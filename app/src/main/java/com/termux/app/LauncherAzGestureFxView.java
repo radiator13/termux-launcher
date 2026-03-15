@@ -126,7 +126,6 @@ public final class LauncherAzGestureFxView extends View {
         @Nullable RectF focusedBoundsRaw,
         @NonNull InteractionMode mode
     ) {
-        boolean wasActive = dragActive;
         dragActive = active;
         targetRawX = rawX;
         targetRawY = rawY;
@@ -141,22 +140,7 @@ public final class LauncherAzGestureFxView extends View {
         } else {
             hasFocus = false;
         }
-
-        if (active && !wasActive) {
-            if (mode == InteractionMode.LETTER_TRACK && focusedBoundsRaw != null && !focusedBoundsRaw.isEmpty()) {
-                displayRawX = focusedBoundsRaw.centerX();
-                displayRawY = focusedBoundsRaw.centerY();
-            } else {
-                displayRawX = rawX;
-                displayRawY = rawY;
-            }
-            focusDisplayRect.setEmpty();
-        }
-
-        if (getVisibility() != VISIBLE) {
-            setVisibility(VISIBLE);
-        }
-        applyBlurIfSupported(active && mode == InteractionMode.ICON_TRACK_LOCKED);
+        applyBlurIfSupported(false);
         invalidate();
     }
 
@@ -206,26 +190,16 @@ public final class LauncherAzGestureFxView extends View {
             canPageLeft = false;
             canPageRight = false;
         }
+        launchBloomActive = false;
+        launchBloomProgress = 0f;
         applyBlurIfSupported(false);
         invalidate();
     }
 
     public void playLaunchBloom(float rawX, float rawY) {
+        // Intentionally disabled: launch glow visuals were removed.
         launchBloomRawX = rawX;
         launchBloomRawY = rawY;
-        launchBloomProgress = 0f;
-        launchBloomActive = true;
-        if (launchBloomAnimator != null) {
-            launchBloomAnimator.cancel();
-        }
-        launchBloomAnimator = ValueAnimator.ofFloat(0f, 1f);
-        launchBloomAnimator.setDuration(440L);
-        launchBloomAnimator.setInterpolator(new DecelerateInterpolator());
-        launchBloomAnimator.addUpdateListener(animation -> {
-            launchBloomProgress = (float) animation.getAnimatedValue();
-            invalidate();
-        });
-        launchBloomAnimator.start();
     }
 
     @Override
@@ -242,54 +216,16 @@ public final class LauncherAzGestureFxView extends View {
         super.onDraw(canvas);
         getLocationOnScreen(locationOnScreen);
 
-        boolean needsMoreFrames = false;
-
-        if (filteredOverflowActive && (canPageLeft || canPageRight)) {
-            drawGlassEdgeCapsules(canvas);
-        }
-
-        if (dragActive) {
-            float desiredRawX = targetRawX;
-            float desiredRawY = targetRawY;
-            if (interactionMode == InteractionMode.LETTER_TRACK && hasFocus && !focusRawRect.isEmpty()) {
-                desiredRawX = focusRawRect.centerX();
-                desiredRawY = focusRawRect.centerY();
-            }
-            if (displayRawX == 0f && displayRawY == 0f) {
-                displayRawX = desiredRawX;
-                displayRawY = desiredRawY;
-            }
-            float smoothing = interactionMode == InteractionMode.ICON_TRACK_LOCKED ? 0.30f : 0.34f;
-            displayRawX = lerp(displayRawX, desiredRawX, smoothing);
-            displayRawY = lerp(displayRawY, desiredRawY, smoothing);
-            if (Math.abs(displayRawX - desiredRawX) > 0.55f || Math.abs(displayRawY - desiredRawY) > 0.55f) {
-                needsMoreFrames = true;
-            }
-
-            if (interactionMode == InteractionMode.LETTER_TRACK) {
-                drawLetterGlassDroplet(canvas);
-            } else {
-                drawLockedIconTrackGlass(canvas);
-            }
-        }
-
-        if (launchBloomActive) {
-            drawLaunchGlassBloom(canvas);
-            if (launchBloomProgress >= 0.999f) {
-                launchBloomActive = false;
-            } else {
-                needsMoreFrames = true;
-            }
-        }
-
-        boolean shouldStayVisible = dragActive || launchBloomActive || (filteredOverflowActive && (canPageLeft || canPageRight));
+        boolean shouldStayVisible = filteredOverflowActive && (canPageLeft || canPageRight);
         if (!shouldStayVisible && getVisibility() != GONE) {
             setVisibility(GONE);
             return;
         }
-
-        if (needsMoreFrames) {
-            postInvalidateOnAnimation();
+        if (shouldStayVisible) {
+            if (getVisibility() != VISIBLE) {
+                setVisibility(VISIBLE);
+            }
+            drawGlassEdgeCapsules(canvas);
         }
     }
 

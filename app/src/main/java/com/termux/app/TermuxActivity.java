@@ -1068,6 +1068,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzLastAnchorRawY = azLoc[1] + (mAzScrubRowView.getHeight() * 0.5f);
 
         if (letter == AzScrubRowView.PINNED_APPS_SYMBOL) {
+            mSuggestionBarView.clearAzFocusedEntry();
             mSuggestionBarView.clearAzPreview();
             resetAzGestureState(false, false);
             updateAzOverflowAffordance();
@@ -1077,7 +1078,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzGestureActive = true;
         cancelAzOverflowRefresh();
         float lockThreshold = -(mAzScrubRowView.getHeight() * 0.16f);
+        float unlockThreshold = mAzScrubRowView.getHeight() * 0.12f;
         boolean enteringIconTrack = touchY <= lockThreshold;
+        boolean returningToAzTrack = touchY >= unlockThreshold;
 
         if (mAzGestureMode == AzGestureMode.AZ_TRACKING) {
             mSuggestionBarView.persistAzPreview(letter, selectionIndex);
@@ -1090,8 +1093,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mAzScrubRowView.setLockedInlineLetter(Character.toUpperCase(letter));
             }
         } else if (mAzGestureMode == AzGestureMode.ICON_TRACKING_LOCKED && mAzHasLockedSelection) {
-            mSuggestionBarView.persistAzPreview(mAzLockedLetter, mAzLockedSelectionIndex);
-            mAzScrubRowView.setLockedInlineLetter(Character.toUpperCase(mAzLockedLetter));
+            if (returningToAzTrack && phase != AzScrubRowView.GesturePhase.UP) {
+                mAzGestureMode = AzGestureMode.AZ_TRACKING;
+                mAzHasLockedSelection = false;
+                mAzScrubRowView.setInteractionMode(AzScrubRowView.InteractionMode.WAVE_TRACK);
+                mAzScrubRowView.setLockedInlineLetter(null);
+                mSuggestionBarView.clearAzFocusedEntry();
+                mSuggestionBarView.persistAzPreview(letter, selectionIndex);
+            } else {
+                mSuggestionBarView.persistAzPreview(mAzLockedLetter, mAzLockedSelectionIndex);
+                mAzScrubRowView.setLockedInlineLetter(Character.toUpperCase(mAzLockedLetter));
+            }
         }
         updateAzOverflowAffordance();
 
@@ -1137,6 +1149,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mAzGestureMode == AzGestureMode.ICON_TRACKING_LOCKED
                 ? LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
                 : LauncherAzGestureFxView.InteractionMode.LETTER_TRACK;
+        if (mSuggestionBarView != null) {
+            if (interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED) {
+                mSuggestionBarView.updateAzFocusedEntry(focusResult);
+            } else {
+                mSuggestionBarView.clearAzFocusedEntry();
+            }
+        }
         RectF focusBounds;
         if (interactionMode == LauncherAzGestureFxView.InteractionMode.LETTER_TRACK && mAzScrubRowView != null) {
             mAzLetterVisualMetrics.clear();
@@ -1271,6 +1290,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mAzScrubRowView != null) {
             mAzScrubRowView.setInteractionMode(AzScrubRowView.InteractionMode.WAVE_TRACK);
             mAzScrubRowView.setLockedInlineLetter(null);
+        }
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.clearAzFocusedEntry();
         }
         if (mLauncherAzGestureFxView != null) {
             mLauncherAzGestureFxView.clearDrag(keepOverflowAffordance);

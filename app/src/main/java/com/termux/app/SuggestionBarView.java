@@ -3,6 +3,7 @@ package com.termux.app;
 import android.annotation.SuppressLint;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
 import android.animation.ArgbEvaluator;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
@@ -73,6 +74,7 @@ import com.termux.R;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
 import com.termux.app.launcher.data.LauncherRankingEngine;
+import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.model.AppRef;
 import com.termux.app.launcher.model.LauncherAppEntry;
 import com.termux.app.launcher.model.PinnedAppItem;
@@ -100,7 +102,6 @@ public final class SuggestionBarView extends GridLayout {
     private static final char[] AZ_ORDER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".toCharArray();
     private static final int POPUP_MAX_WIDTH_DP = 320;
     private static final int POPUP_MIN_WIDTH_DP = 188;
-    private static final int POPUP_MIN_WIDTH_TIGHT_DP = 132;
     private static final float POPUP_MAX_HEIGHT_FACTOR = 0.45f;
     private static final long APP_LAUNCH_TOUCH_DELAY_MS = 120L;
     private static final long PICKUP_DECISION_WINDOW_MS = 650L;
@@ -158,10 +159,16 @@ public final class SuggestionBarView extends GridLayout {
     private int activeMenuTintBase = (0xFF202020 & 0x00FFFFFF);
     @Nullable private TextView shortcutsMainRowView;
     private final Runnable azResetRunnable = this::clearAzPreviewWithFade;
+    private static final long AZ_LAUNCH_CLEAR_DELAY_MS = 1000L;
+    private final Runnable azPostLaunchClearRunnable = this::clearAzPreview;
     private final Map<Integer, LauncherAppEntry> azRenderedSlotEntries = new HashMap<>();
     private final Map<String, WeakReference<View>> azRenderedEntryTargets = new HashMap<>();
     private int azRenderedSlotCount = 0;
     private boolean azPreviewRendered = false;
+    @Nullable private LauncherUsageStatsStore usageStatsStore;
+    @Nullable private String azFocusedEntryKey;
+    @Nullable private View azFocusedView;
+    @Nullable private Animator azFocusAnimator;
 
     public static final int AZ_EDGE_NONE = 0;
     public static final int AZ_EDGE_LEFT = -1;
@@ -248,6 +255,20 @@ public final class SuggestionBarView extends GridLayout {
         this.appDataProvider = appDataProvider;
     }
 
+    private LauncherUsageStatsStore getUsageStatsStore() {
+        if (usageStatsStore == null) {
+            usageStatsStore = new LauncherUsageStatsStore(getContext());
+        }
+        return usageStatsStore;
+    }
+
+    public void clearLauncherUsageRanking() {
+        getUsageStatsStore().clear();
+        if (activeAzLetter != null) {
+            previewAzLetter(activeAzLetter, activeAzSelection, false);
+        }
+    }
+
     public void setDefaultButtons(List<String> defaultButtons) {
         if (defaultButtons == null) {
             this.defaultButtonStrings = new ArrayList<>();
@@ -295,6 +316,7 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     public void previewAzLetter(char letter, int selectionIndex, boolean commit) {
+        cancelAzPostLaunchClear();
         if (appDataProvider == null) {
             appDataProvider = new LauncherAppDataProvider(getContext());
         }
@@ -305,7 +327,8 @@ public final class SuggestionBarView extends GridLayout {
         activeAzLetter = normalized;
         activeAzSelection = Math.max(0, selectionIndex);
         cancelAzResetTimeout();
-        activeAzCandidates = appDataProvider.getAppsForLetter(activeAzLetter);
+        List<LauncherAppEntry> candidates = appDataProvider.getAppsForLetter(activeAzLetter);
+        activeAzCandidates = getUsageStatsStore().rankForAz(candidates);
         if (activeAzCandidates.isEmpty()) {
             if (commit) {
                 clearAzPreview();
@@ -452,12 +475,96 @@ public final class SuggestionBarView extends GridLayout {
             return false;
         }
         launchEntry(focusResult.entry, lastTerminalView, focusResult.launchView);
-        clearAzPreview();
+        removeCallbacks(azResetRunnable);
+        removeCallbacks(azPostLaunchClearRunnable);
+        postDelayed(azPostLaunchClearRunnable, AZ_LAUNCH_CLEAR_DELAY_MS);
         return true;
+    }
+
+    public void updateAzFocusedEntry(@Nullable AzDragFocusResult focusResult) {
+        if (focusResult == null || focusResult.entry == null) {
+            clearAzFocusedEntry();
+            return;
+        }
+        String key = stableEntryKey(focusResult.entry);
+        View target = focusResult.launchView;
+        if (target != null) {
+            target = resolvePrimaryPressTarget(target);
+        }
+        if (target == null || !target.isAttachedToWindow()) {
+            WeakReference<View> ref = azRenderedEntryTargets.get(key);
+            target = ref == null ? null : ref.get();
+            if (target != null) {
+                target = resolvePrimaryPressTarget(target);
+            }
+        }
+        if (target == null || !target.isAttachedToWindow()) {
+            clearAzFocusedEntry();
+            return;
+        }
+        if (key.equals(azFocusedEntryKey) && target == azFocusedView) {
+            return;
+        }
+        clearAzFocusedEntry();
+        azFocusedEntryKey = key;
+        azFocusedView = target;
+        animateAzFocusBounce(target);
+    }
+
+    public void clearAzFocusedEntry() {
+        if (azFocusAnimator != null) {
+            azFocusAnimator.cancel();
+            azFocusAnimator = null;
+        }
+        if (azFocusedView != null) {
+            azFocusedView.animate().cancel();
+            azFocusedView.setScaleX(1f);
+            azFocusedView.setScaleY(1f);
+            azFocusedView.setTranslationY(0f);
+        }
+        azFocusedView = null;
+        azFocusedEntryKey = null;
+    }
+
+    private void animateAzFocusBounce(@NonNull View target) {
+        target.animate().cancel();
+        target.setPivotX(target.getWidth() * 0.5f);
+        target.setPivotY(target.getHeight() * 0.5f);
+        float lift = dp(9);
+        AnimatorSet bounce = new AnimatorSet();
+        ObjectAnimator scaleX = ObjectAnimator.ofFloat(target, View.SCALE_X, 1f, 1.17f, 0.94f, 1.05f, 1f);
+        ObjectAnimator scaleY = ObjectAnimator.ofFloat(target, View.SCALE_Y, 1f, 1.17f, 0.94f, 1.05f, 1f);
+        ObjectAnimator translateY = ObjectAnimator.ofFloat(target, View.TRANSLATION_Y, 0f, -lift, dp(2), -dp(1), 0f);
+        bounce.playTogether(scaleX, scaleY, translateY);
+        bounce.setDuration(340L);
+        bounce.setInterpolator(new DecelerateInterpolator());
+        bounce.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (target == azFocusedView) {
+                    target.setScaleX(1f);
+                    target.setScaleY(1f);
+                    target.setTranslationY(0f);
+                }
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                if (target == azFocusedView) {
+                    target.setScaleX(1f);
+                    target.setScaleY(1f);
+                    target.setTranslationY(0f);
+                }
+            }
+        });
+        azFocusAnimator = bounce;
+        bounce.start();
     }
 
     public void clearAzPreview() {
         cancelAzResetTimeout();
+        cancelAzPostLaunchClear();
+        clearAzFocusedEntry();
         activeAzLetter = null;
         activeAzSelection = 0;
         activeAzPageIndex = 0;
@@ -512,6 +619,10 @@ public final class SuggestionBarView extends GridLayout {
 
     private void cancelAzResetTimeout() {
         removeCallbacks(azResetRunnable);
+    }
+
+    private void cancelAzPostLaunchClear() {
+        removeCallbacks(azPostLaunchClearRunnable);
     }
 
     @Override
@@ -644,6 +755,7 @@ public final class SuggestionBarView extends GridLayout {
 
     private void renderButtons(@NonNull List<LauncherAppEntry> entries, boolean azPreview) {
         removeAllViews();
+        clearAzFocusedEntry();
         launchTargetViews.clear();
         launchTargetViewsByPackage.clear();
         azRenderedSlotEntries.clear();
@@ -654,7 +766,6 @@ public final class SuggestionBarView extends GridLayout {
         int renderStartCol = 0;
         List<PinnedItem> pinnedForSlots = new ArrayList<>();
         int pinnedPageOffset = 0;
-        int azTotalMatches = entries.size();
 
         if (azPreview) {
             int perPage = Math.max(1, maxButtonCount);
@@ -669,11 +780,7 @@ public final class SuggestionBarView extends GridLayout {
             buttonCount = perPage;
             pinnedItemsPerPage = 1;
             pinnedPageIndex = 0;
-            if (azTotalMatches <= perPage && !entries.isEmpty() && activeAzLetter != null) {
-                float anchor = computeAzAnchorPosition(activeAzLetter, perPage);
-                int centeredStart = Math.round(anchor - ((entries.size() - 1) / 2f));
-                renderStartCol = clamp(centeredStart, 0, Math.max(0, perPage - entries.size()));
-            }
+            renderStartCol = 0;
         }
 
         boolean pinnedSurface = !azPreview && TextUtils.isEmpty(lastInput.trim()) && pinnedItems != null && !pinnedItems.isEmpty();
@@ -698,10 +805,20 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         boolean[] usedColumns = new boolean[Math.max(1, buttonCount)];
+        int[] azPriorityColumns = null;
+        if (azPreview) {
+            int preferredCenter = buttonCount / 2;
+            if (activeAzLetter != null) {
+                preferredCenter = clamp(Math.round(computeAzAnchorPosition(activeAzLetter, buttonCount)), 0, buttonCount - 1);
+            }
+            azPriorityColumns = buildAzPriorityColumnsAround(preferredCenter, buttonCount);
+        }
         for (int col = 0; col < entries.size() && col < buttonCount; col++) {
             LauncherAppEntry entry = entries.get(col);
             View view = createEntryButton(entry);
-            int renderCol = azPreview ? (renderStartCol + col) : col;
+            int renderCol = azPreview && azPriorityColumns != null
+                ? azPriorityColumns[col]
+                : (renderStartCol + col);
             LayoutParams param = createSlotParams(renderCol);
             view.setLayoutParams(param);
 
@@ -798,6 +915,27 @@ public final class SuggestionBarView extends GridLayout {
             setOnLongClickListener(null);
             setOnDragListener(null);
         }
+    }
+
+    @NonNull
+    private static int[] buildAzPriorityColumnsAround(int center, int count) {
+        int safeCount = Math.max(1, count);
+        int[] order = new int[safeCount];
+        int cursor = 0;
+        int anchoredCenter = Math.max(0, Math.min(safeCount - 1, center));
+        order[cursor++] = anchoredCenter;
+        for (int offset = 1; cursor < safeCount; offset++) {
+            int right = anchoredCenter + offset;
+            if (right < safeCount) {
+                order[cursor++] = right;
+                if (cursor >= safeCount) break;
+            }
+            int left = anchoredCenter - offset;
+            if (left >= 0) {
+                order[cursor++] = left;
+            }
+        }
+        return order;
     }
 
     private void applyPinnedHintShimmer(@NonNull TextView hintView) {
@@ -979,6 +1117,7 @@ public final class SuggestionBarView extends GridLayout {
                 + " activity=" + entry.appRef.activityName);
             return;
         }
+        getUsageStatsStore().recordLaunch(entry.appRef.stableId());
 
         if (terminalView != null) {
             terminalView.clearInputLine();
@@ -2170,7 +2309,8 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         int rowWidth = normalizePopupRowWidths(appContextRows);
-        constrainPopupHeaderWidth(header, rowWidth);
+        int contentWidth = constrainPopupHeaderWidth(header, rowWidth);
+        constrainPopupRowsWidth(appContextRows, contentWidth);
 
         appContextPopupWindow = buildPopupWindow(shell, tintBase, true, () -> {
             if (appContextPopupWindow != null && !appContextPopupWindow.isShowing()) {
@@ -2246,7 +2386,8 @@ public final class SuggestionBarView extends GridLayout {
         }, false));
 
         int rowWidth = normalizePopupRowWidths(appContextRows);
-        constrainPopupHeaderWidth(header, rowWidth);
+        int contentWidth = constrainPopupHeaderWidth(header, rowWidth);
+        constrainPopupRowsWidth(appContextRows, contentWidth);
 
         appContextPopupWindow = buildPopupWindow(shell, tintBase, true, () -> {
             if (appContextPopupWindow != null && !appContextPopupWindow.isShowing()) {
@@ -2458,17 +2599,40 @@ public final class SuggestionBarView extends GridLayout {
         return maxWidth;
     }
 
-    private void constrainPopupHeaderWidth(@NonNull TextView header, int targetWidth) {
+    private void constrainPopupRowsWidth(@NonNull List<MenuActionRow> rows, int targetWidth) {
         if (targetWidth <= 0) return;
-        header.setSingleLine(true);
+        for (MenuActionRow row : rows) {
+            if (row.rowView == null) continue;
+            ViewGroup.LayoutParams params = row.rowView.getLayoutParams();
+            if (params == null) {
+                params = new LinearLayout.LayoutParams(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            } else {
+                params.width = targetWidth;
+            }
+            row.rowView.setLayoutParams(params);
+        }
+    }
+
+    private int constrainPopupHeaderWidth(@NonNull TextView header, int targetWidth) {
+        if (targetWidth <= 0) return 0;
+        String title = header.getText() == null ? "" : header.getText().toString();
+        int horizontalPadding = header.getPaddingLeft() + header.getPaddingRight();
+        int titleTextWidth = (int) Math.ceil(header.getPaint().measureText(title));
+        int mediumNameLimitWidth = (int) Math.ceil(header.getPaint().measureText("MMMMMMMMMMMM"));
+        int desiredSingleLineWidth = titleTextWidth + horizontalPadding;
+        int boundedWidth = Math.max(targetWidth, Math.min(desiredSingleLineWidth, mediumNameLimitWidth + horizontalPadding));
+
+        header.setSingleLine(false);
         header.setEllipsize(TextUtils.TruncateAt.END);
+        header.setMaxLines(desiredSingleLineWidth <= boundedWidth ? 1 : 2);
         ViewGroup.LayoutParams params = header.getLayoutParams();
         if (params == null) {
-            params = new LinearLayout.LayoutParams(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params = new LinearLayout.LayoutParams(boundedWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         } else {
-            params.width = targetWidth;
+            params.width = boundedWidth;
         }
         header.setLayoutParams(params);
+        return boundedWidth;
     }
 
     private void stylePopupRow(@NonNull TextView row, boolean highlighted, int tintBase) {
@@ -2749,7 +2913,7 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private int popupMinWidth(int screenW, boolean tightWrap) {
-        int target = tightWrap ? POPUP_MIN_WIDTH_TIGHT_DP : POPUP_MIN_WIDTH_DP;
+        int target = tightWrap ? 0 : POPUP_MIN_WIDTH_DP;
         return Math.min(popupMaxWidth(screenW), dp(target));
     }
 
