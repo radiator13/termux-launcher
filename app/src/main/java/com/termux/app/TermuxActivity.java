@@ -263,7 +263,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private final RectF mExtraKeysRawBounds = new RectF();
     private final RectF mAzFocusLetterRawBounds = new RectF();
     private final AzScrubRowView.LetterVisualMetrics mAzLetterVisualMetrics = new AzScrubRowView.LetterVisualMetrics();
-    private static final long AZ_EDGE_PAGE_INTERVAL_MS = 210L;
+    private static final long AZ_EDGE_PAGE_INITIAL_DELAY_MS = 360L;
+    private static final long AZ_EDGE_PAGE_REPEAT_INTERVAL_MS = 620L;
     private static final long AZ_PREVIEW_TIMEOUT_REFRESH_MS = 5200L;
 
     private static final int CONTEXT_MENU_SELECT_URL_ID = 0;
@@ -1243,7 +1244,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (!mAzGestureActive || mSuggestionBarView == null) {
                     return;
                 }
-                boolean changed = mSuggestionBarView.requestAzPageDelta(pageDelta, 1300f);
+                boolean changed = mSuggestionBarView.requestAzPageDelta(pageDelta, 640f);
                 if (changed) {
                     updateAzOverflowAffordance();
                 }
@@ -1251,11 +1252,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mAzCurrentFocusResult = fresh;
                 updateAzOverlayState(fresh, mAzLockedLetter);
                 if (mAzGestureActive && fresh.edge == focusResult.edge) {
-                    mAzGestureHandler.postDelayed(this, AZ_EDGE_PAGE_INTERVAL_MS);
+                    mAzGestureHandler.postDelayed(this, AZ_EDGE_PAGE_REPEAT_INTERVAL_MS);
                 }
             }
         };
-        mAzGestureHandler.postDelayed(mAzEdgePagingRunnable, AZ_EDGE_PAGE_INTERVAL_MS);
+        mAzGestureHandler.postDelayed(mAzEdgePagingRunnable, AZ_EDGE_PAGE_INITIAL_DELAY_MS);
     }
 
     private void stopAzEdgePagingLoop() {

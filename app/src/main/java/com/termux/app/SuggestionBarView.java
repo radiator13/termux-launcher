@@ -165,10 +165,13 @@ public final class SuggestionBarView extends GridLayout {
     private final Map<String, WeakReference<View>> azRenderedEntryTargets = new HashMap<>();
     private int azRenderedSlotCount = 0;
     private boolean azPreviewRendered = false;
+    private int lastAzResolvedSlot = -1;
     @Nullable private LauncherUsageStatsStore usageStatsStore;
     @Nullable private String azFocusedEntryKey;
     @Nullable private View azFocusedView;
     @Nullable private Animator azFocusAnimator;
+    private long lastAzFocusBounceUptimeMs = 0L;
+    private static final long AZ_FOCUS_BOUNCE_COOLDOWN_MS = 320L;
 
     public static final int AZ_EDGE_NONE = 0;
     public static final int AZ_EDGE_LEFT = -1;
@@ -407,6 +410,7 @@ public final class SuggestionBarView extends GridLayout {
         boolean pageLeft = canAzPageLeft();
         boolean pageRight = canAzPageRight();
         if (!isAzPreviewActive() || !azPreviewRendered || azRenderedSlotCount <= 0) {
+            lastAzResolvedSlot = -1;
             return new AzDragFocusResult(null, null, null, AZ_EDGE_NONE, pageLeft, pageRight);
         }
 
@@ -426,14 +430,34 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         if (localY < -dp(10) || localY > height + dp(12)) {
+            lastAzResolvedSlot = -1;
             return new AzDragFocusResult(null, null, null, edge, pageLeft, pageRight);
         }
 
-        int slot = clamp((int) ((Math.max(0f, Math.min(width - 1f, localX)) / width) * azRenderedSlotCount), 0, azRenderedSlotCount - 1);
+        float clampedX = Math.max(0f, Math.min(width - 1f, localX));
+        float slotWidth = width / Math.max(1f, azRenderedSlotCount);
+        int candidateSlot = clamp((int) ((clampedX / width) * azRenderedSlotCount), 0, azRenderedSlotCount - 1);
+        int slot = candidateSlot;
+        if (lastAzResolvedSlot >= 0 && lastAzResolvedSlot < azRenderedSlotCount && candidateSlot != lastAzResolvedSlot) {
+            float hysteresis = slotWidth * 0.16f;
+            if (candidateSlot > lastAzResolvedSlot) {
+                float boundary = (lastAzResolvedSlot + 1) * slotWidth;
+                if (clampedX < boundary + hysteresis) {
+                    slot = lastAzResolvedSlot;
+                }
+            } else {
+                float boundary = lastAzResolvedSlot * slotWidth;
+                if (clampedX > boundary - hysteresis) {
+                    slot = lastAzResolvedSlot;
+                }
+            }
+        }
         LauncherAppEntry entry = azRenderedSlotEntries.get(slot);
         if (entry == null) {
+            lastAzResolvedSlot = -1;
             return new AzDragFocusResult(null, null, null, edge, pageLeft, pageRight);
         }
+        lastAzResolvedSlot = slot;
 
         String key = stableEntryKey(entry);
         WeakReference<View> viewRef = azRenderedEntryTargets.get(key);
@@ -508,7 +532,15 @@ public final class SuggestionBarView extends GridLayout {
         clearAzFocusedEntry();
         azFocusedEntryKey = key;
         azFocusedView = target;
-        animateAzFocusBounce(target);
+        long now = SystemClock.uptimeMillis();
+        if ((now - lastAzFocusBounceUptimeMs) >= AZ_FOCUS_BOUNCE_COOLDOWN_MS) {
+            lastAzFocusBounceUptimeMs = now;
+            animateAzFocusBounce(target);
+        } else {
+            target.setScaleX(1f);
+            target.setScaleY(1f);
+            target.setTranslationY(0f);
+        }
     }
 
     public void clearAzFocusedEntry() {
@@ -530,13 +562,13 @@ public final class SuggestionBarView extends GridLayout {
         target.animate().cancel();
         target.setPivotX(target.getWidth() * 0.5f);
         target.setPivotY(target.getHeight() * 0.5f);
-        float lift = dp(9);
+        float lift = dp(4.5f);
         AnimatorSet bounce = new AnimatorSet();
-        ObjectAnimator scaleX = ObjectAnimator.ofFloat(target, View.SCALE_X, 1f, 1.17f, 0.94f, 1.05f, 1f);
-        ObjectAnimator scaleY = ObjectAnimator.ofFloat(target, View.SCALE_Y, 1f, 1.17f, 0.94f, 1.05f, 1f);
-        ObjectAnimator translateY = ObjectAnimator.ofFloat(target, View.TRANSLATION_Y, 0f, -lift, dp(2), -dp(1), 0f);
+        ObjectAnimator scaleX = ObjectAnimator.ofFloat(target, View.SCALE_X, 1f, 1.06f, 0.985f, 1.015f, 1f);
+        ObjectAnimator scaleY = ObjectAnimator.ofFloat(target, View.SCALE_Y, 1f, 1.06f, 0.985f, 1.015f, 1f);
+        ObjectAnimator translateY = ObjectAnimator.ofFloat(target, View.TRANSLATION_Y, 0f, -lift, -dp(1.5f), -dp(0.5f), 0f);
         bounce.playTogether(scaleX, scaleY, translateY);
-        bounce.setDuration(340L);
+        bounce.setDuration(520L);
         bounce.setInterpolator(new DecelerateInterpolator());
         bounce.addListener(new AnimatorListenerAdapter() {
             @Override
@@ -756,6 +788,7 @@ public final class SuggestionBarView extends GridLayout {
     private void renderButtons(@NonNull List<LauncherAppEntry> entries, boolean azPreview) {
         removeAllViews();
         clearAzFocusedEntry();
+        lastAzResolvedSlot = -1;
         launchTargetViews.clear();
         launchTargetViewsByPackage.clear();
         azRenderedSlotEntries.clear();
@@ -3694,12 +3727,12 @@ public final class SuggestionBarView extends GridLayout {
 
         pageSwitchAnimating = true;
         final int direction = pageDelta > 0 ? 1 : -1;
-        final float travel = Math.max(dp(24), getWidth() * 0.28f);
+        final float travel = Math.max(dp(18), getWidth() * 0.20f);
         final long duration = computePageAnimDuration(velocityPxPerSec);
 
         animate()
-            .translationX(-direction * travel)
-            .alpha(0.42f)
+            .translationX(-direction * travel * 0.55f)
+            .alpha(0.90f)
             .setDuration(duration)
             .setInterpolator(new DecelerateInterpolator())
             .setListener(new AnimatorListenerAdapter() {
@@ -3708,12 +3741,12 @@ public final class SuggestionBarView extends GridLayout {
                     setListenerSafe(null);
                     activeAzPageIndex = targetPage;
                     renderButtons(activeAzCandidates, true);
-                    setTranslationX(direction * travel * 0.48f);
-                    setAlpha(0.52f);
+                    setTranslationX(direction * travel * 0.50f);
+                    setAlpha(0.88f);
                     animate()
                         .translationX(0f)
                         .alpha(1f)
-                        .setDuration(Math.max(110, duration - 20))
+                        .setDuration(Math.max(180, duration + 80))
                         .setInterpolator(new DecelerateInterpolator())
                         .setListener(new AnimatorListenerAdapter() {
                             @Override
@@ -3730,8 +3763,8 @@ public final class SuggestionBarView extends GridLayout {
 
     private long computePageAnimDuration(float velocityPxPerSec) {
         float v = Math.max(200f, Math.min(6000f, Math.abs(velocityPxPerSec)));
-        long ms = (long) (280f - ((v - 200f) / (6000f - 200f)) * 140f);
-        return clamp((int) ms, 120, 280);
+        long ms = (long) (460f - ((v - 200f) / (6000f - 200f)) * 190f);
+        return clamp((int) ms, 220, 460);
     }
 
     private void setListenerSafe(@Nullable AnimatorListenerAdapter adapter) {
