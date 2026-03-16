@@ -1096,11 +1096,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzGestureActive = true;
         cancelAzOverflowRefresh();
         float rowHeight = Math.max(1f, mAzScrubRowView.getHeight());
+        View extraKeysRow = findViewById(R.id.terminal_toolbar_view_pager);
+        float extraKeysHeight = (extraKeysRow != null && extraKeysRow.getHeight() > 0)
+            ? extraKeysRow.getHeight()
+            : (rowHeight * 1.2f);
         float filterUpperBound = -(rowHeight * 0.10f);
-        float filterLowerBound = rowHeight * 1.34f;
+        // Preserve forgiving AZ filtering in the region below the alphabet row,
+        // through the extra-keys row, plus a small margin.
+        float filterLowerBound = rowHeight + extraKeysHeight + (rowHeight * 0.25f);
         float lockThreshold = -(rowHeight * 0.18f);
         float unlockThreshold = rowHeight * 0.20f;
-        float unlockMaxBound = rowHeight * 1.46f;
+        float unlockMaxBound = filterLowerBound + (rowHeight * 0.18f);
         float minUpwardTravel = Math.max(getResources().getDisplayMetrics().density * 6f, rowHeight * 0.12f);
         float dyFromDown = touchY - mAzGestureDownTouchY;
         float dxFromDown = touchX - mAzGestureDownTouchX;
