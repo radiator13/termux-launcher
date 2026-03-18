@@ -173,8 +173,10 @@ public final class SuggestionBarView extends GridLayout {
     private int lastAzResolvedSlot = -1;
     @Nullable private LauncherUsageStatsStore usageStatsStore;
     @Nullable private Runnable appCatalogChangedListener;
+    @Nullable private OverflowInteractionListener overflowInteractionListener;
     private final ExecutorService searchExecutor = Executors.newSingleThreadExecutor();
     private int searchGeneration = 0;
+    private boolean rowInteractionActive = false;
     @Nullable private String azFocusedEntryKey;
     @Nullable private View azFocusedView;
     @Nullable private Animator azFocusAnimator;
@@ -216,6 +218,10 @@ public final class SuggestionBarView extends GridLayout {
         public boolean hasFocusEntry() {
             return entry != null;
         }
+    }
+
+    public interface OverflowInteractionListener {
+        void onOverflowInteractionChanged(boolean interacting);
     }
 
     public SuggestionBarView(Context context, AttributeSet attrs) {
@@ -297,6 +303,10 @@ public final class SuggestionBarView extends GridLayout {
 
     public void setAppCatalogChangedListener(@Nullable Runnable appCatalogChangedListener) {
         this.appCatalogChangedListener = appCatalogChangedListener;
+    }
+
+    public void setOverflowInteractionListener(@Nullable OverflowInteractionListener listener) {
+        overflowInteractionListener = listener;
     }
 
     private LauncherUsageStatsStore getUsageStatsStore() {
@@ -462,6 +472,30 @@ public final class SuggestionBarView extends GridLayout {
 
     public int getAzVisiblePageCount() {
         return getAzPagesCount();
+    }
+
+    public boolean hasPinnedOverflowPages() {
+        return activeAzLetter == null
+            && TextUtils.isEmpty(lastInput.trim())
+            && pinnedItems != null
+            && !pinnedItems.isEmpty()
+            && getPinnedPagesCount() > 1;
+    }
+
+    public boolean canPinnedPageLeft() {
+        return hasPinnedOverflowPages() && pinnedPageIndex > 0;
+    }
+
+    public boolean canPinnedPageRight() {
+        return hasPinnedOverflowPages() && pinnedPageIndex < (getPinnedPagesCount() - 1);
+    }
+
+    public int getPinnedCurrentPageIndex() {
+        return Math.max(0, pinnedPageIndex);
+    }
+
+    public int getPinnedVisiblePageCount() {
+        return Math.max(1, getPinnedPagesCount());
     }
 
     public boolean requestAzPageDelta(int pageDelta, float velocityPxPerSec) {
@@ -747,6 +781,7 @@ public final class SuggestionBarView extends GridLayout {
         if (event == null) return super.dispatchTouchEvent(event);
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
+            setRowInteractionActive(true);
             if (swipeVelocityTracker != null) swipeVelocityTracker.recycle();
             swipeVelocityTracker = VelocityTracker.obtain();
             swipeVelocityTracker.addMovement(event);
@@ -755,6 +790,7 @@ public final class SuggestionBarView extends GridLayout {
             swipeDownX = event.getX();
             swipeDownY = event.getY();
         } else if (action == MotionEvent.ACTION_MOVE) {
+            setRowInteractionActive(true);
             if (swipeVelocityTracker != null) swipeVelocityTracker.addMovement(event);
         } else if (action == MotionEvent.ACTION_UP) {
             if (swipeVelocityTracker != null) {
@@ -779,6 +815,7 @@ public final class SuggestionBarView extends GridLayout {
                                 swipeVelocityTracker.recycle();
                                 swipeVelocityTracker = null;
                             }
+                            setRowInteractionActive(false);
                             return true;
                         }
                     }
@@ -792,6 +829,7 @@ public final class SuggestionBarView extends GridLayout {
                                 swipeVelocityTracker.recycle();
                                 swipeVelocityTracker = null;
                             }
+                            setRowInteractionActive(false);
                             return true;
                         }
                     }
@@ -803,6 +841,7 @@ public final class SuggestionBarView extends GridLayout {
                 swipeVelocityTracker.recycle();
                 swipeVelocityTracker = null;
             }
+            setRowInteractionActive(false);
         } else if (action == MotionEvent.ACTION_CANCEL) {
             ViewParent parent = getParent();
             if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
@@ -810,6 +849,7 @@ public final class SuggestionBarView extends GridLayout {
                 swipeVelocityTracker.recycle();
                 swipeVelocityTracker = null;
             }
+            setRowInteractionActive(false);
         }
         return super.dispatchTouchEvent(event);
     }
@@ -3905,6 +3945,16 @@ public final class SuggestionBarView extends GridLayout {
                 }
             })
             .start();
+    }
+
+    private void setRowInteractionActive(boolean active) {
+        if (rowInteractionActive == active) {
+            return;
+        }
+        rowInteractionActive = active;
+        if (overflowInteractionListener != null) {
+            overflowInteractionListener.onOverflowInteractionChanged(active);
+        }
     }
 
     private long computePageAnimDuration(float velocityPxPerSec) {
