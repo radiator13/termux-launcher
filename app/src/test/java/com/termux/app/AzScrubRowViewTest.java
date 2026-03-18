@@ -86,12 +86,14 @@ public class AzScrubRowViewTest {
         view.onTouchEvent(MotionEvent.obtain(0, 10, MotionEvent.ACTION_DOWN, 0f, 24f, 0));
         assertEquals(AzScrubRowView.PINNED_APPS_SYMBOL, lastLetter[0]);
 
+        float slotWidth = 540f / 28f;
+
         // Cross the raw slot boundary a little, but not far enough to commit the neighboring slot.
-        view.onTouchEvent(MotionEvent.obtain(0, 15, MotionEvent.ACTION_MOVE, 21f, 24f, 0));
+        view.onTouchEvent(MotionEvent.obtain(0, 15, MotionEvent.ACTION_MOVE, slotWidth + (slotWidth * 0.10f), 24f, 0));
         assertEquals(AzScrubRowView.PINNED_APPS_SYMBOL, lastLetter[0]);
 
         // Move deeper into the next slot and confirm the letter now advances.
-        view.onTouchEvent(MotionEvent.obtain(0, 20, MotionEvent.ACTION_MOVE, 25f, 24f, 0));
+        view.onTouchEvent(MotionEvent.obtain(0, 20, MotionEvent.ACTION_MOVE, slotWidth + (slotWidth * 0.30f), 24f, 0));
         assertEquals('A', lastLetter[0]);
     }
 }

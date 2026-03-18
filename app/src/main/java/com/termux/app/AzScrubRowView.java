@@ -366,6 +366,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                 }
                 suppressUpScrub = false;
                 if (interactionMode == InteractionMode.WAVE_TRACK) {
+                    activeLetterIndex = -1;
                     animateWaveRelease();
                 } else {
                     waveStrength = 0f;
@@ -378,6 +379,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                 suppressUpScrub = false;
                 callback.onCancel();
                 if (interactionMode == InteractionMode.WAVE_TRACK) {
+                    activeLetterIndex = -1;
                     animateWaveRelease();
                 } else {
                     waveStrength = 0f;
@@ -399,17 +401,6 @@ public final class AzScrubRowView extends AppCompatTextView {
             waveStrength = (float) animation.getAnimatedValue();
             updateInteractionLayerOffset();
             invalidate();
-        });
-        settleAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(android.animation.Animator animation) {
-                activeLetterIndex = -1;
-            }
-
-            @Override
-            public void onAnimationCancel(android.animation.Animator animation) {
-                activeLetterIndex = -1;
-            }
         });
         settleAnimator.start();
     }
