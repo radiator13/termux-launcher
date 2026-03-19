@@ -303,7 +303,6 @@ public final class LauncherAzGestureFxView extends View {
         }
         float top = appsRowRawBounds.top - locationOnScreen[1];
         float bottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        float pulse = breathe(0.88f, 1.08f, 2400L);
 
         float glowHeight = Math.max(dp(34f), bottom - top);
         float edgeWidth = Math.max(dp(24f), getWidth() * 0.062f);
@@ -311,14 +310,14 @@ public final class LauncherAzGestureFxView extends View {
         float radius = Math.max(dp(18f), glowHeight * 0.30f);
 
         if (interactionCanPageLeft) {
-            drawEdgeGlowAmbient(canvas, 0f, top, edgeWidth, bottom, radius, spread, false, pulse);
+            drawEdgeGlowAmbient(canvas, 0f, top, edgeWidth, bottom, radius, spread, false);
         }
         if (interactionCanPageRight) {
-            drawEdgeGlowAmbient(canvas, getWidth() - edgeWidth, top, getWidth(), bottom, radius, spread, true, pulse);
+            drawEdgeGlowAmbient(canvas, getWidth() - edgeWidth, top, getWidth(), bottom, radius, spread, true);
         }
     }
 
-    private void drawEdgeGlowAmbient(Canvas canvas, float left, float top, float right, float bottom, float radius, float spread, boolean rightEdge, float pulse) {
+    private void drawEdgeGlowAmbient(Canvas canvas, float left, float top, float right, float bottom, float radius, float spread, boolean rightEdge) {
         RectF glow = new RectF(left, top, right, bottom);
         if (rightEdge) {
             glow.left -= spread * 0.28f;
@@ -329,12 +328,12 @@ public final class LauncherAzGestureFxView extends View {
         }
         glow.top -= dp(10f);
         glow.bottom += dp(10f);
-        edgePaint.setColor(withAlpha(overflowGlowTintColor, (int) (74f * pulse)));
+        edgePaint.setColor(withAlpha(overflowGlowTintColor, 68));
         canvas.drawRoundRect(glow, radius, radius, edgePaint);
 
         RectF innerGlow = new RectF(glow);
         innerGlow.inset(spread * 0.30f, dp(6f));
-        edgePaint.setColor(withAlpha(overflowGlowTintColor, (int) (52f * pulse)));
+        edgePaint.setColor(withAlpha(overflowGlowTintColor, 44));
         canvas.drawRoundRect(innerGlow, Math.max(dp(16f), radius - dp(6f)), Math.max(dp(16f), radius - dp(6f)), edgePaint);
     }
 
@@ -344,19 +343,18 @@ public final class LauncherAzGestureFxView extends View {
         }
         float top = appsRowRawBounds.top - locationOnScreen[1];
         float bottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        float pulse = breathe(0.92f, 1.10f, 2400L);
 
         float edgeWidth = Math.max(dp(24f), getWidth() * 0.062f);
         float radius = Math.max(dp(18f), Math.max(dp(34f), bottom - top) * 0.30f);
         if (interactionCanPageLeft) {
-            drawEdgeGlowBeacon(canvas, 0f, top, edgeWidth, bottom, radius, false, pulse);
+            drawEdgeGlowBeacon(canvas, 0f, top, edgeWidth, bottom, radius, false);
         }
         if (interactionCanPageRight) {
-            drawEdgeGlowBeacon(canvas, getWidth() - edgeWidth, top, getWidth(), bottom, radius, true, pulse);
+            drawEdgeGlowBeacon(canvas, getWidth() - edgeWidth, top, getWidth(), bottom, radius, true);
         }
     }
 
-    private void drawEdgeGlowBeacon(Canvas canvas, float left, float top, float right, float bottom, float radius, boolean rightEdge, float pulse) {
+    private void drawEdgeGlowBeacon(Canvas canvas, float left, float top, float right, float bottom, float radius, boolean rightEdge) {
         RectF beacon = new RectF(left, top, right, bottom);
         float beaconInsetY = Math.max(dp(4f), (bottom - top) * 0.14f);
         float beaconInsetX = Math.max(dp(2f), (right - left) * 0.16f);
@@ -366,15 +364,16 @@ public final class LauncherAzGestureFxView extends View {
             beacon.right = Math.min(right, left + Math.max(dp(9f), (right - left) * 0.28f));
         }
         beacon.inset(beaconInsetX, beaconInsetY);
-        edgePaint.setColor(withAlpha(overflowGlowTintColor, (int) (196f * pulse)));
+        edgePaint.setColor(withAlpha(overflowGlowTintColor, 176));
         canvas.drawRoundRect(beacon, Math.max(dp(16f), radius * 0.68f), Math.max(dp(16f), radius * 0.68f), edgePaint);
 
         RectF beaconCore = new RectF(beacon);
         float coreInsetX = Math.max(dp(1.2f), beacon.width() * 0.18f);
         float coreInsetY = Math.max(dp(5f), beacon.height() * 0.20f);
         beaconCore.inset(coreInsetX, coreInsetY);
-        edgeInnerPaint.setColor(withAlpha(Color.WHITE, (int) (208f * pulse)));
+        edgeInnerPaint.setColor(withAlpha(Color.WHITE, 184));
         canvas.drawRoundRect(beaconCore, Math.max(dp(10f), radius * 0.42f), Math.max(dp(10f), radius * 0.42f), edgeInnerPaint);
+        drawAnimatedBloomEdge(canvas, beacon, rightEdge);
     }
 
     private void drawLetterGlassDroplet(Canvas canvas) {
@@ -604,37 +603,52 @@ public final class LauncherAzGestureFxView extends View {
         float gapTop = rowBottom + dp(2f);
         float gapBottom = azTop - dp(2f);
         float cy = gapTop <= gapBottom
-            ? gapTop + ((gapBottom - gapTop) * 0.5f)
-            : rowBottom + dp(3f);
-        float lineHeight = dp(3f);
+            ? clamp(gapTop + ((gapBottom - gapTop) * 0.62f), rowBottom + dp(2f), gapBottom)
+            : rowBottom + dp(2.2f);
+        float lineHeight = dp(2f);
         float segmentGap = dp(5f);
         float sideInset = dp(14f);
         float totalWidth = Math.max(dp(120f), getWidth() - (sideInset * 2f));
         float segmentWidth = (totalWidth - (segmentGap * Math.max(0, pageCount - 1))) / Math.max(1, pageCount);
         float left = (getWidth() - totalWidth) * 0.5f;
-        float pulse = breathe(0.94f, 1.06f, 2200L);
+        int backgroundLineColor = withAlpha(boostColor(glassTintColor, 0.94f, 0.72f), 118);
+        int activeLineColor = withAlpha(boostColor(edgeTintColor, 0.92f, 0.82f), 198);
         for (int i = 0; i < pageCount; i++) {
             float radius = lineHeight * 0.5f;
             tmpRect.set(left, cy - (lineHeight * 0.5f), left + segmentWidth, cy + (lineHeight * 0.5f));
-            pageIndicatorPaint.setColor(withAlpha(glassTintColor, 92));
+            pageIndicatorPaint.setColor(backgroundLineColor);
             canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            RectF inner = new RectF(tmpRect);
-            inner.inset(dp(0.4f), dp(0.4f));
-            pageIndicatorInnerPaint.setColor(withAlpha(Color.WHITE, 28));
-            canvas.drawRoundRect(inner, radius, radius, pageIndicatorInnerPaint);
             if (i == currentPageIndex) {
                 RectF active = new RectF(tmpRect);
-                float activeInset = dp(0.3f);
+                float activeInset = dp(0.12f);
                 active.inset(activeInset, activeInset);
-                pageIndicatorPaint.setColor(withAlpha(edgeTintColor, (int) (210f * pulse)));
+                pageIndicatorPaint.setColor(activeLineColor);
                 canvas.drawRoundRect(active, radius, radius, pageIndicatorPaint);
-                RectF highlight = new RectF(active);
-                highlight.bottom = highlight.top + Math.max(dp(1f), active.height() * 0.48f);
-                pageIndicatorInnerPaint.setColor(withAlpha(Color.WHITE, (int) (110f * pulse)));
-                canvas.drawRoundRect(highlight, radius, radius, pageIndicatorInnerPaint);
             }
             left += segmentWidth + segmentGap;
         }
+    }
+
+    private void drawAnimatedBloomEdge(Canvas canvas, @NonNull RectF beacon, boolean rightEdge) {
+        float pulse = breathe(0.56f, 1.0f, 1900L);
+        float edgeWidth = lerp(dp(0.8f), dp(1.9f), pulse);
+        RectF shimmer = new RectF(beacon);
+        if (rightEdge) {
+            shimmer.right = beacon.left + edgeWidth;
+            shimmer.left = beacon.left - dp(0.3f);
+        } else {
+            shimmer.left = beacon.right - edgeWidth;
+            shimmer.right = beacon.right + dp(0.3f);
+        }
+        shimmer.top += dp(2f);
+        shimmer.bottom -= dp(2f);
+        edgePaint.setColor(withAlpha(Color.WHITE, (int) (138f * pulse)));
+        canvas.drawRoundRect(shimmer, edgeWidth, edgeWidth, edgePaint);
+
+        RectF core = new RectF(shimmer);
+        core.inset(dp(0.2f), dp(1.2f));
+        edgeInnerPaint.setColor(withAlpha(overflowGlowTintColor, (int) (152f * pulse)));
+        canvas.drawRoundRect(core, Math.max(dp(0.6f), core.width() * 0.5f), Math.max(dp(0.6f), core.width() * 0.5f), edgeInnerPaint);
     }
 
     private float breathe(float min, float max, long durationMs) {
