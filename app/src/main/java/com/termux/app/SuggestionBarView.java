@@ -371,6 +371,7 @@ public final class SuggestionBarView extends GridLayout {
         if (!appDataProvider.hasLoadedApps()) {
             appDataProvider.warmAsync(() -> {
                 allApps = appDataProvider.getAllApps();
+                pruneUnavailablePinnedItems();
                 invalidateAzRankCache();
                 if (appCatalogChangedListener != null) {
                     appCatalogChangedListener.run();
@@ -380,10 +381,65 @@ public final class SuggestionBarView extends GridLayout {
             return;
         }
         allApps = appDataProvider.getAllApps();
+        pruneUnavailablePinnedItems();
         if (appCatalogChangedListener != null) {
             appCatalogChangedListener.run();
         }
         invalidateAzRankCache();
+    }
+
+    /**
+     * Removes pinned references that no longer resolve to installed launchable apps.
+     * This prevents stale "ghost" pinned slots after apps are uninstalled.
+     */
+    private void pruneUnavailablePinnedItems() {
+        if (configRepository == null || pinnedItems == null || pinnedItems.isEmpty() || allApps == null || allApps.isEmpty()) {
+            return;
+        }
+
+        List<PinnedItem> cleaned = new ArrayList<>();
+        boolean changed = false;
+
+        for (PinnedItem item : pinnedItems) {
+            if (item instanceof PinnedAppItem) {
+                PinnedAppItem appItem = (PinnedAppItem) item;
+                if (resolveRef(appItem.appRef) != null) {
+                    cleaned.add(item);
+                } else {
+                    changed = true;
+                }
+                continue;
+            }
+
+            if (item instanceof PinnedFolderItem) {
+                PinnedFolderItem folder = (PinnedFolderItem) clonePinnedItem(item);
+                int before = folder.apps.size();
+                for (int i = folder.apps.size() - 1; i >= 0; i--) {
+                    if (resolveRef(folder.apps.get(i)) == null) {
+                        folder.apps.remove(i);
+                    }
+                }
+                if (folder.apps.isEmpty()) {
+                    changed = true;
+                    continue;
+                }
+                if (folder.apps.size() != before) {
+                    changed = true;
+                }
+                cleaned.add(folder);
+                continue;
+            }
+
+            cleaned.add(item);
+        }
+
+        if (!changed) {
+            return;
+        }
+
+        pinnedItems = cleaned;
+        configRepository.savePinnedItems(pinnedItems);
+        pinnedPageIndex = clamp(pinnedPageIndex, 0, Math.max(0, getPinnedPagesCount() - 1));
     }
 
     public void previewAzLetter(char letter, int selectionIndex, boolean commit) {
