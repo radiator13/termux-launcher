@@ -79,6 +79,7 @@ public final class LauncherAzGestureFxView extends View {
     private int interactionCurrentPageIndex;
     private int interactionPageCount = 1;
     private boolean interactionShowsPageIndicators;
+    private boolean interactionUseSubtlePageIndicators;
     private float edgeProximityLeft;
     private float edgeProximityRight;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
@@ -193,13 +194,22 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
-    public void setInteractionOverflowState(boolean active, boolean pageLeft, boolean pageRight, int currentPageIndex, int pageCount, boolean showPageIndicators) {
+    public void setInteractionOverflowState(
+        boolean active,
+        boolean pageLeft,
+        boolean pageRight,
+        int currentPageIndex,
+        int pageCount,
+        boolean showPageIndicators,
+        boolean useSubtlePageIndicators
+    ) {
         interactionOverflowActive = active;
         interactionCanPageLeft = pageLeft;
         interactionCanPageRight = pageRight;
         interactionCurrentPageIndex = Math.max(0, currentPageIndex);
         interactionPageCount = Math.max(1, pageCount);
         interactionShowsPageIndicators = showPageIndicators;
+        interactionUseSubtlePageIndicators = useSubtlePageIndicators;
         refreshVisibility();
         invalidate();
     }
@@ -237,6 +247,7 @@ public final class LauncherAzGestureFxView extends View {
             interactionCurrentPageIndex = 0;
             interactionPageCount = 1;
             interactionShowsPageIndicators = false;
+            interactionUseSubtlePageIndicators = false;
         }
         launchBloomActive = false;
         launchBloomProgress = 0f;
@@ -283,8 +294,11 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
         if (shouldDrawInteractionOverflow) {
-            if (renderLayer == RenderLayer.UNDERLAY) {
+            if (renderLayer == RenderLayer.UNDERLAY && !interactionUseSubtlePageIndicators) {
                 drawEdgeGlowAmbient(canvas);
+            }
+            if (renderLayer == RenderLayer.OVERLAY && interactionUseSubtlePageIndicators) {
+                drawInteractionPageIndicators(canvas);
             }
         }
         if (shouldDrawAzOverflow && renderLayer == RenderLayer.OVERLAY) {
@@ -509,6 +523,32 @@ public final class LauncherAzGestureFxView extends View {
                 active.inset(activeInset, activeInset);
                 pageIndicatorPaint.setColor(activeLineColor);
                 canvas.drawRoundRect(active, radius, radius, pageIndicatorPaint);
+            }
+            left += segmentWidth + segmentGap;
+        }
+    }
+
+    private void drawInteractionPageIndicators(Canvas canvas) {
+        if (!interactionOverflowActive || interactionPageCount <= 1 || appsRowRawBounds.isEmpty()) {
+            return;
+        }
+        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
+        float cy = rowBottom - dp(2.6f);
+        float lineHeight = dp(1.35f);
+        float segmentGap = dp(3f);
+        float totalWidth = clamp(getWidth() * 0.22f, dp(62f), dp(118f));
+        float segmentWidth = (totalWidth - (segmentGap * Math.max(0, interactionPageCount - 1))) / Math.max(1, interactionPageCount);
+        float left = (getWidth() - totalWidth) * 0.5f;
+        int backgroundLineColor = withAlpha(boostColor(glassTintColor, 0.88f, 0.68f), 68);
+        int activeLineColor = withAlpha(boostColor(edgeTintColor, 0.90f, 0.76f), 136);
+        for (int i = 0; i < interactionPageCount; i++) {
+            float radius = lineHeight * 0.5f;
+            tmpRect.set(left, cy - (lineHeight * 0.5f), left + segmentWidth, cy + (lineHeight * 0.5f));
+            pageIndicatorPaint.setColor(backgroundLineColor);
+            canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
+            if (i == interactionCurrentPageIndex) {
+                pageIndicatorPaint.setColor(activeLineColor);
+                canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
             }
             left += segmentWidth + segmentGap;
         }
