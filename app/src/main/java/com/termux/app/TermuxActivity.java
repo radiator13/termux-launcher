@@ -507,6 +507,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalBlurBackground();
         applyTerminalGrainOverlay();
         applySeamlessStatusBackgroundModeIfNeeded();
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.post(this::updateAzOverflowAffordance);
+        }
 
         // Check if a crash happened on last run of the app or if a plugin crashed and show a
         // notification with the crash details if it did
@@ -1421,14 +1424,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean canRight = false;
         int currentPageIndex = 0;
         int pageCount = 1;
-        boolean showPageIndicators = false;
+        boolean showPageIndicators = azOverflowActive;
         boolean subtlePinnedIndicators = false;
         if (mAzGestureActive && azOverflowActive) {
             canLeft = mSuggestionBarView.canAzPageLeft();
             canRight = mSuggestionBarView.canAzPageRight();
             currentPageIndex = mSuggestionBarView.getAzCurrentPageIndex();
             pageCount = mSuggestionBarView.getAzVisiblePageCount();
-            showPageIndicators = true;
         } else if (mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
