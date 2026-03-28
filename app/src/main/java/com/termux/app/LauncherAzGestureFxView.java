@@ -496,15 +496,7 @@ public final class LauncherAzGestureFxView extends View {
         if (!filteredOverflowActive || pageCount <= 1 || appsRowRawBounds.isEmpty() || azRowRawBounds.isEmpty()) {
             return;
         }
-
-        float rowTop = appsRowRawBounds.top - locationOnScreen[1];
-        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        float azTop = azRowRawBounds.top - locationOnScreen[1];
-        float gapTop = rowBottom + dp(2f);
-        float gapBottom = azTop - dp(2f);
-        float cy = gapTop <= gapBottom
-            ? clamp(gapTop + ((gapBottom - gapTop) * 0.62f), rowBottom + dp(2f), gapBottom)
-            : rowBottom + dp(2.2f);
+        float cy = resolvePageIndicatorCenterY();
         float lineHeight = dp(2f);
         float segmentGap = dp(5f);
         float totalWidth = clamp(getWidth() * 0.34f, dp(120f), dp(220f));
@@ -532,8 +524,7 @@ public final class LauncherAzGestureFxView extends View {
         if (!interactionOverflowActive || interactionPageCount <= 1 || appsRowRawBounds.isEmpty()) {
             return;
         }
-        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        float cy = rowBottom - dp(2.6f);
+        float cy = resolvePageIndicatorCenterY();
         float lineHeight = dp(1.35f);
         float segmentGap = dp(3f);
         float totalWidth = clamp(getWidth() * 0.22f, dp(62f), dp(118f));
@@ -552,6 +543,19 @@ public final class LauncherAzGestureFxView extends View {
             }
             left += segmentWidth + segmentGap;
         }
+    }
+
+    private float resolvePageIndicatorCenterY() {
+        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
+        if (azRowRawBounds.isEmpty()) {
+            return rowBottom + dp(2.2f);
+        }
+        float azTop = azRowRawBounds.top - locationOnScreen[1];
+        float gapTop = rowBottom + dp(2f);
+        float gapBottom = azTop - dp(2f);
+        return gapTop <= gapBottom
+            ? clamp(gapTop + ((gapBottom - gapTop) * 0.62f), rowBottom + dp(2f), gapBottom)
+            : rowBottom + dp(2.2f);
     }
 
     private void drawLaunchGlassBloom(Canvas canvas) {
