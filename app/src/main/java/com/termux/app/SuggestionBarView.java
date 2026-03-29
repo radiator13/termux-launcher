@@ -148,6 +148,7 @@ public final class SuggestionBarView extends GridLayout {
     private float swipeDownY = 0f;
     private VelocityTracker swipeVelocityTracker;
     private boolean pageSwitchAnimating = false;
+    private boolean suppressContextLongPressForSwipe = false;
     private int folderDragHoverIndex = -1;
     @Nullable private LongPressPickupState activeLongPressPickupState;
     @Nullable private AppMenuContext activeAppMenuContext;
@@ -860,6 +861,13 @@ public final class SuggestionBarView extends GridLayout {
         if (event == null) return super.dispatchTouchEvent(event);
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
+            // Always normalize row transform at new gesture start to avoid stale offsets.
+            animate().cancel();
+            setListenerSafe(null);
+            pageSwitchAnimating = false;
+            setTranslationX(0f);
+            setAlpha(1f);
+            suppressContextLongPressForSwipe = false;
             setRowInteractionActive(true);
             if (swipeVelocityTracker != null) swipeVelocityTracker.recycle();
             swipeVelocityTracker = VelocityTracker.obtain();
@@ -871,6 +879,14 @@ public final class SuggestionBarView extends GridLayout {
         } else if (action == MotionEvent.ACTION_MOVE) {
             setRowInteractionActive(true);
             if (swipeVelocityTracker != null) swipeVelocityTracker.addMovement(event);
+            float dx = event.getX() - swipeDownX;
+            float dy = event.getY() - swipeDownY;
+            int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            boolean horizontalIntent = Math.abs(dx) >= slop && Math.abs(dx) > (Math.abs(dy) * 1.1f);
+            if (horizontalIntent && TextUtils.isEmpty(lastInput.trim())) {
+                suppressContextLongPressForSwipe = true;
+                cancelPendingContextLongPresses();
+            }
         } else if (action == MotionEvent.ACTION_UP) {
             if (swipeVelocityTracker != null) {
                 swipeVelocityTracker.addMovement(event);
@@ -894,6 +910,7 @@ public final class SuggestionBarView extends GridLayout {
                                 swipeVelocityTracker.recycle();
                                 swipeVelocityTracker = null;
                             }
+                            suppressContextLongPressForSwipe = false;
                             setRowInteractionActive(false);
                             return true;
                         }
@@ -908,6 +925,7 @@ public final class SuggestionBarView extends GridLayout {
                                 swipeVelocityTracker.recycle();
                                 swipeVelocityTracker = null;
                             }
+                            suppressContextLongPressForSwipe = false;
                             setRowInteractionActive(false);
                             return true;
                         }
@@ -920,6 +938,11 @@ public final class SuggestionBarView extends GridLayout {
                 swipeVelocityTracker.recycle();
                 swipeVelocityTracker = null;
             }
+            suppressContextLongPressForSwipe = false;
+            if (!pageSwitchAnimating) {
+                setTranslationX(0f);
+                setAlpha(1f);
+            }
             setRowInteractionActive(false);
         } else if (action == MotionEvent.ACTION_CANCEL) {
             ViewParent parent = getParent();
@@ -927,6 +950,11 @@ public final class SuggestionBarView extends GridLayout {
             if (swipeVelocityTracker != null) {
                 swipeVelocityTracker.recycle();
                 swipeVelocityTracker = null;
+            }
+            suppressContextLongPressForSwipe = false;
+            if (!pageSwitchAnimating) {
+                setTranslationX(0f);
+                setAlpha(1f);
             }
             setRowInteractionActive(false);
         }
@@ -2408,6 +2436,9 @@ public final class SuggestionBarView extends GridLayout {
     ) {
         pressTarget.setLongClickable(true);
         pressTarget.setOnLongClickListener(v -> {
+            if (suppressContextLongPressForSwipe) {
+                return true;
+            }
             showContextPopup.run();
             LongPressPickupState state = activeLongPressPickupState;
             if (state == null || state.sourceView != pressTarget) {
@@ -2493,6 +2524,19 @@ public final class SuggestionBarView extends GridLayout {
             }
             return false;
         });
+    }
+
+    private void cancelPendingContextLongPresses() {
+        cancelLongPress();
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            if (child == null) continue;
+            child.cancelLongPress();
+            View pressTarget = resolvePrimaryPressTarget(child);
+            if (pressTarget != child) {
+                pressTarget.cancelLongPress();
+            }
+        }
     }
 
     private void showAppContextPopup(@NonNull AppMenuContext context) {
