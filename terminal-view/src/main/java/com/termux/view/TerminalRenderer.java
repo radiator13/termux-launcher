@@ -70,8 +70,12 @@ public final class TerminalRenderer {
      */
     final int mItalicFontLineSpacingAndAscent;
 
-    private static final int POWERLINE_PRIVATE_USE_START = 0xE0A0;
-    private static final int POWERLINE_PRIVATE_USE_END = 0xE0D7;
+    private static final int BMP_PRIVATE_USE_START = 0xE000;
+    private static final int BMP_PRIVATE_USE_END = 0xF8FF;
+    private static final int SUPPLEMENTARY_PRIVATE_USE_A_START = 0xF0000;
+    private static final int SUPPLEMENTARY_PRIVATE_USE_A_END = 0xFFFFD;
+    private static final int SUPPLEMENTARY_PRIVATE_USE_B_START = 0x100000;
+    private static final int SUPPLEMENTARY_PRIVATE_USE_B_END = 0x10FFFD;
     private static volatile float sPowerlineBaselineNudgePx = 0f;
 
     public TerminalRenderer(int textSize, Typeface typeface, Typeface italicTypeface) {
@@ -293,7 +297,7 @@ public final class TerminalRenderer {
             mTextPaint.setColor(foreColor);
             // The text alignment is the default Paint.Align.LEFT.
             float baseline = y - fontLineSpacingAndAscent;
-            if (runContainsPowerlineGlyph(text, startCharIndex, runWidthChars))
+            if (sPowerlineBaselineNudgePx != 0f && runContainsPrivateUseGlyph(text, startCharIndex, runWidthChars))
                 baseline += sPowerlineBaselineNudgePx;
             canvas.drawTextRun(text, startCharIndex, runWidthChars, startCharIndex, runWidthChars, left, baseline, false, mTextPaint);
         }
@@ -301,7 +305,7 @@ public final class TerminalRenderer {
             canvas.restore();
     }
 
-    private static boolean runContainsPowerlineGlyph(char[] text, int startCharIndex, int runWidthChars) {
+    private static boolean runContainsPrivateUseGlyph(char[] text, int startCharIndex, int runWidthChars) {
         int end = startCharIndex + runWidthChars;
         for (int i = startCharIndex; i < end; ) {
             char ch = text[i];
@@ -313,10 +317,16 @@ public final class TerminalRenderer {
                 codePoint = ch;
                 i++;
             }
-            if (codePoint >= POWERLINE_PRIVATE_USE_START && codePoint <= POWERLINE_PRIVATE_USE_END)
+            if (isPrivateUseCodePoint(codePoint))
                 return true;
         }
         return false;
+    }
+
+    private static boolean isPrivateUseCodePoint(int codePoint) {
+        return (codePoint >= BMP_PRIVATE_USE_START && codePoint <= BMP_PRIVATE_USE_END) ||
+            (codePoint >= SUPPLEMENTARY_PRIVATE_USE_A_START && codePoint <= SUPPLEMENTARY_PRIVATE_USE_A_END) ||
+            (codePoint >= SUPPLEMENTARY_PRIVATE_USE_B_START && codePoint <= SUPPLEMENTARY_PRIVATE_USE_B_END);
     }
 
     public float getFontWidth() {
