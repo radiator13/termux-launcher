@@ -12,6 +12,7 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.WindowInsetsCompat;
 
@@ -64,11 +65,11 @@ import com.termux.shared.view.ViewUtils;
 public class TermuxActivityRootView extends LinearLayout implements ViewTreeObserver.OnGlobalLayoutListener {
 
     public TermuxActivity mActivity;
-    public Integer marginBottom;
-    public Integer lastMarginBottom;
     public long lastMarginBottomTime;
     public long lastMarginBottomExtraTime;
     private long lastMarginApplyTime;
+    private int mGlobalLayoutInvocationCount;
+    private int mMarginApplyCount;
 
     /** Log root view events. */
     private boolean ROOT_VIEW_LOGGING_ENABLED = false;
@@ -107,22 +108,6 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
     }
 
     @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-
-        if (marginBottom != null) {
-            if (ROOT_VIEW_LOGGING_ENABLED)
-                Logger.logVerbose(LOG_TAG, "onMeasure: Setting bottom margin to " + marginBottom);
-            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) getLayoutParams();
-            if (params.bottomMargin != marginBottom) {
-                params.setMargins(0, 0, 0, marginBottom);
-                setLayoutParams(params);
-            }
-            marginBottom = null;
-        }
-    }
-
-    @Override
     public void onGlobalLayout() {
         if (mActivity == null || !mActivity.isVisible()) return;
 
@@ -130,6 +115,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
         if (bottomSpaceView == null) return;
 
         boolean root_view_logging_enabled = ROOT_VIEW_LOGGING_ENABLED;
+        mGlobalLayoutInvocationCount++;
 
         if (root_view_logging_enabled)
             Logger.logVerbose(LOG_TAG, ":\nonGlobalLayout:");
@@ -184,7 +170,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
                 // and prevents some infinite loops
                 if ((System.currentTimeMillis() - lastMarginBottomTime) > 40) {
                     lastMarginBottomTime = System.currentTimeMillis();
-                    marginBottom = 0;
+                    applyBottomMarginIfNeeded(params, 0, "visible_due_to_margin", root_view_logging_enabled);
                 } else {
                     if (root_view_logging_enabled)
                         Logger.logVerbose(LOG_TAG, "Ignoring restoring marginBottom to 0 since called to quickly");
@@ -204,8 +190,6 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
                     if (root_view_logging_enabled)
                         Logger.logVerbose(LOG_TAG, "Resetting margin since visible due to extra margin");
                     lastMarginBottomExtraTime = System.currentTimeMillis();
-                    // lastMarginBottom must be invalid. May also happen when keyboards are changed.
-                    lastMarginBottom = null;
                     setMargin = true;
                 } else {
                     if (root_view_logging_enabled)
@@ -214,10 +198,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
             }
 
             if (setMargin) {
-                if (root_view_logging_enabled)
-                    Logger.logVerbose(LOG_TAG, "Setting bottom margin to 0");
-                params.setMargins(0, 0, 0, 0);
-                setLayoutParams(params);
+                applyBottomMarginIfNeeded(params, 0, "visible_reset", root_view_logging_enabled);
             } else {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Bottom margin already equals 0");
@@ -278,16 +259,28 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
 
 
             if (setMargin) {
-                if (root_view_logging_enabled)
-                    Logger.logVerbose(LOG_TAG, "Setting bottom margin to " + pxHidden);
-                params.setMargins(0, 0, 0, pxHidden);
-                setLayoutParams(params);
-                lastMarginBottom = pxHidden;
+                applyBottomMarginIfNeeded(params, pxHidden, "hidden_adjust", root_view_logging_enabled);
                 lastMarginApplyTime = now;
             } else {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Bottom margin already equals " + pxHidden);
             }
+        }
+    }
+
+    private void applyBottomMarginIfNeeded(@NonNull FrameLayout.LayoutParams params, int targetBottomMargin,
+                                           @NonNull String reason, boolean rootViewLoggingEnabled) {
+        if (params.bottomMargin == targetBottomMargin) {
+            return;
+        }
+        params.setMargins(0, 0, 0, targetBottomMargin);
+        setLayoutParams(params);
+        mMarginApplyCount++;
+        if (rootViewLoggingEnabled) {
+            Logger.logVerbose(LOG_TAG, "applyBottomMarginIfNeeded: reason=" + reason +
+                ", target=" + targetBottomMargin +
+                ", applyCount=" + mMarginApplyCount +
+                ", layoutCount=" + mGlobalLayoutInvocationCount);
         }
     }
 

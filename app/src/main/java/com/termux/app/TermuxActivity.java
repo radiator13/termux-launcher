@@ -335,6 +335,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int mStatusBarInsetTop;
     private boolean mSeamlessStatusBackgroundActive;
     private long mLastEmptySessionRecoveryElapsedMs;
+    private int mImeBottomInsetPx;
+    private long mLastImeMarginApplyTimeMs;
+    private static final int IME_MARGIN_SMALL_THRESHOLD_DP = 16;
+    private static final int IME_MARGIN_MAX_DP = 240;
+    private static final int IME_MARGIN_JITTER_THRESHOLD_DP = 20;
+    private static final long IME_MARGIN_APPLY_DEBOUNCE_MS = 120L;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -378,7 +384,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
             mStatusBarInsetTop = insetsCompat.getInsets(Type.statusBars()).top;
+            int imeInsetBottom = insetsCompat.getInsets(Type.ime()).bottom;
+            mImeBottomInsetPx = Math.max(0, imeInsetBottom - mNavBarHeight);
             applyTerminalStatusBarInset(mSeamlessStatusBackgroundActive ? mStatusBarInsetTop : 0);
+            if (mPreferences != null && mPreferences.isTerminalMarginAdjustmentEnabled() && shouldUseImeInsetsMarginAdjustment()) {
+                applyImeDrivenRootBottomMargin(mImeBottomInsetPx);
+            }
             return insetsCompat.toWindowInsets();
         });
         applySeamlessStatusBackgroundModeIfNeeded();
@@ -457,7 +468,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxTerminalViewClient.onStart();
     
         if (mPreferences.isTerminalMarginAdjustmentEnabled()) {
-            addTermuxActivityRootViewGlobalLayoutListener();
+            if (shouldUseImeInsetsMarginAdjustment()) {
+                removeTermuxActivityRootViewGlobalLayoutListener();
+                applyImeDrivenRootBottomMargin(mImeBottomInsetPx);
+            } else {
+                addTermuxActivityRootViewGlobalLayoutListener();
+            }
         }
 
         if (mPreferences.isMonetBackgroundEnabled()) {
@@ -582,66 +598,40 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // App bar uses the combined extra-keys background surface.
 
         if (!isToolbarShown) {
-            if (accessoryContainer != null) {
-                accessoryContainer.setVisibility(View.GONE);
-            }
-            if (extraKeysBackgroundBlur != null) {
-                extraKeysBackgroundBlur.setVisibility(View.GONE);
-            }
-            if (extraKeysBackground != null) {
-                extraKeysBackground.setVisibility(View.GONE);
-            }
-            if (bottomSpaceBackground != null) {
-                bottomSpaceBackground.setVisibility(View.GONE);
-            }
-            if (bottomSpaceBlur != null) {
-                bottomSpaceBlur.setVisibility(View.GONE);
-            }
-            if (appsBarViewPager != null) {
-                appsBarViewPager.setVisibility(View.GONE);
-            }
-            if (azRow != null) {
-                azRow.setVisibility(View.GONE);
-            }
-            if (azFxOverlay != null) {
-                azFxOverlay.setVisibility(View.GONE);
-            }
-            if (azFxUnderlay != null) {
-                azFxUnderlay.setVisibility(View.GONE);
-            }
+            updateViewVisibility(accessoryContainer, false);
+            updateViewVisibility(extraKeysBackgroundBlur, false);
+            updateViewVisibility(extraKeysBackground, false);
+            updateViewVisibility(bottomSpaceBackground, false);
+            updateViewVisibility(bottomSpaceBlur, false);
+            updateViewVisibility(appsBarViewPager, false);
+            updateViewVisibility(azRow, false);
+            updateViewVisibility(azFxOverlay, false);
+            updateViewVisibility(azFxUnderlay, false);
             return;
         }
 
-        if (accessoryContainer != null) {
-            accessoryContainer.setVisibility(View.VISIBLE);
-        }
-        if (appsBarViewPager != null) {
-            appsBarViewPager.setVisibility(View.VISIBLE);
-        }
+        updateViewVisibility(accessoryContainer, true);
+        updateViewVisibility(appsBarViewPager, true);
         if (azRow != null) {
-            azRow.setVisibility(mPreferences.isAppLauncherAzRowEnabled() ? View.VISIBLE : View.GONE);
+            updateViewVisibility(azRow, mPreferences.isAppLauncherAzRowEnabled());
         }
-        if (azFxUnderlay != null) {
-            azFxUnderlay.setVisibility(View.VISIBLE);
-        }
-        if (azFxOverlay != null) {
-            azFxOverlay.setVisibility(View.VISIBLE);
-        }
+        updateViewVisibility(azFxUnderlay, true);
+        updateViewVisibility(azFxOverlay, true);
 
         if (extraKeysBackground != null) {
-            extraKeysBackground.setVisibility(View.VISIBLE);
-            extraKeysBackground.setAlpha(isBlurEnabled ? barAlpha : 1.0f);
+            updateViewVisibility(extraKeysBackground, true);
+            updateViewAlpha(extraKeysBackground, isBlurEnabled ? barAlpha : 1.0f);
         }
         if (bottomSpaceBackground != null) {
-            bottomSpaceBackground.setVisibility(View.VISIBLE);
-            bottomSpaceBackground.setAlpha(isBlurEnabled ? barAlpha : 1.0f);
+            updateViewVisibility(bottomSpaceBackground, true);
+            updateViewAlpha(bottomSpaceBackground, isBlurEnabled ? barAlpha : 1.0f);
         }
 
         if (extraKeysBackgroundBlur != null) {
-            extraKeysBackgroundBlur.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
+            updateViewVisibility(extraKeysBackgroundBlur, isBlurEnabled);
         }
         if (bottomSpaceBlur != null) {
-            bottomSpaceBlur.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
+            updateViewVisibility(bottomSpaceBlur, isBlurEnabled);
         }
     }
 
@@ -733,10 +723,59 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mTermuxActivityRootView.setLayoutParams(marginLayoutParams);
             }
         }
-        mTermuxActivityRootView.marginBottom = 0;
-        mTermuxActivityRootView.lastMarginBottom = null;
         mTermuxActivityRootView.lastMarginBottomTime = 0L;
         mTermuxActivityRootView.lastMarginBottomExtraTime = 0L;
+        mLastImeMarginApplyTimeMs = 0L;
+        if (mPreferences != null && mPreferences.isTerminalMarginAdjustmentEnabled() && shouldUseImeInsetsMarginAdjustment()) {
+            applyImeDrivenRootBottomMargin(mImeBottomInsetPx);
+        }
+    }
+
+    private boolean shouldUseImeInsetsMarginAdjustment() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R;
+    }
+
+    private void applyImeDrivenRootBottomMargin(int imeBottomInsetPx) {
+        if (mTermuxActivityRootView == null) {
+            return;
+        }
+
+        int smallThresholdPx = (int) ViewUtils.dpToPx(this, IME_MARGIN_SMALL_THRESHOLD_DP);
+        int maxMarginPx = (int) ViewUtils.dpToPx(this, IME_MARGIN_MAX_DP);
+        int jitterThresholdPx = (int) ViewUtils.dpToPx(this, IME_MARGIN_JITTER_THRESHOLD_DP);
+
+        int targetMargin = imeBottomInsetPx;
+        if (targetMargin > 0 && targetMargin <= smallThresholdPx) {
+            targetMargin = 0;
+        } else if (targetMargin > maxMarginPx) {
+            targetMargin = maxMarginPx;
+        }
+
+        ViewGroup.LayoutParams layoutParams = mTermuxActivityRootView.getLayoutParams();
+        if (!(layoutParams instanceof ViewGroup.MarginLayoutParams)) {
+            return;
+        }
+        ViewGroup.MarginLayoutParams marginLayoutParams = (ViewGroup.MarginLayoutParams) layoutParams;
+        int currentMargin = marginLayoutParams.bottomMargin;
+        if (currentMargin == targetMargin) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (currentMargin > 0 && targetMargin > 0 &&
+            Math.abs(currentMargin - targetMargin) <= jitterThresholdPx &&
+            (now - mLastImeMarginApplyTimeMs) < IME_MARGIN_APPLY_DEBOUNCE_MS) {
+            return;
+        }
+
+        marginLayoutParams.bottomMargin = targetMargin;
+        mTermuxActivityRootView.setLayoutParams(marginLayoutParams);
+        mLastImeMarginApplyTimeMs = now;
+
+        if (mPreferences != null && mPreferences.isTerminalViewKeyLoggingEnabled()) {
+            Logger.logVerbose(LOG_TAG, "IME margin apply: target=" + targetMargin +
+                ", imeInset=" + imeBottomInsetPx + ", nav=" + mNavBarHeight);
+        }
     }
 
     private void applyBackgroundLayerTopInset(int viewId, int insetTop) {
@@ -1837,6 +1876,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
         if (layoutParams == null)
             return;
+        if (layoutParams.height == height)
+            return;
         layoutParams.height = height;
         view.setLayoutParams(layoutParams);
     }
@@ -1852,6 +1893,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
         if (layoutParams == null)
+            return;
+        if (layoutParams.height == height)
             return;
         layoutParams.height = height;
         view.setLayoutParams(layoutParams);
@@ -1889,13 +1932,23 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void updateViewVisibility(int viewId, boolean isVisible) {
         View view = findViewById(viewId);
         if (view != null) {
-            view.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+            updateViewVisibility(view, isVisible);
         }
     }
     
     private void updateViewVisibility(View view, boolean isVisible) {
         if (view != null) {
-            view.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+            int target = isVisible ? View.VISIBLE : View.GONE;
+            if (view.getVisibility() != target) {
+                view.setVisibility(target);
+            }
+        }
+    }
+
+    private void updateViewAlpha(View view, float alpha) {
+        if (view == null) return;
+        if (Math.abs(view.getAlpha() - alpha) > 0.001f) {
+            view.setAlpha(alpha);
         }
     }
     
