@@ -255,6 +255,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
     private final Handler mAzGestureHandler = new Handler(Looper.getMainLooper());
+    @Nullable private Runnable mPendingImeMarginApplyRunnable;
     private enum AzGestureMode {
         IDLE,
         AZ_TRACKING,
@@ -341,6 +342,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int IME_MARGIN_MAX_DP = 240;
     private static final int IME_MARGIN_JITTER_THRESHOLD_DP = 20;
     private static final long IME_MARGIN_APPLY_DEBOUNCE_MS = 120L;
+    private static final long IME_MARGIN_APPLY_DELAY_MS = 90L;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -388,7 +390,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mImeBottomInsetPx = Math.max(0, imeInsetBottom - mNavBarHeight);
             applyTerminalStatusBarInset(mSeamlessStatusBackgroundActive ? mStatusBarInsetTop : 0);
             if (mPreferences != null && mPreferences.isTerminalMarginAdjustmentEnabled() && shouldUseImeInsetsMarginAdjustment()) {
-                applyImeDrivenRootBottomMargin(mImeBottomInsetPx);
+                scheduleImeDrivenRootBottomMarginApply(mImeBottomInsetPx);
             }
             return insetsCompat.toWindowInsets();
         });
@@ -778,6 +780,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    private void scheduleImeDrivenRootBottomMarginApply(int imeBottomInsetPx) {
+        if (mPendingImeMarginApplyRunnable != null) {
+            mAzGestureHandler.removeCallbacks(mPendingImeMarginApplyRunnable);
+            mPendingImeMarginApplyRunnable = null;
+        }
+
+        final int targetInset = imeBottomInsetPx;
+        Runnable runnable = () -> {
+            mPendingImeMarginApplyRunnable = null;
+            if (mPreferences != null && mPreferences.isTerminalMarginAdjustmentEnabled() && shouldUseImeInsetsMarginAdjustment()) {
+                applyImeDrivenRootBottomMargin(targetInset);
+            }
+        };
+
+        mPendingImeMarginApplyRunnable = runnable;
+        mAzGestureHandler.postDelayed(runnable, IME_MARGIN_APPLY_DELAY_MS);
+    }
+
     private void applyBackgroundLayerTopInset(int viewId, int insetTop) {
         View view = findViewById(viewId);
         if (view == null) {
@@ -819,6 +839,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         unregisterTermuxActivityBroadcastReceiver();
         unregisterPackageChangeReceiver();
         unregisterLauncherAppsCallback();
+        if (mPendingImeMarginApplyRunnable != null) {
+            mAzGestureHandler.removeCallbacks(mPendingImeMarginApplyRunnable);
+            mPendingImeMarginApplyRunnable = null;
+        }
         mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
         getDrawer().closeDrawers();
     }
