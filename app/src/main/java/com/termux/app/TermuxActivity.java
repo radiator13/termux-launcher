@@ -101,6 +101,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -1069,7 +1070,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mProperties == null) {
             return defaultValue;
         }
-        String value = mProperties.getProperty(key, false);
+        Properties properties = mProperties.getProperties(false);
+        String value = properties == null ? null : properties.getProperty(key);
         if (DataUtils.isNullOrEmpty(value)) {
             return defaultValue;
         }
