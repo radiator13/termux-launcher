@@ -11,6 +11,8 @@ import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.widget.ListView;
 import androidx.annotation.NonNull;
@@ -48,6 +50,15 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     private int mBellSoundId;
 
     private static final String LOG_TAG = "TermuxTerminalSessionActivityClient";
+    private final Handler mUiHandler = new Handler(Looper.getMainLooper());
+    private boolean mTerminalScreenUpdatePending;
+    private final Runnable mTerminalScreenUpdateRunnable = () -> {
+        mTerminalScreenUpdatePending = false;
+        if (!mActivity.isVisible()) return;
+        if (mActivity.getCurrentSession() != null) {
+            mActivity.getTerminalView().onScreenUpdated();
+        }
+    };
 
     public TermuxTerminalSessionActivityClient(TermuxActivity activity) {
         this.mActivity = activity;
@@ -102,6 +113,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // Bell is not played in background anyways
         // Related: https://stackoverflow.com/a/28708351/14686958
         releaseBellSoundPool();
+        mTerminalScreenUpdatePending = false;
+        mUiHandler.removeCallbacks(mTerminalScreenUpdateRunnable);
     }
 
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
@@ -123,8 +136,12 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void onTextChanged(@NonNull TerminalSession changedSession) {
         if (!mActivity.isVisible())
             return;
-        if (mActivity.getCurrentSession() == changedSession)
-            mActivity.getTerminalView().onScreenUpdated();
+        if (mActivity.getCurrentSession() != changedSession)
+            return;
+        if (mTerminalScreenUpdatePending)
+            return;
+        mTerminalScreenUpdatePending = true;
+        mUiHandler.post(mTerminalScreenUpdateRunnable);
     }
 
     @Override

@@ -578,8 +578,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float barAlpha = mPreferences.getAppBarOpacity() / 100f;
         int blurRadiusDp = mPreferences.getExtraKeysBlurRadius();
         applyRealtimeBlurRadius(extraKeysBackgroundBlur, blurRadiusDp);
-        applyRealtimeBlurRadius(bottomSpaceBlur, blurRadiusDp);
-        // App bar uses the combined extra-keys background surface.
+        // Keep one live blur in the accessory stack. The bottom probe stays static to avoid
+        // overlapping RealtimeBlurView composition during IME transitions.
+        if (bottomSpaceBlur != null) {
+            bottomSpaceBlur.setVisibility(View.GONE);
+        }
 
         if (!isToolbarShown) {
             if (accessoryContainer != null) {
@@ -640,9 +643,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
         }
-        if (bottomSpaceBlur != null) {
-            bottomSpaceBlur.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
-        }
+        applyTerminalBlurBackground();
     }
 
     private void applyRealtimeBlurRadius(View blurView, int blurRadiusDp) {
@@ -672,7 +673,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int downsampleFactor = mPreferences.getTerminalBlurDownsampleFactor();
         applyRealtimeBlurRadius(blurView, blurRadiusDp);
         applyRealtimeBlurDownsampleFactor(blurView, downsampleFactor);
-        blurView.setVisibility(blurRadiusDp > 0 ? View.VISIBLE : View.GONE);
+        boolean accessoryBlurActive = mPreferences.shouldShowTerminalToolbar() && mPreferences.isExtraKeysBlurEnabled();
+        blurView.setVisibility((blurRadiusDp > 0 && !accessoryBlurActive) ? View.VISIBLE : View.GONE);
     }
 
     private void applyTerminalGrainOverlay() {

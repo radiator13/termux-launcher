@@ -11,8 +11,10 @@ import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.os.SystemClock;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.termux.app.TermuxActivity;
@@ -75,6 +77,9 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
     private static final String LOG_TAG = "TermuxActivityRootView";
 
     private static int mStatusBarHeight;
+    private static final long MIN_MARGIN_UPDATE_INTERVAL_MS = 18L;
+
+    private long mLastMarginCommitTimeMs;
 
     public TermuxActivityRootView(Context context) {
         super(context);
@@ -106,13 +111,16 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
         if (marginBottom != null) {
+            int targetBottomMargin = clampBottomMargin(marginBottom);
             if (ROOT_VIEW_LOGGING_ENABLED)
-                Logger.logVerbose(LOG_TAG, "onMeasure: Setting bottom margin to " + marginBottom);
+                Logger.logVerbose(LOG_TAG, "onMeasure: Setting bottom margin to " + targetBottomMargin);
             ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) getLayoutParams();
-            params.setMargins(0, 0, 0, marginBottom);
-            setLayoutParams(params);
+            if (params.bottomMargin != targetBottomMargin) {
+                params.setMargins(0, 0, 0, targetBottomMargin);
+                setLayoutParams(params);
+                mLastMarginCommitTimeMs = SystemClock.uptimeMillis();
+            }
             marginBottom = null;
-            requestLayout();
         }
     }
 
@@ -210,8 +218,7 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
             if (setMargin) {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Setting bottom margin to 0");
-                params.setMargins(0, 0, 0, 0);
-                setLayoutParams(params);
+                commitBottomMargin(params, 0);
             } else {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Bottom margin already equals 0");
@@ -262,14 +269,29 @@ public class TermuxActivityRootView extends LinearLayout implements ViewTreeObse
             if (setMargin) {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Setting bottom margin to " + pxHidden);
-                params.setMargins(0, 0, 0, pxHidden);
-                setLayoutParams(params);
+                commitBottomMargin(params, pxHidden);
                 lastMarginBottom = pxHidden;
             } else {
                 if (root_view_logging_enabled)
                     Logger.logVerbose(LOG_TAG, "Bottom margin already equals " + pxHidden);
             }
         }
+    }
+
+    private int clampBottomMargin(int value) {
+        int max = Math.max(0, getHeight());
+        return Math.max(0, Math.min(value, max));
+    }
+
+    private void commitBottomMargin(@NonNull FrameLayout.LayoutParams params, int requestedBottomMargin) {
+        int targetBottomMargin = clampBottomMargin(requestedBottomMargin);
+        if (params.bottomMargin == targetBottomMargin) return;
+        long now = SystemClock.uptimeMillis();
+        int delta = Math.abs(params.bottomMargin - targetBottomMargin);
+        if (delta <= 1 && (now - mLastMarginCommitTimeMs) < MIN_MARGIN_UPDATE_INTERVAL_MS) return;
+        params.setMargins(0, 0, 0, targetBottomMargin);
+        setLayoutParams(params);
+        mLastMarginCommitTimeMs = now;
     }
 
     public static class WindowInsetsListener implements View.OnApplyWindowInsetsListener {
