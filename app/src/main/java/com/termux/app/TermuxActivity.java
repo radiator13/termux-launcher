@@ -561,8 +561,42 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         blurView.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
         backgroundView.setAlpha(isBlurEnabled ? alphaIfBlurred : 1.0f);
     }
-    
+
+    private static final class AccessoryRenderState {
+        final boolean toolbarShown;
+        final boolean blurEnabled;
+        final boolean azRowEnabled;
+        final float barAlpha;
+        final int blurRadiusDp;
+
+        AccessoryRenderState(boolean toolbarShown, boolean blurEnabled, boolean azRowEnabled, float barAlpha, int blurRadiusDp) {
+            this.toolbarShown = toolbarShown;
+            this.blurEnabled = blurEnabled;
+            this.azRowEnabled = azRowEnabled;
+            this.barAlpha = barAlpha;
+            this.blurRadiusDp = blurRadiusDp;
+        }
+    }
+
+    @NonNull
+    private AccessoryRenderState buildAccessoryRenderState() {
+        if (mPreferences == null) {
+            return new AccessoryRenderState(false, false, false, 1.0f, 0);
+        }
+        return new AccessoryRenderState(
+            mPreferences.shouldShowTerminalToolbar(),
+            mPreferences.isExtraKeysBlurEnabled(),
+            mPreferences.isAppLauncherAzRowEnabled(),
+            mPreferences.getAppBarOpacity() / 100f,
+            mPreferences.getExtraKeysBlurRadius()
+        );
+    }
+
     private void configureExtraKeysBackground() {
+        applyAccessoryRenderState(buildAccessoryRenderState());
+    }
+
+    private void applyAccessoryRenderState(@NonNull AccessoryRenderState state) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         View appsBarViewPager = findViewById(R.id.apps_bar_viewpager);
         View extraKeysBackground = findViewById(R.id.extrakeys_background);
@@ -573,18 +607,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View azFxUnderlay = findViewById(R.id.apps_bar_az_fx_underlay);
         View azFxOverlay = findViewById(R.id.apps_bar_az_fx_overlay);
 
-        boolean isToolbarShown = mPreferences.shouldShowTerminalToolbar();
-        boolean isBlurEnabled = mPreferences.isExtraKeysBlurEnabled();
-        float barAlpha = mPreferences.getAppBarOpacity() / 100f;
-        int blurRadiusDp = mPreferences.getExtraKeysBlurRadius();
-        applyRealtimeBlurRadius(extraKeysBackgroundBlur, blurRadiusDp);
+        applyRealtimeBlurRadius(extraKeysBackgroundBlur, state.blurRadiusDp);
         // Keep one live blur in the accessory stack. The bottom probe stays static to avoid
         // overlapping RealtimeBlurView composition during IME transitions.
         if (bottomSpaceBlur != null) {
             bottomSpaceBlur.setVisibility(View.GONE);
         }
 
-        if (!isToolbarShown) {
+        if (!state.toolbarShown) {
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(View.GONE);
             }
@@ -623,28 +653,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             appsBarViewPager.setVisibility(View.VISIBLE);
         }
         if (azRow != null) {
-            azRow.setVisibility(mPreferences.isAppLauncherAzRowEnabled() ? View.VISIBLE : View.GONE);
+            azRow.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
         }
         if (azFxUnderlay != null) {
-            azFxUnderlay.setVisibility(View.VISIBLE);
+            azFxUnderlay.setVisibility(View.GONE);
         }
         if (azFxOverlay != null) {
-            azFxOverlay.setVisibility(View.VISIBLE);
+            azFxOverlay.setVisibility(View.GONE);
         }
 
         if (extraKeysBackground != null) {
             extraKeysBackground.setVisibility(View.VISIBLE);
-            extraKeysBackground.setAlpha(isBlurEnabled ? barAlpha : 1.0f);
+            extraKeysBackground.setAlpha(state.blurEnabled ? state.barAlpha : 1.0f);
         }
         if (bottomSpaceBackground != null) {
             bottomSpaceBackground.setVisibility(View.VISIBLE);
-            bottomSpaceBackground.setAlpha(isBlurEnabled ? barAlpha : 1.0f);
+            bottomSpaceBackground.setAlpha(state.blurEnabled ? state.barAlpha : 1.0f);
         }
 
         if (extraKeysBackgroundBlur != null) {
-            extraKeysBackgroundBlur.setVisibility(isBlurEnabled ? View.VISIBLE : View.GONE);
+            extraKeysBackgroundBlur.setVisibility(state.blurEnabled ? View.VISIBLE : View.GONE);
         }
         applyTerminalBlurBackground();
+        updateAzOverflowAffordance();
     }
 
     private void applyRealtimeBlurRadius(View blurView, int blurRadiusDp) {
