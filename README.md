@@ -1,55 +1,60 @@
 # Termux Launcher
 
-Termux Launcher turns Termux into an Android home screen focused on keyboard-first workflows, terminal-heavy use, and fast app launching.
+Termux Launcher is a terminal-first Android launcher built on top of [termux-app](https://github.com/termux/termux-app) and [termux-monet](https://github.com/Termux-Monet/termux-monet). It keeps the full Termux session front and center, adds a fast app bar for touch launch and alphabet filtering, and stays usable as a daily launcher instead of a one-off shell skin.
 
-It is based on [termux-monet](https://github.com/Termux-Monet/termux-monet), with launcher-specific UI built on top of the upstream [termux-app](https://github.com/termux/termux-app) codebase.
+[Download builds from Releases](https://github.com/PickleHik3/termux-launcher/releases)
 
-Download builds from [Releases](https://github.com/PickleHik3/termux-launcher/releases).
+## Highlights
 
-## What It Adds
-
-- Terminal-first Android launcher experience
-- App icons row with paging and page indicators
-- AZ scrub row for fast application filtering and launching
-- Wallpaper-aware theming and visual customization
-- Optional terminal blur, grain, and opacity controls
-- Pinned apps workflow inside the launcher surface
-- Optional monochrome app icons
+- Termux as the actual home screen, not a widget inside another launcher
+- Pinned app row plus alphabet scrub filtering for the full installed app list
+- Live install and uninstall refresh in the app bar without restarting the launcher
+- Keyboard-first search flow with configurable split character handling
+- Wallpaper-aware theming, blur controls, monochrome icons, and launcher visual tuning
+- Optional Shizuku hooks for screen locking and privileged status integrations
 
 ## Companion Apps
 
-Use the matching forks below to avoid shared UID and signature mismatches:
+Use the matching forks below to avoid shared UID or signing mismatches:
 
 - [Termux:API](https://github.com/PickleHik3/termux-api)
 - [Termux:Styling](https://github.com/PickleHik3/termux-styling)
 
 ## Optional Shizuku Integration
 
-Shizuku is not required for normal app launching, filtering, pinned apps, or the launcher UI.
+Shizuku is not required for normal launcher usage.
 
 If enabled, the current privileged integrations are limited to:
 
-- lock screen on AZ-row double tap
+- double-tap A-Z row to lock the screen
 - system stats support for tmux status bar integrations
 
-If you use the tmux status bar helpers, see [tooie](https://github.com/PickleHik3/tooie) for the companion tooling and setup flow.
+If you use the tmux status helpers, see [tooie](https://github.com/PickleHik3/tooie).
 
 ## Setup Notes
 
-- Installing [Shizuku](https://github.com/rikkaapps/shizuku) is optional.
-- Installing [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) is recommended for heavy tmux and shell usage.
-- By default, typing `/` in the terminal starts app search in the launcher bar. You can change that from `Settings -> Apps Bar -> Input split character`.
+- [Shizuku](https://github.com/rikkaapps/shizuku) is optional.
+- [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) is strongly recommended for tmux-heavy use.
+- By default, typing `/` in the terminal starts app search in the launcher bar. This can be changed in `Settings -> Apps Bar -> Input split character`.
+
+## Demo
+
+![Launcher demo](screenshots/launcher-demo.gif)
 
 ## Screenshots
 
-| Home | Apps Bar | Settings |
+| Home | tooie / system view | Pacman in filtered app bar |
 | --- | --- | --- |
-| ![Home](screenshots/home-screen.png) | ![Apps Bar](screenshots/app-search.png) | ![Settings](screenshots/app-settings.png) |
+| ![Home screen](screenshots/01-home.png) | ![tooie system view](screenshots/02-tooie-system.png) | ![Pacman with filtered app bar](screenshots/03-pacman-search.png) |
+
+| Main settings | Look and feel | Apps bar settings |
+| --- | --- | --- |
+| ![Launcher settings](screenshots/04-settings-home.png) | ![Look and feel settings](screenshots/05-look-and-feel.png) | ![Apps bar settings](screenshots/06-apps-bar-settings.png) |
 
 ## Known Limitations
 
-- Android 12+ phantom process restrictions can still affect Termux stability under heavy background process load. See the upstream Termux guidance in [termux-app issue #2366](https://github.com/termux/termux-app/issues/2366).
-- If the shell is exited while the app is active as the system launcher, Android may leave the app in a degraded state until the launcher process is restarted.
+- Android 12+ phantom process restrictions can still affect long-running Termux workloads under heavy background pressure. See [termux-app issue #2366](https://github.com/termux/termux-app/issues/2366).
+- If the shell exits while the launcher is active as the system home app, Android can leave the process in a degraded state until it is restarted.
 
 ## Upstream Base
 
