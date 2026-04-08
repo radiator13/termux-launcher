@@ -7,7 +7,6 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
@@ -70,7 +69,6 @@ public final class TerminalView extends View {
     public TerminalViewClient mClient;
 
     private boolean mUseTransparentFrameClear;
-    private int mTransparentFrameOverlayColor = Color.TRANSPARENT;
 
     private TextSelectionCursorController mTextSelectionCursorController;
 
@@ -1324,7 +1322,7 @@ public final class TerminalView extends View {
             if (mTextSelectionCursorController != null) {
                 mTextSelectionCursorController.getSelectors(sel);
             }
-            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3], mUseTransparentFrameClear, mTransparentFrameOverlayColor);
+            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3], mUseTransparentFrameClear);
             // render the text selection handles
             renderTextSelection();
         }
@@ -1333,12 +1331,6 @@ public final class TerminalView extends View {
     public void setUseTransparentFrameClear(boolean useTransparentFrameClear) {
         if (mUseTransparentFrameClear == useTransparentFrameClear) return;
         mUseTransparentFrameClear = useTransparentFrameClear;
-        invalidate();
-    }
-
-    public void setTransparentFrameOverlayColor(int transparentFrameOverlayColor) {
-        if (mTransparentFrameOverlayColor == transparentFrameOverlayColor) return;
-        mTransparentFrameOverlayColor = transparentFrameOverlayColor;
         invalidate();
     }
 

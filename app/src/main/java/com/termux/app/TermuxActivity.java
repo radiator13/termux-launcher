@@ -327,6 +327,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
 
     private static final String LOG_TAG = "TermuxActivity";
+    private static final int ACCESSORY_BLUR_DOWNSAMPLE_FACTOR = 4;
     private static volatile boolean sPendingStyleReloadOnNextResume = false;
 
     private static final int SUGGESTION_BAR_MIN_BUTTON_DP = 56;
@@ -562,11 +563,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return 0xFF000000 | (overlayColor & 0x00FFFFFF);
     }
 
-    private int resolveGlassOverlayColor(int opacityPercent) {
-        int alpha = Math.round(resolveOpacityAlpha(opacityPercent) * 255f);
-        return (alpha << 24) | (resolveGlassSurfaceColor() & 0x00FFFFFF);
-    }
-
     private void applyGlassSurfaceColor(int viewId, int surfaceColor) {
         View surface = findViewById(viewId);
         if (surface != null) {
@@ -633,11 +629,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View azRow = findViewById(R.id.apps_bar_az_row);
         View azFxUnderlay = findViewById(R.id.apps_bar_az_fx_underlay);
         View azFxOverlay = findViewById(R.id.apps_bar_az_fx_overlay);
-        boolean sharedWallpaperBlur = shouldUseWallpaperPassthroughMode();
 
         if (extraKeysBackgroundBlur != null) {
             applyRealtimeBlurRadius(extraKeysBackgroundBlur, state.blurRadiusDp);
-            applyRealtimeBlurDownsampleFactor(extraKeysBackgroundBlur, sharedWallpaperBlur ? mPreferences.getTerminalBlurDownsampleFactor() : 1);
+            applyRealtimeBlurDownsampleFactor(extraKeysBackgroundBlur, ACCESSORY_BLUR_DOWNSAMPLE_FACTOR);
             applyRealtimeBlurOverlayColor(extraKeysBackgroundBlur, Color.TRANSPARENT);
         }
         // Keep one live blur in the accessory stack. The bottom probe stays static to avoid
@@ -709,7 +704,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (extraKeysBackgroundBlur != null) {
-            extraKeysBackgroundBlur.setVisibility(!sharedWallpaperBlur && state.blurEnabled ? View.VISIBLE : View.GONE);
+            extraKeysBackgroundBlur.setVisibility(state.blurEnabled ? View.VISIBLE : View.GONE);
         }
         updateAzOverflowAffordance();
     }
@@ -744,10 +739,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (blurView == null) {
             return;
         }
-        int blurRadiusDp = mPreferences.getTerminalBlurRadius();
         if (shouldUseWallpaperPassthroughMode()) {
-            blurRadiusDp = Math.max(blurRadiusDp, mPreferences.getExtraKeysBlurRadius());
+            blurView.setVisibility(View.GONE);
+            return;
         }
+        int blurRadiusDp = mPreferences.getTerminalBlurRadius();
         int downsampleFactor = mPreferences.getTerminalBlurDownsampleFactor();
         applyRealtimeBlurRadius(blurView, blurRadiusDp);
         applyRealtimeBlurDownsampleFactor(blurView, downsampleFactor);
@@ -765,9 +761,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTerminalView == null) {
             return;
         }
-        boolean passthrough = shouldUseWallpaperPassthroughMode();
-        mTerminalView.setUseTransparentFrameClear(passthrough);
-        mTerminalView.setTransparentFrameOverlayColor(passthrough ? resolveGlassOverlayColor(mPreferences.getTerminalBackgroundOpacity()) : Color.TRANSPARENT);
+        mTerminalView.setUseTransparentFrameClear(shouldUseWallpaperPassthroughMode());
     }
 
     private boolean shouldEnableSeamlessStatusBackground() {

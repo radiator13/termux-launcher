@@ -246,6 +246,15 @@ public class TermuxBackgroundManager {
         if (!mActivity.isVisible())
             return;
         if (mPreferences.isUseSystemWallpaperEnabled() && !mPreferences.isBackgroundImageEnabled()) {
+            try {
+                Drawable wallpaperDrawable = WallpaperManager.getInstance(mActivity).getDrawable();
+                if (wallpaperDrawable != null) {
+                    mActivity.getWindow().getDecorView().setBackground(wallpaperDrawable);
+                    return;
+                }
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Failed to load system wallpaper drawable", e);
+            }
             mActivity.getWindow().getDecorView().setBackgroundColor(android.graphics.Color.TRANSPARENT);
             return;
         }
