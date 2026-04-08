@@ -562,6 +562,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return 0xFF000000 | (overlayColor & 0x00FFFFFF);
     }
 
+    private int resolveGlassOverlayColor(int opacityPercent) {
+        int alpha = Math.round(resolveOpacityAlpha(opacityPercent) * 255f);
+        return (alpha << 24) | (resolveGlassSurfaceColor() & 0x00FFFFFF);
+    }
+
     private void applyGlassSurfaceColor(int viewId, int surfaceColor) {
         View surface = findViewById(viewId);
         if (surface != null) {
@@ -633,6 +638,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (extraKeysBackgroundBlur != null) {
             applyRealtimeBlurRadius(extraKeysBackgroundBlur, state.blurRadiusDp);
             applyRealtimeBlurDownsampleFactor(extraKeysBackgroundBlur, sharedWallpaperBlur ? mPreferences.getTerminalBlurDownsampleFactor() : 1);
+            applyRealtimeBlurOverlayColor(extraKeysBackgroundBlur, resolveGlassOverlayColor(Math.round(state.barAlpha * 100f)));
         }
         // Keep one live blur in the accessory stack. The bottom probe stays static to avoid
         // overlapping RealtimeBlurView composition during IME transitions.
@@ -724,6 +730,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ((RealtimeBlurView) blurView).setDownsampleFactor(Math.max(1, downsampleFactor));
     }
 
+    private void applyRealtimeBlurOverlayColor(View blurView, int overlayColor) {
+        if (!(blurView instanceof RealtimeBlurView)) {
+            return;
+        }
+        ((RealtimeBlurView) blurView).setOverlayColor(overlayColor);
+    }
+
     private void applyTerminalBlurBackground() {
         if (mPreferences == null) {
             return;
@@ -733,9 +746,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         int blurRadiusDp = mPreferences.getTerminalBlurRadius();
+        if (shouldUseWallpaperPassthroughMode()) {
+            blurRadiusDp = Math.max(blurRadiusDp, mPreferences.getExtraKeysBlurRadius());
+        }
         int downsampleFactor = mPreferences.getTerminalBlurDownsampleFactor();
         applyRealtimeBlurRadius(blurView, blurRadiusDp);
         applyRealtimeBlurDownsampleFactor(blurView, downsampleFactor);
+        applyRealtimeBlurOverlayColor(blurView, resolveGlassOverlayColor(mPreferences.getTerminalBackgroundOpacity()));
         blurView.setVisibility(blurRadiusDp > 0 ? View.VISIBLE : View.GONE);
     }
 
@@ -756,7 +773,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mPreferences == null || mProperties == null || mProperties.isUsingFullScreen()) {
             return false;
         }
-        return mPreferences.isMonetBackgroundEnabled()
+        return shouldUseWallpaperPassthroughMode()
+            || mPreferences.isMonetBackgroundEnabled()
             || mPreferences.getTerminalBlurRadius() > 0;
     }
 
