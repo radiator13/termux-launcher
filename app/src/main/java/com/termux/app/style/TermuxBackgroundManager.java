@@ -245,6 +245,10 @@ public class TermuxBackgroundManager {
     public void updateBackgroundColor() {
         if (!mActivity.isVisible())
             return;
+        if (mPreferences.isUseSystemWallpaperEnabled() && !mPreferences.isBackgroundImageEnabled()) {
+            mActivity.getWindow().getDecorView().setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            return;
+        }
         TerminalSession session = mActivity.getCurrentSession();
         if (session != null && session.getEmulator() != null) {
             mActivity.getWindow().getDecorView().setBackgroundColor(session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND]);

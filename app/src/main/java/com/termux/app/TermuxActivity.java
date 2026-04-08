@@ -999,8 +999,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // day or night theme takes affect.
         AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
 
-        setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
-        Logger.logDebug(LOG_TAG, "Applied normal theme");
+        boolean useWallpaperTheme = mPreferences != null
+            && mPreferences.isUseSystemWallpaperEnabled()
+            && !mPreferences.isBackgroundImageEnabled();
+        setTheme(useWallpaperTheme ? R.style.Theme_TermuxActivity_Wallpaper : R.style.Theme_TermuxActivity_DayNight_NoActionBar);
+        Logger.logDebug(LOG_TAG, "Applied " + (useWallpaperTheme ? "wallpaper" : "normal") + " theme");
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
