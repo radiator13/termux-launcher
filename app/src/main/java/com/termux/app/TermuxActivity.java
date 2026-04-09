@@ -338,6 +338,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mLastImeVisible;
     @Nullable private String mPendingAccessoryRenderReason;
     @Nullable private ViewTreeObserver.OnGlobalLayoutListener mAccessoryKeyboardLayoutListener;
+    @Nullable private View.OnLayoutChangeListener mAccessoryLayoutChangeListener;
     private final int[] mTmpViewLocation = new int[2];
     private long mLastAccessoryRenderSyncUptimeMs;
     private final Handler mAccessoryRenderHandler = new Handler(Looper.getMainLooper());
@@ -474,6 +475,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             addTermuxActivityRootViewGlobalLayoutListener();
         }
         addAccessoryKeyboardLayoutListener();
+        addAccessoryLayoutChangeListeners();
 
         syncTerminalWallpaperRenderingMode();
         applySeamlessStatusBackgroundModeIfNeeded();
@@ -557,12 +559,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     ((TerminalView) terminalView).setTransparentFrameOverlayColor(terminalSurfaceColor);
                 }
             }
-            terminalStatusSurface.setBackgroundColor(terminalSurfaceColor);
-            terminalStatusSurface.setVisibility(
-                showSurface && mSeamlessStatusBackgroundActive && Color.alpha(terminalSurfaceColor) > 0
-                    ? View.VISIBLE
-                    : View.GONE
-            );
+            applyTerminalStatusBarSurfaceColor(terminalStatusSurface, showSurface, terminalSurfaceColor);
             return;
         }
 
@@ -578,8 +575,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ((TerminalView) terminalView).setTransparentFrameOverlayColor(Color.TRANSPARENT);
             }
         }
-        terminalStatusSurface.setBackgroundColor(terminalSurfaceColor);
-        terminalStatusSurface.setVisibility(showSurface && mSeamlessStatusBackgroundActive ? View.VISIBLE : View.GONE);
+        applyTerminalStatusBarSurfaceColor(terminalStatusSurface, showSurface, terminalSurfaceColor);
+    }
+
+    private void applyTerminalStatusBarSurfaceColor(@NonNull View terminalStatusSurface, boolean showSurface, int terminalSurfaceColor) {
+        int targetColor = showSurface && mSeamlessStatusBackgroundActive ? terminalSurfaceColor : Color.TRANSPARENT;
+        if (getWindow() != null) {
+            getWindow().setStatusBarColor(targetColor);
+        }
+        terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
+        terminalStatusSurface.setVisibility(View.GONE);
     }
 
     private int resolveGlassSurfaceBaseColor() {
@@ -623,6 +628,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (accessoryContainer == null || accessoryContainer.getWidth() <= 0 || accessoryContainer.getHeight() <= 0) {
             return null;
         }
+        Rect containerRect = new Rect();
+        if (!accessoryContainer.getGlobalVisibleRect(containerRect)) {
+            return null;
+        }
         int top = Integer.MAX_VALUE;
         int bottom = Integer.MIN_VALUE;
         int[] candidateIds = {
@@ -635,13 +644,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (candidate == null || candidate.getVisibility() != View.VISIBLE || candidate.getHeight() <= 0) {
                 continue;
             }
-            top = Math.min(top, candidate.getTop());
-            bottom = Math.max(bottom, candidate.getBottom());
+            Rect candidateRect = new Rect();
+            if (!candidate.getGlobalVisibleRect(candidateRect)) {
+                continue;
+            }
+            candidateRect.offset(-containerRect.left, -containerRect.top);
+            top = Math.min(top, candidateRect.top);
+            bottom = Math.max(bottom, candidateRect.bottom);
         }
         if (top == Integer.MAX_VALUE || bottom <= top) {
             return null;
         }
-        return new Rect(0, top, accessoryContainer.getWidth(), bottom);
+        return new Rect(0, Math.max(0, top), accessoryContainer.getWidth(), Math.min(accessoryContainer.getHeight(), bottom));
     }
 
     private void applyAccessoryLayerBounds(int viewId, @Nullable Rect bounds) {
@@ -1049,7 +1063,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applyTerminalStatusBarInset(int insetTop) {
         int safeInsetTop = Math.max(0, insetTop);
-        updateViewHeight(R.id.terminal_monetbackground, safeInsetTop);
+        updateViewHeight(R.id.terminal_monetbackground, 0);
         applyBackgroundLayerTopInset(R.id.terminal_backgroundblur, safeInsetTop);
     }
 
@@ -1068,6 +1082,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxTerminalViewClient.onStop();
         removeTermuxActivityRootViewGlobalLayoutListener();
         removeAccessoryKeyboardLayoutListener();
+        removeAccessoryLayoutChangeListeners();
         unregisterTermuxActivityBroadcastReceiver();
         unregisterPackageChangeReceiver();
         unregisterLauncherAppsCallback();
@@ -2820,6 +2835,49 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         content.getViewTreeObserver().removeOnGlobalLayoutListener(mAccessoryKeyboardLayoutListener);
         mAccessoryKeyboardLayoutListener = null;
+    }
+
+    private void addAccessoryLayoutChangeListeners() {
+        if (mAccessoryLayoutChangeListener != null) {
+            return;
+        }
+        mAccessoryLayoutChangeListener = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (left == oldLeft && top == oldTop && right == oldRight && bottom == oldBottom) {
+                return;
+            }
+            scheduleAccessoryRenderSync("accessory:layout");
+        };
+        int[] watchIds = {
+            R.id.accessory_stack_container,
+            R.id.apps_bar_viewpager,
+            R.id.apps_bar_az_row,
+            R.id.terminal_toolbar_view_pager
+        };
+        for (int watchId : watchIds) {
+            View watchView = findViewById(watchId);
+            if (watchView != null) {
+                watchView.addOnLayoutChangeListener(mAccessoryLayoutChangeListener);
+            }
+        }
+    }
+
+    private void removeAccessoryLayoutChangeListeners() {
+        if (mAccessoryLayoutChangeListener == null) {
+            return;
+        }
+        int[] watchIds = {
+            R.id.accessory_stack_container,
+            R.id.apps_bar_viewpager,
+            R.id.apps_bar_az_row,
+            R.id.terminal_toolbar_view_pager
+        };
+        for (int watchId : watchIds) {
+            View watchView = findViewById(watchId);
+            if (watchView != null) {
+                watchView.removeOnLayoutChangeListener(mAccessoryLayoutChangeListener);
+            }
+        }
+        mAccessoryLayoutChangeListener = null;
     }
 
     private boolean isImeVisible() {
