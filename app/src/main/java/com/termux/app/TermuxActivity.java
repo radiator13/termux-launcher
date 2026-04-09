@@ -331,7 +331,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final long EMPTY_SESSION_RECOVERY_DEBOUNCE_MS = 1500L;
     private static final boolean ACCESSORY_RENDER_TRACE = true;
 
-    private int mStatusBarInsetTop;
     private boolean mSeamlessStatusBackgroundActive;
     private long mLastEmptySessionRecoveryElapsedMs;
     private boolean mAccessoryRenderSyncPending;
@@ -393,8 +392,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         content.setOnApplyWindowInsetsListener((v, insets) -> {
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
-            mStatusBarInsetTop = insetsCompat.getInsets(Type.statusBars()).top;
-            applyTerminalStatusBarInset(mSeamlessStatusBackgroundActive ? mStatusBarInsetTop : 0);
             return insetsCompat.toWindowInsets();
         });
         applySeamlessStatusBackgroundModeIfNeeded();
@@ -482,7 +479,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalSurfaceAppearance();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         configureExtraKeysBackground();
-        applyTerminalBlurBackground();
         scheduleAccessoryRenderSync("onStart");
     
         registerTermuxActivityBroadcastReceiver();
@@ -514,7 +510,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalSurfaceAppearance();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         configureExtraKeysBackground();
-        applyTerminalBlurBackground();
         scheduleAccessoryRenderSync("onResume");
         if (mSuggestionBarView != null) {
             mSuggestionBarView.post(this::updateAzOverflowAffordance);
@@ -535,11 +530,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mPreferences == null) {
             return;
         }
-        View terminalStatusSurface = findViewById(R.id.terminal_monetbackground);
         View terminalSurfaceHost = findViewById(R.id.terminal_surface_host);
         View terminalBodySurface = findViewById(R.id.terminal_background);
         View terminalView = findViewById(R.id.terminal_view);
-        if (terminalStatusSurface == null || terminalSurfaceHost == null || terminalBodySurface == null) {
+        if (terminalSurfaceHost == null || terminalBodySurface == null) {
             return;
         }
         int sharedSurfaceColor = resolveGlassSurfaceBaseColor();
@@ -559,12 +553,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     ((TerminalView) terminalView).setTransparentFrameOverlayColor(terminalSurfaceColor);
                 }
             }
-            applyTerminalStatusBarSurfaceColor(terminalStatusSurface, showSurface, terminalSurfaceColor);
+            applyTerminalStatusBarSurfaceColor(showSurface, terminalSurfaceColor);
             return;
         }
 
-        boolean blurEnabled = !shouldUseWallpaperPassthroughMode() && mPreferences.getTerminalBlurRadius() > 0;
-        boolean showSurface = shouldShowTerminalGlassSurface() && !blurEnabled;
+        boolean showSurface = shouldShowTerminalGlassSurface();
         int terminalSurfaceColor = showSurface ? resolveTerminalSurfaceColor() : Color.TRANSPARENT;
         terminalSurfaceHost.setBackgroundColor(Color.TRANSPARENT);
         terminalBodySurface.setBackgroundColor(terminalSurfaceColor);
@@ -575,16 +568,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ((TerminalView) terminalView).setTransparentFrameOverlayColor(Color.TRANSPARENT);
             }
         }
-        applyTerminalStatusBarSurfaceColor(terminalStatusSurface, showSurface, terminalSurfaceColor);
+        applyTerminalStatusBarSurfaceColor(showSurface, terminalSurfaceColor);
     }
 
-    private void applyTerminalStatusBarSurfaceColor(@NonNull View terminalStatusSurface, boolean showSurface, int terminalSurfaceColor) {
+    private void applyTerminalStatusBarSurfaceColor(boolean showSurface, int terminalSurfaceColor) {
         int targetColor = showSurface && mSeamlessStatusBackgroundActive ? terminalSurfaceColor : Color.TRANSPARENT;
         if (getWindow() != null) {
             getWindow().setStatusBarColor(targetColor);
         }
-        terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
-        terminalStatusSurface.setVisibility(View.GONE);
     }
 
     private int resolveGlassSurfaceBaseColor() {
@@ -686,7 +677,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         return mPreferences.isMonetBackgroundEnabled()
             || mPreferences.isMonetOverlayEnabled()
-            || mPreferences.getTerminalBlurRadius() > 0
             || mPreferences.getTerminalBackgroundOpacity() > 0;
     }
 
@@ -943,26 +933,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ((RealtimeBlurView) blurView).setOverlayColor(overlayColor);
     }
 
-    private void applyTerminalBlurBackground() {
-        if (mPreferences == null) {
-            return;
-        }
-        View blurView = findViewById(R.id.terminal_backgroundblur);
-        if (blurView == null) {
-            return;
-        }
-        if (shouldUseWallpaperPassthroughMode()) {
-            blurView.setVisibility(View.GONE);
-            return;
-        }
-        int blurRadiusDp = mPreferences.getTerminalBlurRadius();
-        int downsampleFactor = mPreferences.getTerminalBlurDownsampleFactor();
-        applyRealtimeBlurRadius(blurView, blurRadiusDp);
-        applyRealtimeBlurDownsampleFactor(blurView, downsampleFactor);
-        applyRealtimeBlurOverlayColor(blurView, resolveTerminalSurfaceColor());
-        blurView.setVisibility(blurRadiusDp > 0 ? View.VISIBLE : View.GONE);
-    }
-
     private boolean shouldUseWallpaperPassthroughMode() {
         return mPreferences != null
             && mPreferences.isUseSystemWallpaperEnabled();
@@ -1001,7 +971,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             container.setClipChildren(!enable);
         }
 
-        applyTerminalStatusBarInset(enable ? mStatusBarInsetTop : 0);
         resetRootBottomMarginAfterEdgeModeToggle();
         View content = findViewById(android.R.id.content);
         if (content != null) {
@@ -1025,46 +994,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxActivityRootView.lastMarginBottom = null;
         mTermuxActivityRootView.lastMarginBottomTime = 0L;
         mTermuxActivityRootView.lastMarginBottomExtraTime = 0L;
-    }
-
-    private void applyBackgroundLayerTopInset(int viewId, int insetTop) {
-        View view = findViewById(viewId);
-        if (view == null) {
-            return;
-        }
-        ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-        if (!(layoutParams instanceof ViewGroup.MarginLayoutParams)) {
-            return;
-        }
-        ViewGroup.MarginLayoutParams marginLayoutParams = (ViewGroup.MarginLayoutParams) layoutParams;
-        int targetTopMargin = -Math.max(0, insetTop);
-        if (marginLayoutParams.topMargin != targetTopMargin) {
-            marginLayoutParams.topMargin = targetTopMargin;
-            view.setLayoutParams(marginLayoutParams);
-        }
-    }
-
-    private void applyBackgroundLayerBottomInset(int viewId, int insetBottom) {
-        View view = findViewById(viewId);
-        if (view == null) {
-            return;
-        }
-        ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
-        if (!(layoutParams instanceof ViewGroup.MarginLayoutParams)) {
-            return;
-        }
-        ViewGroup.MarginLayoutParams marginLayoutParams = (ViewGroup.MarginLayoutParams) layoutParams;
-        int targetBottomMargin = Math.max(0, insetBottom);
-        if (marginLayoutParams.bottomMargin != targetBottomMargin) {
-            marginLayoutParams.bottomMargin = targetBottomMargin;
-            view.setLayoutParams(marginLayoutParams);
-        }
-    }
-
-    private void applyTerminalStatusBarInset(int insetTop) {
-        int safeInsetTop = Math.max(0, insetTop);
-        updateViewHeight(R.id.terminal_monetbackground, 0);
-        applyBackgroundLayerTopInset(R.id.terminal_backgroundblur, safeInsetTop);
     }
 
     @Override
@@ -2910,10 +2839,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void syncTerminalOverlayBottomInsetToAccessoryHeight() {
         // Terminal glass layers now live inside terminal_surface_host, which already ends above the
-        // accessory stack. Re-applying the accessory height here causes the wallpaper and scrim to
-        // drift against the extra-keys surface and exposes false seams at the bottom edge.
-        applyBackgroundLayerBottomInset(R.id.terminal_monetbackground, 0);
-        applyBackgroundLayerBottomInset(R.id.terminal_backgroundblur, 0);
+        // accessory stack. There is no separate terminal inset layer left to sync here.
     }
 
     private void enforceAccessoryFxInvariants() {
@@ -3056,7 +2982,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applySeamlessStatusBackgroundModeIfNeeded();
         configureExtraKeysBackground();
         applyTerminalSurfaceAppearance();
-        applyTerminalBlurBackground();
         syncTerminalWallpaperRenderingMode();
         updateWindowBackgroundForCurrentSession();
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);

@@ -309,20 +309,6 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_VALUE_TERMINAL_BACKGROUND_OPACITY = 100;
 
         /**
-         * Defines the key for terminal background blur radius (dp). 0 disables blur.
-         */
-        public static final String KEY_TERMINAL_BLUR_RADIUS = "terminal_blur_radius";
-
-        public static final int DEFAULT_VALUE_TERMINAL_BLUR_RADIUS = 0;
-
-        /**
-         * Defines the key for terminal blur downsample factor. Lower is sharper but heavier.
-         */
-        public static final String KEY_TERMINAL_BLUR_DOWNSAMPLE_FACTOR = "terminal_blur_downsample_factor";
-
-        public static final int DEFAULT_VALUE_TERMINAL_BLUR_DOWNSAMPLE_FACTOR = 4;
-
-        /**
          * Defines the key for sessions menu opacity (percentage), where 100 is fully opaque.
          */
         public static final String KEY_SESSIONS_OPACITY = "sessions_opacity";

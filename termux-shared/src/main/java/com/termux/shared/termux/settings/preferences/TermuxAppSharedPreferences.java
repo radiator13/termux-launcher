@@ -441,24 +441,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, DataUtils.clamp(value, 0, 100), false);
     }
 
-    public int getTerminalBlurRadius() {
-        int radius = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BLUR_RADIUS, TERMUX_APP.DEFAULT_VALUE_TERMINAL_BLUR_RADIUS);
-        return DataUtils.clamp(radius, 0, 25);
-    }
-
-    public void setTerminalBlurRadius(int value) {
-        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BLUR_RADIUS, DataUtils.clamp(value, 0, 25), false);
-    }
-
-    public int getTerminalBlurDownsampleFactor() {
-        int factor = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BLUR_DOWNSAMPLE_FACTOR, TERMUX_APP.DEFAULT_VALUE_TERMINAL_BLUR_DOWNSAMPLE_FACTOR);
-        return DataUtils.clamp(factor, 1, 8);
-    }
-
-    public void setTerminalBlurDownsampleFactor(int value) {
-        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BLUR_DOWNSAMPLE_FACTOR, DataUtils.clamp(value, 1, 8), false);
-    }
-
     public int getSessionsOpacity() {
         int opacity = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_SESSIONS_OPACITY, TERMUX_APP.DEFAULT_VALUE_SESSIONS_OPACITY);
         return DataUtils.clamp(opacity, 0, 100);

@@ -4,7 +4,6 @@ import android.app.Application;
 import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
 
 import com.github.mmin18.widget.RealtimeBlurView;
@@ -87,35 +86,4 @@ public class TermuxActivityExtraKeysLayoutParamsTest {
         ((RealtimeBlurView) extraKeysBlur).setBlurRadius(16f);
     }
 
-    @Test
-    public void applyTerminalStatusBarInset_offsetsOnlyBackgroundLayers() {
-        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
-        activity.setContentView(R.layout.activity_termux);
-
-        View terminalMonetBackground = activity.findViewById(R.id.terminal_monetbackground);
-        View terminalBlurBackground = activity.findViewById(R.id.terminal_backgroundblur);
-        View terminalGrainOverlay = activity.findViewById(R.id.terminal_grain_overlay);
-        RelativeLayout terminalContentRoot = activity.findViewById(R.id.activity_termux_root_relative_layout);
-
-        assertNotNull(terminalMonetBackground);
-        assertNotNull(terminalBlurBackground);
-        assertNotNull(terminalGrainOverlay);
-        assertNotNull(terminalContentRoot);
-
-        ReflectionHelpers.callInstanceMethod(activity, "applyTerminalStatusBarInset",
-            ReflectionHelpers.ClassParameter.from(int.class, 32));
-
-        assertEquals(-32, ((FrameLayout.LayoutParams) terminalMonetBackground.getLayoutParams()).topMargin);
-        assertEquals(-32, ((FrameLayout.LayoutParams) terminalBlurBackground.getLayoutParams()).topMargin);
-        assertEquals(-32, ((FrameLayout.LayoutParams) terminalGrainOverlay.getLayoutParams()).topMargin);
-        assertEquals(0, terminalContentRoot.getPaddingTop());
-
-        ReflectionHelpers.callInstanceMethod(activity, "applyTerminalStatusBarInset",
-            ReflectionHelpers.ClassParameter.from(int.class, 0));
-
-        assertEquals(0, ((FrameLayout.LayoutParams) terminalMonetBackground.getLayoutParams()).topMargin);
-        assertEquals(0, ((FrameLayout.LayoutParams) terminalBlurBackground.getLayoutParams()).topMargin);
-        assertEquals(0, ((FrameLayout.LayoutParams) terminalGrainOverlay.getLayoutParams()).topMargin);
-        assertEquals(0, terminalContentRoot.getPaddingTop());
-    }
 }
