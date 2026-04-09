@@ -82,6 +82,7 @@ import com.termux.shared.theme.NightMode;
 import com.termux.shared.view.ViewUtils;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
+import com.termux.terminal.TextStyle;
 import com.termux.view.TerminalView;
 import com.termux.view.TerminalViewClient;
 import androidx.annotation.NonNull;
