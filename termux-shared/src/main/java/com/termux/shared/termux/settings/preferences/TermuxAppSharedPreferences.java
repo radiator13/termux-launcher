@@ -441,6 +441,33 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, DataUtils.clamp(value, 0, 100), false);
     }
 
+    public String getAppTheme() {
+        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APP_THEME,
+            TERMUX_APP.DEFAULT_VALUE_APP_THEME, true);
+    }
+
+    public void setAppTheme(String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_THEME, value, false);
+    }
+
+    public boolean isThemeTerminalSyncEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_THEME_TERMINAL_SYNC_ENABLED,
+            TERMUX_APP.DEFAULT_VALUE_THEME_TERMINAL_SYNC_ENABLED);
+    }
+
+    public void setThemeTerminalSyncEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_THEME_TERMINAL_SYNC_ENABLED, value, false);
+    }
+
+    public boolean isPureBlackThemeEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_PURE_BLACK_THEME_ENABLED,
+            TERMUX_APP.DEFAULT_VALUE_PURE_BLACK_THEME_ENABLED);
+    }
+
+    public void setPureBlackThemeEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_PURE_BLACK_THEME_ENABLED, value, false);
+    }
+
     public int getSessionsOpacity() {
         int opacity = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_SESSIONS_OPACITY, TERMUX_APP.DEFAULT_VALUE_SESSIONS_OPACITY);
         return DataUtils.clamp(opacity, 0, 100);

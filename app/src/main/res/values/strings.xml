@@ -151,6 +151,7 @@
     <string name="termux_launcher_layout_preferences_summary">Configure launcher bar layout and sizing</string>
     <string name="termux_launcher_icons_header">Launcher: Icons</string>
     <string name="termux_launcher_icons_preferences_summary">Configure launcher icon rendering options</string>
+    <string name="termux_themes_header">Themes</string>
     <string name="termux_terminal_background_header">Terminal Background</string>
     <string name="termux_extrakeys_appsbar_header">Accessory Glass</string>
     <string name="apps_bar_search_header">Search</string>
@@ -228,7 +229,26 @@
 
         <!-- Termux Style Preferences -->
         <string name="termux_style_preferences_title">Look &amp; Feel</string>
-        <string name="termux_style_preferences_summary">Wallpaper passthrough, surfaces, and accessory glass settings</string>
+        <string name="termux_style_preferences_summary">Themes, wallpaper passthrough, surfaces, and accessory glass settings</string>
+
+        <string name="termux_theme_mode_title">Theme mode</string>
+        <string name="termux_theme_mode_system">System</string>
+        <string name="termux_theme_mode_light">Light</string>
+        <string name="termux_theme_mode_dark">Dark</string>
+        <string name="termux_app_theme_title">App theme</string>
+        <string name="termux_app_theme_dynamic">Dynamic</string>
+        <string name="termux_app_theme_nord">Nord</string>
+        <string name="termux_app_theme_catppuccin">Catppuccin</string>
+        <string name="termux_app_theme_rose_pine">Rosé Pine</string>
+        <string name="termux_app_theme_synthwave84">Synthwave 84</string>
+        <string name="termux_app_theme_onedark">One Dark</string>
+        <string name="termux_app_theme_dracula">Dracula</string>
+        <string name="termux_pure_black_theme_title">Pure black dark mode</string>
+        <string name="termux_pure_black_theme_on">Use pure black surfaces whenever the app is in dark mode.</string>
+        <string name="termux_pure_black_theme_off">Keep elevated dark surfaces instead of forcing pure black.</string>
+        <string name="termux_theme_terminal_sync_title">Sync theme with terminal</string>
+        <string name="termux_theme_terminal_sync_on">Apply the selected preset to the terminal colors when the app theme changes.</string>
+        <string name="termux_theme_terminal_sync_off">Keep the terminal palette independent from the launcher theme.</string>
 
         <string name="termux_privileged_access_preferences_title">Shizuku</string>
         <string name="termux_privileged_access_preferences_summary">Shizuku backend and privileged endpoint controls</string>

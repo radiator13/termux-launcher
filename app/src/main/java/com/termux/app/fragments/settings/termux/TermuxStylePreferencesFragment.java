@@ -7,15 +7,22 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.preference.ListPreference;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreferenceCompat;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.app.theme.TermuxAppTheme;
+import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.settings.properties.SharedProperties;
+import com.termux.shared.theme.ThemeUtils;
+import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
 import com.termux.shared.termux.settings.properties.TermuxSharedProperties;
@@ -40,6 +47,50 @@ public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.termux_style_preferences, rootKey);
+        configureThemePreferences();
+    }
+
+    private void configureThemePreferences() {
+        ListPreference themeMode = findPreference("theme_mode");
+        ListPreference appTheme = findPreference("app_theme");
+        SwitchPreferenceCompat pureBlack = findPreference("pure_black_theme_enabled");
+        SwitchPreferenceCompat terminalSync = findPreference("theme_terminal_sync_enabled");
+
+        if (themeMode != null) {
+            themeMode.setOnPreferenceChangeListener((preference, newValue) -> {
+                updateThemePreferenceVisibility(String.valueOf(newValue),
+                    appTheme == null ? TermuxAppTheme.DYNAMIC.getValue() : appTheme.getValue(),
+                    pureBlack, terminalSync);
+                return true;
+            });
+        }
+        if (appTheme != null) {
+            appTheme.setOnPreferenceChangeListener((preference, newValue) -> {
+                updateThemePreferenceVisibility(
+                    themeMode == null ? TermuxPropertyConstants.IVALUE_NIGHT_MODE_SYSTEM : themeMode.getValue(),
+                    String.valueOf(newValue),
+                    pureBlack,
+                    terminalSync
+                );
+                return true;
+            });
+        }
+        updateThemePreferenceVisibility(
+            themeMode == null ? TermuxPropertyConstants.IVALUE_NIGHT_MODE_SYSTEM : themeMode.getValue(),
+            appTheme == null ? TermuxAppTheme.DYNAMIC.getValue() : appTheme.getValue(),
+            pureBlack,
+            terminalSync
+        );
+    }
+
+    private void updateThemePreferenceVisibility(@NonNull String themeModeValue, @NonNull String appThemeValue,
+        Preference pureBlackPreference, Preference terminalSyncPreference) {
+        if (pureBlackPreference != null) {
+            pureBlackPreference.setVisible(!TermuxPropertyConstants.IVALUE_NIGHT_MODE_FALSE.equals(themeModeValue));
+        }
+        if (terminalSyncPreference != null) {
+            terminalSyncPreference.setVisible(TermuxAppTheme.of(appThemeValue).supportsTerminalSync());
+        }
     }
 }
 
@@ -71,6 +122,21 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch(key) {
+            case "pure_black_theme_enabled":
+                mPreferences.setPureBlackThemeEnabled(value);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                break;
+            case "theme_terminal_sync_enabled":
+                if (TermuxAppTheme.of(mPreferences.getAppTheme()).supportsTerminalSync()) {
+                    mPreferences.setThemeTerminalSyncEnabled(value);
+                    if (value) {
+                        TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
+                    }
+                    TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                } else {
+                    mPreferences.setThemeTerminalSyncEnabled(false);
+                }
+                break;
             case "use_system_wallpaper":
                 mPreferences.setUseSystemWallpaperEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
@@ -115,6 +181,11 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (mPreferences == null)
             return defValue;
         switch(key) {
+            case "pure_black_theme_enabled":
+                return mPreferences.isPureBlackThemeEnabled();
+            case "theme_terminal_sync_enabled":
+                return TermuxAppTheme.of(mPreferences.getAppTheme()).supportsTerminalSync() &&
+                    mPreferences.isThemeTerminalSyncEnabled();
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "terminal_material_tint_enabled":
@@ -208,6 +279,22 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch (key) {
+            case "theme_mode":
+                writeTermuxPropertyToProperties(TermuxPropertyConstants.KEY_NIGHT_MODE, value);
+                TermuxThemeUtils.setAppNightMode(value);
+                TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                break;
+            case "app_theme":
+                TermuxAppTheme theme = TermuxAppTheme.of(value);
+                mPreferences.setAppTheme(theme.getValue());
+                if (!theme.supportsTerminalSync()) {
+                    mPreferences.setThemeTerminalSyncEnabled(false);
+                } else if (mPreferences.isThemeTerminalSyncEnabled()) {
+                    TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
+                }
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                break;
             case "app_launcher_button_count":
                 mPreferences.setAppLauncherButtonCount(DataUtils.getIntFromString(value, mPreferences.getAppLauncherButtonCount()));
                 break;
@@ -240,6 +327,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return defValue;
         switch (key) {
+            case "theme_mode":
+                return TermuxSharedProperties.getNightMode(mContext);
+            case "app_theme":
+                return mPreferences.getAppTheme();
             case "app_launcher_button_count":
                 return Integer.toString(mPreferences.getAppLauncherButtonCount());
             case "app_launcher_search_mode":
@@ -266,7 +357,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             baseColor = getMonetSurfaceColor(baseColor);
         }
         int newColor = (baseColor & 0x00FFFFFF) | (alpha << 24);
-        writeOverlayColorToProperties(String.format("#%08X", newColor));
+        writeTermuxPropertyToProperties(TermuxPropertyConstants.KEY_BACKGROUND_OVERLAY_COLOR,
+            String.format("#%08X", newColor));
     }
 
     private void setTerminalAndAccessoryMaterialTintEnabled(boolean enabled) {
@@ -307,7 +399,7 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         return properties == null ? new Properties() : properties;
     }
 
-    private void writeOverlayColorToProperties(@NonNull String overlayColor) {
+    private void writeTermuxPropertyToProperties(@NonNull String propertyKey, @NonNull String propertyValue) {
         File propertiesFile = SharedProperties.getPropertiesFileFromList(TermuxConstants.TERMUX_PROPERTIES_FILE_PATHS_LIST, LOG_TAG);
         if (propertiesFile == null) {
             propertiesFile = TermuxConstants.TERMUX_PROPERTIES_PRIMARY_FILE;
@@ -324,8 +416,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String trimmed = line.trim();
-                    if (!trimmed.startsWith("#") && trimmed.matches("^\\s*" + TermuxPropertyConstants.KEY_BACKGROUND_OVERLAY_COLOR + "\\s*=.*$")) {
-                        lines.add(TermuxPropertyConstants.KEY_BACKGROUND_OVERLAY_COLOR + "=" + overlayColor);
+                    if (!trimmed.startsWith("#") && trimmed.matches("^\\s*" + propertyKey + "\\s*=.*$")) {
+                        lines.add(propertyKey + "=" + propertyValue);
                         updated = true;
                     } else {
                         lines.add(line);
@@ -336,7 +428,7 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             }
         }
         if (!updated) {
-            lines.add(TermuxPropertyConstants.KEY_BACKGROUND_OVERLAY_COLOR + "=" + overlayColor);
+            lines.add(propertyKey + "=" + propertyValue);
         }
         StringBuilder output = new StringBuilder();
         for (String line : lines) {
@@ -349,9 +441,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
     private int getMonetSurfaceColor(@ColorInt int fallbackColor) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                return ContextCompat.getColor(mContext, R.color.termux_accent_container);
+                return ThemeUtils.getSystemAttrColor(mContext, com.termux.shared.R.attr.termuxColorAccentContainer, fallbackColor);
             }
-            return ContextCompat.getColor(mContext, R.color.termux_accent_container);
+            return ThemeUtils.getSystemAttrColor(mContext, com.termux.shared.R.attr.termuxColorAccentContainer, fallbackColor);
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to resolve Monet surface color", e);
             return fallbackColor;

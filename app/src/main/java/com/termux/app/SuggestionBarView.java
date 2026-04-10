@@ -81,6 +81,7 @@ import com.termux.app.launcher.model.LauncherAppEntry;
 import com.termux.app.launcher.model.PinnedAppItem;
 import com.termux.app.launcher.model.PinnedFolderItem;
 import com.termux.app.launcher.model.PinnedItem;
+import com.termux.shared.theme.ThemeUtils;
 import com.termux.view.TerminalView;
 
 import java.util.ArrayList;
@@ -321,7 +322,8 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private int resolveLauncherOutlineColor() {
-        return ContextCompat.getColor(getContext(), R.color.termux_outline_variant);
+        return ThemeUtils.getSystemAttrColor(getContext(), com.termux.shared.R.attr.termuxColorOutlineVariant,
+            ContextCompat.getColor(getContext(), R.color.termux_outline_variant));
     }
 
     private static int withAlphaComponent(int color, int alpha) {

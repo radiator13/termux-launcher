@@ -18,7 +18,7 @@
 
     <!-- TermuxActivity DayNight NoActionBar theme. -->
     <style name="Theme.TermuxActivity.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar">
-        <item name="android:windowBackground">@color/termux_surface_base</item>
+        <item name="android:windowBackground">?attr/termuxColorSurfaceBase</item>
 
         <!-- Avoid action mode toolbar pushing down terminal content when
              selecting text on pre-6.0 (non-floating toolbar). -->
@@ -27,12 +27,12 @@
         <!-- Transparent Status Bar and NavigationBar -->
         <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
-        <item name="android:navigationBarColor">@color/termux_surface_base</item>
+        <item name="android:navigationBarColor">?attr/termuxColorSurfaceBase</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowTranslucentNavigation">false</item>
 
-        <item name="android:popupBackground">@color/termux_surface_panel_high</item>
+        <item name="android:popupBackground">?attr/termuxColorSurfacePanelHigh</item>
 
         <!-- https://developer.android.com/training/tv/start/start.html#transition-color -->
         <item name="android:windowAllowReturnTransitionOverlap">true</item>
@@ -40,14 +40,14 @@
 
         <!-- Left drawer. -->
         <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Dark</item>
-        <item name="termuxActivityDrawerBackground">@color/termux_surface_panel_high</item>
-        <item name="termuxActivityDrawerImageTint">@color/termux_on_surface</item>
+        <item name="termuxActivityDrawerBackground">?attr/termuxColorSurfacePanelHigh</item>
+        <item name="termuxActivityDrawerImageTint">?attr/termuxColorOnSurface</item>
 
         <!-- Extra keys colors. -->
-        <item name="extraKeysButtonTextColor">@color/termux_on_surface</item>
-        <item name="extraKeysButtonActiveTextColor">@color/termux_on_accent_container</item>
+        <item name="extraKeysButtonTextColor">?attr/termuxColorOnSurface</item>
+        <item name="extraKeysButtonActiveTextColor">?attr/termuxColorOnAccentContainer</item>
         <item name="extraKeysButtonBackgroundColor">@android:color/transparent</item>
-        <item name="extraKeysButtonActiveBackgroundColor">@color/termux_accent_container</item>
+        <item name="extraKeysButtonActiveBackgroundColor">?attr/termuxColorAccentContainer</item>
 
     </style>
 

@@ -1,5 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="termux_theme_mode_entries">
+        <item>@string/termux_theme_mode_system</item>
+        <item>@string/termux_theme_mode_light</item>
+        <item>@string/termux_theme_mode_dark</item>
+    </string-array>
+    <string-array name="termux_theme_mode_values">
+        <item>system</item>
+        <item>false</item>
+        <item>true</item>
+    </string-array>
+    <string-array name="termux_app_theme_entries">
+        <item>@string/termux_app_theme_dynamic</item>
+        <item>@string/termux_app_theme_nord</item>
+        <item>@string/termux_app_theme_catppuccin</item>
+        <item>@string/termux_app_theme_rose_pine</item>
+        <item>@string/termux_app_theme_synthwave84</item>
+        <item>@string/termux_app_theme_onedark</item>
+        <item>@string/termux_app_theme_dracula</item>
+    </string-array>
+    <string-array name="termux_app_theme_values">
+        <item>dynamic</item>
+        <item>nord</item>
+        <item>catppuccin</item>
+        <item>rosepine</item>
+        <item>synthwave84</item>
+        <item>onedark</item>
+        <item>dracula</item>
+    </string-array>
     <string-array name="app_launcher_search_mode_entries">
         <item>@string/termux_app_launcher_search_mode_strict</item>
         <item>@string/termux_app_launcher_search_mode_balanced</item>

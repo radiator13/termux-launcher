@@ -10,6 +10,7 @@ import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import com.termux.R;
+import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.models.ReportInfo;
@@ -24,6 +25,7 @@ import com.termux.shared.termux.settings.preferences.TermuxWidgetAppSharedPrefer
 import com.termux.shared.android.AndroidUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxUtils;
+import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
 
@@ -43,8 +45,11 @@ public class SettingsActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        TermuxThemeUtils.setAppNightMode(this);
         AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
+        setTheme(R.style.Theme_TermuxApp_DayNight_DarkActionBar);
+        TermuxThemeManager.applyThemeOverlays(this);
+        super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         if (savedInstanceState == null) {
             Fragment initialFragment = buildInitialFragment();

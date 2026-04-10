@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat;
 import com.google.android.material.color.MaterialColors;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.shared.theme.ThemeUtils;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.termux.terminal.TerminalSession;
 import java.util.List;
@@ -70,7 +71,8 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
             ContextCompat.getColor(mActivity, R.color.termux_on_surface));
         int color = sessionRunning || sessionAtRow.getExitStatus() == 0
             ? defaultColor
-            : ContextCompat.getColor(mActivity, R.color.termux_error);
+            : ThemeUtils.getSystemAttrColor(mActivity, com.termux.shared.R.attr.termuxColorError,
+                ContextCompat.getColor(mActivity, R.color.termux_error));
         sessionTitleView.setTextColor(color);
         return sessionRowView;
     }

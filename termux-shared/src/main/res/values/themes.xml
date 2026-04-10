@@ -10,28 +10,45 @@
       https://github.com/material-components/material-components-android/blob/1.4.0/lib/java/com/google/android/material/theme/res/values/themes.xml#L33
      -->
     <style name="Theme.BaseActivity.Light.DarkActionBar" parent="Theme.Material3.Light">
-        <item name="colorPrimary">@color/termux_primary</item>
-        <item name="colorOnPrimary">@color/termux_on_primary</item>
-        <item name="colorSecondary">@color/termux_secondary</item>
-        <item name="colorOnSecondary">@color/termux_on_secondary</item>
-        <item name="colorPrimaryContainer">@color/termux_accent_container</item>
-        <item name="colorOnPrimaryContainer">@color/termux_on_accent_container</item>
-        <item name="colorSecondaryContainer">@color/termux_accent_container</item>
-        <item name="colorOnSecondaryContainer">@color/termux_on_accent_container</item>
-        <item name="colorSurface">@color/termux_surface_base</item>
-        <item name="colorSurfaceVariant">@color/termux_surface_panel</item>
-        <item name="colorSurfaceContainer">@color/termux_surface_panel</item>
-        <item name="colorSurfaceContainerHigh">@color/termux_surface_panel_high</item>
-        <item name="colorSurfaceContainerHighest">@color/termux_surface_panel_highest</item>
-        <item name="colorOnSurface">@color/termux_on_surface</item>
-        <item name="colorOnSurfaceVariant">@color/termux_on_surface_variant</item>
-        <item name="colorOutlineVariant">@color/termux_outline_variant</item>
-        <item name="colorError">@color/termux_error</item>
-        <item name="colorErrorContainer">@color/termux_error_container</item>
-        <item name="colorOnErrorContainer">@color/termux_on_error_container</item>
-        <item name="android:statusBarColor" tools:targetApi="l">@color/termux_surface_base</item>
-        <item name="android:textColorPrimary">@color/termux_on_surface</item>
-        <item name="android:textColorSecondary">@color/termux_on_surface_variant</item>
+        <item name="termuxColorPrimary">@color/termux_primary</item>
+        <item name="termuxColorOnPrimary">@color/termux_on_primary</item>
+        <item name="termuxColorSecondary">@color/termux_secondary</item>
+        <item name="termuxColorOnSecondary">@color/termux_on_secondary</item>
+        <item name="termuxColorSurfaceBase">@color/termux_surface_base</item>
+        <item name="termuxColorSurfacePanel">@color/termux_surface_panel</item>
+        <item name="termuxColorSurfacePanelHigh">@color/termux_surface_panel_high</item>
+        <item name="termuxColorSurfacePanelHighest">@color/termux_surface_panel_highest</item>
+        <item name="termuxColorOnSurface">@color/termux_on_surface</item>
+        <item name="termuxColorOnSurfaceVariant">@color/termux_on_surface_variant</item>
+        <item name="termuxColorOutlineVariant">@color/termux_outline_variant</item>
+        <item name="termuxColorAccentContainer">@color/termux_accent_container</item>
+        <item name="termuxColorOnAccentContainer">@color/termux_on_accent_container</item>
+        <item name="termuxColorError">@color/termux_error</item>
+        <item name="termuxColorErrorContainer">@color/termux_error_container</item>
+        <item name="termuxColorOnErrorContainer">@color/termux_on_error_container</item>
+        <item name="termuxColorScrollbar">@color/termux_scrollbar</item>
+        <item name="colorPrimary">?attr/termuxColorPrimary</item>
+        <item name="colorOnPrimary">?attr/termuxColorOnPrimary</item>
+        <item name="colorSecondary">?attr/termuxColorSecondary</item>
+        <item name="colorOnSecondary">?attr/termuxColorOnSecondary</item>
+        <item name="colorPrimaryContainer">?attr/termuxColorAccentContainer</item>
+        <item name="colorOnPrimaryContainer">?attr/termuxColorOnAccentContainer</item>
+        <item name="colorSecondaryContainer">?attr/termuxColorAccentContainer</item>
+        <item name="colorOnSecondaryContainer">?attr/termuxColorOnAccentContainer</item>
+        <item name="colorSurface">?attr/termuxColorSurfaceBase</item>
+        <item name="colorSurfaceVariant">?attr/termuxColorSurfacePanel</item>
+        <item name="colorSurfaceContainer">?attr/termuxColorSurfacePanel</item>
+        <item name="colorSurfaceContainerHigh">?attr/termuxColorSurfacePanelHigh</item>
+        <item name="colorSurfaceContainerHighest">?attr/termuxColorSurfacePanelHighest</item>
+        <item name="colorOnSurface">?attr/termuxColorOnSurface</item>
+        <item name="colorOnSurfaceVariant">?attr/termuxColorOnSurfaceVariant</item>
+        <item name="colorOutlineVariant">?attr/termuxColorOutlineVariant</item>
+        <item name="colorError">?attr/termuxColorError</item>
+        <item name="colorErrorContainer">?attr/termuxColorErrorContainer</item>
+        <item name="colorOnErrorContainer">?attr/termuxColorOnErrorContainer</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/termuxColorSurfaceBase</item>
+        <item name="android:textColorPrimary">?attr/termuxColorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/termuxColorOnSurfaceVariant</item>
         <item name="android:textColorLink">@color/blue_link_light</item>
 
         <!--
@@ -56,27 +73,44 @@
 
     <!-- BaseActivity DayNight DarkActionBar theme. -->
     <style name="Theme.BaseActivity.DayNight.DarkActionBar" parent="Theme.Material3.DayNight">
-        <item name="colorPrimary">@color/termux_primary</item>
-        <item name="colorOnPrimary">@color/termux_on_primary</item>
-        <item name="colorSecondary">@color/termux_secondary</item>
-        <item name="colorOnSecondary">@color/termux_on_secondary</item>
-        <item name="colorPrimaryContainer">@color/termux_accent_container</item>
-        <item name="colorOnPrimaryContainer">@color/termux_on_accent_container</item>
-        <item name="colorSecondaryContainer">@color/termux_accent_container</item>
-        <item name="colorOnSecondaryContainer">@color/termux_on_accent_container</item>
-        <item name="colorSurface">@color/termux_surface_base</item>
-        <item name="colorSurfaceVariant">@color/termux_surface_panel</item>
-        <item name="colorSurfaceContainer">@color/termux_surface_panel</item>
-        <item name="colorSurfaceContainerHigh">@color/termux_surface_panel_high</item>
-        <item name="colorSurfaceContainerHighest">@color/termux_surface_panel_highest</item>
-        <item name="colorOnSurface">@color/termux_on_surface</item>
-        <item name="colorOnSurfaceVariant">@color/termux_on_surface_variant</item>
-        <item name="colorOutlineVariant">@color/termux_outline_variant</item>
-        <item name="colorError">@color/termux_error</item>
-        <item name="colorErrorContainer">@color/termux_error_container</item>
-        <item name="colorOnErrorContainer">@color/termux_on_error_container</item>
-        <item name="android:textColorPrimary">@color/termux_on_surface</item>
-        <item name="android:textColorSecondary">@color/termux_on_surface_variant</item>
+        <item name="termuxColorPrimary">@color/termux_primary</item>
+        <item name="termuxColorOnPrimary">@color/termux_on_primary</item>
+        <item name="termuxColorSecondary">@color/termux_secondary</item>
+        <item name="termuxColorOnSecondary">@color/termux_on_secondary</item>
+        <item name="termuxColorSurfaceBase">@color/termux_surface_base</item>
+        <item name="termuxColorSurfacePanel">@color/termux_surface_panel</item>
+        <item name="termuxColorSurfacePanelHigh">@color/termux_surface_panel_high</item>
+        <item name="termuxColorSurfacePanelHighest">@color/termux_surface_panel_highest</item>
+        <item name="termuxColorOnSurface">@color/termux_on_surface</item>
+        <item name="termuxColorOnSurfaceVariant">@color/termux_on_surface_variant</item>
+        <item name="termuxColorOutlineVariant">@color/termux_outline_variant</item>
+        <item name="termuxColorAccentContainer">@color/termux_accent_container</item>
+        <item name="termuxColorOnAccentContainer">@color/termux_on_accent_container</item>
+        <item name="termuxColorError">@color/termux_error</item>
+        <item name="termuxColorErrorContainer">@color/termux_error_container</item>
+        <item name="termuxColorOnErrorContainer">@color/termux_on_error_container</item>
+        <item name="termuxColorScrollbar">@color/termux_scrollbar</item>
+        <item name="colorPrimary">?attr/termuxColorPrimary</item>
+        <item name="colorOnPrimary">?attr/termuxColorOnPrimary</item>
+        <item name="colorSecondary">?attr/termuxColorSecondary</item>
+        <item name="colorOnSecondary">?attr/termuxColorOnSecondary</item>
+        <item name="colorPrimaryContainer">?attr/termuxColorAccentContainer</item>
+        <item name="colorOnPrimaryContainer">?attr/termuxColorOnAccentContainer</item>
+        <item name="colorSecondaryContainer">?attr/termuxColorAccentContainer</item>
+        <item name="colorOnSecondaryContainer">?attr/termuxColorOnAccentContainer</item>
+        <item name="colorSurface">?attr/termuxColorSurfaceBase</item>
+        <item name="colorSurfaceVariant">?attr/termuxColorSurfacePanel</item>
+        <item name="colorSurfaceContainer">?attr/termuxColorSurfacePanel</item>
+        <item name="colorSurfaceContainerHigh">?attr/termuxColorSurfacePanelHigh</item>
+        <item name="colorSurfaceContainerHighest">?attr/termuxColorSurfacePanelHighest</item>
+        <item name="colorOnSurface">?attr/termuxColorOnSurface</item>
+        <item name="colorOnSurfaceVariant">?attr/termuxColorOnSurfaceVariant</item>
+        <item name="colorOutlineVariant">?attr/termuxColorOutlineVariant</item>
+        <item name="colorError">?attr/termuxColorError</item>
+        <item name="colorErrorContainer">?attr/termuxColorErrorContainer</item>
+        <item name="colorOnErrorContainer">?attr/termuxColorOnErrorContainer</item>
+        <item name="android:textColorPrimary">?attr/termuxColorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/termuxColorOnSurfaceVariant</item>
         <item name="android:textColorLink">@color/blue_link_dark</item>
     </style>
     <!-- BaseActivity DayNight NoActionBar theme. -->
@@ -101,11 +135,11 @@
       https://github.com/material-components/material-components-android/blob/1.4.0/lib/java/com/google/android/material/dialog/res/values/themes.xml#L70
      -->
     <style name="ThemeOverlay.BaseDialog.Light" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorPrimary">@color/termux_primary</item>
-        <item name="colorOnPrimary">@color/termux_on_primary</item>
-        <item name="colorSurface">@color/termux_surface_panel_high</item>
-        <item name="colorOnSurface">@color/termux_on_surface</item>
-        <item name="colorOutlineVariant">@color/termux_outline_variant</item>
+        <item name="colorPrimary">?attr/termuxColorPrimary</item>
+        <item name="colorOnPrimary">?attr/termuxColorOnPrimary</item>
+        <item name="colorSurface">?attr/termuxColorSurfacePanelHigh</item>
+        <item name="colorOnSurface">?attr/termuxColorOnSurface</item>
+        <item name="colorOutlineVariant">?attr/termuxColorOutlineVariant</item>
         <!-- Dialog title panel style. -->
         <item name="materialAlertDialogTitlePanelStyle">@style/BaseDialog.Title.Panel</item>
 

@@ -4,6 +4,37 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        app:key="termux_themes"
+        app:title="@string/termux_themes_header">
+
+        <ListPreference
+            app:key="theme_mode"
+            app:title="@string/termux_theme_mode_title"
+            app:entries="@array/termux_theme_mode_entries"
+            app:entryValues="@array/termux_theme_mode_values"
+            app:useSimpleSummaryProvider="true" />
+
+        <ListPreference
+            app:key="app_theme"
+            app:title="@string/termux_app_theme_title"
+            app:entries="@array/termux_app_theme_entries"
+            app:entryValues="@array/termux_app_theme_values"
+            app:useSimpleSummaryProvider="true" />
+
+        <SwitchPreferenceCompat
+            app:key="pure_black_theme_enabled"
+            app:title="@string/termux_pure_black_theme_title"
+            app:summaryOn="@string/termux_pure_black_theme_on"
+            app:summaryOff="@string/termux_pure_black_theme_off" />
+
+        <SwitchPreferenceCompat
+            app:key="theme_terminal_sync_enabled"
+            app:title="@string/termux_theme_terminal_sync_title"
+            app:summaryOn="@string/termux_theme_terminal_sync_on"
+            app:summaryOff="@string/termux_theme_terminal_sync_off" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:key="termux_background"
         app:title="@string/termux_background_header">
 

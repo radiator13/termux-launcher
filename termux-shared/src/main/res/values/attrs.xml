@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <attr name="termuxColorPrimary" format="color" />
+    <attr name="termuxColorOnPrimary" format="color" />
+    <attr name="termuxColorSecondary" format="color" />
+    <attr name="termuxColorOnSecondary" format="color" />
+    <attr name="termuxColorSurfaceBase" format="color" />
+    <attr name="termuxColorSurfacePanel" format="color" />
+    <attr name="termuxColorSurfacePanelHigh" format="color" />
+    <attr name="termuxColorSurfacePanelHighest" format="color" />
+    <attr name="termuxColorOnSurface" format="color" />
+    <attr name="termuxColorOnSurfaceVariant" format="color" />
+    <attr name="termuxColorOutlineVariant" format="color" />
+    <attr name="termuxColorAccentContainer" format="color" />
+    <attr name="termuxColorOnAccentContainer" format="color" />
+    <attr name="termuxColorError" format="color" />
+    <attr name="termuxColorErrorContainer" format="color" />
+    <attr name="termuxColorOnErrorContainer" format="color" />
+    <attr name="termuxColorScrollbar" format="color" />
+
     <attr name="extraKeysButtonTextColor" format="reference" />
     <attr name="extraKeysButtonActiveTextColor" format="reference" />
     <attr name="extraKeysButtonBackgroundColor" format="reference" />
