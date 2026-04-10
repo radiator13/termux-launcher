@@ -2,6 +2,7 @@ package com.termux.app.fragments.settings.termux;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Build;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
