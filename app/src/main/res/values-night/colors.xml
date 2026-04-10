@@ -35,4 +35,14 @@
     <color name="icon_neutral_accent_bg">@color/termux_surface_panel</color>
 
     <color name="menu_accent">@color/termux_on_surface_variant</color>
+
+    <color name="theme_default_surface_base">#000000</color>
+    <color name="theme_default_surface_panel">#060606</color>
+    <color name="theme_default_surface_panel_high">#0E0E0E</color>
+    <color name="theme_default_surface_panel_highest">#161616</color>
+    <color name="theme_default_on_surface">#F4F4F4</color>
+    <color name="theme_default_on_surface_variant">#BEBEBE</color>
+    <color name="theme_default_outline_variant">#2E2E2E</color>
+    <color name="theme_default_accent_container">#1A1A1A</color>
+    <color name="theme_default_on_accent_container">#F4F4F4</color>
 </resources>
