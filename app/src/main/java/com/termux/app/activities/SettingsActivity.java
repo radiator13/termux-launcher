@@ -47,7 +47,7 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         TermuxThemeUtils.setAppNightMode(this);
         AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
-        setTheme(R.style.Theme_TermuxApp_DayNight_DarkActionBar);
+        setTheme(R.style.Theme_TermuxApp_DayNight_NoActionBar);
         TermuxThemeManager.applyThemeOverlays(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
