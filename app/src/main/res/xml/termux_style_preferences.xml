@@ -14,20 +14,9 @@
             app:entryValues="@array/termux_theme_mode_values"
             app:useSimpleSummaryProvider="true" />
 
-        <ListPreference
-            app:key="app_theme"
-            app:title="@string/termux_app_theme_title"
-            app:entries="@array/termux_app_theme_entries"
-            app:entryValues="@array/termux_app_theme_values"
-            app:useSimpleSummaryProvider="true" />
-
         <SwitchPreferenceCompat
-            app:key="theme_terminal_sync_enabled"
-            app:title="@string/termux_theme_terminal_sync_title" />
-
-        <SwitchPreferenceCompat
-            app:key="pure_black_theme_enabled"
-            app:title="@string/termux_pure_black_theme_title" />
+            app:key="default_theme_enabled"
+            app:title="@string/termux_default_theme_title" />
     </PreferenceCategory>
 
     <SwitchPreferenceCompat

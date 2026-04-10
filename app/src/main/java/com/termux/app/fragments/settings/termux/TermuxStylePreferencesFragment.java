@@ -2,7 +2,6 @@ package com.termux.app.fragments.settings.termux;
 
 import android.content.Context;
 import android.os.Bundle;
-import android.os.Build;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -15,8 +14,6 @@ import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
-import com.termux.app.theme.TermuxAppTheme;
-import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.logger.Logger;
@@ -52,45 +49,46 @@ public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
 
     private void configureThemePreferences() {
         ListPreference themeMode = findPreference("theme_mode");
-        ListPreference appTheme = findPreference("app_theme");
-        SwitchPreferenceCompat pureBlack = findPreference("pure_black_theme_enabled");
-        SwitchPreferenceCompat terminalSync = findPreference("theme_terminal_sync_enabled");
+        SwitchPreferenceCompat defaultTheme = findPreference("default_theme_enabled");
+        Preference terminalTint = findPreference("terminal_material_tint_enabled");
+        Preference accessoryTint = findPreference("accessory_material_tint_enabled");
 
         if (themeMode != null) {
             themeMode.setOnPreferenceChangeListener((preference, newValue) -> {
-                updateThemePreferenceVisibility(String.valueOf(newValue),
-                    appTheme == null ? TermuxAppTheme.DYNAMIC.getValue() : appTheme.getValue(),
-                    pureBlack, terminalSync);
+                updateThemePreferenceVisibility(defaultTheme, terminalTint, accessoryTint);
                 return true;
             });
         }
-        if (appTheme != null) {
-            appTheme.setOnPreferenceChangeListener((preference, newValue) -> {
-                updateThemePreferenceVisibility(
-                    themeMode == null ? TermuxPropertyConstants.IVALUE_NIGHT_MODE_SYSTEM : themeMode.getValue(),
-                    String.valueOf(newValue),
-                    pureBlack,
-                    terminalSync
-                );
+        if (defaultTheme != null) {
+            defaultTheme.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabled = Boolean.TRUE.equals(newValue);
+                if (terminalTint != null) terminalTint.setEnabled(!enabled);
+                if (accessoryTint != null) accessoryTint.setEnabled(!enabled);
                 return true;
             });
         }
-        updateThemePreferenceVisibility(
-            themeMode == null ? TermuxPropertyConstants.IVALUE_NIGHT_MODE_SYSTEM : themeMode.getValue(),
-            appTheme == null ? TermuxAppTheme.DYNAMIC.getValue() : appTheme.getValue(),
-            pureBlack,
-            terminalSync
-        );
+        updateThemePreferenceVisibility(defaultTheme, terminalTint, accessoryTint);
     }
 
-    private void updateThemePreferenceVisibility(@NonNull String themeModeValue, @NonNull String appThemeValue,
-        Preference pureBlackPreference, Preference terminalSyncPreference) {
-        if (pureBlackPreference != null) {
-            pureBlackPreference.setVisible(!TermuxPropertyConstants.IVALUE_NIGHT_MODE_FALSE.equals(themeModeValue));
+    private void updateThemePreferenceVisibility(Preference defaultThemePreference,
+        Preference terminalTintPreference, Preference accessoryTintPreference) {
+        boolean defaultEnabled = maybeIsDefaultThemeEnabled();
+        if (defaultThemePreference != null) {
+            defaultThemePreference.setVisible(true);
         }
-        if (terminalSyncPreference != null) {
-            terminalSyncPreference.setVisible(TermuxAppTheme.of(appThemeValue).supportsTerminalSync());
+        if (terminalTintPreference != null) {
+            terminalTintPreference.setEnabled(!defaultEnabled);
         }
+        if (accessoryTintPreference != null) {
+            accessoryTintPreference.setEnabled(!defaultEnabled);
+        }
+    }
+
+    private boolean maybeIsDefaultThemeEnabled() {
+        Context context = getContext();
+        if (context == null) return false;
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        return preferences != null && preferences.isDefaultThemeEnabled();
     }
 }
 
@@ -122,20 +120,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch(key) {
-            case "pure_black_theme_enabled":
-                mPreferences.setPureBlackThemeEnabled(value);
+            case "default_theme_enabled":
+                mPreferences.setDefaultThemeEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
-                break;
-            case "theme_terminal_sync_enabled":
-                if (TermuxAppTheme.of(mPreferences.getAppTheme()).supportsTerminalSync()) {
-                    mPreferences.setThemeTerminalSyncEnabled(value);
-                    if (value) {
-                        TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
-                    }
-                    TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
-                } else {
-                    mPreferences.setThemeTerminalSyncEnabled(false);
-                }
                 break;
             case "use_system_wallpaper":
                 mPreferences.setUseSystemWallpaperEnabled(value);
@@ -181,11 +168,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (mPreferences == null)
             return defValue;
         switch(key) {
-            case "pure_black_theme_enabled":
-                return mPreferences.isPureBlackThemeEnabled();
-            case "theme_terminal_sync_enabled":
-                return TermuxAppTheme.of(mPreferences.getAppTheme()).supportsTerminalSync() &&
-                    mPreferences.isThemeTerminalSyncEnabled();
+            case "default_theme_enabled":
+                return mPreferences.isDefaultThemeEnabled();
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "terminal_material_tint_enabled":
@@ -282,17 +266,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "theme_mode":
                 writeTermuxPropertyToProperties(TermuxPropertyConstants.KEY_NIGHT_MODE, value);
                 TermuxThemeUtils.setAppNightMode(value);
-                TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
-                break;
-            case "app_theme":
-                TermuxAppTheme theme = TermuxAppTheme.of(value);
-                mPreferences.setAppTheme(theme.getValue());
-                if (!theme.supportsTerminalSync()) {
-                    mPreferences.setThemeTerminalSyncEnabled(false);
-                } else if (mPreferences.isThemeTerminalSyncEnabled()) {
-                    TermuxThemeManager.syncTerminalThemeIfNeeded(mContext);
-                }
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
                 break;
             case "app_launcher_button_count":
@@ -329,8 +302,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         switch (key) {
             case "theme_mode":
                 return TermuxSharedProperties.getNightMode(mContext);
-            case "app_theme":
-                return mPreferences.getAppTheme();
             case "app_launcher_button_count":
                 return Integer.toString(mPreferences.getAppLauncherButtonCount());
             case "app_launcher_search_mode":

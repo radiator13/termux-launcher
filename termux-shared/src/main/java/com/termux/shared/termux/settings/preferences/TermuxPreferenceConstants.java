@@ -309,25 +309,11 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_VALUE_TERMINAL_BACKGROUND_OPACITY = 100;
 
         /**
-         * Defines the key for the selected app theme preset.
+         * Defines the key for enabling the classic Termux shell look for terminal and dock surfaces.
          */
-        public static final String KEY_APP_THEME = "app_theme";
+        public static final String KEY_DEFAULT_THEME_ENABLED = "default_theme_enabled";
 
-        public static final String DEFAULT_VALUE_APP_THEME = "dynamic";
-
-        /**
-         * Defines the key for syncing preset app theme to terminal colors.properties.
-         */
-        public static final String KEY_THEME_TERMINAL_SYNC_ENABLED = "theme_terminal_sync_enabled";
-
-        public static final boolean DEFAULT_VALUE_THEME_TERMINAL_SYNC_ENABLED = false;
-
-        /**
-         * Defines the key for enabling pure black dark surfaces.
-         */
-        public static final String KEY_PURE_BLACK_THEME_ENABLED = "pure_black_theme_enabled";
-
-        public static final boolean DEFAULT_VALUE_PURE_BLACK_THEME_ENABLED = false;
+        public static final boolean DEFAULT_VALUE_DEFAULT_THEME_ENABLED = false;
 
         /**
          * Defines the key for sessions menu opacity (percentage), where 100 is fully opaque.

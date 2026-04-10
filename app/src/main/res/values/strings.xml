@@ -235,16 +235,7 @@
         <string name="termux_theme_mode_system">System</string>
         <string name="termux_theme_mode_light">Light</string>
         <string name="termux_theme_mode_dark">Dark</string>
-        <string name="termux_app_theme_title">Palette</string>
-        <string name="termux_app_theme_dynamic">Dynamic</string>
-        <string name="termux_app_theme_nord">Nord</string>
-        <string name="termux_app_theme_catppuccin">Catppuccin</string>
-        <string name="termux_app_theme_rose_pine">Rosé Pine</string>
-        <string name="termux_app_theme_synthwave84">Synthwave 84</string>
-        <string name="termux_app_theme_onedark">One Dark</string>
-        <string name="termux_app_theme_dracula">Dracula</string>
-        <string name="termux_pure_black_theme_title">Pure black dark mode</string>
-        <string name="termux_theme_terminal_sync_title">Sync to terminal (colors.properties)</string>
+        <string name="termux_default_theme_title">Default</string>
 
         <string name="termux_privileged_access_preferences_title">Shizuku</string>
         <string name="termux_privileged_access_preferences_summary">Shizuku backend and privileged endpoint controls</string>
