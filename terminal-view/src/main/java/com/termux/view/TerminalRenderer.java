@@ -118,7 +118,7 @@ public final class TerminalRenderer {
         } else if (transparentBackground) {
             canvas.drawColor(transparentOverlayColor, PorterDuff.Mode.SRC);
         }
-        float heightOffset = mFontLineSpacingAndAscent;
+        float heightOffset = 0f;
         for (int row = topRow; row < endRow; row++) {
             heightOffset += mFontLineSpacing;
             final int cursorX = (row == cursorRow && cursorVisible) ? cursorCol : -1;

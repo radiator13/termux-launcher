@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="ThemeOverlay.TermuxPalette" parent="" />
+
     <color name="theme_nord_primary">#5E81AC</color>
     <color name="theme_nord_on_primary">#FFFFFF</color>
     <color name="theme_nord_secondary">#81A1C1</color>
@@ -92,7 +94,7 @@
     <color name="theme_pure_black_on_surface_variant">#BEBEBE</color>
     <color name="theme_pure_black_outline_variant">#2E2E2E</color>
 
-    <style name="ThemeOverlay.TermuxPalette.Nord">
+    <style name="ThemeOverlay.TermuxPalette.Nord" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_nord_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_nord_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_nord_secondary</item>
@@ -108,7 +110,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_nord_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.Catppuccin">
+    <style name="ThemeOverlay.TermuxPalette.Catppuccin" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_catppuccin_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_catppuccin_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_catppuccin_secondary</item>
@@ -124,7 +126,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_catppuccin_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.RosePine">
+    <style name="ThemeOverlay.TermuxPalette.RosePine" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_rosepine_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_rosepine_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_rosepine_secondary</item>
@@ -140,7 +142,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_rosepine_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.Synthwave84">
+    <style name="ThemeOverlay.TermuxPalette.Synthwave84" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_synthwave_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_synthwave_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_synthwave_secondary</item>
@@ -156,7 +158,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_synthwave_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.OneDark">
+    <style name="ThemeOverlay.TermuxPalette.OneDark" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_onedark_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_onedark_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_onedark_secondary</item>
@@ -172,7 +174,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_onedark_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.Dracula">
+    <style name="ThemeOverlay.TermuxPalette.Dracula" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorPrimary">@color/theme_dracula_primary</item>
         <item name="termuxColorOnPrimary">@color/theme_dracula_on_primary</item>
         <item name="termuxColorSecondary">@color/theme_dracula_secondary</item>
@@ -188,7 +190,7 @@
         <item name="termuxColorOnAccentContainer">@color/theme_dracula_on_accent_container</item>
     </style>
 
-    <style name="ThemeOverlay.TermuxPalette.PureBlack">
+    <style name="ThemeOverlay.TermuxPalette.PureBlack" parent="ThemeOverlay.TermuxPalette">
         <item name="termuxColorSurfaceBase">@color/theme_pure_black_surface_base</item>
         <item name="termuxColorSurfacePanel">@color/theme_pure_black_surface_panel</item>
         <item name="termuxColorSurfacePanelHigh">@color/theme_pure_black_surface_panel_high</item>

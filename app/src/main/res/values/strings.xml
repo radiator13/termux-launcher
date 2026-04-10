@@ -83,7 +83,7 @@
     <string name="action_kill_process">Kill process (%d)</string>
     <string name="title_confirm_kill_process">Really kill this session?</string>
 
-    <string name="action_look_and_feel">Look &amp; Feel</string>
+    <string name="action_look_and_feel">Appearance</string>
     <string name="action_apps_bar">Apps Bar</string>
     <string name="action_set_background_image">Set Wallpaper</string>
     <string name="action_remove_background_image">Remove Wallpaper</string>
@@ -151,9 +151,9 @@
     <string name="termux_launcher_layout_preferences_summary">Configure launcher bar layout and sizing</string>
     <string name="termux_launcher_icons_header">Launcher: Icons</string>
     <string name="termux_launcher_icons_preferences_summary">Configure launcher icon rendering options</string>
-    <string name="termux_themes_header">Themes</string>
-    <string name="termux_terminal_background_header">Terminal Background</string>
-    <string name="termux_extrakeys_appsbar_header">Accessory Glass</string>
+    <string name="termux_themes_header">Theme</string>
+    <string name="termux_terminal_background_header">Terminal</string>
+    <string name="termux_extrakeys_appsbar_header">Dock</string>
     <string name="apps_bar_search_header">Search</string>
     <string name="apps_bar_icons_header">Icons</string>
     <string name="apps_bar_visual_header">Visual</string>
@@ -228,14 +228,14 @@
 
 
         <!-- Termux Style Preferences -->
-        <string name="termux_style_preferences_title">Look &amp; Feel</string>
-        <string name="termux_style_preferences_summary">Themes, wallpaper passthrough, surfaces, and accessory glass settings</string>
+        <string name="termux_style_preferences_title">Appearance</string>
+        <string name="termux_style_preferences_summary">Theme, wallpaper, terminal, dock, and sessions menu settings</string>
 
-        <string name="termux_theme_mode_title">Theme mode</string>
+        <string name="termux_theme_mode_title">Mode</string>
         <string name="termux_theme_mode_system">System</string>
         <string name="termux_theme_mode_light">Light</string>
         <string name="termux_theme_mode_dark">Dark</string>
-        <string name="termux_app_theme_title">App theme</string>
+        <string name="termux_app_theme_title">Palette</string>
         <string name="termux_app_theme_dynamic">Dynamic</string>
         <string name="termux_app_theme_nord">Nord</string>
         <string name="termux_app_theme_catppuccin">Catppuccin</string>
@@ -244,11 +244,7 @@
         <string name="termux_app_theme_onedark">One Dark</string>
         <string name="termux_app_theme_dracula">Dracula</string>
         <string name="termux_pure_black_theme_title">Pure black dark mode</string>
-        <string name="termux_pure_black_theme_on">Use pure black surfaces whenever the app is in dark mode.</string>
-        <string name="termux_pure_black_theme_off">Keep elevated dark surfaces instead of forcing pure black.</string>
-        <string name="termux_theme_terminal_sync_title">Sync theme with terminal</string>
-        <string name="termux_theme_terminal_sync_on">Apply the selected preset to the terminal colors when the app theme changes.</string>
-        <string name="termux_theme_terminal_sync_off">Keep the terminal palette independent from the launcher theme.</string>
+        <string name="termux_theme_terminal_sync_title">Sync to terminal (colors.properties)</string>
 
         <string name="termux_privileged_access_preferences_title">Shizuku</string>
         <string name="termux_privileged_access_preferences_summary">Shizuku backend and privileged endpoint controls</string>
@@ -277,26 +273,15 @@
             <string name="termux_privileged_endpoint_exec_summary">Controls LauncherCtl privileged exec endpoint availability.</string>
 
             <!-- Background Category -->
-            <string name="termux_background_header">Wallpaper &amp; Tint</string>
-
-                <string name="termux_use_system_wallpaper_title">Use wallpaper passthrough</string>
-                <string name="termux_use_system_wallpaper_on">Use the Android system wallpaper behind the terminal surfaces.</string>
-                <string name="termux_use_system_wallpaper_off">Use an opaque terminal background instead of wallpaper passthrough.</string>
+            <string name="termux_background_header">Wallpaper</string>
+            <string name="termux_use_system_wallpaper_title">Wallpaper</string>
                 
-                <string name="termux_terminal_background_opacity_title">Terminal opacity</string>
-                <string name="termux_terminal_background_opacity_summary">Adjust the opacity of the terminal surface over wallpaper passthrough.</string>
-                <string name="termux_terminal_material_tint_enabled_title">Use dynamic Material tint</string>
-                <string name="termux_terminal_material_tint_enabled_off">Use the terminal overlay color from termux.properties.</string>
-                <string name="termux_terminal_material_tint_enabled_on">Tint the terminal surface with dynamic Material colors from the current wallpaper.</string>
+                <string name="termux_terminal_background_opacity_title">Opacity</string>
+                <string name="termux_terminal_material_tint_enabled_title">Color Overlay</string>
             <!-- Extra Keys Category -->
-            <string name="termux_extrakeys_header">Extra Keys Bar</string>
-                <string name="termux_extrakeys_blur_radius_title">Extra keys bar blur intensity</string>
-                <string name="termux_extrakeys_blur_radius_summary">Adjust the faux-glass blur used behind the extra keys bar.</string>
-                <string name="termux_app_bar_opacity_title">Accessory bar opacity</string>
-                <string name="termux_app_bar_opacity_summary">Adjust the opacity of the extra keys, apps bar, and A-Z glass surface.</string>
-                <string name="termux_accessory_material_tint_enabled_title">Use dynamic Material tint</string>
-                <string name="termux_accessory_material_tint_enabled_off">Use the launcher surface palette for the accessory stack.</string>
-                <string name="termux_accessory_material_tint_enabled_on">Tint the accessory stack with dynamic Material colors from the current wallpaper.</string>
+                <string name="termux_extrakeys_blur_radius_title">Blur</string>
+                <string name="termux_app_bar_opacity_title">Opacity</string>
+                <string name="termux_accessory_material_tint_enabled_title">Color Overlay</string>
 
             <!-- App Launcher Category -->
             <string name="termux_app_launcher_header">Launcher: Settings</string>
@@ -332,10 +317,33 @@
                 <string name="termux_app_launcher_reset_usage_ranking_done">Adaptive A-Z ranking reset</string>
                 
             <!-- Sessions Category -->
-            <string name="termux_sessions_header">Sessions Menu</string>
+            <string name="termux_sessions_header">Termux Sessions Menu</string>
             
-                <string name="termux_sessions_opacity_title">Sessions menu opacity</string>
-                <string name="termux_sessions_opacity_summary">Adjust the opacity of the sessions menu surface.</string>
+                <string name="termux_sessions_opacity_title">Opacity</string>
+
+        <!-- Legacy defaults retained so localized resources with older keys still merge on CI. -->
+        <string name="action_autofill_password">Autofill password</string>
+        <string name="action_autofill_username">Autofill username</string>
+        <string name="action_font_and_color">Font and color</string>
+        <string name="action_open_help">Help</string>
+        <string name="action_report_issue">Report issue</string>
+        <string name="action_style_terminal">Style</string>
+        <string name="action_toggle_keep_screen_on">Keep screen on</string>
+        <string name="error_background_image_loading_failed">Couldn&#39;t load the background image.</string>
+        <string name="error_background_image_loading_from_gallery_failed">Couldn&#39;t load the selected image.</string>
+        <string name="termux_background_image_enabled_title">Display background image</string>
+        <string name="termux_background_image_enabled_off">Background images are disabled.</string>
+        <string name="termux_background_image_enabled_on">Background images are enabled.</string>
+        <string name="termux_extrakeys_blur_enabled_title">Extra keys blur</string>
+        <string name="termux_extrakeys_blur_enabled_off">Extra keys blur is disabled.</string>
+        <string name="termux_extrakeys_blur_enabled_on">Extra keys blur is enabled.</string>
+        <string name="termux_monet_background_enabled_title">Material background tint</string>
+        <string name="termux_monet_background_enabled_off">Material background tint is disabled.</string>
+        <string name="termux_monet_background_enabled_on">Material background tint is enabled.</string>
+        <string name="termux_sessions_blur_enabled_title">Sessions blur</string>
+        <string name="termux_sessions_blur_enabled_off">Sessions blur is disabled.</string>
+        <string name="termux_sessions_blur_enabled_on">Sessions blur is enabled.</string>
+        <string name="title_restore_background_image">Restore background image?</string>
 
 
 
