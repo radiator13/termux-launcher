@@ -7,12 +7,9 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
-import androidx.preference.ListPreference;
-import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
-import androidx.preference.SwitchPreferenceCompat;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.data.DataUtils;
@@ -45,51 +42,6 @@ public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.termux_style_preferences, rootKey);
-        configureThemePreferences();
-    }
-
-    private void configureThemePreferences() {
-        ListPreference themeMode = findPreference("theme_mode");
-        SwitchPreferenceCompat defaultTheme = findPreference("default_theme_enabled");
-        Preference terminalTint = findPreference("terminal_material_tint_enabled");
-        Preference accessoryTint = findPreference("accessory_material_tint_enabled");
-
-        if (themeMode != null) {
-            themeMode.setOnPreferenceChangeListener((preference, newValue) -> {
-                updateThemePreferenceVisibility(defaultTheme, terminalTint, accessoryTint);
-                return true;
-            });
-        }
-        if (defaultTheme != null) {
-            defaultTheme.setOnPreferenceChangeListener((preference, newValue) -> {
-                boolean enabled = Boolean.TRUE.equals(newValue);
-                if (terminalTint != null) terminalTint.setEnabled(!enabled);
-                if (accessoryTint != null) accessoryTint.setEnabled(!enabled);
-                return true;
-            });
-        }
-        updateThemePreferenceVisibility(defaultTheme, terminalTint, accessoryTint);
-    }
-
-    private void updateThemePreferenceVisibility(Preference defaultThemePreference,
-        Preference terminalTintPreference, Preference accessoryTintPreference) {
-        boolean defaultEnabled = maybeIsDefaultThemeEnabled();
-        if (defaultThemePreference != null) {
-            defaultThemePreference.setVisible(true);
-        }
-        if (terminalTintPreference != null) {
-            terminalTintPreference.setEnabled(!defaultEnabled);
-        }
-        if (accessoryTintPreference != null) {
-            accessoryTintPreference.setEnabled(!defaultEnabled);
-        }
-    }
-
-    private boolean maybeIsDefaultThemeEnabled() {
-        Context context = getContext();
-        if (context == null) return false;
-        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
-        return preferences != null && preferences.isDefaultThemeEnabled();
     }
 }
 
@@ -121,10 +73,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch(key) {
-            case "default_theme_enabled":
-                mPreferences.setDefaultThemeEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
-                break;
             case "use_system_wallpaper":
                 mPreferences.setUseSystemWallpaperEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
@@ -169,8 +117,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (mPreferences == null)
             return defValue;
         switch(key) {
-            case "default_theme_enabled":
-                return mPreferences.isDefaultThemeEnabled();
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "terminal_material_tint_enabled":

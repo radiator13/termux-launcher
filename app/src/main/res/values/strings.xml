@@ -235,7 +235,6 @@
         <string name="termux_theme_mode_system">System</string>
         <string name="termux_theme_mode_light">Light</string>
         <string name="termux_theme_mode_dark">Dark</string>
-        <string name="termux_default_theme_title">Default</string>
 
         <string name="termux_privileged_access_preferences_title">Shizuku</string>
         <string name="termux_privileged_access_preferences_summary">Shizuku backend and privileged endpoint controls</string>

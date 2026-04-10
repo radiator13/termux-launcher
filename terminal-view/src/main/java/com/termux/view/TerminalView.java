@@ -822,7 +822,7 @@ public final class TerminalView extends View {
      * @return Array with the column and row.
      */
     public int[] getColumnAndRow(MotionEvent event, boolean relativeToScroll) {
-        int column = (int) (event.getX() / mRenderer.mFontWidth);
+        int column = (int) ((event.getX() - getHorizontalContentOffset()) / mRenderer.mFontWidth);
         int row = (int) ((event.getY() - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
         if (relativeToScroll) {
             row += mTopRow;
@@ -1339,7 +1339,7 @@ public final class TerminalView extends View {
             if (mTextSelectionCursorController != null) {
                 mTextSelectionCursorController.getSelectors(sel);
             }
-            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3], mUseTransparentFrameClear, mTransparentFrameOverlayColor);
+            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3], mUseTransparentFrameClear, mTransparentFrameOverlayColor, getHorizontalContentOffset());
             // render the text selection handles
             renderTextSelection();
         }
@@ -1367,7 +1367,7 @@ public final class TerminalView extends View {
     }
 
     public int getCursorX(float x) {
-        return (int) (x / mRenderer.mFontWidth);
+        return (int) ((x - getHorizontalContentOffset()) / mRenderer.mFontWidth);
     }
 
     public int getCursorY(float y) {
@@ -1378,11 +1378,19 @@ public final class TerminalView extends View {
         if (cx > mEmulator.mColumns) {
             cx = mEmulator.mColumns;
         }
-        return Math.round(cx * mRenderer.mFontWidth);
+        return Math.round(getHorizontalContentOffset() + (cx * mRenderer.mFontWidth));
     }
 
     public int getPointY(int cy) {
         return Math.round((cy - mTopRow) * mRenderer.mFontLineSpacing);
+    }
+
+    public float getHorizontalContentOffset() {
+        if (mEmulator == null || mRenderer == null) {
+            return 0f;
+        }
+        float contentWidth = mEmulator.mColumns * mRenderer.mFontWidth;
+        return Math.max(0f, (getWidth() - contentWidth) / 2f);
     }
 
     public int getTopRow() {

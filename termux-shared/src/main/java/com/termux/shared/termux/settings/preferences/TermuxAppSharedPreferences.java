@@ -441,15 +441,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, DataUtils.clamp(value, 0, 100), false);
     }
 
-    public boolean isDefaultThemeEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_DEFAULT_THEME_ENABLED,
-            TERMUX_APP.DEFAULT_VALUE_DEFAULT_THEME_ENABLED);
-    }
-
-    public void setDefaultThemeEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_DEFAULT_THEME_ENABLED, value, false);
-    }
-
     public int getSessionsOpacity() {
         int opacity = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_SESSIONS_OPACITY, TERMUX_APP.DEFAULT_VALUE_SESSIONS_OPACITY);
         return DataUtils.clamp(opacity, 0, 100);

@@ -309,13 +309,6 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_VALUE_TERMINAL_BACKGROUND_OPACITY = 100;
 
         /**
-         * Defines the key for enabling the classic Termux shell look for terminal and dock surfaces.
-         */
-        public static final String KEY_DEFAULT_THEME_ENABLED = "default_theme_enabled";
-
-        public static final boolean DEFAULT_VALUE_DEFAULT_THEME_ENABLED = false;
-
-        /**
          * Defines the key for sessions menu opacity (percentage), where 100 is fully opaque.
          */
         public static final String KEY_SESSIONS_OPACITY = "sessions_opacity";

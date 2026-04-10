@@ -101,7 +101,7 @@ public final class TerminalRenderer {
     /**
      * Render the terminal to a canvas with at a specified row scroll, and an optional rectangular selection.
      */
-    public final void render(TerminalEmulator mEmulator, Canvas canvas, int topRow, int selectionY1, int selectionY2, int selectionX1, int selectionX2, boolean transparentBackground, int transparentOverlayColor) {
+    public final void render(TerminalEmulator mEmulator, Canvas canvas, int topRow, int selectionY1, int selectionY2, int selectionX1, int selectionX2, boolean transparentBackground, int transparentOverlayColor, float horizontalOffset) {
         final boolean boldWithBright = mEmulator.isBoldWithBright();
         final boolean reverseVideo = mEmulator.isReverseVideo();
         final int endRow = topRow + mEmulator.mRows;
@@ -148,7 +148,7 @@ public final class TerminalRenderer {
                 if (TextStyle.isBitmap(style)) {
                     Bitmap bm = mEmulator.getScreen().getSixelBitmap(codePoint, style);
                     if (bm != null) {
-                        float left = column * mFontWidth;
+                        float left = horizontalOffset + column * mFontWidth;
                         float top = heightOffset - mFontLineSpacing;
                         RectF r = new RectF(left, top, left + mFontWidth, top + mFontLineSpacing);
                         canvas.drawBitmap(mEmulator.getScreen().getSixelBitmap(codePoint, style), mEmulator.getScreen().getSixelRect(codePoint, style), r, null);
@@ -183,7 +183,7 @@ public final class TerminalRenderer {
                         if (lastRunInsideCursor && cursorShape == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK) {
                             invertCursorTextColor = true;
                         }
-                        drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun, measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, boldWithBright, reverseVideo || invertCursorTextColor || lastRunInsideSelection);
+                        drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun, measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, boldWithBright, reverseVideo || invertCursorTextColor || lastRunInsideSelection, horizontalOffset);
                     }
                     measuredWidthForRun = 0.f;
                     lastRunStyle = style;
@@ -209,11 +209,11 @@ public final class TerminalRenderer {
             if (lastRunInsideCursor && cursorShape == TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK) {
                 invertCursorTextColor = true;
             }
-            drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun, measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, boldWithBright, reverseVideo || invertCursorTextColor || lastRunInsideSelection);
+            drawTextRun(canvas, line, palette, heightOffset, lastRunStartColumn, columnWidthSinceLastRun, lastRunStartIndex, charsSinceLastRun, measuredWidthForRun, cursorColor, cursorShape, lastRunStyle, boldWithBright, reverseVideo || invertCursorTextColor || lastRunInsideSelection, horizontalOffset);
         }
     }
 
-    private void drawTextRun(Canvas canvas, char[] text, int[] palette, float y, int startColumn, int runWidthColumns, int startCharIndex, int runWidthChars, float mes, int cursor, int cursorStyle, long textStyle, boolean boldWithBright, boolean reverseVideo) {
+    private void drawTextRun(Canvas canvas, char[] text, int[] palette, float y, int startColumn, int runWidthColumns, int startCharIndex, int runWidthChars, float mes, int cursor, int cursorStyle, long textStyle, boolean boldWithBright, boolean reverseVideo, float horizontalOffset) {
         int foreColor = TextStyle.decodeForeColor(textStyle);
         final int effect = TextStyle.decodeEffect(textStyle);
         int backColor = TextStyle.decodeBackColor(textStyle);
@@ -242,7 +242,7 @@ public final class TerminalRenderer {
             foreColor = backColor;
             backColor = tmp;
         }
-        float left = startColumn * fontWidth;
+        float left = horizontalOffset + startColumn * fontWidth;
         float right = left + runWidthColumns * fontWidth;
         mes = mes / fontWidth;
         boolean savedMatrix = false;

@@ -13,10 +13,6 @@
             app:entries="@array/termux_theme_mode_entries"
             app:entryValues="@array/termux_theme_mode_values"
             app:useSimpleSummaryProvider="true" />
-
-        <SwitchPreferenceCompat
-            app:key="default_theme_enabled"
-            app:title="@string/termux_default_theme_title" />
     </PreferenceCategory>
 
     <SwitchPreferenceCompat

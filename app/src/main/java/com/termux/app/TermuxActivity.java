@@ -89,7 +89,6 @@ import com.termux.shared.theme.ThemeUtils;
 import com.termux.shared.view.ViewUtils;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
-import com.termux.terminal.TextStyle;
 import com.termux.view.TerminalView;
 import com.termux.view.TerminalViewClient;
 import androidx.annotation.NonNull;
@@ -544,11 +543,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         boolean wallpaperMode = shouldUseWallpaperPassthroughMode();
-        int accessoryBaseColor = shouldUseClassicTermuxShellTheme()
-            ? resolveClassicTermuxShellColor()
-            : wallpaperMode
-                ? resolveAccessoryGlassBaseColor()
-                : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        int accessoryBaseColor = wallpaperMode
+            ? resolveAccessoryGlassBaseColor()
+            : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         applyGlassSurfaceColor(R.id.extrakeys_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.activity_termux_bottom_space_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.sessions_background, accessoryBaseColor);
@@ -586,9 +583,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void applyTerminalStatusBarSurfaceColor(boolean showSurface, int terminalSurfaceColor) {
         int targetColor;
         if (!shouldUseWallpaperPassthroughMode()) {
-            targetColor = shouldUseClassicTermuxShellTheme()
-                ? resolveClassicTermuxShellColor()
-                : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+            targetColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         } else {
             targetColor = showSurface && mSeamlessStatusBackgroundActive ? terminalSurfaceColor : Color.TRANSPARENT;
         }
@@ -598,9 +593,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveTerminalGlassBaseColor() {
-        if (shouldUseClassicTermuxShellTheme()) {
-            return 0xFF000000 | (resolveClassicTermuxShellColor() & 0x00FFFFFF);
-        }
         if (mPreferences != null && mPreferences.isTerminalMaterialTintEnabled()) {
             return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
         }
@@ -611,9 +603,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveAccessoryGlassBaseColor() {
-        if (shouldUseClassicTermuxShellTheme()) {
-            return 0xFF000000 | (resolveClassicTermuxShellColor() & 0x00FFFFFF);
-        }
         if (mPreferences != null && mPreferences.isAccessoryMaterialTintEnabled()) {
             return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
         }
@@ -636,11 +625,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveTerminalSurfaceColor() {
-        int baseColor = shouldUseClassicTermuxShellTheme()
-            ? resolveClassicTermuxShellColor()
-            : shouldUseWallpaperPassthroughMode()
-                ? resolveTerminalGlassBaseColor()
-                : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        int baseColor = shouldUseWallpaperPassthroughMode()
+            ? resolveTerminalGlassBaseColor()
+            : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         int alpha = Math.round(resolveOpacityAlpha(
             mPreferences != null ? mPreferences.getTerminalBackgroundOpacity() : 100
         ) * 255f);
@@ -648,25 +635,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveAccessorySurfaceColor(float surfaceAlpha) {
-        int baseColor = shouldUseClassicTermuxShellTheme()
-            ? resolveClassicTermuxShellColor()
-            : shouldUseWallpaperPassthroughMode()
-                ? resolveAccessoryGlassBaseColor()
-                : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        int baseColor = shouldUseWallpaperPassthroughMode()
+            ? resolveAccessoryGlassBaseColor()
+            : getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         int alpha = Math.round(Math.max(0f, Math.min(1f, surfaceAlpha)) * 255f);
         return (alpha << 24) | (baseColor & 0x00FFFFFF);
-    }
-
-    private boolean shouldUseClassicTermuxShellTheme() {
-        return mPreferences != null && mPreferences.isDefaultThemeEnabled();
-    }
-
-    private int resolveClassicTermuxShellColor() {
-        TerminalSession session = getCurrentSession();
-        if (session != null && session.getEmulator() != null) {
-            return session.getEmulator().mColors.mCurrentColors[TextStyle.COLOR_INDEX_BACKGROUND];
-        }
-        return 0xFF000000;
     }
 
     private int getTermuxThemeColor(int attr, int fallbackRes) {
