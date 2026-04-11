@@ -106,6 +106,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -2371,7 +2372,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (tempCropFile.exists()) {
             tempCropFile.delete();
         }
-        cropOptions.customOutputUri = Uri.fromFile(tempCropFile);
+        cropOptions.customOutputUri = getManagedWallpaperTempFileUri(tempCropFile);
         cropOptions.outputCompressFormat = Bitmap.CompressFormat.PNG;
         cropOptions.outputCompressQuality = 100;
         cropOptions.activityTitle = getString(R.string.action_set_background_image);
@@ -2470,6 +2471,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             directory.mkdirs();
         }
         return new File(directory, "system-wallpaper-pending.png");
+    }
+
+    @NonNull
+    private Uri getManagedWallpaperTempFileUri(@NonNull File file) {
+        return FileProvider.getUriForFile(
+            this,
+            getPackageName() + ".cropper.fileprovider",
+            file
+        );
     }
 
     private void promoteManagedWallpaperTempFile() {
