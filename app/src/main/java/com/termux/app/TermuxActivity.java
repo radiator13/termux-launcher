@@ -816,38 +816,52 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Nullable
     private Bitmap createWallpaperBackdropBitmapForView(@NonNull View target, @NonNull View wallpaperFrame) {
-        Drawable wallpaper = WallpaperManager.getInstance(this).getDrawable();
+        WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+        Drawable wallpaper = wallpaperManager.getDrawable();
         if (wallpaper == null) {
             return null;
         }
 
         int targetWidth = Math.max(1, target.getWidth());
         int targetHeight = Math.max(1, target.getHeight());
-        int frameWidth = Math.max(1, wallpaperFrame.getWidth());
-        int frameHeight = Math.max(1, wallpaperFrame.getHeight());
-
-        if (frameWidth <= 1 || frameHeight <= 1) {
+        Rect frameRect = new Rect();
+        if (!wallpaperFrame.getGlobalVisibleRect(frameRect) || frameRect.width() <= 0 || frameRect.height() <= 0) {
+            wallpaperFrame.getLocationOnScreen(mTmpParentLocation);
+            frameRect.set(
+                mTmpParentLocation[0],
+                mTmpParentLocation[1],
+                mTmpParentLocation[0] + Math.max(1, wallpaperFrame.getWidth()),
+                mTmpParentLocation[1] + Math.max(1, wallpaperFrame.getHeight())
+            );
+        }
+        if (frameRect.width() <= 1 || frameRect.height() <= 1) {
             DisplayMetrics realMetrics = new DisplayMetrics();
             getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
-            frameWidth = Math.max(1, realMetrics.widthPixels);
-            frameHeight = Math.max(1, realMetrics.heightPixels);
+            frameRect.set(0, 0, Math.max(1, realMetrics.widthPixels), Math.max(1, realMetrics.heightPixels));
         }
 
-        int intrinsicWidth = wallpaper.getIntrinsicWidth() > 0 ? wallpaper.getIntrinsicWidth() : frameWidth;
-        int intrinsicHeight = wallpaper.getIntrinsicHeight() > 0 ? wallpaper.getIntrinsicHeight() : frameHeight;
-        float scale = Math.max((float) frameWidth / intrinsicWidth, (float) frameHeight / intrinsicHeight);
-        int drawWidth = Math.max(frameWidth, Math.round(intrinsicWidth * scale));
-        int drawHeight = Math.max(frameHeight, Math.round(intrinsicHeight * scale));
+        Rect targetRect = new Rect();
+        if (!target.getGlobalVisibleRect(targetRect) || targetRect.width() <= 0 || targetRect.height() <= 0) {
+            target.getLocationOnScreen(mTmpViewLocation);
+            targetRect.set(
+                mTmpViewLocation[0],
+                mTmpViewLocation[1],
+                mTmpViewLocation[0] + targetWidth,
+                mTmpViewLocation[1] + targetHeight
+            );
+        }
 
-        wallpaperFrame.getLocationOnScreen(mTmpParentLocation);
-        int frameScreenX = mTmpParentLocation[0];
-        int frameScreenY = mTmpParentLocation[1];
-        int offsetLeft = frameScreenX + Math.round((frameWidth - drawWidth) / 2f);
-        int offsetTop = frameScreenY + Math.round((frameHeight - drawHeight) / 2f);
-
-        target.getLocationOnScreen(mTmpViewLocation);
-        int targetScreenX = mTmpViewLocation[0];
-        int targetScreenY = mTmpViewLocation[1];
+        int intrinsicWidth = wallpaper.getIntrinsicWidth() > 0 ? wallpaper.getIntrinsicWidth() : frameRect.width();
+        int intrinsicHeight = wallpaper.getIntrinsicHeight() > 0 ? wallpaper.getIntrinsicHeight() : frameRect.height();
+        int desiredWidth = wallpaperManager.getDesiredMinimumWidth();
+        int desiredHeight = wallpaperManager.getDesiredMinimumHeight();
+        int sourceWidth = Math.max(frameRect.width(), Math.max(intrinsicWidth, Math.max(0, desiredWidth)));
+        int sourceHeight = Math.max(frameRect.height(), Math.max(intrinsicHeight, Math.max(0, desiredHeight)));
+        float scale = Math.max((float) frameRect.width() / sourceWidth, (float) frameRect.height() / sourceHeight);
+        int drawWidth = Math.max(frameRect.width(), Math.round(sourceWidth * scale));
+        int drawHeight = Math.max(frameRect.height(), Math.round(sourceHeight * scale));
+        int drawLeft = frameRect.left + Math.round((frameRect.width() - drawWidth) / 2f);
+        int drawTop = frameRect.top + Math.round((frameRect.height() - drawHeight) / 2f);
 
         Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -855,10 +869,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ? wallpaper.getConstantState().newDrawable().mutate()
             : wallpaper.mutate();
         drawable.setBounds(
-            offsetLeft - targetScreenX,
-            offsetTop - targetScreenY,
-            offsetLeft - targetScreenX + drawWidth,
-            offsetTop - targetScreenY + drawHeight
+            drawLeft - targetRect.left,
+            drawTop - targetRect.top,
+            drawLeft - targetRect.left + drawWidth,
+            drawTop - targetRect.top + drawHeight
         );
         drawable.draw(canvas);
         return bitmap;
@@ -868,7 +882,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
         View surfaceHost = findViewById(R.id.accessory_surface_host);
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
-        View wallpaperFrame = findViewById(R.id.terminal_root_container);
+        View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
         applyAccessoryLayerBounds(R.id.accessory_surface_host, null);
         if (backdrop == null || surfaceHost == null || accessoryContainer == null || wallpaperFrame == null ||
             accessoryContainer.getWidth() <= 0 || accessoryContainer.getHeight() <= 0) {
