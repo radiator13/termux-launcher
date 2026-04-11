@@ -651,6 +651,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return ThemeUtils.getSystemAttrColor(this, attr, ContextCompat.getColor(this, fallbackRes));
     }
 
+    private static int withAlphaComponent(int color, int alpha) {
+        return (Math.max(0, Math.min(255, alpha)) << 24) | (color & 0x00FFFFFF);
+    }
+
     @Nullable
     private Rect resolveAccessoryContentBounds() {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
