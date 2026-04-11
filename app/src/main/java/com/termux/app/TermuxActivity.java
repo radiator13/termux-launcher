@@ -797,10 +797,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldUseAccessoryRenderEffectBlur(@NonNull AccessoryRenderState state) {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            && shouldUseWallpaperPassthroughMode()
-            && state.toolbarShown
-            && state.blurEnabled;
+        return false;
     }
 
     private void clearAccessoryRenderEffectBackdrop() {
