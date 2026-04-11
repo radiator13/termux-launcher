@@ -49,6 +49,12 @@
             android:defaultValue="10"
             app:showSeekBarValue="true" />
 
+        <Preference
+            app:key="extrakeys_blur_live_wallpaper_note"
+            app:summary="@string/termux_extrakeys_blur_live_wallpaper_note"
+            app:selectable="false"
+            app:iconSpaceReserved="false" />
+
         <androidx.preference.SeekBarPreference
             app:key="app_bar_opacity"
             app:title="@string/termux_app_bar_opacity_title"

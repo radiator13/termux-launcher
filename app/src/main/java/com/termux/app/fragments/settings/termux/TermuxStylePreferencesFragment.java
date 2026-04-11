@@ -1,5 +1,7 @@
 package com.termux.app.fragments.settings.termux;
 
+import android.app.WallpaperInfo;
+import android.app.WallpaperManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Build;
@@ -7,9 +9,11 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SeekBarPreference;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.data.DataUtils;
@@ -42,6 +46,51 @@ public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.termux_style_preferences, rootKey);
+        updateDockBlurAvailability();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateDockBlurAvailability();
+    }
+
+    private void updateDockBlurAvailability() {
+        Context context = getContext();
+        if (context == null) return;
+
+        boolean liveWallpaperActive = isLiveWallpaperActive(context);
+        SeekBarPreference dockBlurPreference = findPreference("extrakeys_blur_radius");
+        Preference blurNotePreference = findPreference("extrakeys_blur_live_wallpaper_note");
+
+        if (dockBlurPreference != null) {
+            dockBlurPreference.setEnabled(!liveWallpaperActive);
+        }
+        if (blurNotePreference != null) {
+            blurNotePreference.setSummary(
+                liveWallpaperActive
+                    ? R.string.termux_extrakeys_blur_live_wallpaper_active_note
+                    : R.string.termux_extrakeys_blur_live_wallpaper_note
+            );
+        }
+
+        if (!liveWallpaperActive) return;
+
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        if (preferences != null && preferences.getExtraKeysBlurRadius() != 0) {
+            preferences.setExtraKeysBlurRadius(0);
+            TermuxActivity.requestTermuxActivityStylingOnNextResume(context, true);
+        }
+    }
+
+    private boolean isLiveWallpaperActive(@NonNull Context context) {
+        try {
+            WallpaperInfo wallpaperInfo = WallpaperManager.getInstance(context).getWallpaperInfo();
+            return wallpaperInfo != null;
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage("TermuxStylePreferences", "Failed to detect live wallpaper state", e);
+            return false;
+        }
     }
 }
 

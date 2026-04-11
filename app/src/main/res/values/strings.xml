@@ -270,6 +270,8 @@
                 <string name="termux_terminal_material_tint_enabled_title">Color Overlay</string>
             <!-- Extra Keys Category -->
                 <string name="termux_extrakeys_blur_radius_title">Blur</string>
+                <string name="termux_extrakeys_blur_live_wallpaper_note">Blur may not work with live wallpapers. If you use a live wallpaper, set Blur to 0.</string>
+                <string name="termux_extrakeys_blur_live_wallpaper_active_note">Dock blur is not available while using a live wallpaper. Blur has been set to 0.</string>
                 <string name="termux_app_bar_opacity_title">Opacity</string>
                 <string name="termux_accessory_material_tint_enabled_title">Color Overlay</string>
 
