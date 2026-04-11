@@ -438,7 +438,11 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public void setTerminalBackgroundOpacity(int value) {
-        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, DataUtils.clamp(value, 0, 100), false);
+        int clamped = DataUtils.clamp(value, 0, 100);
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, clamped, false);
+        if (isUseSystemWallpaperEnabled()) {
+            setWallpaperEnabledTerminalBackgroundOpacity(clamped);
+        }
     }
 
     public int getSessionsOpacity() {
@@ -465,7 +469,47 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public void setAppBarOpacity(int value) {
-        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_APP_BAR_OPACITY, DataUtils.clamp(value, 0, 100), false);
+        int clamped = DataUtils.clamp(value, 0, 100);
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_APP_BAR_OPACITY, clamped, false);
+        if (isUseSystemWallpaperEnabled()) {
+            setWallpaperEnabledAppBarOpacity(clamped);
+        }
+    }
+
+    public int getWallpaperEnabledTerminalBackgroundOpacity() {
+        int opacity = SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY,
+            TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY
+        );
+        return DataUtils.clamp(opacity, 0, 100);
+    }
+
+    public void setWallpaperEnabledTerminalBackgroundOpacity(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY,
+            DataUtils.clamp(value, 0, 100),
+            false
+        );
+    }
+
+    public int getWallpaperEnabledAppBarOpacity() {
+        int opacity = SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_WALLPAPER_ENABLED_APP_BAR_OPACITY,
+            TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_APP_BAR_OPACITY
+        );
+        return DataUtils.clamp(opacity, 0, 100);
+    }
+
+    public void setWallpaperEnabledAppBarOpacity(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_WALLPAPER_ENABLED_APP_BAR_OPACITY,
+            DataUtils.clamp(value, 0, 100),
+            false
+        );
     }
     
     public boolean isExtraKeysBlurEnabled() {

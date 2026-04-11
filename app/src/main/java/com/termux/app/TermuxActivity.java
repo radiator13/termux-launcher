@@ -20,6 +20,7 @@ import android.graphics.RenderEffect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -656,7 +657,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!accessoryContainer.getGlobalVisibleRect(containerRect)) {
             return null;
         }
+        int left = Integer.MAX_VALUE;
         int top = Integer.MAX_VALUE;
+        int right = Integer.MIN_VALUE;
         int bottom = Integer.MIN_VALUE;
         int[] candidateIds = {
             R.id.apps_bar_viewpager,
@@ -673,13 +676,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 continue;
             }
             candidateRect.offset(-containerRect.left, -containerRect.top);
+            left = Math.min(left, candidateRect.left);
             top = Math.min(top, candidateRect.top);
+            right = Math.max(right, candidateRect.right);
             bottom = Math.max(bottom, candidateRect.bottom);
         }
-        if (top == Integer.MAX_VALUE || bottom <= top) {
+        if (left == Integer.MAX_VALUE || top == Integer.MAX_VALUE || right <= left || bottom <= top) {
             return null;
         }
-        return new Rect(0, Math.max(0, top), accessoryContainer.getWidth(), Math.min(accessoryContainer.getHeight(), bottom));
+        return new Rect(
+            Math.max(0, left),
+            Math.max(0, top),
+            Math.min(accessoryContainer.getWidth(), right),
+            Math.min(accessoryContainer.getHeight(), bottom)
+        );
     }
 
     private void applyAccessoryLayerBounds(int viewId, @Nullable Rect bounds) {
@@ -692,13 +702,50 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) layoutParams;
+        View parent = (View) view.getParent();
+        int targetLeft = bounds != null ? bounds.left : 0;
         int targetTop = bounds != null ? bounds.top : 0;
+        int targetWidth = bounds != null ? Math.max(0, bounds.width()) : ViewGroup.LayoutParams.MATCH_PARENT;
         int targetHeight = bounds != null ? Math.max(0, bounds.height()) : ViewGroup.LayoutParams.MATCH_PARENT;
-        if (params.topMargin != targetTop || params.height != targetHeight) {
+        int parentWidth = parent != null ? parent.getWidth() : 0;
+        int targetRight = bounds != null && parentWidth > 0 ? Math.max(0, parentWidth - bounds.right) : 0;
+        if (params.leftMargin != targetLeft || params.topMargin != targetTop ||
+            params.rightMargin != targetRight || params.width != targetWidth || params.height != targetHeight) {
+            params.leftMargin = targetLeft;
             params.topMargin = targetTop;
+            params.rightMargin = targetRight;
+            params.width = targetWidth;
             params.height = targetHeight;
             view.setLayoutParams(params);
         }
+    }
+
+    private void configureAccessorySurfaceChrome(@Nullable Rect bounds, float barAlpha) {
+        View surfaceHost = findViewById(R.id.accessory_surface_host);
+        if (!(surfaceHost instanceof FrameLayout)) {
+            return;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        float topCornerRadius = 22f * density;
+        int fillColor = resolveAccessorySurfaceColor(Math.max(0.04f, barAlpha * 0.08f));
+        int strokeColor = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(28 * Math.max(0.45f, barAlpha)));
+
+        GradientDrawable chrome = new GradientDrawable();
+        chrome.setShape(GradientDrawable.RECTANGLE);
+        chrome.setColor(fillColor);
+        chrome.setCornerRadii(new float[] {
+            topCornerRadius, topCornerRadius,
+            topCornerRadius, topCornerRadius,
+            0f, 0f,
+            0f, 0f
+        });
+        chrome.setStroke(Math.max(1, Math.round(density)), strokeColor);
+
+        surfaceHost.setBackground(chrome);
+        surfaceHost.setClipToOutline(true);
+        surfaceHost.setElevation(bounds != null ? 10f * density : 0f);
+        surfaceHost.setTranslationZ(bounds != null ? 10f * density : 0f);
     }
 
     private boolean shouldShowTerminalGlassSurface() {
@@ -905,6 +952,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 azFxUnderlay.setVisibility(View.GONE);
             }
             clearAccessoryRenderEffectBackdrop();
+            configureAccessorySurfaceChrome(null, state.barAlpha);
             resetAzOverflowAffordanceState();
             return;
         }
@@ -942,6 +990,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(state.blurEnabled && !useRenderEffectBlur ? View.VISIBLE : View.GONE);
         }
+        configureAccessorySurfaceChrome(resolveAccessoryContentBounds(), state.barAlpha);
         updateAccessoryRenderEffectBackdrop(state);
         updateAzOverflowAffordance();
     }
@@ -2198,19 +2247,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void launchSystemWallpaperPicker() {
         try {
             startActivity(new Intent(Intent.ACTION_SET_WALLPAPER));
-            mPreferences.setUseSystemWallpaperEnabled(true);
-            requestTermuxActivityStylingOnNextResume(this, true);
+            setWallpaperModeEnabled(this, true);
         } catch (ActivityNotFoundException e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "No system wallpaper picker available", e);
             showToast(getString(R.string.error_wallpaper_set_failed), true);
         }
     }
 
-    private void makeTerminalBackgroundOpaque() {
-        mPreferences.setUseSystemWallpaperEnabled(false);
-        mPreferences.setTerminalBackgroundOpacity(100);
-        mPreferences.setAppBarOpacity(100);
-        updateTermuxActivityStyling(this, true);
+    public static void setWallpaperModeEnabled(@NonNull Context context, boolean enabled) {
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        if (preferences == null) {
+            return;
+        }
+
+        if (enabled) {
+            preferences.setUseSystemWallpaperEnabled(true);
+            preferences.setTerminalBackgroundOpacity(preferences.getWallpaperEnabledTerminalBackgroundOpacity());
+            preferences.setAppBarOpacity(preferences.getWallpaperEnabledAppBarOpacity());
+        } else {
+            preferences.setWallpaperEnabledTerminalBackgroundOpacity(preferences.getTerminalBackgroundOpacity());
+            preferences.setWallpaperEnabledAppBarOpacity(preferences.getAppBarOpacity());
+            preferences.setUseSystemWallpaperEnabled(false);
+            preferences.setTerminalBackgroundOpacity(100);
+            preferences.setAppBarOpacity(100);
+        }
+
+        requestTermuxActivityStylingOnNextResume(context, true);
     }
 
     private void openLookAndFeelSettings() {
@@ -2244,7 +2306,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 launchSystemWallpaperPicker();
                 return true;
             case CONTEXT_MENU_REMOVE_WALLPAPER_ID:
-                makeTerminalBackgroundOpaque();
+                setWallpaperModeEnabled(this, !shouldUseWallpaperPassthroughMode());
                 return true;
             case CONTEXT_MENU_LOOK_AND_FEEL_ID:
                 openLookAndFeelSettings();
@@ -2278,7 +2340,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         items.add(new TerminalActionItem(CONTEXT_MENU_SELECT_URL_ID, getString(R.string.action_select_url)));
         items.add(new TerminalActionItem(CONTEXT_MENU_SHARE_TRANSCRIPT_ID, getString(R.string.action_share_transcript)));
         items.add(new TerminalActionItem(CONTEXT_MENU_SET_WALLPAPER_ID, getString(R.string.action_set_background_image)));
-        items.add(new TerminalActionItem(CONTEXT_MENU_REMOVE_WALLPAPER_ID, getString(R.string.action_remove_background_image)));
+        items.add(new TerminalActionItem(
+            CONTEXT_MENU_REMOVE_WALLPAPER_ID,
+            getString(shouldUseWallpaperPassthroughMode()
+                ? R.string.action_disable_background_image
+                : R.string.action_enable_background_image)
+        ));
         items.add(new TerminalActionItem(CONTEXT_MENU_LOOK_AND_FEEL_ID, getString(R.string.action_look_and_feel)));
         items.add(new TerminalActionItem(CONTEXT_MENU_APPS_BAR_ID, getString(R.string.action_apps_bar)));
         items.add(new TerminalActionItem(CONTEXT_MENU_SETTINGS_ID, getString(R.string.action_open_settings)));

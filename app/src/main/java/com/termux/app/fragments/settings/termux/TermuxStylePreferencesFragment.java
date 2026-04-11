@@ -155,8 +155,7 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             return;
         switch(key) {
             case "use_system_wallpaper":
-                mPreferences.setUseSystemWallpaperEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                TermuxActivity.setWallpaperModeEnabled(mContext, value);
                 break;
             case "terminal_material_tint_enabled":
                 setTerminalMaterialTintEnabled(value);

@@ -328,6 +328,24 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_APP_BAR_OPACITY = "app_bar_opacity";
 
         public static final int DEFAULT_VALUE_APP_BAR_OPACITY = 50;
+
+        /**
+         * Stores the user's preferred terminal opacity while wallpaper mode is enabled so it can
+         * be restored after temporarily disabling wallpaper.
+         */
+        public static final String KEY_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY =
+            "wallpaper_enabled_terminal_background_opacity";
+
+        public static final int DEFAULT_VALUE_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY = 50;
+
+        /**
+         * Stores the user's preferred dock opacity while wallpaper mode is enabled so it can be
+         * be restored after temporarily disabling wallpaper.
+         */
+        public static final String KEY_WALLPAPER_ENABLED_APP_BAR_OPACITY =
+            "wallpaper_enabled_app_bar_opacity";
+
+        public static final int DEFAULT_VALUE_WALLPAPER_ENABLED_APP_BAR_OPACITY = 50;
         
         /**
          * Defines the key for whether extrakeys blur is enabled or not.

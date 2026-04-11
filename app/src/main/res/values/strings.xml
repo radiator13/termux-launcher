@@ -86,7 +86,8 @@
     <string name="action_look_and_feel">Appearance</string>
     <string name="action_apps_bar">Apps Bar</string>
     <string name="action_set_background_image">Set Wallpaper</string>
-    <string name="action_remove_background_image">Remove Wallpaper</string>
+    <string name="action_enable_background_image">Enable Wallpaper</string>
+    <string name="action_disable_background_image">Disable Wallpaper</string>
     <string name="action_open_settings">Settings</string>
     <string name="msg_generating_report">Generating Report</string>
     <string name="msg_add_termux_debug_info">Add &TERMUX_APP_NAME; debug info to report?</string>
