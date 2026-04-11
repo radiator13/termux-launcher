@@ -613,6 +613,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return 0xFF000000 | (overlayColor & 0x00FFFFFF);
     }
 
+    private int resolveAccessoryOutlineColor() {
+        return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOutlineVariant, R.color.termux_outline_variant);
+    }
+
     private void applyGlassSurfaceColor(int viewId, int surfaceColor) {
         View surface = findViewById(viewId);
         if (surface != null) {
