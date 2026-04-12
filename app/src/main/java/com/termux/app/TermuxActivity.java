@@ -120,6 +120,7 @@ import java.util.List;
 import java.util.Set;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 
 /**
@@ -2511,6 +2512,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return false;
             }
             WallpaperManager.getInstance(this).setStream(inputStream, null, true, wallpaperFlags);
+            exportWallpaperCopyToTermuxBackgroundDirectory(croppedUri);
             if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
                 promoteManagedWallpaperTempFile();
                 int wallpaperId = getCurrentSystemWallpaperId();
@@ -2522,6 +2524,31 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply managed wallpaper", e);
             return false;
+        }
+    }
+
+    private void exportWallpaperCopyToTermuxBackgroundDirectory(@NonNull Uri wallpaperUri) {
+        File backgroundDir = TermuxConstants.TERMUX_BACKGROUND_DIR;
+        if (!backgroundDir.exists() && !backgroundDir.mkdirs()) {
+            Logger.logError(LOG_TAG, "Failed to create termux background directory at: " + backgroundDir.getAbsolutePath());
+            return;
+        }
+
+        File destination = TermuxConstants.TERMUX_BACKGROUND_IMAGE_FILE;
+        try (InputStream inputStream = openWallpaperInputStream(wallpaperUri);
+             FileOutputStream outputStream = new FileOutputStream(destination, false)) {
+            if (inputStream == null) {
+                Logger.logError(LOG_TAG, "Failed to export wallpaper copy: could not open source stream");
+                return;
+            }
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, read);
+            }
+            outputStream.flush();
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to export wallpaper copy to " + destination.getAbsolutePath(), e);
         }
     }
 
