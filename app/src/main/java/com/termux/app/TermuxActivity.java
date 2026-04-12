@@ -1487,7 +1487,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);
         applySuggestionBarPreferences();
         mSuggestionBarView.reload();
-        mTermuxTerminalViewClient.setSuggestionBarCallback(this);
+        if (mTermuxTerminalViewClient != null) {
+            mTermuxTerminalViewClient.setSuggestionBarCallback(this);
+        }
 
         if (mAzScrubRowView != null) {
             mAzScrubRowView.setScrubCallback(new AzScrubRowView.ScrubCallback() {
