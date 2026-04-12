@@ -532,6 +532,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         syncTerminalWallpaperRenderingMode();
         applySeamlessStatusBackgroundModeIfNeeded();
         applyTerminalSurfaceAppearance();
+        applyWallpaperOffsetFixIfNeeded();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         configureExtraKeysBackground();
         scheduleAccessoryRenderSync("onResume");
@@ -607,6 +608,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (getWindow() != null) {
             getWindow().setStatusBarColor(targetColor);
+        }
+    }
+
+    private void applyWallpaperOffsetFixIfNeeded() {
+        if (!shouldUseWallpaperPassthroughMode()) {
+            return;
+        }
+        if (getWindow() == null || getWindow().getDecorView() == null) {
+            return;
+        }
+        IBinder windowToken = getWindow().getDecorView().getWindowToken();
+        if (windowToken == null) {
+            return;
+        }
+        try {
+            WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+            Rect frameRect = getVisibleWallpaperFrameRect(findViewById(R.id.activity_termux_root_view));
+            wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+            wallpaperManager.setWallpaperOffsetSteps(1f, 1f);
+            wallpaperManager.setWallpaperOffsets(windowToken, 0.5f, 0.5f);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply wallpaper offset fix", e);
         }
     }
 
@@ -2412,6 +2435,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         setWallpaperModeEnabled(this, true);
+        View rootView = findViewById(R.id.activity_termux_root_view);
+        if (rootView != null) {
+            rootView.post(this::applyWallpaperOffsetFixIfNeeded);
+        }
         scheduleAccessoryRenderSync("wallpaper-crop-applied");
     }
 
