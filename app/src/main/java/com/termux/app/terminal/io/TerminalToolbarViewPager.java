@@ -31,7 +31,7 @@ public class TerminalToolbarViewPager {
 
         @Override
         public int getCount() {
-            return 3;
+            return 2;
         }
 
         @Override
@@ -44,13 +44,13 @@ public class TerminalToolbarViewPager {
         public Object instantiateItem(@NonNull ViewGroup collection, int position) {
             LayoutInflater inflater = LayoutInflater.from(mActivity);
             View layout;
-            if (position == 0 || position == 1) {
+            if (position == 0) {
                 layout = inflater.inflate(R.layout.view_terminal_toolbar_extra_keys, collection, false);
                 ExtraKeysView extraKeysView = (ExtraKeysView) layout;
-                extraKeysView.setExtraKeysViewClient(mActivity.getTermuxTerminalExtraKeys(position));
+                extraKeysView.setExtraKeysViewClient(mActivity.getTermuxTerminalExtraKeys());
                 extraKeysView.setButtonTextAllCaps(mActivity.getProperties().shouldExtraKeysTextBeAllCaps());
-                mActivity.setExtraKeysView(extraKeysView, position);
-                extraKeysView.reload(mActivity.getTermuxTerminalExtraKeys(position).getExtraKeysInfo(), mActivity.getTerminalToolbarDefaultHeight());
+                mActivity.setExtraKeysView(extraKeysView);
+                extraKeysView.reload(mActivity.getTermuxTerminalExtraKeys().getExtraKeysInfo(), mActivity.getTerminalToolbarDefaultHeight());
                 // apply extra keys fix if enabled in prefs
                 if (mActivity.getProperties().isUsingFullScreen() && mActivity.getProperties().isUsingFullScreenWorkAround()) {
                     FullScreenWorkAround.apply(mActivity);
@@ -59,9 +59,14 @@ public class TerminalToolbarViewPager {
                 layout = inflater.inflate(R.layout.view_terminal_toolbar_text_input, collection, false);
 
                 final Button button = layout.findViewById(R.id.terminal_toolbar_text_input_button);
+                button.setText("\u2398");
                 button.setOnClickListener(v -> {
+                    mActivity.getTermuxTerminalSessionClient().onPasteTextFromClipboard(null);
+                });
+                button.setOnLongClickListener(v -> {
                     ViewPager pager = mActivity.getTerminalToolbarViewPager();
                     pager.setCurrentItem(0, true);
+                    return true;
                 });
 
                 final EditText editText = layout.findViewById(R.id.terminal_toolbar_text_input);
@@ -108,8 +113,7 @@ public class TerminalToolbarViewPager {
 
         @Override
         public void onPageSelected(int position) {
-            mActivity.setTerminalToolbarHeight();
-            if (position == 0 || position == 1) {
+            if (position == 0) {
                 mActivity.getTerminalView().requestFocus();
             } else {
                 final EditText editText = mTerminalToolbarViewPager.findViewById(R.id.terminal_toolbar_text_input);

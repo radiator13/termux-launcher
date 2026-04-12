@@ -2222,7 +2222,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void setTerminalToolbarView(Bundle savedInstanceState) {
         mTermuxTerminalExtraKeys = new TermuxTerminalExtraKeys(this, mTerminalView, mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient, 0);
-        mTermuxTerminalExtraKeys2 = new TermuxTerminalExtraKeys(this, mTerminalView, mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient, 1);
+        mTermuxTerminalExtraKeys2 = null;
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
         mTerminalToolbarDefaultHeight = layoutParams.height;
@@ -2273,14 +2273,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
 
-        int i = terminalToolbarViewPager.getCurrentItem();
         int matrix = 0;
-        if (i == 0) {
-            if (mTermuxTerminalExtraKeys.getExtraKeysInfo() != null)
+        if (mTermuxTerminalExtraKeys != null && mTermuxTerminalExtraKeys.getExtraKeysInfo() != null) {
             matrix = mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
-        } else {
-            if (mTermuxTerminalExtraKeys2.getExtraKeysInfo() != null)
-                matrix = mTermuxTerminalExtraKeys2.getExtraKeysInfo().getMatrix().length;
         }
 
         int toolbarHeightPx = Math.round(mTerminalToolbarDefaultHeight * matrix * mProperties.getTerminalToolbarHeightScaleFactor());
@@ -2892,28 +2887,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public ExtraKeysView getExtraKeysView(int i) {
-        if (i==0)
-            return mExtraKeysView;
-        else
-            return mExtraKeysView2;
+        return mExtraKeysView;
     }
     public ExtraKeysView getExtraKeysView() {
-        int i = getTerminalToolbarViewPager().getCurrentItem();
-        return getExtraKeysView(i);
+        return mExtraKeysView;
     }
 
     public TermuxTerminalExtraKeys getTermuxTerminalExtraKeys(int i) {
-        if (i==0)
-            return mTermuxTerminalExtraKeys;
-        else
-            return mTermuxTerminalExtraKeys2;
+        return mTermuxTerminalExtraKeys;
+    }
+
+    public TermuxTerminalExtraKeys getTermuxTerminalExtraKeys() {
+        return mTermuxTerminalExtraKeys;
     }
 
     public void setExtraKeysView(ExtraKeysView extraKeysView, int i) {
-        if (i==0)
-            mExtraKeysView = extraKeysView;
-        else
-            mExtraKeysView2 = extraKeysView;
+        mExtraKeysView = extraKeysView;
+    }
+
+    public void setExtraKeysView(ExtraKeysView extraKeysView) {
+        mExtraKeysView = extraKeysView;
     }
 
     public DrawerLayout getDrawer() {
@@ -3433,10 +3426,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
                mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
-            }
-            if (mExtraKeysView2 != null) {
-                mExtraKeysView2.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
-               mExtraKeysView2.reload(mTermuxTerminalExtraKeys2.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
             }
             // Update NightMode.APP_NIGHT_MODE
             TermuxThemeUtils.setAppNightMode(mProperties.getNightMode());
