@@ -123,6 +123,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean blurEnabled = false;
     private int blurRadiusDp = 10;
     private int inheritedTintColor = 0;
+    private int dockRowHeightHintPx = 0;
     private List<String> defaultButtonStrings = new ArrayList<>();
     private final Map<String, WeakReference<View>> launchTargetViews = new HashMap<>();
     private final Map<String, WeakReference<View>> launchTargetViewsByPackage = new HashMap<>();
@@ -154,6 +155,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean pendingDeferredRender = false;
     private boolean suppressDrawUntilStableLayout = true;
     private boolean stableLayoutRerenderPosted = false;
+    private boolean childLayoutPending = true;
     private boolean suppressContextLongPressForSwipe = false;
     private int folderDragHoverIndex = -1;
     @Nullable private LongPressPickupState activeLongPressPickupState;
@@ -241,6 +243,9 @@ public final class SuggestionBarView extends GridLayout {
     private void initFocusSurface() {
         setClipChildren(false);
         setClipToPadding(false);
+        setRowCount(1);
+        setUseDefaultMargins(false);
+        setAlignmentMode(GridLayout.ALIGN_BOUNDS);
     }
 
     @Override
@@ -268,6 +273,7 @@ public final class SuggestionBarView extends GridLayout {
     protected void onWindowVisibilityChanged(int visibility) {
         super.onWindowVisibilityChanged(visibility);
         if (visibility == VISIBLE) {
+            prepareForWindowReentry();
             resetTransientVisualState();
             scheduleStableDrawReleaseIfPossible();
         }
@@ -311,6 +317,18 @@ public final class SuggestionBarView extends GridLayout {
         this.iconScale = iconScale;
     }
 
+    public void setDockRowHeightHintPx(int dockRowHeightHintPx) {
+        int clamped = Math.max(0, dockRowHeightHintPx);
+        if (this.dockRowHeightHintPx == clamped) {
+            return;
+        }
+        this.dockRowHeightHintPx = clamped;
+        childLayoutPending = true;
+        requestLayout();
+        invalidate();
+        scheduleStableDrawReleaseIfPossible();
+    }
+
     public void setAppBarOpacity(int appBarOpacity) {
         this.appBarOpacity = appBarOpacity;
     }
@@ -323,6 +341,7 @@ public final class SuggestionBarView extends GridLayout {
     public void prepareForWindowReentry() {
         suppressDrawUntilStableLayout = true;
         stableLayoutRerenderPosted = false;
+        childLayoutPending = true;
         invalidate();
         scheduleStableDrawReleaseIfPossible();
     }
@@ -1117,6 +1136,7 @@ public final class SuggestionBarView extends GridLayout {
     private void renderButtons(@NonNull List<LauncherAppEntry> entries, boolean azPreview) {
         if (!hasStableRenderBounds()) {
             suppressDrawUntilStableLayout = true;
+            childLayoutPending = true;
             if (pendingDeferredRender) {
                 return;
             }
@@ -1132,8 +1152,9 @@ public final class SuggestionBarView extends GridLayout {
             });
             return;
         }
-        suppressDrawUntilStableLayout = false;
+        suppressDrawUntilStableLayout = true;
         pendingDeferredRender = false;
+        childLayoutPending = true;
         resetTransientVisualState();
         folderDragHoverIndex = -1;
         setTranslationX(0f);
@@ -1306,6 +1327,8 @@ public final class SuggestionBarView extends GridLayout {
         if (overflowInteractionListener != null) {
             overflowInteractionListener.onOverflowInteractionChanged(rowInteractionActive);
         }
+        requestLayout();
+        scheduleStableDrawReleaseIfPossible();
     }
 
     @NonNull
@@ -4415,7 +4438,39 @@ public final class SuggestionBarView extends GridLayout {
     private boolean hasStableRenderBounds() {
         int minStableWidth = Math.max(1, dp(120));
         int minStableHeight = Math.max(1, dp(24));
-        return isLaidOut() && getWidth() >= minStableWidth && getHeight() >= minStableHeight;
+        if (!isLaidOut() || getWidth() < minStableWidth || getHeight() < minStableHeight) {
+            return false;
+        }
+        return dockRowHeightHintPx <= 0 || getHeight() >= Math.max(minStableHeight, dockRowHeightHintPx - dp(4));
+    }
+
+    private boolean hasStableChildLayout() {
+        if (!childLayoutPending) {
+            return true;
+        }
+        int meaningfulChildren = 0;
+        int firstLeft = Integer.MIN_VALUE;
+        boolean foundDistinctSlot = false;
+        int minChildWidth = Math.max(dp(18), getWidth() / Math.max(2, maxButtonCount * 2));
+        int minChildHeight = Math.max(dp(18), Math.min(Math.max(dp(18), dockRowHeightHintPx - dp(8)), getHeight()));
+
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            if (child == null || child.getVisibility() != VISIBLE || child.getAlpha() <= 0.01f) {
+                continue;
+            }
+            meaningfulChildren++;
+            if (child.getWidth() < minChildWidth || child.getHeight() < minChildHeight) {
+                return false;
+            }
+            if (firstLeft == Integer.MIN_VALUE) {
+                firstLeft = child.getLeft();
+            } else if (Math.abs(child.getLeft() - firstLeft) >= dp(8)) {
+                foundDistinctSlot = true;
+            }
+        }
+
+        return meaningfulChildren <= 1 || foundDistinctSlot;
     }
 
     private void scheduleStableDrawReleaseIfPossible() {
@@ -4428,9 +4483,15 @@ public final class SuggestionBarView extends GridLayout {
             if (!isAttachedToWindow() || !hasStableRenderBounds()) {
                 return;
             }
+            if (!hasStableChildLayout()) {
+                if (suppressDrawUntilStableLayout) {
+                    postDelayed(this::scheduleStableDrawReleaseIfPossible, 16L);
+                }
+                return;
+            }
             resetTransientVisualState();
             suppressDrawUntilStableLayout = false;
-            rerenderCurrentSurface();
+            childLayoutPending = false;
             invalidate();
         });
     }
@@ -4598,7 +4659,7 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private int iconSizePx() {
-        int availableHeight = getHeight();
+        int availableHeight = dockRowHeightHintPx > 0 ? dockRowHeightHintPx : getHeight();
         if (availableHeight <= 0) {
             ViewParent parent = getParent();
             if (parent instanceof View) {
@@ -4608,22 +4669,14 @@ public final class SuggestionBarView extends GridLayout {
         if (availableHeight <= 0) {
             return Math.max(dp(20), Math.round(24f * iconScale * getResources().getDisplayMetrics().density));
         }
-        int usableHeight = Math.max(dp(24), availableHeight - dp(4));
+        int usableHeight = Math.max(dp(24), availableHeight - dp(8));
         int candidate = Math.round(usableHeight * resolveIconFillRatio());
-        return clamp(candidate, dp(20), usableHeight);
+        return clamp(candidate, dp(20), Math.max(dp(20), usableHeight));
     }
 
     private float resolveIconFillRatio() {
-        if (iconScale <= 1.04f) {
-            return 0.52f;
-        }
-        if (iconScale <= 1.30f) {
-            return 0.60f;
-        }
-        if (iconScale <= 1.63f) {
-            return 0.68f;
-        }
-        return 0.76f;
+        float normalized = clamp01((iconScale - 1.0f) / 0.8f);
+        return 0.46f + (normalized * 0.28f);
     }
 
     @NonNull

@@ -509,6 +509,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalSurfaceAppearance();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         if (mSuggestionBarView != null) {
+            mSuggestionBarView.prepareForWindowReentry();
             mSuggestionBarView.resetTransientVisualState();
         }
         updateAppLauncherBarHeight();
@@ -546,6 +547,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyWallpaperOffsetFixIfNeeded();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         if (mSuggestionBarView != null) {
+            mSuggestionBarView.prepareForWindowReentry();
             mSuggestionBarView.resetTransientVisualState();
         }
         updateAppLauncherBarHeight();
@@ -842,6 +844,27 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             this.azRowEnabled = azRowEnabled;
             this.barAlpha = barAlpha;
             this.blurRadiusDp = blurRadiusDp;
+        }
+    }
+
+    private static final class DockLayoutMetrics {
+        final int appsBarHeightPx;
+        final int azRowHeightPx;
+        final int interRowGapPx;
+
+        DockLayoutMetrics(int appsBarHeightPx, int azRowHeightPx, int interRowGapPx) {
+            this.appsBarHeightPx = Math.max(0, appsBarHeightPx);
+            this.azRowHeightPx = Math.max(0, azRowHeightPx);
+            this.interRowGapPx = Math.max(0, interRowGapPx);
+        }
+
+        int combinedHeight(int toolbarHeightPx) {
+            return AccessoryStackLayoutPolicy.computeCombinedHeight(
+                toolbarHeightPx,
+                appsBarHeightPx,
+                azRowHeightPx,
+                interRowGapPx
+            );
         }
     }
 
@@ -1459,13 +1482,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
 
-        // Set height based on preferences
-        ViewGroup.LayoutParams layoutParams = appsBarContainer.getLayoutParams();
-        float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        int defaultHeight = (int) (getResources().getDisplayMetrics().density * 37.5f);
-        layoutParams.height = Math.round(defaultHeight * barHeightScale);
-        appsBarContainer.setLayoutParams(layoutParams);
-
         if (mSuggestionBarView == null) {
             LayoutInflater inflater = LayoutInflater.from(TermuxActivity.this);
             mSuggestionBarView = (SuggestionBarView) inflater.inflate(R.layout.suggestion_bar, appsBarContainer, false);
@@ -1486,6 +1502,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);
         applySuggestionBarPreferences();
+        applyDockLayoutMetrics(buildDockLayoutMetrics(0));
         mSuggestionBarView.reload();
         if (mTermuxTerminalViewClient != null) {
             mTermuxTerminalViewClient.setSuggestionBarCallback(this);
@@ -1541,6 +1558,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setSearchTolerance(mPreferences.getAppLauncherSearchTolerance());
         mSuggestionBarView.setBandW(mPreferences.isAppLauncherBwIconsEnabled());
         mSuggestionBarView.setIconScale(mPreferences.getAppLauncherIconScale());
+        mSuggestionBarView.setDockRowHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx);
         mSuggestionBarView.setAppBarOpacity(mPreferences.getAppBarOpacity());
         mSuggestionBarView.setBlurConfig(mPreferences.getExtraKeysBlurRadius() > 0, mPreferences.getExtraKeysBlurRadius());
         mSuggestionBarView.setInheritedTintColor(resolveAccessoryGlassBaseColor());
@@ -1552,6 +1570,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mLauncherTransitionController.onAnimationPreferenceUpdated();
         }
         mSuggestionBarView.reloadAllApps();
+        String input = mTerminalView == null ? "" : normalizeSuggestionBarInput(mTerminalView.getCurrentInput());
+        mSuggestionBarView.reloadWithInput(input, mTerminalView);
         syncAzScrubLettersAndTint();
     }
 
@@ -2230,35 +2250,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void updateAppLauncherBarHeight() {
         if (mPreferences == null)
             return;
-        int barHeightPx = Math.round(mTerminalToolbarDefaultHeight * mPreferences.getAppLauncherBarHeightScale());
-        if (barHeightPx < 0) {
-            barHeightPx = 0;
-        }
-        int azRowHeightPx = 0;
-        boolean azEnabled = mPreferences.isAppLauncherAzRowEnabled();
-        if (mPreferences.isAppLauncherAzRowEnabled()) {
-            float density = getResources().getDisplayMetrics().density;
-            float iconScale = mPreferences.getAppLauncherIconScale();
-            float ratio = 0.40f + ((iconScale - 1f) * 0.08f);
-            int target = Math.round(barHeightPx * ratio);
-            int min = Math.round(16f * density);
-            int max = Math.round(27f * density);
-            azRowHeightPx = Math.max(min, Math.min(max, target));
-        }
-        updateViewHeight(R.id.apps_bar_viewpager, barHeightPx);
-        updateViewHeight(R.id.apps_bar_az_row, azRowHeightPx);
-        int interRowGapPx = AccessoryStackLayoutPolicy.computeAppsBarInterRowGapPx(
-            azEnabled,
-            getResources().getDisplayMetrics().density,
-            mPreferences.getAppLauncherIconScale()
-        );
-        updateViewBottomMargin(R.id.apps_bar_viewpager, interRowGapPx);
+        applyDockLayoutMetrics(buildDockLayoutMetrics(0));
     }
 
     public void setTerminalToolbarHeight() {
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         View accessoryStackContainer = findViewById(R.id.accessory_stack_container);
-        View appsBarViewPager = findViewById(R.id.apps_bar_viewpager);
         if (terminalToolbarViewPager == null || accessoryStackContainer == null)
             return;
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
@@ -2272,41 +2269,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         toolbarLayoutParams.height = toolbarHeightPx;
         terminalToolbarViewPager.setLayoutParams(toolbarLayoutParams);
 
-        int appsBarHeightPx = 0;
-        int appsBarGapPx = 0;
-        if (appsBarViewPager != null) {
-            ViewGroup.LayoutParams appsBarLayoutParams = appsBarViewPager.getLayoutParams();
-            if (appsBarLayoutParams != null) {
-                appsBarHeightPx = appsBarLayoutParams.height;
-                if (appsBarHeightPx < 0) {
-                    appsBarHeightPx = 0;
-                }
-                if (appsBarLayoutParams instanceof ViewGroup.MarginLayoutParams) {
-                    appsBarGapPx = Math.max(0, ((ViewGroup.MarginLayoutParams) appsBarLayoutParams).bottomMargin);
-                }
-            }
-        }
-        View azRow = findViewById(R.id.apps_bar_az_row);
-        int azRowHeightPx = 0;
-        if (azRow != null && azRow.getLayoutParams() != null) {
-            azRowHeightPx = Math.max(0, azRow.getLayoutParams().height);
-        }
-        int combinedHeight = AccessoryStackLayoutPolicy.computeCombinedHeight(
-            toolbarHeightPx,
-            appsBarHeightPx,
-            azRowHeightPx,
-            appsBarGapPx
-        );
+        DockLayoutMetrics dockMetrics = buildDockLayoutMetrics(0);
+        applyDockLayoutMetrics(dockMetrics);
+        int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
         updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
-        scheduleAccessoryHeightSnapToTerminalGrid(accessoryStackContainer, combinedHeight);
+        scheduleAccessoryHeightSnapToTerminalGrid(accessoryStackContainer, toolbarHeightPx, dockMetrics);
         scheduleAccessoryRenderSync("setTerminalToolbarHeight");
     }
 
-    private void scheduleAccessoryHeightSnapToTerminalGrid(@NonNull View accessoryStackContainer, int requestedHeightPx) {
+    private void scheduleAccessoryHeightSnapToTerminalGrid(@NonNull View accessoryStackContainer, int toolbarHeightPx, @NonNull DockLayoutMetrics baseDockMetrics) {
         if (mPendingAccessoryGridSnapRunnable != null) {
             mAccessoryRenderHandler.removeCallbacks(mPendingAccessoryGridSnapRunnable);
         }
-        final int baseHeightPx = Math.max(0, requestedHeightPx);
         mPendingAccessoryGridSnapRunnable = new Runnable() {
             private int attempts;
 
@@ -2329,11 +2303,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     return;
                 }
 
-                int currentHeightPx = accessoryStackContainer.getHeight() > 0
-                    ? accessoryStackContainer.getHeight()
-                    : baseHeightPx;
-                int alignedHeightPx = computeAccessoryHeightAlignedToTerminalGrid(currentHeightPx);
-                if (alignedHeightPx != currentHeightPx) {
+                int snapExtraPx = computeAccessoryGridSnapExtraPx();
+                int maxCombinedHeightPx = rootLayout != null ? Math.max(0, rootLayout.getHeight()) : Integer.MAX_VALUE;
+                int maxAdditionalPx = Math.max(0, maxCombinedHeightPx - baseDockMetrics.combinedHeight(toolbarHeightPx));
+                if (snapExtraPx > maxAdditionalPx) {
+                    snapExtraPx = maxAdditionalPx;
+                }
+
+                DockLayoutMetrics snappedDockMetrics = buildDockLayoutMetrics(snapExtraPx);
+                applyDockLayoutMetrics(snappedDockMetrics);
+                int alignedHeightPx = snappedDockMetrics.combinedHeight(toolbarHeightPx);
+                if (alignedHeightPx != accessoryStackContainer.getHeight()) {
                     updateAccessoryStackContainerHeight(accessoryStackContainer, alignedHeightPx);
                 }
                 if (mTerminalView != null) {
@@ -2345,29 +2325,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         accessoryStackContainer.post(mPendingAccessoryGridSnapRunnable);
     }
 
-    private int computeAccessoryHeightAlignedToTerminalGrid(int currentAccessoryHeightPx) {
+    private int computeAccessoryGridSnapExtraPx() {
         if (mTerminalView == null) {
-            return currentAccessoryHeightPx;
+            return 0;
         }
         TerminalRenderer renderer = mTerminalView.mRenderer;
         if (renderer == null) {
-            return currentAccessoryHeightPx;
+            return 0;
         }
         int terminalHeightPx = mTerminalView.getHeight();
         int lineSpacingPx = renderer.getFontLineSpacing();
         int lineStartOffsetPx = renderer.getFontLineSpacingAndAscent();
         if (lineSpacingPx <= 0 || terminalHeightPx <= lineStartOffsetPx) {
-            return currentAccessoryHeightPx;
+            return 0;
         }
         int rows = Math.max(4, (terminalHeightPx - lineStartOffsetPx) / lineSpacingPx);
         int renderedTerminalHeightPx = lineStartOffsetPx + (rows * lineSpacingPx);
         int unusedTerminalPx = Math.max(0, terminalHeightPx - renderedTerminalHeightPx);
-        if (unusedTerminalPx == 0) {
-            return currentAccessoryHeightPx;
-        }
-        RelativeLayout rootLayout = findViewById(R.id.activity_termux_root_relative_layout);
-        int maxAccessoryHeightPx = rootLayout != null ? Math.max(0, rootLayout.getHeight()) : Integer.MAX_VALUE;
-        return Math.max(0, Math.min(maxAccessoryHeightPx, currentAccessoryHeightPx + unusedTerminalPx));
+        return unusedTerminalPx;
     }
 
     private void updateAccessoryStackContainerHeight(View view, int height) {
@@ -2403,6 +2378,51 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (marginParams.bottomMargin == marginBottom) return;
         marginParams.bottomMargin = marginBottom;
         view.setLayoutParams(marginParams);
+    }
+
+    private int getDockBaseToolbarHeightPx() {
+        if (mTerminalToolbarDefaultHeight > 0) {
+            return mTerminalToolbarDefaultHeight;
+        }
+        return Math.round(getResources().getDisplayMetrics().density * 37.5f);
+    }
+
+    @NonNull
+    private DockLayoutMetrics buildDockLayoutMetrics(int additionalAppsBarHeightPx) {
+        if (mPreferences == null) {
+            return new DockLayoutMetrics(0, 0, 0);
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        float iconScale = mPreferences.getAppLauncherIconScale();
+        float normalizedIconScale = Math.max(0f, Math.min(1f, (iconScale - 1.0f) / 0.8f));
+        int appsBarHeightPx = Math.max(0,
+            Math.round(getDockBaseToolbarHeightPx() * mPreferences.getAppLauncherBarHeightScale()) + Math.max(0, additionalAppsBarHeightPx));
+
+        boolean azEnabled = mPreferences.isAppLauncherAzRowEnabled();
+        int azRowHeightPx = 0;
+        if (azEnabled) {
+            float azRatio = 0.36f + (normalizedIconScale * 0.10f);
+            int target = Math.round(appsBarHeightPx * azRatio);
+            int min = Math.round(18f * density);
+            int max = Math.round(30f * density);
+            azRowHeightPx = Math.max(min, Math.min(max, target));
+        }
+
+        int interRowGapPx = azEnabled
+            ? Math.max(Math.round(2f * density), Math.round(appsBarHeightPx * 0.05f))
+            : 0;
+
+        return new DockLayoutMetrics(appsBarHeightPx, azRowHeightPx, interRowGapPx);
+    }
+
+    private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
+        updateViewHeight(R.id.apps_bar_viewpager, metrics.appsBarHeightPx);
+        updateViewHeight(R.id.apps_bar_az_row, metrics.azRowHeightPx);
+        updateViewBottomMargin(R.id.apps_bar_viewpager, metrics.interRowGapPx);
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.setDockRowHeightHintPx(metrics.appsBarHeightPx);
+        }
     }
 
     public void toggleTerminalToolbar() {
@@ -3344,6 +3364,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mSuggestionBarView.clearAzPreview();
             }
         }
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.prepareForWindowReentry();
+        }
         scheduleAccessoryRenderSync(visible ? "ime:open" : "ime:close");
     }
 
@@ -3492,6 +3515,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setMargins();
         updateAppLauncherBarHeight();
         applySuggestionBarPreferences();
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.prepareForWindowReentry();
+        }
         applySuggestionBarInputChar();
         setTerminalToolbarHeight();
         applySeamlessStatusBackgroundModeIfNeeded();
