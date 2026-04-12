@@ -2495,7 +2495,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         };
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, targets);
         new MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.wallpaper_target_dialog_title)
             .setAdapter(adapter, (dialogInterface, which) -> {
                 int selectedFlags = flags[which];
                 if (!applyManagedWallpaper(croppedUri, selectedFlags)) {
