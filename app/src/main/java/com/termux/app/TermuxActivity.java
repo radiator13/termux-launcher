@@ -520,7 +520,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mSuggestionBarView != null) {
             mSuggestionBarView.resetTransientVisualState();
         }
-        applyAccessoryGeometryIfNeeded(true, "onStart");
+        if (shouldRefreshAccessoryGeometryOnForeground()) {
+            applyAccessoryGeometryIfNeeded(true, "onStart");
+        }
         scheduleAccessoryRenderSync("onStart");
     
         registerTermuxActivityBroadcastReceiver();
@@ -556,7 +558,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mSuggestionBarView != null) {
             mSuggestionBarView.resetTransientVisualState();
         }
-        applyAccessoryGeometryIfNeeded(false, "onResume");
+        if (shouldRefreshAccessoryGeometryOnForeground()) {
+            applyAccessoryGeometryIfNeeded(false, "onResume");
+        }
         scheduleAccessoryRenderSync("onResume");
         if (mSuggestionBarView != null) {
             mSuggestionBarView.post(this::updateAzOverflowAffordance);
@@ -1580,6 +1584,38 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return !isImeVisible() && (SystemClock.uptimeMillis() - mLastForegroundEntryUptimeMs) < 180L;
     }
 
+    private boolean shouldRefreshAccessoryGeometryOnForeground() {
+        if (mPreferences == null || !mPreferences.shouldShowTerminalToolbar()) {
+            return false;
+        }
+        View accessoryContainer = findViewById(R.id.accessory_stack_container);
+        View appsBar = findViewById(R.id.apps_bar_viewpager);
+        View azRow = findViewById(R.id.apps_bar_az_row);
+        ViewPager toolbar = getTerminalToolbarViewPager();
+        if (accessoryContainer == null || appsBar == null || toolbar == null) {
+            return true;
+        }
+        int matrix = 0;
+        if (mTermuxTerminalExtraKeys != null && mTermuxTerminalExtraKeys.getExtraKeysInfo() != null) {
+            matrix = mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
+        }
+        int expectedToolbarHeight = Math.round(mTerminalToolbarDefaultHeight * matrix * mProperties.getTerminalToolbarHeightScaleFactor());
+        DockLayoutMetrics metrics = buildDockLayoutMetrics(0);
+        if (toolbar.getHeight() <= 0 || appsBar.getHeight() <= 0 || accessoryContainer.getHeight() <= 0) {
+            return true;
+        }
+        if (Math.abs(toolbar.getHeight() - expectedToolbarHeight) > 1) {
+            return true;
+        }
+        if (Math.abs(appsBar.getHeight() - metrics.appsBarHeightPx) > 1) {
+            return true;
+        }
+        if (mPreferences.isAppLauncherAzRowEnabled() && azRow != null && Math.abs(azRow.getHeight() - metrics.azRowHeightPx) > 1) {
+            return true;
+        }
+        return false;
+    }
+
     private void applyAccessoryGeometryIfNeeded(boolean force, @NonNull String reason) {
         long now = SystemClock.uptimeMillis();
         if (!force && (now - mLastAccessoryGeometryApplyUptimeMs) < 120L) {
@@ -2411,11 +2447,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float resolveDerivedDockIconScale() {
         if (mPreferences == null) {
-            return 1.24f;
+            return 1.36f;
         }
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.24f) / (1.60f - 1.24f)));
-        return 1.12f + (normalized * 0.24f);
+        float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
+        return 1.22f + (normalized * 0.52f);
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
