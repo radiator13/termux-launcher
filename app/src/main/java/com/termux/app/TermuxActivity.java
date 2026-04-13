@@ -56,6 +56,7 @@ import android.widget.ArrayAdapter;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.graphics.Insets;
 import com.github.mmin18.widget.RealtimeBlurView;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -448,10 +449,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 120L;
                     mSmoothImeTargetBottomInsetPx = 0;
                     applySmoothDockImeOffset(0);
-                    if (isUsingSmoothSoftKeyboardBehavior()) {
-                        mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
-                        mAccessoryRenderHandler.post(mDeferredImeGeometryRunnable);
-                    }
+                    mPendingImeGeometryVisible = null;
                 }
             }
         };
@@ -700,7 +698,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!shouldUseWallpaperPassthroughMode()) {
             targetColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         } else {
-            targetColor = showSurface && mSeamlessStatusBackgroundActive ? terminalSurfaceColor : Color.TRANSPARENT;
+            targetColor = Color.TRANSPARENT;
         }
         if (getWindow() != null) {
             getWindow().setStatusBarColor(targetColor);
@@ -1204,12 +1202,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 state.blurEnabled ? resolveAccessorySurfaceColor(state.barAlpha) : Color.TRANSPARENT
             );
         }
-        // Keep one live blur in the accessory stack. The bottom probe stays static to avoid
-        // overlapping RealtimeBlurView composition during IME transitions.
-        if (bottomSpaceBlur != null) {
-            bottomSpaceBlur.setVisibility(View.GONE);
-        }
-
         if (!state.toolbarShown) {
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(View.GONE);
@@ -1289,6 +1281,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(state.blurEnabled && !useRenderEffectBlur ? View.VISIBLE : View.GONE);
         }
+        updateBottomGestureSurface(state);
         configureAccessoryTopEdgeFx(true, state.barAlpha);
         updateAccessoryRenderEffectBackdrop(state);
         updateAzOverflowAffordance();
@@ -1329,7 +1322,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldEnableSeamlessStatusBackground() {
-        return shouldUseWallpaperPassthroughMode() && shouldShowTerminalOverlaySurface();
+        return false;
     }
 
     private void applySmoothDockImeOffset(int translationYPx) {
@@ -3546,6 +3539,54 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return insets != null && insets.isVisible(Type.ime());
     }
 
+    private int resolveBottomGestureInsetPx() {
+        View content = findViewById(android.R.id.content);
+        if (content == null) {
+            return 0;
+        }
+        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(content);
+        if (insets == null) {
+            return 0;
+        }
+        Insets navInsets = insets.getInsets(Type.navigationBars());
+        Insets gestureInsets = insets.getInsets(Type.systemGestures());
+        return Math.max(0, Math.max(navInsets.bottom, gestureInsets.bottom));
+    }
+
+    private void updateBottomGestureSurface(@NonNull AccessoryRenderState state) {
+        View bottomSpaceView = findViewById(R.id.activity_termux_bottom_space_view);
+        View bottomSpaceBackground = findViewById(R.id.activity_termux_bottom_space_background);
+        View bottomSpaceBlur = findViewById(R.id.activity_termux_bottom_space_blur);
+        if (bottomSpaceView == null || bottomSpaceBackground == null || bottomSpaceBlur == null) {
+            return;
+        }
+
+        boolean showGestureSurface = state.toolbarShown && !isImeVisible();
+        int gestureInsetPx = showGestureSurface ? resolveBottomGestureInsetPx() : 0;
+
+        ViewGroup.LayoutParams layoutParams = bottomSpaceView.getLayoutParams();
+        if (layoutParams != null && layoutParams.height != gestureInsetPx) {
+            layoutParams.height = gestureInsetPx;
+            bottomSpaceView.setLayoutParams(layoutParams);
+        }
+
+        if (!showGestureSurface || gestureInsetPx <= 0) {
+            bottomSpaceBackground.setVisibility(View.GONE);
+            bottomSpaceBlur.setVisibility(View.GONE);
+            return;
+        }
+
+        bottomSpaceBackground.setAlpha(state.barAlpha);
+        bottomSpaceBackground.setVisibility(View.VISIBLE);
+        applyRealtimeBlurRadius(bottomSpaceBlur, state.blurRadiusDp);
+        applyRealtimeBlurDownsampleFactor(bottomSpaceBlur, ACCESSORY_BLUR_DOWNSAMPLE_FACTOR);
+        applyRealtimeBlurOverlayColor(
+            bottomSpaceBlur,
+            state.blurEnabled ? resolveAccessorySurfaceColor(state.barAlpha) : Color.TRANSPARENT
+        );
+        bottomSpaceBlur.setVisibility(state.blurEnabled ? View.VISIBLE : View.GONE);
+    }
+
     private void onImeVisibilityChanged(boolean visible) {
         if (!visible && !mAzGestureActive) {
             mSuggestionBarInteractionActive = false;
@@ -3558,11 +3599,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (isUsingCustomSoftKeyboardBehavior()) {
             mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + (visible ? 260L : 220L);
-            mPendingImeGeometryVisible = visible;
+            mPendingImeGeometryVisible = null;
             mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
-            if (!isUsingSmoothSoftKeyboardBehavior()) {
-                mAccessoryRenderHandler.postDelayed(mDeferredImeGeometryRunnable, visible ? 140L : 110L);
-            }
         } else {
             applyAccessoryGeometryIfNeeded(true, visible ? "ime:open" : "ime:close");
         }
