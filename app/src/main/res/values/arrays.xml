@@ -22,10 +22,12 @@
     </string-array>
     <string-array name="app_launcher_soft_keyboard_behavior_entries">
         <item>@string/termux_app_launcher_soft_keyboard_behavior_stock</item>
-        <item>@string/termux_app_launcher_soft_keyboard_behavior_custom</item>
+        <item>@string/termux_app_launcher_soft_keyboard_behavior_simple</item>
+        <item>@string/termux_app_launcher_soft_keyboard_behavior_smooth</item>
     </string-array>
     <string-array name="app_launcher_soft_keyboard_behavior_values">
         <item>stock</item>
-        <item>custom</item>
+        <item>simple</item>
+        <item>smooth</item>
     </string-array>
 </resources>

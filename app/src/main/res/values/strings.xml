@@ -309,7 +309,8 @@
                 <string name="termux_app_launcher_soft_keyboard_behavior_title">Soft Keyboard Behavior</string>
                 <string name="termux_app_launcher_soft_keyboard_behavior_summary">Choose how keyboard return behaves when reopening launcher.</string>
                 <string name="termux_app_launcher_soft_keyboard_behavior_stock">Stock</string>
-                <string name="termux_app_launcher_soft_keyboard_behavior_custom">Custom</string>
+                <string name="termux_app_launcher_soft_keyboard_behavior_simple">Simple</string>
+                <string name="termux_app_launcher_soft_keyboard_behavior_smooth">Smooth</string>
                 <string name="termux_app_launcher_bar_height_title">Dock size</string>
                 <string name="termux_app_launcher_bar_height_summary">Choose the overall dock size.</string>
                 <string name="termux_app_launcher_icon_scale_title">Icon scaling</string>

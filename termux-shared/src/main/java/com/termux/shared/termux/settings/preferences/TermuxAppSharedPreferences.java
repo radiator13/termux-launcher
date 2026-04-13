@@ -241,7 +241,10 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.DEFAULT_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR,
             true
         );
-        if (!"custom".equals(value) && !"stock".equals(value)) {
+        if ("custom".equals(value)) {
+            value = "simple";
+            SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR, value, true);
+        } else if (!"simple".equals(value) && !"smooth".equals(value) && !"stock".equals(value)) {
             value = TERMUX_APP.DEFAULT_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR;
             SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR, value, true);
         }
@@ -249,7 +252,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public void setAppLauncherSoftKeyboardBehavior(String value) {
-        if (!"custom".equals(value)) {
+        if (!"simple".equals(value) && !"smooth".equals(value)) {
             value = TERMUX_APP.DEFAULT_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR;
         }
         SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SOFT_KEYBOARD_BEHAVIOR, value, false);

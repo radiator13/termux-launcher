@@ -156,6 +156,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean suppressDrawUntilStableLayout = true;
     private boolean stableLayoutRerenderPosted = false;
     private boolean childLayoutPending = true;
+    private int lastSurfaceRenderSignature = 0;
     private boolean suppressContextLongPressForSwipe = false;
     private int folderDragHoverIndex = -1;
     @Nullable private LongPressPickupState activeLongPressPickupState;
@@ -1159,25 +1160,7 @@ public final class SuggestionBarView extends GridLayout {
             });
             return;
         }
-        suppressDrawUntilStableLayout = true;
         pendingDeferredRender = false;
-        childLayoutPending = true;
-        resetTransientVisualState();
-        folderDragHoverIndex = -1;
-        setTranslationX(0f);
-        setAlpha(1f);
-        removeAllViews();
-        clearAzFocusedEntry();
-        lastAzResolvedSlot = -1;
-        launchTargetViews.clear();
-        launchTargetViewsByPackage.clear();
-        azRenderedSlotEntries.clear();
-        azRenderedEntryTargets.clear();
-        azRenderedSlotCount = 0;
-        azPreviewRendered = azPreview;
-        if (!azPreview) {
-            invalidateAzRenderState();
-        }
         int buttonCount = Math.max(1, maxButtonCount);
         int renderStartCol = 0;
         List<PinnedItem> pinnedForSlots = new ArrayList<>();
@@ -1215,6 +1198,37 @@ public final class SuggestionBarView extends GridLayout {
             pinnedItemsPerPage = 1;
             pinnedPageIndex = 0;
         }
+
+        int surfaceRenderSignature = computeSurfaceRenderSignature(entries, azPreview, pinnedSurface, buttonCount);
+        boolean keepCurrentFrameVisible = hasStableDisplayLayout() && surfaceRenderSignature != 0 && surfaceRenderSignature != lastSurfaceRenderSignature;
+        if (!keepCurrentFrameVisible) {
+            suppressDrawUntilStableLayout = true;
+            childLayoutPending = true;
+        } else {
+            suppressDrawUntilStableLayout = false;
+            childLayoutPending = false;
+        }
+        if (surfaceRenderSignature != 0 && surfaceRenderSignature == lastSurfaceRenderSignature && getChildCount() > 0) {
+            pendingDeferredRender = false;
+            return;
+        }
+        resetTransientVisualState();
+        folderDragHoverIndex = -1;
+        setTranslationX(0f);
+        setAlpha(1f);
+        removeAllViews();
+        clearAzFocusedEntry();
+        lastAzResolvedSlot = -1;
+        launchTargetViews.clear();
+        launchTargetViewsByPackage.clear();
+        azRenderedSlotEntries.clear();
+        azRenderedEntryTargets.clear();
+        azRenderedSlotCount = 0;
+        azPreviewRendered = azPreview;
+        if (!azPreview) {
+            invalidateAzRenderState();
+        }
+
         setColumnCount(buttonCount);
         if (azPreview) {
             azRenderedSlotCount = buttonCount;
@@ -1334,8 +1348,34 @@ public final class SuggestionBarView extends GridLayout {
         if (overflowInteractionListener != null) {
             overflowInteractionListener.onOverflowInteractionChanged(rowInteractionActive);
         }
+        lastSurfaceRenderSignature = surfaceRenderSignature;
         requestLayout();
-        scheduleStableDrawReleaseIfPossible();
+        if (!keepCurrentFrameVisible) {
+            scheduleStableDrawReleaseIfPossible();
+        } else {
+            invalidate();
+        }
+    }
+
+    private int computeSurfaceRenderSignature(
+        @NonNull List<LauncherAppEntry> entries,
+        boolean azPreview,
+        boolean pinnedSurface,
+        int buttonCount
+    ) {
+        int signature = 17;
+        signature = (31 * signature) + (azPreview ? 1 : 0);
+        signature = (31 * signature) + (pinnedSurface ? 1 : 0);
+        signature = (31 * signature) + Math.max(1, buttonCount);
+        signature = (31 * signature) + pinnedPageIndex;
+        signature = (31 * signature) + activeAzPageIndex;
+        signature = (31 * signature) + lastInput.trim().hashCode();
+        int limit = Math.min(entries.size(), Math.max(1, buttonCount));
+        for (int i = 0; i < limit; i++) {
+            signature = (31 * signature) + stableEntryKey(entries.get(i)).hashCode();
+        }
+        signature = (31 * signature) + entries.size();
+        return signature;
     }
 
     @NonNull
