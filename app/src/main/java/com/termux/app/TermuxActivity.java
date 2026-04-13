@@ -1150,7 +1150,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyAccessoryLayerBounds(R.id.accessory_surface_host, null);
         if (backdrop == null || surfaceHost == null || accessoryContainer == null || wallpaperFrame == null ||
             accessoryContainer.getWidth() <= 0 || accessoryContainer.getHeight() <= 0) {
-            clearAccessoryRenderEffectBackdrop();
+            if (backdrop != null && backdrop.getDrawable() != null && shouldUseAccessoryRenderEffectBlur(state)) {
+                backdrop.setVisibility(View.VISIBLE);
+            } else {
+                clearAccessoryRenderEffectBackdrop();
+            }
             return;
         }
         if (!shouldUseAccessoryRenderEffectBlur(state)) {
@@ -1171,7 +1175,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         Bitmap wallpaperBackdrop = createWallpaperBackdropBitmapForRect(backdropTargetRect, wallpaperFrame);
         if (wallpaperBackdrop == null) {
-            clearAccessoryRenderEffectBackdrop();
+            if (backdrop.getDrawable() != null) {
+                backdrop.setVisibility(View.VISIBLE);
+            } else {
+                clearAccessoryRenderEffectBackdrop();
+            }
             return;
         }
 
@@ -2557,17 +2565,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
         int appsBarHeightPx = Math.max(0,
-            Math.round(getDockBaseToolbarHeightPx() * (1.22f + (normalizedScale * 0.48f))) + Math.max(0, additionalAppsBarHeightPx));
+            Math.round(getDockBaseToolbarHeightPx() * (1.08f + (normalizedScale * 0.30f))) + Math.max(0, additionalAppsBarHeightPx));
 
         boolean azEnabled = mPreferences.isAppLauncherAzRowEnabled();
         int azRowHeightPx = 0;
         int indicatorBandHeightPx = 0;
         if (azEnabled) {
-            int target = Math.round((18f + (normalizedScale * 8f)) * density);
-            int min = Math.round(18f * density);
-            int max = Math.round(28f * density);
-            azRowHeightPx = Math.max(min, Math.min(max, target));
-            indicatorBandHeightPx = Math.max(Math.round(12f * density), Math.round((16f + (normalizedScale * 6f)) * density));
+            azRowHeightPx = Math.round(22f * density);
+            indicatorBandHeightPx = Math.round(10f * density);
         }
 
         int interRowGapPx = indicatorBandHeightPx;
