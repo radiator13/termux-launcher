@@ -2166,11 +2166,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             canRight = mSuggestionBarView.canPinnedPageRight();
             currentPageIndex = mSuggestionBarView.getPinnedCurrentPageIndex();
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
+            showPageIndicators = true;
         } else if (!mAzGestureActive && !mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
             currentPageIndex = mSuggestionBarView.getPinnedCurrentPageIndex();
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
+            showPageIndicators = true;
             subtlePinnedIndicators = true;
             interactionActive = true;
         }
