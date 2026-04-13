@@ -4683,14 +4683,14 @@ public final class SuggestionBarView extends GridLayout {
         if (availableHeight <= 0) {
             return Math.max(dp(20), Math.round(24f * iconScale * getResources().getDisplayMetrics().density));
         }
-        int usableHeight = Math.max(dp(24), availableHeight - dp(4));
+        int usableHeight = Math.max(dp(24), availableHeight - dp(2));
         int candidate = Math.round(usableHeight * resolveIconFillRatio());
         return clamp(candidate, dp(20), Math.max(dp(20), usableHeight));
     }
 
     private float resolveIconFillRatio() {
         float normalized = clamp01((iconScale - 1.0f) / 0.8f);
-        return 0.60f + (normalized * 0.22f);
+        return 0.68f + (normalized * 0.16f);
     }
 
     @NonNull

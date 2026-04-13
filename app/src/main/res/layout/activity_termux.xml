@@ -207,6 +207,13 @@
                 android:id="@+id/apps_bar_viewpager"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
+                android:layout_above="@+id/apps_bar_indicator_band"
+                android:visibility="gone" />
+
+            <View
+                android:id="@+id/apps_bar_indicator_band"
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
                 android:layout_above="@+id/apps_bar_az_row"
                 android:visibility="gone" />
 

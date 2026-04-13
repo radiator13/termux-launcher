@@ -300,6 +300,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private float mAzLockedAnchorRawY = 0f;
     private final RectF mAzRowRawBounds = new RectF();
     private final RectF mAppsRowRawBounds = new RectF();
+    private final RectF mIndicatorBandRawBounds = new RectF();
     private final RectF mExtraKeysRawBounds = new RectF();
     private final RectF mAzFocusLetterRawBounds = new RectF();
     private final AzScrubRowView.LetterVisualMetrics mAzLetterVisualMetrics = new AzScrubRowView.LetterVisualMetrics();
@@ -883,11 +884,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private static final class DockLayoutMetrics {
         final int appsBarHeightPx;
+        final int indicatorBandHeightPx;
         final int azRowHeightPx;
         final int interRowGapPx;
 
-        DockLayoutMetrics(int appsBarHeightPx, int azRowHeightPx, int interRowGapPx) {
+        DockLayoutMetrics(int appsBarHeightPx, int indicatorBandHeightPx, int azRowHeightPx, int interRowGapPx) {
             this.appsBarHeightPx = Math.max(0, appsBarHeightPx);
+            this.indicatorBandHeightPx = Math.max(0, indicatorBandHeightPx);
             this.azRowHeightPx = Math.max(0, azRowHeightPx);
             this.interRowGapPx = Math.max(0, interRowGapPx);
         }
@@ -897,7 +900,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 toolbarHeightPx,
                 appsBarHeightPx,
                 azRowHeightPx,
-                interRowGapPx
+                indicatorBandHeightPx
             );
         }
     }
@@ -1115,6 +1118,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View accessorySurfaceHost = findViewById(R.id.accessory_surface_host);
         View terminalToolbarViewPager = findViewById(R.id.terminal_toolbar_view_pager);
         View appsBarViewPager = findViewById(R.id.apps_bar_viewpager);
+        View indicatorBand = findViewById(R.id.apps_bar_indicator_band);
         View extraKeysBackground = findViewById(R.id.extrakeys_background);
         View extraKeysBackgroundBlur = findViewById(R.id.extrakeys_backgroundblur);
         View bottomSpaceBackground = findViewById(R.id.activity_termux_bottom_space_background);
@@ -1160,6 +1164,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (appsBarViewPager != null) {
                 appsBarViewPager.setVisibility(View.GONE);
             }
+            if (indicatorBand != null) {
+                indicatorBand.setVisibility(View.GONE);
+            }
             if (terminalToolbarViewPager != null) {
                 terminalToolbarViewPager.setVisibility(View.GONE);
             }
@@ -1186,6 +1193,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (appsBarViewPager != null) {
             appsBarViewPager.setVisibility(View.VISIBLE);
+        }
+        if (indicatorBand != null) {
+            indicatorBand.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
         }
         if (terminalToolbarViewPager != null) {
             terminalToolbarViewPager.setVisibility(View.VISIBLE);
@@ -1616,6 +1626,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         View appsBar = findViewById(R.id.apps_bar_viewpager);
+        View indicatorBand = findViewById(R.id.apps_bar_indicator_band);
         View azRow = findViewById(R.id.apps_bar_az_row);
         ViewPager toolbar = getTerminalToolbarViewPager();
         if (accessoryContainer == null || appsBar == null || toolbar == null) {
@@ -1634,6 +1645,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return true;
         }
         if (Math.abs(appsBar.getHeight() - metrics.appsBarHeightPx) > 1) {
+            return true;
+        }
+        if (indicatorBand != null && Math.abs(indicatorBand.getHeight() - metrics.indicatorBandHeightPx) > 1) {
             return true;
         }
         if (mPreferences.isAppLauncherAzRowEnabled() && azRow != null && Math.abs(azRow.getHeight() - metrics.azRowHeightPx) > 1) {
@@ -1785,6 +1799,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzLastAnchorRawY = azLoc[1] + (mAzScrubRowView.getHeight() * 0.5f);
         populateRawBounds(mAzScrubRowView, mAzRowRawBounds);
         populateRawBounds(mSuggestionBarView, mAppsRowRawBounds);
+        populateRawBounds(findViewById(R.id.apps_bar_indicator_band), mIndicatorBandRawBounds);
         populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
 
         if (letter == AzScrubRowView.PINNED_APPS_SYMBOL) {
@@ -1961,6 +1976,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         populateRawBounds(mAzScrubRowView, mAzRowRawBounds);
         populateRawBounds(mSuggestionBarView, mAppsRowRawBounds);
+        populateRawBounds(findViewById(R.id.apps_bar_indicator_band), mIndicatorBandRawBounds);
         populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
         applyAzFxRowBounds();
         LauncherAzGestureFxView.InteractionMode interactionMode =
@@ -2088,10 +2104,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applyAzFxRowBounds() {
         if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mExtraKeysRawBounds);
+            mLauncherAzGestureFxUnderlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
         }
         if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mExtraKeysRawBounds);
+            mLauncherAzGestureFxOverlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
         }
     }
 
@@ -2445,30 +2461,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private DockLayoutMetrics buildDockLayoutMetrics(int additionalAppsBarHeightPx) {
         if (mPreferences == null) {
-            return new DockLayoutMetrics(0, 0, 0);
+            return new DockLayoutMetrics(0, 0, 0, 0);
         }
 
         float density = getResources().getDisplayMetrics().density;
-        float iconScale = resolveDerivedDockIconScale();
-        float normalizedIconScale = Math.max(0f, Math.min(1f, (iconScale - 1.0f) / 0.8f));
+        float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
+        float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
         int appsBarHeightPx = Math.max(0,
-            Math.round(getDockBaseToolbarHeightPx() * mPreferences.getAppLauncherBarHeightScale()) + Math.max(0, additionalAppsBarHeightPx));
+            Math.round(getDockBaseToolbarHeightPx() * (1.22f + (normalizedScale * 0.48f))) + Math.max(0, additionalAppsBarHeightPx));
 
         boolean azEnabled = mPreferences.isAppLauncherAzRowEnabled();
         int azRowHeightPx = 0;
+        int indicatorBandHeightPx = 0;
         if (azEnabled) {
-            float azRatio = 0.36f + (normalizedIconScale * 0.10f);
-            int target = Math.round(appsBarHeightPx * azRatio);
+            int target = Math.round((18f + (normalizedScale * 8f)) * density);
             int min = Math.round(18f * density);
-            int max = Math.round(30f * density);
+            int max = Math.round(28f * density);
             azRowHeightPx = Math.max(min, Math.min(max, target));
+            indicatorBandHeightPx = Math.max(Math.round(12f * density), Math.round((16f + (normalizedScale * 6f)) * density));
         }
 
-        int interRowGapPx = azEnabled
-            ? Math.max(Math.round(2f * density), Math.round(appsBarHeightPx * 0.05f))
-            : 0;
+        int interRowGapPx = indicatorBandHeightPx;
 
-        return new DockLayoutMetrics(appsBarHeightPx, azRowHeightPx, interRowGapPx);
+        return new DockLayoutMetrics(appsBarHeightPx, indicatorBandHeightPx, azRowHeightPx, interRowGapPx);
     }
 
     private float resolveDerivedDockIconScale() {
@@ -2482,8 +2497,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
         updateViewHeight(R.id.apps_bar_viewpager, metrics.appsBarHeightPx);
+        updateViewHeight(R.id.apps_bar_indicator_band, metrics.indicatorBandHeightPx);
         updateViewHeight(R.id.apps_bar_az_row, metrics.azRowHeightPx);
-        updateViewBottomMargin(R.id.apps_bar_viewpager, metrics.interRowGapPx);
+        updateViewBottomMargin(R.id.apps_bar_viewpager, 0);
         if (mSuggestionBarView != null) {
             mSuggestionBarView.setDockRowHeightHintPx(metrics.appsBarHeightPx);
         }
@@ -3409,6 +3425,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int[] watchIds = {
             R.id.accessory_stack_container,
             R.id.apps_bar_viewpager,
+            R.id.apps_bar_indicator_band,
             R.id.apps_bar_az_row,
             R.id.terminal_toolbar_view_pager
         };
@@ -3427,6 +3444,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int[] watchIds = {
             R.id.accessory_stack_container,
             R.id.apps_bar_viewpager,
+            R.id.apps_bar_indicator_band,
             R.id.apps_bar_az_row,
             R.id.terminal_toolbar_view_pager
         };

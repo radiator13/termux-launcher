@@ -46,6 +46,7 @@ public final class LauncherAzGestureFxView extends View {
     private final RectF focusRawRect = new RectF();
     private final RectF azRowRawBounds = new RectF();
     private final RectF appsRowRawBounds = new RectF();
+    private final RectF indicatorBandRawBounds = new RectF();
     private final RectF extraKeysRawBounds = new RectF();
     private final int[] locationOnScreen = new int[2];
 
@@ -159,7 +160,7 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
-    public void setRowBounds(@Nullable RectF azRowRaw, @Nullable RectF appsRowRaw, @Nullable RectF extraKeysRowRaw) {
+    public void setRowBounds(@Nullable RectF azRowRaw, @Nullable RectF appsRowRaw, @Nullable RectF indicatorBandRaw, @Nullable RectF extraKeysRowRaw) {
         if (azRowRaw != null) {
             azRowRawBounds.set(azRowRaw);
         } else {
@@ -169,6 +170,11 @@ public final class LauncherAzGestureFxView extends View {
             appsRowRawBounds.set(appsRowRaw);
         } else {
             appsRowRawBounds.setEmpty();
+        }
+        if (indicatorBandRaw != null) {
+            indicatorBandRawBounds.set(indicatorBandRaw);
+        } else {
+            indicatorBandRawBounds.setEmpty();
         }
         if (extraKeysRowRaw != null) {
             extraKeysRawBounds.set(extraKeysRowRaw);
@@ -538,6 +544,9 @@ public final class LauncherAzGestureFxView extends View {
     }
 
     private float resolvePageIndicatorCenterY() {
+        if (!indicatorBandRawBounds.isEmpty()) {
+            return ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
+        }
         float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
         if (azRowRawBounds.isEmpty()) {
             return rowBottom + dp(4.5f);
