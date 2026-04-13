@@ -44,6 +44,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private static final int MAX_SESSIONS = 8;
     private static final long FOREGROUND_REFRESH_DEFER_MS = 120L;
+    private static final long WALLPAPER_STREAM_UPDATE_DELAY_MS = 20L;
 
     private SoundPool mBellSoundPool;
 
@@ -151,7 +152,11 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (mTerminalScreenUpdatePending)
             return;
         mTerminalScreenUpdatePending = true;
-        mUiHandler.post(mTerminalScreenUpdateRunnable);
+        if (mActivity.isWallpaperPassthroughEnabled()) {
+            mUiHandler.postDelayed(mTerminalScreenUpdateRunnable, WALLPAPER_STREAM_UPDATE_DELAY_MS);
+        } else {
+            mUiHandler.post(mTerminalScreenUpdateRunnable);
+        }
     }
 
     private boolean shouldDeferForegroundScreenRefresh() {

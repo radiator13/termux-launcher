@@ -374,7 +374,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private long mLastAccessoryRenderSyncUptimeMs;
     private long mLastAccessoryGeometryApplyUptimeMs;
     private int mSmoothImeTargetBottomInsetPx;
+    private long mDelayRootMarginAdjustmentsUntilUptimeMs;
+    @Nullable private Boolean mPendingImeGeometryVisible;
     private final Handler mAccessoryRenderHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mDeferredImeGeometryRunnable = () -> {
+        Boolean visible = mPendingImeGeometryVisible;
+        mPendingImeGeometryVisible = null;
+        if (visible == null) {
+            return;
+        }
+        applyAccessoryGeometryIfNeeded(true, visible ? "ime:open:deferred" : "ime:close:deferred");
+    };
     private final Runnable mAccessoryBlurHeartbeatRunnable = new Runnable() {
         @Override
         public void run() {
@@ -398,6 +408,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @NonNull WindowInsetsAnimationCompat.BoundsCompat bounds
             ) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 420L;
                     mSmoothImeTargetBottomInsetPx = Math.max(bounds.getLowerBound().bottom, bounds.getUpperBound().bottom);
                     applySmoothDockImeOffset(Math.max(0, mSmoothImeTargetBottomInsetPx));
                 }
@@ -429,8 +440,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @Override
             public void onEnd(@NonNull WindowInsetsAnimationCompat animation) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 120L;
                     mSmoothImeTargetBottomInsetPx = 0;
                     applySmoothDockImeOffset(0);
+                    if (isUsingSmoothSoftKeyboardBehavior()) {
+                        mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
+                        mAccessoryRenderHandler.post(mDeferredImeGeometryRunnable);
+                    }
                 }
             }
         };
@@ -710,7 +726,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private int resolveAccessoryGlassBaseColor() {
         if (mPreferences != null && mPreferences.isAccessoryMaterialTintEnabled()) {
-            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
+            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         }
         int overlayColor = mProperties != null
             ? mProperties.getBackgroundOverlayColor()
@@ -736,7 +752,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private int resolveTerminalOverlayBaseColor() {
         if (mPreferences != null && mPreferences.isTerminalMaterialTintEnabled()) {
-            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
+            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
         }
         int overlayColor = mProperties != null
             ? mProperties.getBackgroundOverlayColor()
@@ -1373,6 +1389,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         unregisterLauncherAppsCallback();
         mAccessoryRenderHandler.removeCallbacks(mAccessoryRenderSyncRunnable);
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurHeartbeatRunnable);
+        mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
         mAccessoryRenderSyncPending = false;
         mPendingAccessoryRenderReason = null;
         applySmoothDockImeOffset(0);
@@ -1660,7 +1677,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public boolean shouldDelayRootMarginAdjustments() {
-        return false;
+        return isUsingCustomSoftKeyboardBehavior()
+            && SystemClock.uptimeMillis() < mDelayRootMarginAdjustmentsUntilUptimeMs;
     }
 
     private void applyAccessoryGeometryIfNeeded(boolean force, @NonNull String reason) {
@@ -2063,6 +2081,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         populateRawBounds(mAzScrubRowView, mAzRowRawBounds);
         populateRawBounds(mSuggestionBarView, mAppsRowRawBounds);
+        populateRawBounds(findViewById(R.id.apps_bar_indicator_band), mIndicatorBandRawBounds);
         populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
         applyAzFxRowBounds();
         boolean azOverflowActive = mSuggestionBarView.hasAzOverflowPages();
@@ -3114,6 +3133,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return isImeVisible();
     }
 
+    public boolean isWallpaperPassthroughEnabled() {
+        return shouldUseWallpaperPassthroughMode();
+    }
+
     public boolean isOnResumeAfterOnCreate() {
         return mIsOnResumeAfterOnCreate;
     }
@@ -3510,7 +3533,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxTerminalSessionActivityClient != null) {
             mTermuxTerminalSessionActivityClient.onImeVisibilityChanged(visible);
         }
-        applyAccessoryGeometryIfNeeded(true, visible ? "ime:open" : "ime:close");
+        if (isUsingCustomSoftKeyboardBehavior()) {
+            mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + (visible ? 260L : 220L);
+            mPendingImeGeometryVisible = visible;
+            mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
+            if (!isUsingSmoothSoftKeyboardBehavior()) {
+                mAccessoryRenderHandler.postDelayed(mDeferredImeGeometryRunnable, visible ? 140L : 110L);
+            }
+        } else {
+            applyAccessoryGeometryIfNeeded(true, visible ? "ime:open" : "ime:close");
+        }
         scheduleAccessoryRenderSync(visible ? "ime:open" : "ime:close");
         restartAccessoryBlurHeartbeat();
     }
