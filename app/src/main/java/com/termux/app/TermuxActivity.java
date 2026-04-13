@@ -56,7 +56,6 @@ import android.widget.ArrayAdapter;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.core.graphics.Insets;
 import com.github.mmin18.widget.RealtimeBlurView;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -562,6 +561,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (isLauncherHomeIntent(intent)) {
             if (mSuggestionBarView != null) {
                 mSuggestionBarView.resetTransientVisualState();
+            }
+            if (!isUsingCustomSoftKeyboardBehavior()) {
+                applyAccessoryGeometryIfNeeded(false, "onNewIntent:home");
             }
             scheduleAccessoryRenderSync("onNewIntent:home");
         }
@@ -1186,7 +1188,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applyAccessoryRenderState(@NonNull AccessoryRenderState state) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
-        View accessoryContentHost = findViewById(R.id.accessory_content_host);
         View accessorySurfaceHost = findViewById(R.id.accessory_surface_host);
         View terminalToolbarViewPager = findViewById(R.id.terminal_toolbar_view_pager);
         View appsBarViewPager = findViewById(R.id.apps_bar_viewpager);
@@ -1220,9 +1221,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (accessorySurfaceHost != null) {
                 accessorySurfaceHost.setVisibility(View.GONE);
-            }
-            if (accessoryContentHost != null) {
-                accessoryContentHost.setVisibility(View.GONE);
             }
             if (bottomSpaceBackground != null) {
                 bottomSpaceBackground.setVisibility(View.GONE);
@@ -1259,9 +1257,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
-        }
-        if (accessoryContentHost != null) {
-            accessoryContentHost.setVisibility(View.VISIBLE);
         }
         if (appsBarViewPager != null) {
             appsBarViewPager.setVisibility(View.VISIBLE);
@@ -2452,28 +2447,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTerminalToolbarHeight(true);
     }
 
-    private int resolveAccessoryBottomInsetPx() {
-        if (isImeVisible()) {
-            return 0;
-        }
-        View content = findViewById(android.R.id.content);
-        if (content == null) {
-            return 0;
-        }
-        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(content);
-        if (insets == null) {
-            return 0;
-        }
-        Insets navInsets = insets.getInsets(Type.navigationBars());
-        Insets gestureInsets = insets.getInsets(Type.systemGestures());
-        return Math.max(0, Math.max(navInsets.bottom, gestureInsets.bottom));
-    }
-
     private void setTerminalToolbarHeight(boolean requestTerminalResize) {
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         View accessoryStackContainer = findViewById(R.id.accessory_stack_container);
-        View accessoryContentHost = findViewById(R.id.accessory_content_host);
-        if (terminalToolbarViewPager == null || accessoryStackContainer == null || accessoryContentHost == null)
+        if (terminalToolbarViewPager == null || accessoryStackContainer == null)
             return;
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
 
@@ -2488,9 +2465,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         DockLayoutMetrics dockMetrics = buildDockLayoutMetrics(0);
         applyDockLayoutMetrics(dockMetrics);
-        int contentHeight = dockMetrics.combinedHeight(toolbarHeightPx);
-        int combinedHeight = contentHeight + resolveAccessoryBottomInsetPx();
-        updateAccessoryStackContainerHeight(accessoryContentHost, contentHeight);
+        int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
         updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
         if (requestTerminalResize && mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);

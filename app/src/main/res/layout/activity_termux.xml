@@ -194,62 +194,55 @@
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
             </FrameLayout>
 
-            <RelativeLayout
-                android:id="@+id/accessory_content_host"
+            <com.termux.app.LauncherAzGestureFxView
+                android:id="@+id/apps_bar_az_fx_underlay"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_alignParentTop="true">
+                android:layout_height="match_parent"
+                android:layout_alignParentBottom="true"
+                android:clickable="false"
+                android:focusable="false"
+                android:visibility="gone" />
 
-                <com.termux.app.LauncherAzGestureFxView
-                    android:id="@+id/apps_bar_az_fx_underlay"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_alignParentBottom="true"
-                    android:clickable="false"
-                    android:focusable="false"
-                    android:visibility="gone" />
+            <FrameLayout
+                android:id="@+id/apps_bar_viewpager"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_above="@+id/apps_bar_indicator_band"
+                android:visibility="gone" />
 
-                <FrameLayout
-                    android:id="@+id/apps_bar_viewpager"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_above="@+id/apps_bar_indicator_band"
-                    android:visibility="gone" />
+            <View
+                android:id="@+id/apps_bar_indicator_band"
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:layout_above="@+id/apps_bar_az_row"
+                android:visibility="gone" />
 
-                <View
-                    android:id="@+id/apps_bar_indicator_band"
-                    android:layout_width="match_parent"
-                    android:layout_height="18dp"
-                    android:layout_above="@+id/apps_bar_az_row"
-                    android:visibility="gone" />
+            <com.termux.app.AzScrubRowView
+                android:id="@+id/apps_bar_az_row"
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
+                android:layout_above="@+id/terminal_toolbar_view_pager"
+                android:gravity="center_vertical"
+                android:textColor="?attr/termuxColorOnSurfaceVariant"
+                android:elevation="10dp"
+                android:visibility="gone" />
 
-                <com.termux.app.AzScrubRowView
-                    android:id="@+id/apps_bar_az_row"
-                    android:layout_width="match_parent"
-                    android:layout_height="32dp"
-                    android:layout_above="@+id/terminal_toolbar_view_pager"
-                    android:gravity="center_vertical"
-                    android:textColor="?attr/termuxColorOnSurfaceVariant"
-                    android:elevation="10dp"
-                    android:visibility="gone" />
+            <androidx.viewpager.widget.ViewPager
+                android:id="@+id/terminal_toolbar_view_pager"
+                android:visibility="gone"
+                android:layout_width="match_parent"
+                android:layout_height="37.5dp"
+                android:layout_alignParentBottom="true"
+                android:background="@android:color/transparent"/>
 
-                <androidx.viewpager.widget.ViewPager
-                    android:id="@+id/terminal_toolbar_view_pager"
-                    android:visibility="gone"
-                    android:layout_width="match_parent"
-                    android:layout_height="37.5dp"
-                    android:layout_alignParentBottom="true"
-                    android:background="@android:color/transparent"/>
-
-                <com.termux.app.LauncherAzGestureFxView
-                    android:id="@+id/apps_bar_az_fx_overlay"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_alignParentBottom="true"
-                    android:clickable="false"
-                    android:focusable="false"
-                    android:visibility="gone" />
-            </RelativeLayout>
+            <com.termux.app.LauncherAzGestureFxView
+                android:id="@+id/apps_bar_az_fx_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_alignParentBottom="true"
+                android:clickable="false"
+                android:focusable="false"
+                android:visibility="gone" />
         </RelativeLayout>
         </RelativeLayout>
     </FrameLayout>
