@@ -115,8 +115,11 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      * Should be called when mActivity.onResume() is called
      */
     public void onResume() {
-        // Show the soft keyboard if required
-        setSoftKeyboardState(true, mActivity.isActivityRecreated());
+        // Do not aggressively re-show IME on ordinary app returns. Let Android restore it if it
+        // wants to, and keep terminal focus/IME handling simple like lighter launcher forks.
+        if (mActivity.isOnResumeAfterOnCreate() || mActivity.isActivityRecreated()) {
+            setSoftKeyboardState(true, mActivity.isActivityRecreated());
+        }
         mTerminalCursorBlinkerStateAlreadySet = false;
         if (mActivity.getTerminalView().mEmulator != null) {
             // Start terminal cursor blinking if enabled
