@@ -21,4 +21,12 @@ public class TermuxActivityTest {
         assertUrlsAre("hello http://example.com world and http://more.example.com with secure https://more.example.com", "http://example.com", "http://more.example.com", "https://more.example.com");
         assertUrlsAre("hello https://example.com/#bar https://example.com/foo#bar", "https://example.com/#bar", "https://example.com/foo#bar");
     }
+
+    @Test
+    public void testRecentAppsVisibilityPolicy() {
+        Assert.assertTrue(TermuxActivity.shouldShowInRecents(true, false));
+        Assert.assertFalse(TermuxActivity.shouldShowInRecents(true, true));
+        Assert.assertFalse(TermuxActivity.shouldShowInRecents(false, false));
+        Assert.assertFalse(TermuxActivity.shouldShowInRecents(false, true));
+    }
 }

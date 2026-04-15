@@ -514,8 +514,10 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         int index = service.removeTermuxSession(finishedSession);
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
-            // There are no sessions to show, so finish the activity.
-            mActivity.finishActivityIfNotFinishing();
+            // Avoid finish/relaunch churn while acting as Home launcher; recreate session in-place.
+            if (!mActivity.recoverEmptyVisibleSessionInPlace(null, "last-session-finished")) {
+                mActivity.finishActivityIfNotFinishing();
+            }
         } else {
             if (index >= size) {
                 index = size - 1;

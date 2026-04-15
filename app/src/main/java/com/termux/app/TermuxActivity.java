@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.LauncherApps;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.pm.ShortcutInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -33,6 +35,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -363,6 +366,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mSeamlessStatusBackgroundActive;
     private int mLastStatusBarInsetTop;
     private long mLastEmptySessionRecoveryElapsedMs;
+    private boolean mEmptySessionRecoveryInProgress;
     private boolean mAccessoryRenderSyncPending;
     private boolean mLastImeVisible;
     @Nullable private String mPendingAccessoryRenderReason;
@@ -588,6 +592,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         syncTerminalWallpaperRenderingMode();
         applySeamlessStatusBackgroundModeIfNeeded();
         applyTerminalSurfaceAppearance();
+        syncRecentsVisibilityPolicy();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         restartAccessoryBlurHeartbeat();
         registerTermuxActivityBroadcastReceiver();
@@ -616,6 +621,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         syncTerminalWallpaperRenderingMode();
         applySeamlessStatusBackgroundModeIfNeeded();
         applyTerminalSurfaceAppearance();
+        syncRecentsVisibilityPolicy();
         applyWallpaperOffsetFixIfNeeded();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
         restartAccessoryBlurHeartbeat();
@@ -1489,7 +1495,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setIntent(null);
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
-                startBootstrapAndSession(intent);
+                if (!recoverEmptyVisibleSessionInPlace(intent, "service-connected")) {
+                    startBootstrapAndSession(intent);
+                }
             } else {
                 // Service can connect before onStart() on some devices. Defer bootstrap/session creation.
                 if (mIsOnResumeAfterOnCreate) {
@@ -1522,16 +1530,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             LauncherCtlApiServer.getInstance().ensureCliScriptsInstalled();
 
             // Activity might have been destroyed.
-            if (mTermuxService == null)
+            if (mTermuxService == null) {
+                mEmptySessionRecoveryInProgress = false;
                 return;
+            }
             try {
                 boolean launchFailsafe = false;
                 if (intent != null && intent.getExtras() != null) {
                     launchFailsafe = intent.getExtras().getBoolean(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
                 }
                 mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
+                mEmptySessionRecoveryInProgress = false;
             } catch (WindowManager.BadTokenException e) {
                 // Activity finished - ignore.
+                mEmptySessionRecoveryInProgress = false;
             }
         });
     }
@@ -1543,14 +1555,61 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!mTermuxService.isTermuxSessionsEmpty()) {
             return;
         }
+        recoverEmptyVisibleSessionInPlace(null, source);
+    }
+
+    private boolean shouldRecoverEmptySessionInPlace() {
+        return mIsVisible && isDefaultHomeApp();
+    }
+
+    private void resetUiForInPlaceSessionRecovery(@NonNull String reason) {
+        Logger.logWarn(LOG_TAG, "Resetting launcher UI before in-place empty-session recovery from " + reason);
+        if (mTerminalActionDialog != null) {
+            mTerminalActionDialog.dismiss();
+            mTerminalActionDialog = null;
+        }
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.resetTransientVisualState();
+            mSuggestionBarView.clearAzPreview();
+        }
+        stopAzEdgePagingLoop();
+        cancelAzOverflowRefresh();
+        mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
+        mAccessoryRenderHandler.removeCallbacks(mAccessoryRenderSyncRunnable);
+        mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurHeartbeatRunnable);
+        mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
+        mAccessoryRenderSyncPending = false;
+        mPendingAccessoryRenderReason = null;
+        if (mTerminalView != null) {
+            mTerminalView.onContextMenuClosed(null);
+        }
+        getDrawer().closeDrawers();
+    }
+
+    public boolean recoverEmptyVisibleSessionInPlace(@Nullable Intent intent, @NonNull String reason) {
+        if (!shouldRecoverEmptySessionInPlace() || mTermuxService == null || mTermuxTerminalSessionActivityClient == null) {
+            return false;
+        }
+        if (!mTermuxService.isTermuxSessionsEmpty()) {
+            mEmptySessionRecoveryInProgress = false;
+            return true;
+        }
+        if (mEmptySessionRecoveryInProgress) {
+            Logger.logWarn(LOG_TAG, "Ignoring duplicate empty-session recovery while one is already running: " + reason);
+            return true;
+        }
         long now = SystemClock.elapsedRealtime();
         if (mLastEmptySessionRecoveryElapsedMs > 0
             && (now - mLastEmptySessionRecoveryElapsedMs) < EMPTY_SESSION_RECOVERY_DEBOUNCE_MS) {
-            return;
+            Logger.logWarn(LOG_TAG, "Ignoring empty-session recovery during debounce window: " + reason);
+            return true;
         }
         mLastEmptySessionRecoveryElapsedMs = now;
-        Logger.logWarn(LOG_TAG, "No active terminal session while visible; attempting auto-recovery from " + source);
-        startBootstrapAndSession(null);
+        mEmptySessionRecoveryInProgress = true;
+        Logger.logWarn(LOG_TAG, "No active terminal session while visible Home launcher; recovering in-place from " + reason);
+        resetUiForInPlaceSessionRecovery(reason);
+        startBootstrapAndSession(intent);
+        return true;
     }
 
     @Override
@@ -1685,6 +1744,47 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return false;
         }
         return categories.contains(Intent.CATEGORY_HOME) || categories.contains(Intent.CATEGORY_LAUNCHER);
+    }
+
+    static boolean shouldShowInRecents(boolean showWhenNotHomeEnabled, boolean isDefaultHome) {
+        return showWhenNotHomeEnabled && !isDefaultHome;
+    }
+
+    private boolean isDefaultHomeApp() {
+        Intent home = new Intent(Intent.ACTION_MAIN);
+        home.addCategory(Intent.CATEGORY_HOME);
+        PackageManager packageManager = getPackageManager();
+        ResolveInfo resolveInfo = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
+        if (resolveInfo == null || resolveInfo.activityInfo == null) {
+            return false;
+        }
+        String homePackage = resolveInfo.activityInfo.packageName;
+        return !TextUtils.isEmpty(homePackage) && getPackageName().equals(homePackage);
+    }
+
+    private boolean shouldShowInRecents() {
+        return mPreferences != null
+            && shouldShowInRecents(mPreferences.isRemoveTaskOnActivityFinishEnabled(), isDefaultHomeApp());
+    }
+
+    private void syncRecentsVisibilityPolicy() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return;
+        }
+        boolean excludeFromRecents = !shouldShowInRecents();
+        try {
+            if (getTaskId() != -1) {
+                for (android.app.ActivityManager.AppTask appTask : getSystemService(android.app.ActivityManager.class).getAppTasks()) {
+                    if (appTask == null || appTask.getTaskInfo() == null || appTask.getTaskInfo().taskId != getTaskId()) {
+                        continue;
+                    }
+                    appTask.setExcludeFromRecents(excludeFromRecents);
+                    break;
+                }
+            }
+        } catch (Throwable throwable) {
+            Logger.logWarn(LOG_TAG, "Failed to sync recents visibility: " + throwable.getMessage());
+        }
     }
 
     private char getSuggestionBarSplitChar() {
@@ -3004,7 +3104,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void finishActivityIfNotFinishing() {
         // prevent duplicate calls to finish() if called from multiple places
         if (!TermuxActivity.this.isFinishing()) {
-            if (mPreferences.isRemoveTaskOnActivityFinishEnabled())
+            if (!shouldShowInRecents())
                 finishAndRemoveTask();
             else
                 finish();

@@ -228,9 +228,9 @@
                     If it causes screen flickering on your devices, then disable it. (Default)</string>
 
                 <!-- Terminal View Activity Remove Task -->
-                <string name="termux_terminal_view_activity_remove_title">Prevent from remaining on recent apps</string>
-                <string name="termux_terminal_view_activity_remove_off">Once closed all terminal sessions, &TERMUX_APP_NAME; will close and remain visible in recent apps.</string>
-                <string name="termux_terminal_view_activity_remove_on">&TERMUX_APP_NAME; will close and remove itself from recent apps if there are no active terminal sessions. (Default)</string>
+                <string name="termux_terminal_view_activity_remove_title">Show in recent apps when not Home app</string>
+                <string name="termux_terminal_view_activity_remove_off">&TERMUX_APP_NAME; will stay hidden from recent apps.</string>
+                <string name="termux_terminal_view_activity_remove_on">&TERMUX_APP_NAME; will appear in recent apps when it is not default Home, and stay hidden when it is default Home. (Default)</string>
 
 
         <!-- Termux Style Preferences -->
