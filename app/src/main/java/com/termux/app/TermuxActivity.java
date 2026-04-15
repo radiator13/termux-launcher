@@ -257,6 +257,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @Nullable
     private Intent mPendingLaunchIntent;
+    private boolean mLastLaunchWasLauncherEntry;
 
     /**
      * If activity was restarted like due to call to {@link #recreate()} after receiving
@@ -515,6 +516,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Must be done every time activity is created in order to registerForActivityResult,
         // Even if the logic of launching is based on user input.
         registerWallpaperActivityResultLaunchers();
+        mLastLaunchWasLauncherEntry = isLauncherHomeIntent(getIntent());
         setTermuxTerminalViewAndClients();
         setTerminalToolbarView(savedInstanceState);
         setSettingsButtonView();
@@ -549,6 +551,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (isLauncherHomeIntent(intent)) {
+            mLastLaunchWasLauncherEntry = true;
+        }
         if (mLauncherTransitionController != null) {
             mLauncherTransitionController.maybeHandleGestureContract(intent, mSuggestionBarView);
         }
@@ -1559,7 +1564,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldRecoverEmptySessionInPlace() {
-        return mIsVisible && isDefaultHomeApp();
+        return mIsVisible && (mLastLaunchWasLauncherEntry || isTaskRoot() || isDefaultHomeApp());
     }
 
     private void resetUiForInPlaceSessionRecovery(@NonNull String reason) {
