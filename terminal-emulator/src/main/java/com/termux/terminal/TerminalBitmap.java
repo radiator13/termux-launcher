@@ -1,12 +1,10 @@
 package com.termux.terminal;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Rect;
-import android.os.SystemClock;
+import android.os.Build;
+
+import java.util.Properties;
 
 /**
  * A circular buffer of {@link TerminalRow}:s which keeps notes about what is visible on a logical screen and the scroll
@@ -15,6 +13,26 @@ import android.os.SystemClock;
  * See {@link #externalToInternalRow(int)} for how to map from logical screen rows to array indices.
  */
 public class TerminalBitmap {
+
+    private static int initMaxBitmapSize() {
+        int defaultSize = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM ?
+            150 * 1024 * 1024 : 100 * 1024 * 1024;
+
+        Properties systemProperties = AndroidUtils.getSystemProperties(LOG_TAG);
+        String maxTextureSizeString = systemProperties.getProperty("ro.hwui.max_texture_allocation_size");
+        if (maxTextureSizeString == null) {
+            return defaultSize;
+        }
+
+        try {
+            int maxTextureSize = Integer.parseInt(maxTextureSizeString);
+            return maxTextureSize > 0 ? maxTextureSize : defaultSize;
+        } catch (Exception e) {
+            return defaultSize;
+        }
+    }
+
+    public static final int MAX_BITMAP_SIZE = initMaxBitmapSize();
 
     public Bitmap bitmap;
 
@@ -28,9 +46,9 @@ public class TerminalBitmap {
 
     private static final String LOG_TAG = "TerminalBitmap";
 
-    public TerminalBitmap(int num, WorkingTerminalBitmap sixel, int Y, int X, int cellW, int cellH, TerminalBuffer screen) {
-        Bitmap bm = sixel.bitmap;
-        bm = resizeBitmapConstraints(bm, sixel.width, sixel.height, cellW, cellH, screen.mColumns - X);
+    public TerminalBitmap(int num, TerminalSixel sixel, int Y, int X, int cellW, int cellH, TerminalBuffer screen) {
+        Bitmap bm = sixel.getBitmap();
+        bm = resizeBitmapConstraints(bm, sixel.getWidth(), sixel.getHeight(), cellW, cellH, screen.mColumns - X);
         addBitmap(num, bm, Y, X, cellW, cellH, screen);
     }
 
@@ -155,20 +173,32 @@ public class TerminalBitmap {
         scrollLines = h - s;
     }
 
-    static public Bitmap resizeBitmap(Bitmap bm, int w, int h) {
+    static public Bitmap resizeBitmap(String logTag, String label, TerminalSessionClient client, Bitmap bm, int w, int h) {
+        long newBitmapSize = (long) w * (long) h * 4L;
+        if (newBitmapSize <= 0 || newBitmapSize > MAX_BITMAP_SIZE) {
+            Logger.logError(client, logTag,
+                "The new " + label + " bitmap after resize with width " + w + " and height " + h +
+                    " has size " + newBitmapSize + " greater than max bitmap size " + MAX_BITMAP_SIZE);
+            return null;
+        }
+
         int[] pixels = new int[bm.getAllocationByteCount()];
         bm.getPixels(pixels, 0, bm.getWidth(), 0, 0, bm.getWidth(), bm.getHeight());
         Bitmap newbm;
         try {
             newbm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         } catch (OutOfMemoryError e) {
-            // Only a minor display glitch in this case
-            return bm;
+            Logger.logWarn(client, logTag, "Out of memory resizing " + label + " bitmap");
+            return null;
         }
         int newWidth = Math.min(bm.getWidth(), w);
         int newHeight = Math.min(bm.getHeight(), h);
         newbm.setPixels(pixels, 0, bm.getWidth(), 0, 0, newWidth, newHeight);
         return newbm;
+    }
+
+    static public Bitmap resizeBitmap(Bitmap bm, int w, int h) {
+        return resizeBitmap(LOG_TAG, "terminal", null, bm, w, h);
     }
 
     static public Bitmap resizeBitmapConstraints(Bitmap bm, int w, int h, int cellW, int cellH, int Columns) {

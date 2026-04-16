@@ -17,6 +17,8 @@ import android.os.SystemClock;
  */
 public final class TerminalBuffer {
 
+    private TerminalSessionClient mClient;
+
     TerminalRow[] mLines;
 
     /**
@@ -41,7 +43,7 @@ public final class TerminalBuffer {
 
     public HashMap<Integer, TerminalBitmap> bitmaps;
 
-    public WorkingTerminalBitmap workingBitmap;
+    public TerminalSixel terminalSixel;
 
     private boolean hasBitmaps;
 
@@ -56,6 +58,11 @@ public final class TerminalBuffer {
      *                   the top of the screen.
      */
     public TerminalBuffer(int columns, int totalRows, int screenRows) {
+        this(null, columns, totalRows, screenRows);
+    }
+
+    public TerminalBuffer(TerminalSessionClient client, int columns, int totalRows, int screenRows) {
+        mClient = client;
         mColumns = columns;
         mTotalRows = totalRows;
         mScreenRows = screenRows;
@@ -64,6 +71,10 @@ public final class TerminalBuffer {
         hasBitmaps = false;
         bitmaps = new HashMap<Integer, TerminalBitmap>();
         bitmapLastGC = SystemClock.uptimeMillis();
+    }
+
+    public TerminalSessionClient getClient() {
+        return mClient;
     }
 
     public String getTranscriptText() {
@@ -547,6 +558,7 @@ public final class TerminalBuffer {
         mActiveTranscriptRows = 0;
         bitmaps.clear();
         hasBitmaps = false;
+        terminalSixel = null;
     }
 
     public Bitmap getSixelBitmap(int codePoint, long style) {
@@ -562,19 +574,39 @@ public final class TerminalBuffer {
     }
 
     public void sixelStart(int width, int height) {
-        workingBitmap = new WorkingTerminalBitmap(width, height);
+        terminalSixel = TerminalSixel.build(mClient, width, height);
     }
 
     public void sixelChar(int c, int rep) {
-        workingBitmap.sixelChar(c, rep);
+        if (terminalSixel != null && !terminalSixel.readData(c, rep)) {
+            sixelIgnore();
+        }
     }
 
     public void sixelSetColor(int col) {
-        workingBitmap.sixelSetColor(col);
+        if (terminalSixel != null) {
+            terminalSixel.setColor(col);
+        }
     }
 
     public void sixelSetColor(int col, int r, int g, int b) {
-        workingBitmap.sixelSetColor(col, r, g, b);
+        sixelSetRGBColor(col, r, g, b);
+    }
+
+    public void sixelSetRGBColor(int col, int r, int g, int b) {
+        if (terminalSixel != null) {
+            terminalSixel.setRGBColor(col, r, g, b);
+        }
+    }
+
+    public void sixelResize(int width, int height) {
+        if (terminalSixel != null && !terminalSixel.resize(width, height)) {
+            sixelIgnore();
+        }
+    }
+
+    public void sixelIgnore() {
+        terminalSixel = null;
     }
 
     private int findFreeBitmap() {
@@ -586,9 +618,12 @@ public final class TerminalBuffer {
     }
 
     public int sixelEnd(int Y, int X, int cellW, int cellH) {
+        if (terminalSixel == null) {
+            return 0;
+        }
         int num = findFreeBitmap();
-        bitmaps.put(num, new TerminalBitmap(num, workingBitmap, Y, X, cellW, cellH, this));
-        workingBitmap = null;
+        bitmaps.put(num, new TerminalBitmap(num, terminalSixel, Y, X, cellW, cellH, this));
+        terminalSixel = null;
         if (bitmaps.get(num).bitmap == null) {
             bitmaps.remove(num);
             return 0;

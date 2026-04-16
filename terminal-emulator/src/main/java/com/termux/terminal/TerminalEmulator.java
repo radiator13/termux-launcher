@@ -158,10 +158,7 @@ public final class TerminalEmulator {
     /** The number of parameter arguments including colon separated sub-parameters. */
     private static final int MAX_ESCAPE_PARAMETERS = 32;
 
-    /**
-     * Needs to be large enough to contain reasonable OSC 52 pastes.
-     */
-    private static final int MAX_OSC_STRING_LENGTH = 8192;
+    private static final int DEFAULT_OSC_STRING_LENGTH = 16384;
 
     /**
      * DECSET 1 - application cursor keys.
@@ -326,9 +323,9 @@ public final class TerminalEmulator {
 
     private boolean ESC_P_sixel = false;
 
-    private ArrayList<Byte> ESC_OSC_data;
-
-    private int ESC_OSC_colon = 0;
+    private int mOscStringMaxLength = DEFAULT_OSC_STRING_LENGTH;
+    private boolean mIgnoreCrLfForOsc = false;
+    private ITermImage mITermImage;
 
     private final SavedScreenState mSavedStateMain = new SavedScreenState();
 
@@ -424,6 +421,22 @@ public final class TerminalEmulator {
         cellH = h;
     }
 
+    public int getCellWidthPixels() {
+        return mCellWidthPixels;
+    }
+
+    public int getCellHeightPixels() {
+        return mCellHeightPixels;
+    }
+
+    public int getRows() {
+        return mRows;
+    }
+
+    public int getColumns() {
+        return mColumns;
+    }
+
     private boolean isDecsetInternalBitSet(int bit) {
         return (mCurrentDecSetFlags & bit) != 0;
     }
@@ -477,8 +490,8 @@ public final class TerminalEmulator {
 
     public TerminalEmulator(TerminalOutput session, boolean boldWithBright, int columns, int rows, int cellWidthPixels, int cellHeightPixels, Integer transcriptRows, TerminalSessionClient client) {
         mSession = session;
-        mScreen = mMainBuffer = new TerminalBuffer(columns, getTerminalTranscriptRows(transcriptRows), rows);
-        mAltBuffer = new TerminalBuffer(columns, rows, rows);
+        mScreen = mMainBuffer = new TerminalBuffer(client, columns, getTerminalTranscriptRows(transcriptRows), rows);
+        mAltBuffer = new TerminalBuffer(client, columns, rows, rows);
         mClient = client;
         mBoldWithBright = boldWithBright;
         mRows = rows;
@@ -780,14 +793,14 @@ public final class TerminalEmulator {
             case 11:
             case // Form feed (FF, \f).
             12:
-                if ((mEscapeState != ESC_P || !ESC_P_sixel) && ESC_OSC_colon <= 0) {
+                if ((mEscapeState != ESC_P || !ESC_P_sixel) && !mIgnoreCrLfForOsc) {
                     // Ignore CR/LF inside sixels or iterm2 data
                     doLinefeed();
                 }
                 break;
             case // Carriage return (CR, \r).
             13:
-                if ((mEscapeState != ESC_P || !ESC_P_sixel) && ESC_OSC_colon <= 0) {
+                if ((mEscapeState != ESC_P || !ESC_P_sixel) && !mIgnoreCrLfForOsc) {
                     // Ignore CR/LF inside sixels or iterm2 data
                     setCursorCol(mLeftMargin);
                 }
@@ -1282,6 +1295,9 @@ public final class TerminalEmulator {
                             }
                             pos++;
                         }
+                        if (arg == 3 && args[2] > 0 && args[3] > 0) {
+                            mScreen.sixelResize(args[2], args[3]);
+                        }
                         if (pos == dcs.length()) {
                             break;
                         }
@@ -1309,7 +1325,7 @@ public final class TerminalEmulator {
                                 pos++;
                             }
                             if (args[0] == 2) {
-                                mScreen.sixelSetColor(col, args[1], args[2], args[3]);
+                                mScreen.sixelSetRGBColor(col, args[1], args[2], args[3]);
                             }
                         }
                     } else if (dcs.codePointAt(pos) == '!') {
@@ -1317,6 +1333,14 @@ public final class TerminalEmulator {
                         pos++;
                         while (pos < dcs.length() && dcs.codePointAt(pos) >= '0' && dcs.codePointAt(pos) <= '9') {
                             rep = rep * 10 + dcs.codePointAt(pos++) - '0';
+                        }
+                        if (rep > TerminalSixel.SIXEL__MAX_REPEAT) {
+                            Logger.logError(mClient, LOG_TAG,
+                                "The sixel repeat command Pn value " + rep + " is greater than max repeat value " +
+                                    TerminalSixel.SIXEL__MAX_REPEAT);
+                            mScreen.sixelIgnore();
+                            rep = 1;
+                            break;
                         }
                     } else if (dcs.codePointAt(pos) == '$' || dcs.codePointAt(pos) == '-' || (dcs.codePointAt(pos) >= '?' && dcs.codePointAt(pos) <= '~')) {
                         mScreen.sixelChar(dcs.codePointAt(pos++), rep);
@@ -1347,7 +1371,7 @@ public final class TerminalEmulator {
             finishSequence();
         } else {
             ESC_P_escape = false;
-            if (mOSCOrDeviceControlArgs.length() > MAX_OSC_STRING_LENGTH) {
+            if (mOSCOrDeviceControlArgs.length() > mOscStringMaxLength) {
                 // Too long.
                 mOSCOrDeviceControlArgs.setLength(0);
                 finishSequence();
@@ -1850,7 +1874,6 @@ public final class TerminalEmulator {
             ']':
                 mOSCOrDeviceControlArgs.setLength(0);
                 continueSequence(ESC_OSC);
-                ESC_OSC_colon = -1;
                 break;
             case '_': // APC - Application Program Command.
                 mOSCOrDeviceControlArgs.setLength(0);
@@ -2429,21 +2452,6 @@ public final class TerminalEmulator {
                 break;
             default:
                 collectOSCArgs(b);
-                if (ESC_OSC_colon == -1 && b == ':') {
-                    // Collect base64 data for OSC 1337
-                    ESC_OSC_colon = mOSCOrDeviceControlArgs.length();
-                    ESC_OSC_data = new ArrayList<Byte>(65536);
-                } else if (ESC_OSC_colon >= 0 && mOSCOrDeviceControlArgs.length() - ESC_OSC_colon == 4) {
-                    try {
-                        byte[] decoded = Base64.decode(mOSCOrDeviceControlArgs.substring(ESC_OSC_colon), 0);
-                        for (int i = 0; i < decoded.length; i++) {
-                            ESC_OSC_data.add(decoded[i]);
-                        }
-                    } catch (Exception e) {
-                        // Ignore non-Base64 data.
-                    }
-                    mOSCOrDeviceControlArgs.setLength(ESC_OSC_colon);
-                }
                 break;
         }
     }
@@ -2468,8 +2476,6 @@ public final class TerminalEmulator {
      */
     private void doOscSetTextParameters(String bellOrStringTerminator) {
         int value = -1;
-        int osc_colon = ESC_OSC_colon;
-        ESC_OSC_colon = -1;
         String textParameter = "";
         // Extract initial $value from initial "$value;..." string.
         for (int mOSCArgTokenizerIndex = 0; mOSCArgTokenizerIndex < mOSCOrDeviceControlArgs.length(); mOSCArgTokenizerIndex++) {
@@ -2570,10 +2576,10 @@ public final class TerminalEmulator {
             52:
                 int startIndex = textParameter.indexOf(";") + 1;
                 try {
-                    String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), 0), StandardCharsets.UTF_8);
+                    String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), Base64.DEFAULT), StandardCharsets.UTF_8);
                     mSession.onCopyTextToClipboard(clipboardText);
                 } catch (Exception e) {
-                    Logger.logError(mClient, LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
+                    Logger.logError(mClient, LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "'");
                 }
                 break;
             case 104:
@@ -2618,87 +2624,75 @@ public final class TerminalEmulator {
                 break;
             case // iTerm extemsions
             1337:
-                if (textParameter.startsWith("File=")) {
-                    int pos = 5;
-                    boolean inline = false;
-                    boolean aspect = true;
-                    int width = -1;
-                    int height = -1;
-                    while (pos < textParameter.length()) {
-                        int eqpos = textParameter.indexOf('=', pos);
-                        if (eqpos == -1) {
-                            break;
+                int argsLength = mOSCOrDeviceControlArgs.length();
+                String controlCommandPrefix = mOSCOrDeviceControlArgs.substring(5, Math.min(19, argsLength));
+
+                if (controlCommandPrefix.startsWith("File=") ||
+                    controlCommandPrefix.startsWith("MultipartFile=") ||
+                    controlCommandPrefix.startsWith("FilePart=") ||
+                    controlCommandPrefix.equals("FileEnd")) {
+                    ITermImage iTermImage = null;
+                    boolean oscArgsCleared = false;
+                    int index;
+
+                    if (controlCommandPrefix.startsWith("File=")) {
+                        if (mITermImage != null) {
+                            Logger.logWarn(mClient, LOG_TAG, "A new iTerm 'File' command received while already processing a 'MultipartFile' command");
+                            mITermImage = null;
                         }
-                        int semicolonpos = textParameter.indexOf(';', eqpos);
-                        if (semicolonpos == -1) {
-                            semicolonpos = textParameter.length() - 1;
-                        }
-                        String k = textParameter.substring(pos, eqpos);
-                        String v = textParameter.substring(eqpos + 1, semicolonpos);
-                        pos = semicolonpos + 1;
-                        if (k.equalsIgnoreCase("inline")) {
-                            inline = v.equals("1");
-                        }
-                        if (k.equalsIgnoreCase("preserveAspectRatio")) {
-                            aspect = !v.equals("0");
-                        }
-                        if (k.equalsIgnoreCase("width")) {
-                            double factor = cellW;
-                            int div = 1;
-                            int e = v.length();
-                            if (v.endsWith("px")) {
-                                factor = 1;
-                                e -= 2;
-                            } else if (v.endsWith("%")) {
-                                factor = 0.01 * cellW * mColumns;
-                                e -= 1;
-                            }
-                            try {
-                                width = (int) (factor * Integer.parseInt(v.substring(0, e)));
-                            } catch (Exception ex) {
+
+                        iTermImage = new ITermImage(mClient, false);
+                        if ((index = iTermImage.readArguments(this, mOSCOrDeviceControlArgs, 10)) < 10 ||
+                            !iTermImage.readImage(mOSCOrDeviceControlArgs, index)) {
+                            iTermImage = null;
+                        } else {
+                            mOSCOrDeviceControlArgs.setLength(0);
+                            oscArgsCleared = true;
+                            if (!iTermImage.decodeImage()) {
+                                iTermImage = null;
                             }
                         }
-                        if (k.equalsIgnoreCase("height")) {
-                            double factor = cellH;
-                            int div = 1;
-                            int e = v.length();
-                            if (v.endsWith("px")) {
-                                factor = 1;
-                                e -= 2;
-                            } else if (v.endsWith("%")) {
-                                factor = 0.01 * cellH * mRows;
-                                e -= 1;
-                            }
-                            try {
-                                height = (int) (factor * Integer.parseInt(v.substring(0, e)));
-                            } catch (Exception ex) {
-                            }
+                    } else if (controlCommandPrefix.startsWith("MultipartFile=")) {
+                        if (mITermImage != null) {
+                            Logger.logWarn(mClient, LOG_TAG, "A new iTerm 'MultipartFile' command received while already processing a 'MultipartFile' command");
+                            mITermImage = null;
+                        }
+
+                        iTermImage = new ITermImage(mClient, true);
+                        if (iTermImage.readArguments(this, mOSCOrDeviceControlArgs, 19) < 19) {
+                            iTermImage = null;
+                        } else {
+                            mITermImage = iTermImage;
+                        }
+                    } else if (controlCommandPrefix.startsWith("FilePart=")) {
+                        if (mITermImage == null) {
+                            Logger.logError(mClient, LOG_TAG, "An iTerm 'FilePart' command received without a 'MultipartFile' command preceding it");
+                            return;
+                        }
+
+                        if (!mITermImage.readImage(mOSCOrDeviceControlArgs, 14)) {
+                            mITermImage = null;
+                        }
+                    } else if (controlCommandPrefix.equals("FileEnd")) {
+                        if (mITermImage == null) {
+                            Logger.logError(mClient, LOG_TAG, "An iTerm 'FileEnd' command received without a 'MultipartFile' command preceding it");
+                            return;
+                        }
+
+                        iTermImage = mITermImage;
+                        mITermImage = null;
+                        if (!iTermImage.setMultiPartImageRead() || !iTermImage.decodeImage()) {
+                            iTermImage = null;
                         }
                     }
-                    if (!inline) {
-                        finishSequence();
-                        return;
+
+                    if (!oscArgsCleared) {
+                        mOSCOrDeviceControlArgs.setLength(0);
                     }
-                    if (osc_colon >= 0 && mOSCOrDeviceControlArgs.length() > osc_colon) {
-                        while (mOSCOrDeviceControlArgs.length() - osc_colon < 4) {
-                            mOSCOrDeviceControlArgs.append('=');
-                        }
-                        try {
-                            byte[] decoded = Base64.decode(mOSCOrDeviceControlArgs.substring(osc_colon), 0);
-                            for (int i = 0; i < decoded.length; i++) {
-                                ESC_OSC_data.add(decoded[i]);
-                            }
-                        } catch (Exception e) {
-                            // Ignore non-Base64 data.
-                        }
-                        mOSCOrDeviceControlArgs.setLength(osc_colon);
-                    }
-                    if (osc_colon >= 0) {
-                        byte[] result = new byte[ESC_OSC_data.size()];
-                        for (int i = 0; i < ESC_OSC_data.size(); i++) {
-                            result[i] = ESC_OSC_data.get(i).byteValue();
-                        }
-                        int[] res = mScreen.addImage(result, mCursorRow, mCursorCol, cellW, cellH, width, height, aspect);
+
+                    if (iTermImage != null && iTermImage.isImageDecoded() && iTermImage.isInline()) {
+                        int[] res = mScreen.addImage(iTermImage.getDecodedImage(), mCursorRow, mCursorCol, cellW, cellH,
+                            iTermImage.getWidth(), iTermImage.getHeight(), iTermImage.shouldPreserveAspectRatio());
                         int col = res[1] + mCursorCol;
                         if (col < mColumns - 1) {
                             res[0] -= 1;
@@ -2709,16 +2703,21 @@ public final class TerminalEmulator {
                             doLinefeed();
                         }
                         mCursorCol = col;
-                        ESC_OSC_data.clear();
-                    } else {
                     }
-                } else if (textParameter.startsWith("ReportCellSize")) {
-                    mSession.write(String.format(Locale.US, "\0331337;ReportCellSize=%d;%d\007", cellH, cellW));
+                } else if (controlCommandPrefix.startsWith("ReportCellSize")) {
+                    mSession.write(String.format(Locale.US, "\0331337;ReportCellSize=%d;%d\007", mCellHeightPixels, mCellWidthPixels));
+                    if (!controlCommandPrefix.startsWith("MultipartFile=") &&
+                        !controlCommandPrefix.startsWith("FilePart=")) {
+                        mITermImage = null;
+                    }
                 }
                 break;
             default:
                 unknownParameter(value);
                 break;
+        }
+        if (mITermImage != null && value != 1337) {
+            mITermImage = null;
         }
         finishSequence();
     }
@@ -2855,11 +2854,23 @@ public final class TerminalEmulator {
     }
 
     private void collectOSCArgs(int b) {
-        if (mOSCOrDeviceControlArgs.length() < MAX_OSC_STRING_LENGTH) {
+        if (mOSCOrDeviceControlArgs.length() < mOscStringMaxLength) {
             mOSCOrDeviceControlArgs.appendCodePoint(b);
+            updateOscHandling();
             continueSequence(mEscapeState);
         } else {
             unknownSequence(b);
+        }
+    }
+
+    private void updateOscHandling() {
+        if (mOSCOrDeviceControlArgs.length() >= 5 &&
+            mOSCOrDeviceControlArgs.substring(0, 5).equals("1337;")) {
+            mIgnoreCrLfForOsc = true;
+            mOscStringMaxLength = TerminalBitmap.MAX_BITMAP_SIZE + 150;
+        } else if (mOSCOrDeviceControlArgs.length() >= 3 &&
+            mOSCOrDeviceControlArgs.substring(0, 3).equals("52;")) {
+            mOscStringMaxLength = (100 * 1024) + 10;
         }
     }
 
@@ -2913,6 +2924,8 @@ public final class TerminalEmulator {
 
     private void finishSequence() {
         mEscapeState = ESC_NONE;
+        mIgnoreCrLfForOsc = false;
+        mOscStringMaxLength = DEFAULT_OSC_STRING_LENGTH;
     }
 
     /**
@@ -3170,7 +3183,9 @@ public final class TerminalEmulator {
         mSession.onColorsChanged();
         ESC_P_escape = false;
         ESC_P_sixel = false;
-        ESC_OSC_colon = -1;
+        mOscStringMaxLength = DEFAULT_OSC_STRING_LENGTH;
+        mIgnoreCrLfForOsc = false;
+        mITermImage = null;
     }
 
     public String getSelectedText(int x1, int y1, int x2, int y2) {
