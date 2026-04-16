@@ -2264,7 +2264,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             currentPageIndex = mSuggestionBarView.getPinnedCurrentPageIndex();
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
-            subtlePinnedIndicators = true;
             interactionActive = true;
         }
         applyAzFxInteractionOverflowState(
