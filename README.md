@@ -37,6 +37,20 @@ If you use the tmux status helpers, see [tooie](https://github.com/PickleHik3/to
 - [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) is strongly recommended for tmux-heavy use.
 - By default, typing `/` in the terminal starts app search in the launcher bar. This can be changed in `Settings -> Apps Bar -> Input split character`.
 
+## Shell Launching
+
+You can launch apps directly from the shell with `launcherctl launch`:
+
+```sh
+launcherctl launch whatsapp
+```
+
+Example tmux binding:
+
+```tmux
+bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"\; launcherctl launch whatsapp >/dev/null 2>&1 || tmux display-message "Launch failed: WhatsApp"'
+```
+
 ## Demo
 
 ![Launcher demo](screenshots/launcher-demo.gif)
