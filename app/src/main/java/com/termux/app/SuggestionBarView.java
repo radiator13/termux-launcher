@@ -158,6 +158,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean childLayoutPending = true;
     private long stableLayoutSuppressedSinceUptimeMs = 0L;
     private int lastSurfaceRenderSignature = 0;
+    private boolean pendingPinnedMutationFeedback = false;
     private boolean suppressContextLongPressForSwipe = false;
     private int folderDragHoverIndex = -1;
     @Nullable private LongPressPickupState activeLongPressPickupState;
@@ -1310,6 +1311,11 @@ public final class SuggestionBarView extends GridLayout {
             }
         }
 
+        if (pendingPinnedMutationFeedback && !azPreview) {
+            pendingPinnedMutationFeedback = false;
+            post(this::animatePinnedMutationFeedback);
+        }
+
         boolean showEmptyPinnedHint = !azPreview
             && TextUtils.isEmpty(lastInput.trim())
             && (pinnedItems == null || pinnedItems.isEmpty())
@@ -1381,6 +1387,22 @@ public final class SuggestionBarView extends GridLayout {
         } else {
             invalidate();
         }
+    }
+
+    private void animatePinnedMutationFeedback() {
+        animate().cancel();
+        setPivotX(getWidth() * 0.5f);
+        setPivotY(getHeight() * 0.5f);
+        setScaleX(0.986f);
+        setScaleY(0.986f);
+        setAlpha(0.9f);
+        animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .alpha(1f)
+            .setDuration(180L)
+            .setInterpolator(new DecelerateInterpolator())
+            .start();
     }
 
     private int computeSurfaceRenderSignature(
@@ -2560,6 +2582,7 @@ public final class SuggestionBarView extends GridLayout {
             configRepository.savePinnedItems(pinnedItems);
             pinnedItems = configRepository.loadPinnedItems();
         }
+        pendingPinnedMutationFeedback = true;
         reloadWithInput("", lastTerminalView);
     }
 
@@ -3080,6 +3103,7 @@ public final class SuggestionBarView extends GridLayout {
             return;
         }
         if (context.sourceFolder != null && context.folderEntryRef != null) {
+            dismissFolderPopup();
             removeAppFromFolder(context.sourceFolder, context.folderEntryRef);
             persistPinsAndReload();
         }
@@ -3091,6 +3115,7 @@ public final class SuggestionBarView extends GridLayout {
             return;
         }
 
+        dismissFolderPopup();
         AppRef resolved = resolveForSelectionRef(context.folderEntryRef);
         int existingPinnedIndex = findPinnedAppIndex(resolved);
         int sourceFolderIndex = findPinnedFolderIndex(context.sourceFolder);
@@ -3142,9 +3167,34 @@ public final class SuggestionBarView extends GridLayout {
         actionRow.setPadding(dp(8), dp(7), dp(8), dp(7));
         actionRow.setClickable(true);
         stylePopupRow(actionRow, false, tintBase);
-        actionRow.setOnClickListener(v -> action.run());
+        actionRow.setOnClickListener(v -> runPopupActionWithFeedback(actionRow, action));
         shell.addView(actionRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return actionRow;
+    }
+
+    private void runPopupActionWithFeedback(@NonNull TextView actionRow, @NonNull Runnable action) {
+        actionRow.animate().cancel();
+        actionRow.setPivotX(actionRow.getWidth() * 0.5f);
+        actionRow.setPivotY(actionRow.getHeight() * 0.5f);
+        actionRow.animate()
+            .alpha(0.68f)
+            .scaleX(0.985f)
+            .scaleY(0.985f)
+            .setDuration(70L)
+            .setInterpolator(new DecelerateInterpolator())
+            .withEndAction(() -> {
+                if (actionRow.isAttachedToWindow()) {
+                    actionRow.animate()
+                        .alpha(1f)
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(110L)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .start();
+                }
+                action.run();
+            })
+            .start();
     }
 
     private int normalizePopupRowWidths(@NonNull List<MenuActionRow> rows) {
