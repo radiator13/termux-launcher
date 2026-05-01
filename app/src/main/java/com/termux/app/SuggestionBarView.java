@@ -1662,7 +1662,18 @@ public final class SuggestionBarView extends GridLayout {
             }
         }
         String title = TextUtils.isEmpty(folder.title) ? "Folder" : folder.title;
-        return new LauncherAppEntry(new AppRef("folder", folder.id), title, icon);
+        return new LauncherAppEntry(new AppRef("folder", buildFolderRenderKey(folder)), title, icon);
+    }
+
+    @NonNull
+    private static String buildFolderRenderKey(@NonNull PinnedFolderItem folder) {
+        StringBuilder builder = new StringBuilder(folder.id);
+        builder.append('|').append(TextUtils.isEmpty(folder.title) ? "Folder" : folder.title);
+        builder.append('|').append(folder.apps.size());
+        for (AppRef ref : folder.apps) {
+            builder.append('|').append(ref.stableId());
+        }
+        return builder.toString();
     }
 
     @Nullable
