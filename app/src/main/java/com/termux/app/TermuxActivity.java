@@ -1027,10 +1027,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean useRenderEffectBlur = shouldUseAccessoryRenderEffectBlur(state);
         if (useRenderEffectBlur) {
             ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
-            if (backdrop == null || backdrop.getVisibility() != View.VISIBLE || backdrop.getDrawable() == null) {
-                return false;
-            }
-            return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || backdrop.getRenderEffect() != null;
+            return backdrop != null
+                && backdrop.getVisibility() == View.VISIBLE
+                && backdrop.getDrawable() != null;
         }
         View realtimeBlur = findViewById(R.id.extrakeys_backgroundblur);
         return realtimeBlur != null
