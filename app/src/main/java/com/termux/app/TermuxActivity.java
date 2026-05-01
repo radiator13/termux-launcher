@@ -230,13 +230,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mPackageRefreshForceCatalogReload = false;
         refreshSuggestionBarFromPackageState(forceCatalogRefresh);
     };
-    private final Runnable mLauncherCatalogWarmRunnable = () -> {
-        if (!mIsVisible || mSuggestionBarView == null) {
-            return;
-        }
-        mSuggestionBarView.reloadAllApps();
-        mSuggestionBarView.reload();
-    };
+    private final Runnable mLauncherCatalogWarmRunnable = this::runLauncherCatalogWarmup;
 
     /**
      * The last toast shown, used cancel current toast before showing new in {@link #showToast(String, boolean)}.
@@ -3820,6 +3814,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsVisible && mSuggestionBarView != null) {
             mAzGestureHandler.postDelayed(mLauncherCatalogWarmRunnable, LAUNCHER_CATALOG_WARM_DELAY_MS);
         }
+    }
+
+    private void runLauncherCatalogWarmup() {
+        if (!mIsVisible || mSuggestionBarView == null) {
+            return;
+        }
+        mSuggestionBarView.reloadAllApps();
+        mSuggestionBarView.reload();
     }
 
     private void unregisterPackageChangeReceiver() {
