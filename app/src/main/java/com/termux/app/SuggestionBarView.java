@@ -193,6 +193,7 @@ public final class SuggestionBarView extends GridLayout {
     @Nullable private OverflowInteractionListener overflowInteractionListener;
     private final ExecutorService searchExecutor = newIdleFriendlyExecutor();
     private int searchGeneration = 0;
+    private boolean hostVisible = true;
     private boolean rowInteractionActive = false;
     @Nullable private String azFocusedEntryKey;
     @Nullable private View azFocusedView;
@@ -425,6 +426,23 @@ public final class SuggestionBarView extends GridLayout {
         overflowInteractionListener = listener;
     }
 
+    public void setHostVisible(boolean visible) {
+        hostVisible = visible;
+        if (visible) {
+            scheduleStableDrawReleaseIfPossible();
+            return;
+        }
+        searchGeneration++;
+        pendingDeferredRender = false;
+        stableLayoutRerenderPosted = false;
+        removeCallbacks(azResetRunnable);
+        removeCallbacks(azPostLaunchClearRunnable);
+        clearAzFocusedEntry();
+        dismissShortcutsPopup();
+        dismissAppContextPopup();
+        dismissFolderPopup();
+    }
+
     private LauncherUsageStatsStore getUsageStatsStore() {
         if (usageStatsStore == null) {
             usageStatsStore = new LauncherUsageStatsStore(getContext());
@@ -495,6 +513,9 @@ public final class SuggestionBarView extends GridLayout {
         }
         if (!appDataProvider.hasLoadedApps()) {
             appDataProvider.warmAsync(() -> {
+                if (!hostVisible || !isAttachedToWindow()) {
+                    return;
+                }
                 allApps = appDataProvider.getAllApps();
                 resolvedRefCache.clear();
                 shortcutCache.clear();
@@ -614,7 +635,12 @@ public final class SuggestionBarView extends GridLayout {
             appDataProvider = LauncherAppDataProvider.getInstance(getContext());
         }
         if (!appDataProvider.hasLoadedApps()) {
-            appDataProvider.warmAsync(() -> previewAzLetter(letter, selectionIndex, commit));
+            appDataProvider.warmAsync(() -> {
+                if (!hostVisible || !isAttachedToWindow()) {
+                    return;
+                }
+                previewAzLetter(letter, selectionIndex, commit);
+            });
             return;
         }
         char normalized = Character.toUpperCase(letter);
@@ -1143,6 +1169,9 @@ public final class SuggestionBarView extends GridLayout {
             searchExecutor.execute(() -> {
                 List<LauncherAppEntry> suggestionEntries = LauncherRankingEngine.filterAndRank(snapshot, trimmed, searchTolerance);
                 post(() -> {
+                    if (!hostVisible || !isAttachedToWindow()) {
+                        return;
+                    }
                     if (requestGeneration != searchGeneration) {
                         return;
                     }
@@ -1191,7 +1220,7 @@ public final class SuggestionBarView extends GridLayout {
             final boolean deferredAzPreview = azPreview;
             post(() -> {
                 pendingDeferredRender = false;
-                if (!isAttachedToWindow()) {
+                if (!hostVisible || !isAttachedToWindow()) {
                     return;
                 }
                 renderButtons(deferredEntries, deferredAzPreview);
@@ -4829,13 +4858,13 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private void scheduleStableDrawReleaseIfPossible() {
-        if (!suppressDrawUntilStableLayout || stableLayoutRerenderPosted || !hasStableRenderBounds()) {
+        if (!hostVisible || !suppressDrawUntilStableLayout || stableLayoutRerenderPosted || !hasStableRenderBounds()) {
             return;
         }
         stableLayoutRerenderPosted = true;
         post(() -> {
             stableLayoutRerenderPosted = false;
-            if (!isAttachedToWindow() || !hasStableRenderBounds()) {
+            if (!hostVisible || !isAttachedToWindow() || !hasStableRenderBounds()) {
                 return;
             }
             if (!hasStableChildLayout()) {

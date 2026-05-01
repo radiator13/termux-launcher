@@ -133,6 +133,9 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     public void onStop() {
         // Stop terminal cursor blinking if enabled
         setTerminalCursorBlinkerState(false);
+        if (mShowSoftKeyboardRunnable != null) {
+            mActivity.getTerminalView().removeCallbacks(mShowSoftKeyboardRunnable);
+        }
     }
 
     /**

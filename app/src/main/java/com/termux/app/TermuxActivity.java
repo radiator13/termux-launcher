@@ -223,11 +223,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable private LauncherApps.Callback mLauncherAppsCallback;
     private boolean mLauncherAppsCallbackRegistered = false;
     private static final long PACKAGE_REFRESH_DEBOUNCE_MS = 120L;
+    private static final long LAUNCHER_CATALOG_WARM_DELAY_MS = 450L;
     private boolean mPackageRefreshForceCatalogReload = false;
     private final Runnable mPackageRefreshRunnable = () -> {
         boolean forceCatalogRefresh = mPackageRefreshForceCatalogReload;
         mPackageRefreshForceCatalogReload = false;
         refreshSuggestionBarFromPackageState(forceCatalogRefresh);
+    };
+    private final Runnable mLauncherCatalogWarmRunnable = () -> {
+        if (!mIsVisible || mSuggestionBarView == null) {
+            return;
+        }
+        mSuggestionBarView.reloadAllApps();
+        mSuggestionBarView.reload();
     };
 
     /**
@@ -590,6 +598,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState) return;
     
         mIsVisible = true;
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.setHostVisible(true);
+            scheduleLauncherCatalogWarmup();
+        }
         if (mPendingBootstrapOnStart && mTermuxService != null && mTermuxService.isTermuxSessionsEmpty()) {
             mPendingBootstrapOnStart = false;
             Intent pendingIntent = mPendingLaunchIntent;
@@ -1473,6 +1485,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxTerminalSessionActivityClient.onStop();
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onStop();
+        if (mSuggestionBarView != null) {
+            mSuggestionBarView.setHostVisible(false);
+        }
         removeTermuxActivityRootViewGlobalLayoutListener();
         removeAccessoryKeyboardLayoutListener();
         removeAccessoryLayoutChangeListeners();
@@ -1488,6 +1503,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applySmoothDockImeOffset(0);
         clearAccessoryRenderEffectBackdrop();
         mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
+        mAzGestureHandler.removeCallbacks(mLauncherCatalogWarmRunnable);
         getDrawer().closeDrawers();
     }
 
@@ -1755,11 +1771,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyDockLayoutMetrics(buildDockLayoutMetrics(0));
         mSuggestionBarView.reload();
         mSuggestionBarView.post(() -> {
-            if (mSuggestionBarView == null) {
+            if (mSuggestionBarView == null || !mIsVisible) {
                 return;
             }
-            mSuggestionBarView.reloadAllApps();
-            mSuggestionBarView.reload();
+            scheduleLauncherCatalogWarmup();
         });
         if (mTermuxTerminalViewClient != null) {
             mTermuxTerminalViewClient.setSuggestionBarCallback(this);
@@ -3390,7 +3405,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus || mIsInvalidState) {
+        if (!hasFocus || mIsInvalidState || !mIsVisible) {
             return;
         }
         mAccessoryBackdropDirty = true;
@@ -3798,6 +3813,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         mAzGestureHandler.postDelayed(mPackageRefreshRunnable, PACKAGE_REFRESH_DEBOUNCE_MS);
+    }
+
+    private void scheduleLauncherCatalogWarmup() {
+        mAzGestureHandler.removeCallbacks(mLauncherCatalogWarmRunnable);
+        if (mIsVisible && mSuggestionBarView != null) {
+            mAzGestureHandler.postDelayed(mLauncherCatalogWarmRunnable, LAUNCHER_CATALOG_WARM_DELAY_MS);
+        }
     }
 
     private void unregisterPackageChangeReceiver() {
