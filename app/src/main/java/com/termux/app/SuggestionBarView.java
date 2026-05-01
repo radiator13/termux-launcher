@@ -61,7 +61,6 @@ import android.widget.ListView;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -146,7 +145,6 @@ public final class SuggestionBarView extends GridLayout {
     private int activeAzSelection = 0;
     private int activeAzPageIndex = 0;
     private List<LauncherAppEntry> activeAzCandidates = new ArrayList<>();
-    @Nullable private View pinnedDragHostView;
     private final List<Integer> azPageStarts = new ArrayList<>();
     private int pinnedPageIndex = 0;
     private int pinnedItemsPerPage = 1;
@@ -284,7 +282,6 @@ public final class SuggestionBarView extends GridLayout {
 
     @Override
     protected void onDetachedFromWindow() {
-        updatePinnedDragHost(false);
         super.onDetachedFromWindow();
     }
 
@@ -1369,10 +1366,10 @@ public final class SuggestionBarView extends GridLayout {
                 showUnifiedPinEditor(slotIndex, null);
                 return true;
             });
-            updatePinnedDragHost(true);
+            setOnDragListener(this::handlePinnedBarDragEvent);
         } else {
             setOnLongClickListener(null);
-            updatePinnedDragHost(false);
+            setOnDragListener(null);
         }
         if (overflowInteractionListener != null) {
             overflowInteractionListener.onOverflowInteractionChanged(rowInteractionActive);
@@ -2541,7 +2538,7 @@ public final class SuggestionBarView extends GridLayout {
         shell.addView(grid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         int overlayBase = folder.tintOverrideEnabled ? (folder.tintColor & 0x00FFFFFF) : (inheritedTintColor & 0x00FFFFFF);
-        folderPopupWindow = buildPopupWindow(shell, overlayBase, false, () -> {
+        folderPopupWindow = buildPopupWindow(shell, overlayBase, true, () -> {
             if (folderPopupWindow != null && !folderPopupWindow.isShowing()) {
                 folderPopupWindow = null;
             }
@@ -2620,19 +2617,7 @@ public final class SuggestionBarView extends GridLayout {
         @Nullable AppRef folderEntryRef,
         boolean allowDragPickup
     ) {
-        bindAppContextLongPress(pressTarget, entry, pinnedIndex, sourceFolder, folderEntryRef, allowDragPickup, null);
-    }
-
-    private void bindAppContextLongPress(
-        @NonNull View pressTarget,
-        @NonNull LauncherAppEntry entry,
-        int pinnedIndex,
-        @Nullable PinnedFolderItem sourceFolder,
-        @Nullable AppRef folderEntryRef,
-        boolean allowDragPickup,
-        @Nullable Runnable startDragAction
-    ) {
-        bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, startDragAction, () -> {
+        bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, () -> {
             dismissShortcutsPopup();
             showAppContextPopup(new AppMenuContext(entry, pressTarget, pinnedIndex, sourceFolder, folderEntryRef));
         });
@@ -2644,7 +2629,7 @@ public final class SuggestionBarView extends GridLayout {
         int pinnedIndex,
         boolean allowDragPickup
     ) {
-        bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, null, () -> {
+        bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, () -> {
             dismissFolderPopup();
             showFolderContextPopup(folder, pinnedIndex, pressTarget);
         });
@@ -2654,7 +2639,6 @@ public final class SuggestionBarView extends GridLayout {
         @NonNull View pressTarget,
         int pinnedIndex,
         boolean allowDragPickup,
-        @Nullable Runnable startDragAction,
         @NonNull Runnable showContextPopup
     ) {
         pressTarget.setLongClickable(true);
@@ -2709,18 +2693,14 @@ public final class SuggestionBarView extends GridLayout {
                         && withinPickupWindow
                         && !state.definitiveYMovement
                         && absDx >= xPickupThreshold
-                        && (pinnedIndex >= 0 || startDragAction != null);
+                        && pinnedIndex >= 0;
 
                     if (shouldStartPickup) {
                         state.dragStarted = true;
                         clearMenuHighlight();
                         dismissAppContextPopup();
                         dismissFolderPopup();
-                        if (startDragAction != null) {
-                            startDragAction.run();
-                        } else {
-                            startPinnedDrag(pressTarget, pinnedIndex);
-                        }
+                        startPinnedDrag(pressTarget, pinnedIndex);
                         activeLongPressPickupState = null;
                         return true;
                     }
@@ -2816,11 +2796,20 @@ public final class SuggestionBarView extends GridLayout {
         }, false));
 
         if (folderSource) {
-            TextView removeRow = addPopupActionRow(shell, "Remove from folder", tintBase, () -> {
+            TextView moveToDockRow = addPopupActionRow(shell, "Move to dock", tintBase, () -> {
+                dismissAppContextPopup();
+                moveContextEntryToDock(context);
+            });
+            appContextRows.add(new MenuActionRow(moveToDockRow, () -> {
+                dismissAppContextPopup();
+                moveContextEntryToDock(context);
+            }, false));
+
+            TextView deleteRow = addPopupActionRow(shell, "Delete", tintBase, () -> {
                 dismissAppContextPopup();
                 removeFromContextSource(context);
             });
-            appContextRows.add(new MenuActionRow(removeRow, () -> {
+            appContextRows.add(new MenuActionRow(deleteRow, () -> {
                 dismissAppContextPopup();
                 removeFromContextSource(context);
             }, false));
@@ -3094,6 +3083,34 @@ public final class SuggestionBarView extends GridLayout {
             removeAppFromFolder(context.sourceFolder, context.folderEntryRef);
             persistPinsAndReload();
         }
+    }
+
+    private void moveContextEntryToDock(@NonNull AppMenuContext context) {
+        if (context.sourceFolder == null || context.folderEntryRef == null) {
+            pinEntryToTopLevel(context.entry);
+            return;
+        }
+
+        AppRef resolved = resolveForSelectionRef(context.folderEntryRef);
+        int existingPinnedIndex = findPinnedAppIndex(resolved);
+        int sourceFolderIndex = findPinnedFolderIndex(context.sourceFolder);
+        removeAppFromFolder(context.sourceFolder, resolved);
+        if (existingPinnedIndex >= 0) {
+            persistPinsAndReload();
+            return;
+        }
+
+        int survivingFolderIndex = findPinnedFolderIndex(context.sourceFolder);
+        int insertionIndex;
+        if (survivingFolderIndex >= 0) {
+            insertionIndex = survivingFolderIndex + 1;
+        } else if (sourceFolderIndex >= 0) {
+            insertionIndex = Math.min(sourceFolderIndex + 1, pinnedItems.size());
+        } else {
+            insertionIndex = pinnedItems.size();
+        }
+        pinnedItems.add(clamp(insertionIndex, 0, pinnedItems.size()), new PinnedAppItem(resolved));
+        persistPinsAndReload();
     }
 
     private int findPinnedAppIndex(@NonNull AppRef ref) {
@@ -3952,23 +3969,6 @@ public final class SuggestionBarView extends GridLayout {
         return true;
     }
 
-    private boolean startFolderPopupDrag(@NonNull View view, @NonNull LauncherAppEntry entry, @NonNull PinnedFolderItem folder) {
-        ClipData clip = ClipData.newPlainText("folder-app", entry.appRef.stableId());
-        FolderAppDragState dragState = new FolderAppDragState(resolveForSelectionRef(entry.appRef), folder);
-        View.DragShadowBuilder shadow = createRaisedDragShadow(view);
-        boolean started;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            started = view.startDragAndDrop(clip, shadow, dragState, 0);
-        } else {
-            started = view.startDrag(clip, shadow, dragState, 0);
-        }
-        if (started) {
-            dismissFolderPopup();
-            Toast.makeText(getContext(), "Drag to pin. Release off the bar to remove.", Toast.LENGTH_SHORT).show();
-        }
-        return started;
-    }
-
     @NonNull
     private View.DragShadowBuilder createRaisedDragShadow(@NonNull View view) {
         return new View.DragShadowBuilder(view) {
@@ -3985,18 +3985,16 @@ public final class SuggestionBarView extends GridLayout {
     private boolean handlePinnedBarDragEvent(@NonNull View targetView, @NonNull DragEvent event) {
         Object localState = event.getLocalState();
         boolean pinnedDrag = localState instanceof PinnedDragState;
-        boolean folderDrag = localState instanceof FolderAppDragState;
-        if (!pinnedDrag && !folderDrag) return false;
+        if (!pinnedDrag) return false;
 
         int slotCount = Math.max(1, maxButtonCount);
-        float width = Math.max(1f, getWidth());
-        float x = resolvePinnedBarLocalX(targetView, event);
+        float width = Math.max(1f, targetView.getWidth());
+        float x = Math.max(0f, Math.min(width, event.getX()));
         float slotWidth = width / slotCount;
-        float contentX = Math.max(0f, Math.min(width, x));
+        float contentX = x;
         int hoveredSlot = clamp((int) (contentX / Math.max(1f, slotWidth)), 0, slotCount - 1);
         float slotStartX = hoveredSlot * slotWidth;
         float dropXRatio = slotWidth <= 0f ? 0.5f : Math.max(0f, Math.min(1f, (contentX - slotStartX) / slotWidth));
-        boolean overPinnedBar = isDragOverPinnedBar(targetView, event);
 
         int pageOffset = Math.max(0, pinnedPageIndex) * Math.max(1, pinnedItemsPerPage);
         int targetIndex = clamp(pageOffset + hoveredSlot, 0, pinnedItems == null ? 0 : pinnedItems.size());
@@ -4007,112 +4005,29 @@ public final class SuggestionBarView extends GridLayout {
 
         switch (event.getAction()) {
             case DragEvent.ACTION_DRAG_STARTED:
-                clearFolderDragInsertionPreview();
+                updateFolderDragInsertionPreview(hoveredSlot);
                 return true;
             case DragEvent.ACTION_DRAG_LOCATION:
-                if (overPinnedBar) {
-                    updateFolderDragInsertionPreview(hoveredSlot);
-                } else {
-                    clearFolderDragInsertionPreview();
-                }
+                updateFolderDragInsertionPreview(hoveredSlot);
                 return true;
             case DragEvent.ACTION_DRAG_ENTERED:
-                setAlpha(0.92f);
-                if (overPinnedBar) {
-                    updateFolderDragInsertionPreview(hoveredSlot);
-                } else {
-                    clearFolderDragInsertionPreview();
-                }
+                targetView.setAlpha(0.92f);
+                updateFolderDragInsertionPreview(hoveredSlot);
                 return true;
             case DragEvent.ACTION_DRAG_EXITED:
-                setAlpha(1f);
-                clearFolderDragInsertionPreview();
+                targetView.setAlpha(1f);
                 return true;
             case DragEvent.ACTION_DROP:
-                setAlpha(1f);
+                targetView.setAlpha(1f);
                 clearFolderDragInsertionPreview();
-                if (!overPinnedBar) {
-                    if (folderDrag) {
-                        FolderAppDragState dragState = (FolderAppDragState) localState;
-                        if (dragState.sourceFolder != null && dragState.appRef != null) {
-                            removeAppFromFolder(dragState.sourceFolder, dragState.appRef);
-                            persistPinsAndReload();
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-                if (pinnedDrag) {
-                    return applyPinnedDrop((PinnedDragState) localState, targetIndex, targetItem, dropXRatio);
-                } else {
-                    return applyFolderDropToBar((FolderAppDragState) localState, targetIndex, targetItem, dropXRatio);
-                }
+                return applyPinnedDrop((PinnedDragState) localState, targetIndex, targetItem, dropXRatio);
             case DragEvent.ACTION_DRAG_ENDED:
-                setAlpha(1f);
+                targetView.setAlpha(1f);
                 clearFolderDragInsertionPreview();
-                if (folderDrag && !event.getResult()) {
-                    FolderAppDragState dragState = (FolderAppDragState) localState;
-                    if (dragState.sourceFolder != null && dragState.appRef != null) {
-                        removeAppFromFolder(dragState.sourceFolder, dragState.appRef);
-                        persistPinsAndReload();
-                    }
-                }
                 return true;
             default:
                 return false;
         }
-    }
-
-    private void updatePinnedDragHost(boolean enabled) {
-        View desiredHost = null;
-        if (enabled) {
-            View root = getRootView();
-            desiredHost = root != null ? root : this;
-        }
-        if (pinnedDragHostView == desiredHost) {
-            if (desiredHost == this) {
-                setOnDragListener(enabled ? this::handlePinnedBarDragEvent : null);
-            }
-            return;
-        }
-        if (pinnedDragHostView != null) {
-            pinnedDragHostView.setOnDragListener(null);
-        }
-        pinnedDragHostView = desiredHost;
-        if (pinnedDragHostView == this) {
-            setOnDragListener(enabled ? this::handlePinnedBarDragEvent : null);
-        } else {
-            setOnDragListener(null);
-            if (pinnedDragHostView != null) {
-                pinnedDragHostView.setOnDragListener(this::handlePinnedBarDragEvent);
-            }
-        }
-    }
-
-    private boolean isDragOverPinnedBar(@NonNull View targetView, @NonNull DragEvent event) {
-        float localX = resolvePinnedBarLocalX(targetView, event);
-        float localY = resolvePinnedBarLocalY(targetView, event);
-        float width = Math.max(1f, getWidth());
-        float height = Math.max(1f, getHeight());
-        float verticalSlop = Math.max(dp(28), height * 0.55f);
-        return localX >= -dp(20) && localX <= width + dp(20)
-            && localY >= -verticalSlop && localY <= height + verticalSlop;
-    }
-
-    private float resolvePinnedBarLocalX(@NonNull View targetView, @NonNull DragEvent event) {
-        int[] hostLocation = new int[2];
-        int[] rowLocation = new int[2];
-        targetView.getLocationOnScreen(hostLocation);
-        getLocationOnScreen(rowLocation);
-        return (hostLocation[0] + event.getX()) - rowLocation[0];
-    }
-
-    private float resolvePinnedBarLocalY(@NonNull View targetView, @NonNull DragEvent event) {
-        int[] hostLocation = new int[2];
-        int[] rowLocation = new int[2];
-        targetView.getLocationOnScreen(hostLocation);
-        getLocationOnScreen(rowLocation);
-        return (hostLocation[1] + event.getY()) - rowLocation[1];
     }
 
     private boolean applyPinnedDrop(@NonNull PinnedDragState dragState, int targetIndex, @Nullable PinnedItem targetItem, float dropXRatio) {
@@ -4154,72 +4069,6 @@ public final class SuggestionBarView extends GridLayout {
 
         int insertionIndex = computeInsertionIndex(targetIndex, targetItem, dropXRatio);
         return movePinnedItem(dragState.sourceIndex, insertionIndex);
-    }
-
-    private boolean applyFolderDropToBar(@NonNull FolderAppDragState dragState, int targetIndex, @Nullable PinnedItem targetItem, float dropXRatio) {
-        if (targetIndex < 0) return false;
-        AppRef dragged = dragState.appRef;
-        if (dragged == null) return false;
-        AppRef resolvedDragged = resolveForSelectionRef(dragged);
-
-        if (targetItem instanceof PinnedFolderItem) {
-            PinnedFolderItem targetFolder = (PinnedFolderItem) targetItem;
-            if (dragState.sourceFolder != null && targetFolder.id.equals(dragState.sourceFolder.id)) {
-                return true;
-            }
-            addAppRefToFolderIfMissing(targetFolder, resolvedDragged);
-            if (dragState.sourceFolder != null) {
-                removeAppFromFolder(dragState.sourceFolder, resolvedDragged);
-            }
-            persistPinsAndReload();
-            return true;
-        }
-
-        if (targetItem instanceof PinnedAppItem && shouldCreateFolderOnDrop(dropXRatio)) {
-            AppRef targetRef = resolveForSelectionRef(((PinnedAppItem) targetItem).appRef);
-            if (targetRef.stableId().equals(resolvedDragged.stableId())) {
-                if (dragState.sourceFolder != null) {
-                    removeAppFromFolder(dragState.sourceFolder, resolvedDragged);
-                    persistPinsAndReload();
-                    return true;
-                }
-                return false;
-            }
-            PinnedFolderItem folder = new PinnedFolderItem(UUID.randomUUID().toString(), "Folder");
-            addAppRefToFolderIfMissing(folder, targetRef);
-            addAppRefToFolderIfMissing(folder, resolvedDragged);
-            pinnedItems.set(targetIndex, folder);
-            if (dragState.sourceFolder != null) {
-                removeAppFromFolder(dragState.sourceFolder, resolvedDragged);
-            }
-            persistPinsAndReload();
-            return true;
-        }
-
-        int existingIndex = -1;
-        for (int i = 0; i < pinnedItems.size(); i++) {
-            PinnedItem item = pinnedItems.get(i);
-            if (item instanceof PinnedAppItem) {
-                if (((PinnedAppItem) item).appRef.stableId().equals(resolvedDragged.stableId())) {
-                    existingIndex = i;
-                    break;
-                }
-            }
-        }
-        if (existingIndex >= 0) {
-            pinnedItems.remove(existingIndex);
-            if (existingIndex < targetIndex) targetIndex--;
-        }
-
-        targetIndex = computeInsertionIndex(targetIndex, targetItem, dropXRatio);
-        targetIndex = clamp(targetIndex, 0, pinnedItems.size());
-        pinnedItems.add(targetIndex, new PinnedAppItem(resolvedDragged));
-
-        if (dragState.sourceFolder != null) {
-            removeAppFromFolder(dragState.sourceFolder, resolvedDragged);
-        }
-        persistPinsAndReload();
-        return true;
     }
 
     private int computeInsertionIndex(int targetIndex, @Nullable PinnedItem targetItem, float dropXRatio) {
@@ -4335,16 +4184,6 @@ public final class SuggestionBarView extends GridLayout {
 
         PinnedDragState(int sourceIndex) {
             this.sourceIndex = sourceIndex;
-        }
-    }
-
-    private static final class FolderAppDragState {
-        final AppRef appRef;
-        final PinnedFolderItem sourceFolder;
-
-        FolderAppDragState(@NonNull AppRef appRef, @NonNull PinnedFolderItem sourceFolder) {
-            this.appRef = appRef;
-            this.sourceFolder = sourceFolder;
         }
     }
 
@@ -4609,15 +4448,7 @@ public final class SuggestionBarView extends GridLayout {
             button.setColorFilter(new ColorMatrixColorFilter(colorMatrix));
         }
         button.setOnClickListener(v -> launchEntryFromTouch(v, entry, lastTerminalView));
-        bindAppContextLongPress(
-            button,
-            entry,
-            -1,
-            sourceFolder,
-            resolveForSelectionRef(entry.appRef),
-            true,
-            () -> startFolderPopupDrag(button, entry, sourceFolder)
-        );
+        bindAppContextLongPress(button, entry, -1, sourceFolder, resolveForSelectionRef(entry.appRef), false);
         button.setContentDescription(entry.label);
         registerLaunchTarget(entry.appRef, button);
         return button;

@@ -2258,6 +2258,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             currentPageIndex = mSuggestionBarView.getPinnedCurrentPageIndex();
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
+            subtlePinnedIndicators = true;
         } else if (!mAzGestureActive && !mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
@@ -2265,6 +2266,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
             interactionActive = true;
+            subtlePinnedIndicators = true;
         }
         applyAzFxInteractionOverflowState(
             interactionActive,
