@@ -146,6 +146,7 @@ public final class SuggestionBarView extends GridLayout {
     private int activeAzSelection = 0;
     private int activeAzPageIndex = 0;
     private List<LauncherAppEntry> activeAzCandidates = new ArrayList<>();
+    @Nullable private View pinnedDragHostView;
     private final List<Integer> azPageStarts = new ArrayList<>();
     private int pinnedPageIndex = 0;
     private int pinnedItemsPerPage = 1;
@@ -283,6 +284,7 @@ public final class SuggestionBarView extends GridLayout {
 
     @Override
     protected void onDetachedFromWindow() {
+        updatePinnedDragHost(false);
         super.onDetachedFromWindow();
     }
 
@@ -1367,10 +1369,10 @@ public final class SuggestionBarView extends GridLayout {
                 showUnifiedPinEditor(slotIndex, null);
                 return true;
             });
-            setOnDragListener(this::handlePinnedBarDragEvent);
+            updatePinnedDragHost(true);
         } else {
             setOnLongClickListener(null);
-            setOnDragListener(null);
+            updatePinnedDragHost(false);
         }
         if (overflowInteractionListener != null) {
             overflowInteractionListener.onOverflowInteractionChanged(rowInteractionActive);
@@ -3987,13 +3989,14 @@ public final class SuggestionBarView extends GridLayout {
         if (!pinnedDrag && !folderDrag) return false;
 
         int slotCount = Math.max(1, maxButtonCount);
-        float width = Math.max(1f, targetView.getWidth());
-        float x = Math.max(0f, Math.min(width, event.getX()));
+        float width = Math.max(1f, getWidth());
+        float x = resolvePinnedBarLocalX(targetView, event);
         float slotWidth = width / slotCount;
-        float contentX = x;
+        float contentX = Math.max(0f, Math.min(width, x));
         int hoveredSlot = clamp((int) (contentX / Math.max(1f, slotWidth)), 0, slotCount - 1);
         float slotStartX = hoveredSlot * slotWidth;
         float dropXRatio = slotWidth <= 0f ? 0.5f : Math.max(0f, Math.min(1f, (contentX - slotStartX) / slotWidth));
+        boolean overPinnedBar = isDragOverPinnedBar(targetView, event);
 
         int pageOffset = Math.max(0, pinnedPageIndex) * Math.max(1, pinnedItemsPerPage);
         int targetIndex = clamp(pageOffset + hoveredSlot, 0, pinnedItems == null ? 0 : pinnedItems.size());
@@ -4004,28 +4007,48 @@ public final class SuggestionBarView extends GridLayout {
 
         switch (event.getAction()) {
             case DragEvent.ACTION_DRAG_STARTED:
-                updateFolderDragInsertionPreview(hoveredSlot);
+                clearFolderDragInsertionPreview();
                 return true;
             case DragEvent.ACTION_DRAG_LOCATION:
-                updateFolderDragInsertionPreview(hoveredSlot);
+                if (overPinnedBar) {
+                    updateFolderDragInsertionPreview(hoveredSlot);
+                } else {
+                    clearFolderDragInsertionPreview();
+                }
                 return true;
             case DragEvent.ACTION_DRAG_ENTERED:
-                targetView.setAlpha(0.92f);
-                updateFolderDragInsertionPreview(hoveredSlot);
+                setAlpha(0.92f);
+                if (overPinnedBar) {
+                    updateFolderDragInsertionPreview(hoveredSlot);
+                } else {
+                    clearFolderDragInsertionPreview();
+                }
                 return true;
             case DragEvent.ACTION_DRAG_EXITED:
-                targetView.setAlpha(1f);
+                setAlpha(1f);
+                clearFolderDragInsertionPreview();
                 return true;
             case DragEvent.ACTION_DROP:
-                targetView.setAlpha(1f);
+                setAlpha(1f);
                 clearFolderDragInsertionPreview();
+                if (!overPinnedBar) {
+                    if (folderDrag) {
+                        FolderAppDragState dragState = (FolderAppDragState) localState;
+                        if (dragState.sourceFolder != null && dragState.appRef != null) {
+                            removeAppFromFolder(dragState.sourceFolder, dragState.appRef);
+                            persistPinsAndReload();
+                            return true;
+                        }
+                    }
+                    return false;
+                }
                 if (pinnedDrag) {
                     return applyPinnedDrop((PinnedDragState) localState, targetIndex, targetItem, dropXRatio);
                 } else {
                     return applyFolderDropToBar((FolderAppDragState) localState, targetIndex, targetItem, dropXRatio);
                 }
             case DragEvent.ACTION_DRAG_ENDED:
-                targetView.setAlpha(1f);
+                setAlpha(1f);
                 clearFolderDragInsertionPreview();
                 if (folderDrag && !event.getResult()) {
                     FolderAppDragState dragState = (FolderAppDragState) localState;
@@ -4038,6 +4061,58 @@ public final class SuggestionBarView extends GridLayout {
             default:
                 return false;
         }
+    }
+
+    private void updatePinnedDragHost(boolean enabled) {
+        View desiredHost = null;
+        if (enabled) {
+            View root = getRootView();
+            desiredHost = root != null ? root : this;
+        }
+        if (pinnedDragHostView == desiredHost) {
+            if (desiredHost == this) {
+                setOnDragListener(enabled ? this::handlePinnedBarDragEvent : null);
+            }
+            return;
+        }
+        if (pinnedDragHostView != null) {
+            pinnedDragHostView.setOnDragListener(null);
+        }
+        pinnedDragHostView = desiredHost;
+        if (pinnedDragHostView == this) {
+            setOnDragListener(enabled ? this::handlePinnedBarDragEvent : null);
+        } else {
+            setOnDragListener(null);
+            if (pinnedDragHostView != null) {
+                pinnedDragHostView.setOnDragListener(this::handlePinnedBarDragEvent);
+            }
+        }
+    }
+
+    private boolean isDragOverPinnedBar(@NonNull View targetView, @NonNull DragEvent event) {
+        float localX = resolvePinnedBarLocalX(targetView, event);
+        float localY = resolvePinnedBarLocalY(targetView, event);
+        float width = Math.max(1f, getWidth());
+        float height = Math.max(1f, getHeight());
+        float verticalSlop = Math.max(dp(28), height * 0.55f);
+        return localX >= -dp(20) && localX <= width + dp(20)
+            && localY >= -verticalSlop && localY <= height + verticalSlop;
+    }
+
+    private float resolvePinnedBarLocalX(@NonNull View targetView, @NonNull DragEvent event) {
+        int[] hostLocation = new int[2];
+        int[] rowLocation = new int[2];
+        targetView.getLocationOnScreen(hostLocation);
+        getLocationOnScreen(rowLocation);
+        return (hostLocation[0] + event.getX()) - rowLocation[0];
+    }
+
+    private float resolvePinnedBarLocalY(@NonNull View targetView, @NonNull DragEvent event) {
+        int[] hostLocation = new int[2];
+        int[] rowLocation = new int[2];
+        targetView.getLocationOnScreen(hostLocation);
+        getLocationOnScreen(rowLocation);
+        return (hostLocation[1] + event.getY()) - rowLocation[1];
     }
 
     private boolean applyPinnedDrop(@NonNull PinnedDragState dragState, int targetIndex, @Nullable PinnedItem targetItem, float dropXRatio) {
