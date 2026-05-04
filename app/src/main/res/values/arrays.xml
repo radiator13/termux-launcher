@@ -20,4 +20,14 @@
         <item>balanced</item>
         <item>loose</item>
     </string-array>
+    <string-array name="app_launcher_az_lock_method_entries">
+        <item>@string/termux_app_launcher_az_lock_method_off</item>
+        <item>@string/termux_app_launcher_az_lock_method_shizuku</item>
+        <item>@string/termux_app_launcher_az_lock_method_accessibility</item>
+    </string-array>
+    <string-array name="app_launcher_az_lock_method_values">
+        <item>off</item>
+        <item>shizuku</item>
+        <item>accessibility</item>
+    </string-array>
 </resources>

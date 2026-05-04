@@ -198,8 +198,20 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_PINNED_ITEMS_SCHEMA_VERSION, version, true);
     }
 
+    public boolean isAppLauncherAppsRowEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_APPS_ROW_ENABLED,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_APPS_ROW_ENABLED);
+    }
+
+    public void setAppLauncherAppsRowEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_APPS_ROW_ENABLED, value, false);
+        if (!value) {
+            setAppLauncherAzRowEnabled(false);
+        }
+    }
+
     public boolean isAppLauncherAzRowEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_ROW_ENABLED,
+        return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_ROW_ENABLED,
             TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_ROW_ENABLED);
     }
 
@@ -208,12 +220,68 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public boolean isAppLauncherAzDoubleTapLockEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK);
+        return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU.equals(getAppLauncherAzLockMethod());
     }
 
     public void setAppLauncherAzDoubleTapLockEnabled(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK, value, false);
+        setAppLauncherAzLockMethod(value
+            ? TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU
+            : TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF);
+    }
+
+    public String getAppLauncherAzLockMethod() {
+        migrateAppLauncherAzLockMethodIfNeeded();
+        String value = SharedPreferenceUtils.getString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_AZ_LOCK_METHOD,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_LOCK_METHOD,
+            true
+        );
+        return normalizeAppLauncherAzLockMethod(value);
+    }
+
+    public void setAppLauncherAzLockMethod(String value) {
+        SharedPreferenceUtils.setString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_AZ_LOCK_METHOD,
+            normalizeAppLauncherAzLockMethod(value),
+            false
+        );
+    }
+
+    private void migrateAppLauncherAzLockMethodIfNeeded() {
+        if (mSharedPreferences == null || mSharedPreferences.contains(TERMUX_APP.KEY_APP_LAUNCHER_AZ_LOCK_METHOD)) {
+            return;
+        }
+        boolean legacyEnabled = SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK
+        );
+        SharedPreferenceUtils.setString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_AZ_LOCK_METHOD,
+            legacyEnabled
+                ? TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU
+                : TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF,
+            true
+        );
+    }
+
+    public static String normalizeAppLauncherAzLockMethod(@Nullable String value) {
+        if (value == null) {
+            return TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_LOCK_METHOD;
+        }
+        switch (value.trim().toLowerCase()) {
+            case TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU:
+                return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU;
+            case TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_ACCESSIBILITY:
+                return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_ACCESSIBILITY;
+            case TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF:
+            default:
+                return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF;
+        }
     }
 
     public boolean isAppLauncherAnimationsEnabled() {

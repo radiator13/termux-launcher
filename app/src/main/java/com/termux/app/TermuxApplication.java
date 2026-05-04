@@ -5,7 +5,6 @@ import android.content.Context;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.BuildConfig;
-import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.shared.errors.Error;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxBootstrap;
@@ -43,8 +42,6 @@ public class TermuxApplication extends Application {
         TermuxShellManager shellManager = TermuxShellManager.init(context);
         // Set NightMode.APP_NIGHT_MODE
         TermuxThemeUtils.setAppNightMode(properties.getNightMode());
-        // Initialize privileged backend system for enhanced operations
-        initPrivilegedBackend(context);
         // Check and create termux files directory. If failed to access it like in case of secondary
         // user or external sd card installation, then don't run files directory related code
         Error error = TermuxFileUtils.isTermuxFilesDirectoryAccessible(this, true, true);
@@ -74,28 +71,6 @@ public class TermuxApplication extends Application {
     public void onTerminate() {
         super.onTerminate();
         LauncherCtlApiServer.getInstance().stop();
-        PrivilegedBackendManager.getInstance().cleanup();
-    }
-
-    /**
-     * Initialize the privileged backend system for enhanced operations
-     */
-    private void initPrivilegedBackend(Context context) {
-        Logger.logInfo(LOG_TAG, "Initializing privileged backend system...");
-        PrivilegedBackendManager.getInstance().initialize(context)
-            .thenAccept(success -> {
-                if (success) {
-                    Logger.logInfo(LOG_TAG, "Privileged backend initialized successfully");
-                    Logger.logInfo(LOG_TAG, "Backend status: " + PrivilegedBackendManager.getInstance().getStatusDescription());
-                } else {
-                    Logger.logWarn(LOG_TAG, "Privileged backend initialization failed or not available");
-                    Logger.logInfo(LOG_TAG, "Backend status: " + PrivilegedBackendManager.getInstance().getStatusDescription());
-                }
-            })
-            .exceptionally(throwable -> {
-                Logger.logErrorExtended(LOG_TAG, "Failed to initialize privileged backend: " + throwable.getMessage());
-                return null;
-            });
     }
 
     public static void setLogConfig(Context context) {

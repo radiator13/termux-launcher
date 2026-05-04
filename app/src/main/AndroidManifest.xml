@@ -236,6 +236,19 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".app.launcher.LockAccessibilityService"
+            android:exported="false"
+            android:label="@string/termux_app_launcher_az_lock_method_accessibility"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/lock_accessibility_service" />
+        </service>
+
         <!-- Shizuku Provider for privileged operations -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

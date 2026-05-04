@@ -46,6 +46,14 @@ public class PrivilegedAccessPreferencesFragment extends PreferenceFragmentCompa
     @Override
     public void onResume() {
         super.onResume();
+        Context context = getContext();
+        if (context != null) {
+            PrivilegedBackendManager.getInstance().initializeIfNeeded(context).thenAccept(success -> {
+                if (isAdded() && getActivity() != null) {
+                    getActivity().runOnUiThread(this::refreshStatusSummary);
+                }
+            });
+        }
         refreshStatusSummary();
     }
 
@@ -56,12 +64,18 @@ public class PrivilegedAccessPreferencesFragment extends PreferenceFragmentCompa
 
         preference.setOnPreferenceClickListener(clicked -> {
             PrivilegedBackendManager manager = PrivilegedBackendManager.getInstance();
-            boolean requested = manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
-            String message = requested ?
-                getString(R.string.termux_privileged_request_permission_requested) :
-                getString(R.string.termux_privileged_request_permission_unavailable);
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
-            refreshStatusSummary();
+            manager.initializeShizukuOnly(context).thenAccept(available -> {
+                boolean requested = manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
+                if (isAdded() && getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        String message = requested ?
+                            getString(R.string.termux_privileged_request_permission_requested) :
+                            getString(R.string.termux_privileged_request_permission_unavailable);
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+                        refreshStatusSummary();
+                    });
+                }
+            });
             return true;
         });
     }
@@ -72,6 +86,9 @@ public class PrivilegedAccessPreferencesFragment extends PreferenceFragmentCompa
             return;
 
         preference.setOnPreferenceChangeListener((changed, newValue) -> {
+            if (newValue instanceof Boolean) {
+                writePrivilegedToggle(context, key, (Boolean) newValue);
+            }
             PrivilegedBackendManager.getInstance().reselectBackend().thenAccept(success -> {
                 if (isAdded() && getActivity() != null) {
                     getActivity().runOnUiThread(this::refreshStatusSummary);
@@ -79,6 +96,22 @@ public class PrivilegedAccessPreferencesFragment extends PreferenceFragmentCompa
             });
             return true;
         });
+    }
+
+    private void writePrivilegedToggle(@NonNull Context context, @NonNull String key, boolean value) {
+        switch (key) {
+            case PrivilegedPolicyStore.KEY_MASTER_ENABLED:
+                PrivilegedPolicyStore.setMasterEnabled(context, value);
+                break;
+            case PrivilegedPolicyStore.KEY_PREFER_SHIZUKU:
+                PrivilegedPolicyStore.setPreferShizuku(context, value);
+                break;
+            case PrivilegedPolicyStore.KEY_ALLOW_SHELL_FALLBACK:
+                PrivilegedPolicyStore.setShellFallbackEnabled(context, value);
+                break;
+            default:
+                break;
+        }
     }
 
     private void refreshStatusSummary() {

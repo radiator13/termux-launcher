@@ -572,6 +572,13 @@ public class LauncherCtlApiServer {
         }
 
         PrivilegedBackendManager manager = PrivilegedBackendManager.getInstance();
+        try {
+            manager.initializeIfNeeded(context).get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            JSONObject error = jsonError("backend_init_failed", e.getMessage());
+            error.put("_statusCode", 500);
+            return error;
+        }
         if (manager.getBackendType() == PrivilegedBackend.Type.SHIZUKU && !manager.getBackend().hasPermission()) {
             boolean requested = manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
             JSONObject error = jsonError("permission_required",

@@ -214,8 +214,13 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 TermuxActivity.updateTermuxActivityStyling(mContext, false);
                 break;
+            case "app_launcher_apps_row_enabled":
+                mPreferences.setAppLauncherAppsRowEnabled(value);
+                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                break;
             case "app_launcher_az_row_enabled":
                 mPreferences.setAppLauncherAzRowEnabled(value);
+                TermuxActivity.updateTermuxActivityStyling(mContext, false);
                 break;
             case "app_launcher_az_double_tap_lock":
                 mPreferences.setAppLauncherAzDoubleTapLockEnabled(value);
@@ -241,6 +246,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return true;
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
+            case "app_launcher_apps_row_enabled":
+                return mPreferences.isAppLauncherAppsRowEnabled();
             case "app_launcher_az_row_enabled":
                 return mPreferences.isAppLauncherAzRowEnabled();
             case "app_launcher_az_double_tap_lock":
@@ -343,6 +350,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "app_launcher_input_char":
                 mPreferences.setAppLauncherInputChar(value);
                 break;
+            case "app_launcher_az_lock_method":
+                mPreferences.setAppLauncherAzLockMethod(value);
+                break;
             case "app_launcher_default_buttons":
                 mPreferences.setAppLauncherDefaultButtons(value);
                 break;
@@ -402,6 +412,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.getAppLauncherSearchMode();
             case "app_launcher_input_char":
                 return mPreferences.getAppLauncherInputChar();
+            case "app_launcher_az_lock_method":
+                return mPreferences.getAppLauncherAzLockMethod();
             case "app_launcher_default_buttons":
                 return mPreferences.getAppLauncherDefaultButtons();
             case "app_launcher_bar_height":

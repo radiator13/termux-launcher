@@ -35,6 +35,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -72,6 +73,7 @@ import com.termux.app.api.file.FileReceiverActivity;
 import com.termux.app.launcher.animation.LauncherTransitionController;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
+import com.termux.app.launcher.LockAccessibilityService;
 import com.termux.launcherctl.LauncherCtlApiServer;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.ShizukuBackend;
@@ -91,6 +93,7 @@ import com.termux.app.activities.SettingsActivity;
 import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
 import com.termux.app.terminal.TermuxTerminalViewClient;
@@ -934,13 +937,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final class AccessoryRenderState {
         final boolean toolbarShown;
         final boolean blurEnabled;
+        final boolean appsRowEnabled;
         final boolean azRowEnabled;
         final float barAlpha;
         final int blurRadiusDp;
 
-        AccessoryRenderState(boolean toolbarShown, boolean blurEnabled, boolean azRowEnabled, float barAlpha, int blurRadiusDp) {
+        AccessoryRenderState(boolean toolbarShown, boolean blurEnabled, boolean appsRowEnabled, boolean azRowEnabled, float barAlpha, int blurRadiusDp) {
             this.toolbarShown = toolbarShown;
             this.blurEnabled = blurEnabled;
+            this.appsRowEnabled = appsRowEnabled;
             this.azRowEnabled = azRowEnabled;
             this.barAlpha = barAlpha;
             this.blurRadiusDp = blurRadiusDp;
@@ -973,12 +978,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private AccessoryRenderState buildAccessoryRenderState() {
         if (mPreferences == null) {
-            return new AccessoryRenderState(false, false, false, 1.0f, 0);
+            return new AccessoryRenderState(false, false, false, false, 1.0f, 0);
         }
+        boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
         return new AccessoryRenderState(
             mPreferences.shouldShowTerminalToolbar(),
             mPreferences.getExtraKeysBlurRadius() > 0,
-            mPreferences.isAppLauncherAzRowEnabled(),
+            appsRowEnabled,
+            appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled(),
             mPreferences.getAppBarOpacity() / 100f,
             mPreferences.getExtraKeysBlurRadius()
         );
@@ -1310,7 +1317,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             accessorySurfaceHost.setVisibility(View.VISIBLE);
         }
         if (appsBarViewPager != null) {
-            appsBarViewPager.setVisibility(View.VISIBLE);
+            appsBarViewPager.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (!state.appsRowEnabled) {
+            mSuggestionBarExplicitSearchActive = false;
+            resetAzGestureState(false, true);
         }
         if (indicatorBand != null) {
             indicatorBand.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
@@ -1763,9 +1774,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);
         applySuggestionBarPreferences();
         applyDockLayoutMetrics(buildDockLayoutMetrics(0));
-        mSuggestionBarView.reload();
+        if (isSuggestionBarEnabled()) {
+            mSuggestionBarView.reload();
+        }
         mSuggestionBarView.post(() -> {
-            if (mSuggestionBarView == null || !mIsVisible) {
+            if (mSuggestionBarView == null || !mIsVisible || !isSuggestionBarEnabled()) {
                 return;
             }
             scheduleLauncherCatalogWarmup();
@@ -1858,8 +1871,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return trimmed.isEmpty() ? ' ' : trimmed.charAt(0);
     }
 
+    private boolean isSuggestionBarEnabled() {
+        return mPreferences != null && mPreferences.isAppLauncherAppsRowEnabled();
+    }
+
+    private boolean isAzRowEnabled() {
+        return isSuggestionBarEnabled() && mPreferences.isAppLauncherAzRowEnabled();
+    }
+
     public boolean shouldProcessSuggestionBarKeyEvent(int keyCode) {
-        if (mSuggestionBarView == null) {
+        if (!isSuggestionBarEnabled() || mSuggestionBarView == null) {
             return false;
         }
         if (keyCode == android.view.KeyEvent.KEYCODE_DEL || keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
@@ -1869,7 +1890,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public boolean shouldProcessSuggestionBarCodePoint(int codePoint, boolean ctrlDown) {
-        if (ctrlDown || mSuggestionBarView == null) {
+        if (ctrlDown || !isSuggestionBarEnabled() || mSuggestionBarView == null) {
             return false;
         }
         if (mSuggestionBarExplicitSearchActive || mSuggestionBarView.isSearchSurfaceActive()) {
@@ -1936,6 +1957,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherTransitionController != null) {
             mLauncherTransitionController.onAnimationPreferenceUpdated();
         }
+        if (!isSuggestionBarEnabled()) {
+            mSuggestionBarExplicitSearchActive = false;
+            resetAzGestureState(false, true);
+            resetAzOverflowAffordanceState();
+            return;
+        }
         mSuggestionBarView.reloadAllApps();
         String input = "";
         if (mTerminalView != null && mSuggestionBarExplicitSearchActive) {
@@ -1951,7 +1978,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void syncAzScrubLettersAndTint() {
-        if (mAzScrubRowView == null || mSuggestionBarView == null) return;
+        if (!isAzRowEnabled() || mAzScrubRowView == null || mSuggestionBarView == null) return;
         Set<Character> letters = new LinkedHashSet<>(mSuggestionBarView.getAvailableAzLetters());
         mAzScrubRowView.setVisibleLetters(letters);
         int base = resolveAzGestureAccentColor();
@@ -1985,12 +2012,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mAzScrubRowView.getParent() instanceof ViewGroup) {
             ViewGroup parent = (ViewGroup) mAzScrubRowView.getParent();
-            parent.setClipChildren(false);
-            parent.setClipToPadding(false);
+            parent.setClipChildren(true);
+            parent.setClipToPadding(true);
             if (parent.getParent() instanceof ViewGroup) {
                 ViewGroup grandParent = (ViewGroup) parent.getParent();
-                grandParent.setClipChildren(false);
-                grandParent.setClipToPadding(false);
+                grandParent.setClipChildren(true);
+                grandParent.setClipToPadding(true);
             }
         }
     }
@@ -2004,7 +2031,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float rawY,
         @NonNull AzScrubRowView.GesturePhase phase
     ) {
-        if (mSuggestionBarView == null || mAzScrubRowView == null) {
+        if (!isAzRowEnabled() || mSuggestionBarView == null || mAzScrubRowView == null) {
             return;
         }
 
@@ -2198,6 +2225,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void updateAzOverlayState(@Nullable SuggestionBarView.AzDragFocusResult focusResult, char activeLetter) {
+        if (!isAzRowEnabled()) {
+            return;
+        }
         if (mLauncherAzGestureFxUnderlayView == null && mLauncherAzGestureFxOverlayView == null) {
             return;
         }
@@ -2278,6 +2308,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void updateAzOverflowAffordance() {
+        if (!isSuggestionBarEnabled()) {
+            resetAzOverflowAffordanceState();
+            return;
+        }
         if ((mLauncherAzGestureFxUnderlayView == null && mLauncherAzGestureFxOverlayView == null) || mSuggestionBarView == null) {
             return;
         }
@@ -2404,7 +2438,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void updateAzEdgePagingLoop(@Nullable SuggestionBarView.AzDragFocusResult focusResult) {
         stopAzEdgePagingLoop();
-        if (!mAzGestureActive || mAzGestureMode != AzGestureMode.ICON_TRACKING_LOCKED || focusResult == null) {
+        if (!isAzRowEnabled() || !mAzGestureActive || mAzGestureMode != AzGestureMode.ICON_TRACKING_LOCKED || focusResult == null) {
             return;
         }
         if (focusResult.edge != SuggestionBarView.AZ_EDGE_LEFT && focusResult.edge != SuggestionBarView.AZ_EDGE_RIGHT) {
@@ -2443,6 +2477,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void scheduleAzOverflowRefresh() {
+        if (!isSuggestionBarEnabled()) {
+            return;
+        }
         cancelAzOverflowRefresh();
         mAzOverflowRefreshRunnable = this::updateAzOverflowAffordance;
         mAzGestureHandler.postDelayed(mAzOverflowRefreshRunnable, AZ_PREVIEW_TIMEOUT_REFRESH_MS);
@@ -2518,14 +2555,34 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void lockScreenFromAzDoubleTap() {
-        if (mPreferences == null || !mPreferences.isAppLauncherAzDoubleTapLockEnabled()) {
+        if (mPreferences == null || !mPreferences.isAppLauncherAzRowEnabled()) {
             return;
         }
+        String method = mPreferences.getAppLauncherAzLockMethod();
+        if (TermuxPreferenceConstants.TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU.equals(method)) {
+            lockScreenWithShizuku();
+        } else if (TermuxPreferenceConstants.TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_ACCESSIBILITY.equals(method)) {
+            lockScreenWithAccessibility();
+        }
+    }
+
+    private void lockScreenWithShizuku() {
         PrivilegedBackendManager manager = PrivilegedBackendManager.getInstance();
-        if (!manager.isPrivilegedAvailable()) {
-            manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
-            return;
-        }
+        manager.initializeShizukuOnly(this)
+            .thenAccept(available -> {
+                if (!available || !manager.isPrivilegedAvailable()) {
+                    manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
+                    return;
+                }
+                executeShizukuLockCommand(manager);
+            })
+            .exceptionally(throwable -> {
+                Logger.logWarn(LOG_TAG, "A-Z Shizuku lock initialization failed: " + throwable.getMessage());
+                return null;
+            });
+    }
+
+    private void executeShizukuLockCommand(@NonNull PrivilegedBackendManager manager) {
         manager.executeCommand("input keyevent 223")
             .thenAccept(output -> {
                 if (isSuccessfulPrivilegedCommandOutput(output)) {
@@ -2546,6 +2603,52 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 Logger.logWarn(LOG_TAG, "A-Z double tap lock command failed: " + throwable.getMessage());
                 return null;
             });
+    }
+
+    private void lockScreenWithAccessibility() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            showEnableAccessibilityLockDialog();
+            return;
+        }
+        if (isLockAccessibilityServiceEnabled() && LockAccessibilityService.lockScreen()) {
+            return;
+        }
+        showEnableAccessibilityLockDialog();
+    }
+
+    private boolean isLockAccessibilityServiceEnabled() {
+        String enabledServices = Settings.Secure.getString(
+            getContentResolver(),
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        );
+        if (TextUtils.isEmpty(enabledServices)) {
+            return false;
+        }
+        ComponentName componentName = new ComponentName(this, LockAccessibilityService.class);
+        TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(':');
+        splitter.setString(enabledServices);
+        while (splitter.hasNext()) {
+            ComponentName enabled = ComponentName.unflattenFromString(splitter.next());
+            if (componentName.equals(enabled)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showEnableAccessibilityLockDialog() {
+        runOnUiThread(() -> new MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.termux_app_launcher_accessibility_lock_prompt_title)
+            .setMessage(R.string.termux_app_launcher_accessibility_lock_prompt_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.termux_app_launcher_accessibility_lock_prompt_enable, (dialog, which) -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                } catch (ActivityNotFoundException e) {
+                    Toast.makeText(this, R.string.termux_app_launcher_set_home_unavailable, Toast.LENGTH_SHORT).show();
+                }
+            })
+            .show());
     }
 
     private boolean isSuccessfulPrivilegedCommandOutput(String output) {
@@ -2644,19 +2747,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         DockLayoutMetrics dockMetrics = buildDockLayoutMetrics(0);
         applyDockLayoutMetrics(dockMetrics);
         int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
-        updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
-        if (requestTerminalResize && mTerminalView != null) {
+        boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
+        if (requestTerminalResize && accessoryHeightChanged && mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);
         }
         scheduleAccessoryRenderSync("setTerminalToolbarHeight");
     }
 
-    private void updateAccessoryStackContainerHeight(View view, int height) {
+    private boolean updateAccessoryStackContainerHeight(View view, int height) {
         ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
         if (layoutParams == null)
-            return;
+            return false;
+        if (layoutParams.height == height)
+            return false;
         layoutParams.height = height;
         view.setLayoutParams(layoutParams);
+        return true;
     }
 
     // Kept for test compatibility and to preserve existing RelativeLayout params in-place.
@@ -2702,10 +2808,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float density = getResources().getDisplayMetrics().density;
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
-        int appsBarHeightPx = Math.max(0,
-            Math.round(getDockBaseToolbarHeightPx() * (1.08f + (normalizedScale * 0.30f))) + Math.max(0, additionalAppsBarHeightPx));
+        boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
+        int appsBarHeightPx = appsRowEnabled
+            ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * (1.08f + (normalizedScale * 0.30f))) + Math.max(0, additionalAppsBarHeightPx))
+            : 0;
 
-        boolean azEnabled = mPreferences.isAppLauncherAzRowEnabled();
+        boolean azEnabled = appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled();
         int azRowHeightPx = 0;
         int indicatorBandHeightPx = 0;
         if (azEnabled) {
@@ -3410,7 +3518,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public void reloadSuggestionBar(char inputChar) {
-        if (mSuggestionBarView == null || mTerminalView == null) {
+        if (!isSuggestionBarEnabled() || mSuggestionBarView == null || mTerminalView == null) {
             return;
         }
         resetAzGestureState(false, true);
@@ -3436,7 +3544,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public void reloadSuggestionBar(boolean delete, boolean enter) {
-        if (mSuggestionBarView == null || mTerminalView == null) {
+        if (!isSuggestionBarEnabled() || mSuggestionBarView == null || mTerminalView == null) {
             return;
         }
         resetAzGestureState(false, true);
@@ -3620,7 +3728,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void refreshSuggestionBarFromPackageState(boolean forceCatalogRefresh) {
-        if (mSuggestionBarView == null) {
+        if (!isSuggestionBarEnabled() || mSuggestionBarView == null) {
             return;
         }
         if (forceCatalogRefresh) {
@@ -3798,6 +3906,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void scheduleSuggestionBarPackageRefresh(boolean immediate, boolean forceCatalogRefresh) {
+        if (!isSuggestionBarEnabled()) {
+            mPackageRefreshForceCatalogReload = false;
+            mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
+            return;
+        }
         mPackageRefreshForceCatalogReload = mPackageRefreshForceCatalogReload || forceCatalogRefresh;
         mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
         if (immediate) {
@@ -3811,13 +3924,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void scheduleLauncherCatalogWarmup() {
         mAzGestureHandler.removeCallbacks(mLauncherCatalogWarmRunnable);
-        if (mIsVisible && mSuggestionBarView != null) {
+        if (mIsVisible && isSuggestionBarEnabled() && mSuggestionBarView != null) {
             mAzGestureHandler.postDelayed(mLauncherCatalogWarmRunnable, LAUNCHER_CATALOG_WARM_DELAY_MS);
         }
     }
 
     private void runLauncherCatalogWarmup() {
-        if (!mIsVisible || mSuggestionBarView == null) {
+        if (!mIsVisible || !isSuggestionBarEnabled() || mSuggestionBarView == null) {
             return;
         }
         mSuggestionBarView.reloadAllApps();

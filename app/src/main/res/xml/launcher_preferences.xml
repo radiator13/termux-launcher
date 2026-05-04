@@ -2,8 +2,39 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        app:key="apps_bar_primary"
+        app:title="@string/termux_app_launcher_header">
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_apps_row_enabled"
+            app:title="@string/termux_app_launcher_apps_row_enabled_title"
+            app:summary="@string/termux_app_launcher_apps_row_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_az_row_enabled"
+            app:title="@string/termux_app_launcher_az_row_enabled_title"
+            app:dependency="app_launcher_apps_row_enabled"
+            android:defaultValue="false" />
+
+        <ListPreference
+            app:key="app_launcher_az_lock_method"
+            app:title="@string/termux_app_launcher_az_double_tap_lock_title"
+            app:summary="@string/termux_app_launcher_az_double_tap_lock_summary"
+            android:defaultValue="off"
+            app:entries="@array/app_launcher_az_lock_method_entries"
+            app:entryValues="@array/app_launcher_az_lock_method_values" />
+
+        <Preference
+            app:key="app_launcher_set_home"
+            app:title="@string/termux_app_launcher_set_home_title"
+            app:summary="@string/termux_app_launcher_set_home_summary" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:key="apps_bar_search"
-        app:title="@string/apps_bar_search_header">
+        app:title="@string/termux_app_launcher_search_header">
 
         <ListPreference
             app:key="app_launcher_search_mode"
@@ -18,17 +49,6 @@
             app:summary="@string/termux_app_launcher_input_char_summary"
             android:defaultValue="%"
             android:inputType="text" />
-
-        <SwitchPreferenceCompat
-            app:key="app_launcher_az_row_enabled"
-            app:title="@string/termux_app_launcher_az_row_enabled_title"
-            android:defaultValue="false" />
-
-        <SwitchPreferenceCompat
-            app:key="app_launcher_az_double_tap_lock"
-            app:title="@string/termux_app_launcher_az_double_tap_lock_title"
-            app:summary="@string/termux_app_launcher_az_double_tap_lock_summary"
-            android:defaultValue="false" />
 
         <Preference
             app:key="app_launcher_reset_usage_ranking"

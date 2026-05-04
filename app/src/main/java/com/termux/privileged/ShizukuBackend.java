@@ -89,6 +89,7 @@ public class ShizukuBackend implements PrivilegedBackend {
                 if (Shizuku.isPreV11()) {
                     Log.w(TAG, "Shizuku pre-v11 not supported");
                     isAvailable = false;
+                    cleanup();
                     return false;
                 }
 
@@ -108,6 +109,7 @@ public class ShizukuBackend implements PrivilegedBackend {
                 Log.e(TAG, "Failed to initialize Shizuku backend", e);
                 isAvailable = false;
                 hasPermission = false;
+                cleanup();
                 return false;
             }
         });

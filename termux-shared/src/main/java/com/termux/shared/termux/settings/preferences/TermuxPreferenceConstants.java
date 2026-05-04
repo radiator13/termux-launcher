@@ -151,6 +151,13 @@ public final class TermuxPreferenceConstants {
         public static final String DEFAULT_APP_LAUNCHER_DEFAULT_BUTTONS = "";
 
         /**
+         * Defines the key for enabling the launcher app icons row.
+         */
+        public static final String KEY_APP_LAUNCHER_APPS_ROW_ENABLED = "app_launcher_apps_row_enabled";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_APPS_ROW_ENABLED = true;
+
+        /**
          * Defines the key for app launcher bar height scale.
          */
         public static final String KEY_APP_LAUNCHER_BAR_HEIGHT = "app_launcher_bar_height";
@@ -198,6 +205,19 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK = "app_launcher_az_double_tap_lock";
 
         public static final boolean DEFAULT_APP_LAUNCHER_AZ_DOUBLE_TAP_LOCK = false;
+
+        /**
+         * Defines the selected backend for double-tap on A-Z row to lock screen.
+         */
+        public static final String KEY_APP_LAUNCHER_AZ_LOCK_METHOD = "app_launcher_az_lock_method";
+
+        public static final String APP_LAUNCHER_AZ_LOCK_METHOD_OFF = "off";
+
+        public static final String APP_LAUNCHER_AZ_LOCK_METHOD_SHIZUKU = "shizuku";
+
+        public static final String APP_LAUNCHER_AZ_LOCK_METHOD_ACCESSIBILITY = "accessibility";
+
+        public static final String DEFAULT_APP_LAUNCHER_AZ_LOCK_METHOD = APP_LAUNCHER_AZ_LOCK_METHOD_OFF;
 
         /**
          * Defines the key for enabling launcher app open/close animations.

@@ -51,6 +51,7 @@ public class PrivilegedBackendManager {
     private PrivilegedBackend currentBackend = new NoOpBackend();
     private ShizukuBackend shizukuBackend;
     private ShellBackend shellBackend;
+    private boolean shizukuOnlyMode;
 
     private final ShizukuBackend.Callback shizukuCallback = new ShizukuBackend.Callback() {
         @Override
@@ -82,9 +83,34 @@ public class PrivilegedBackendManager {
 
     public CompletableFuture<Boolean> initialize(Context context) {
         this.applicationContext = context.getApplicationContext();
+        shizukuOnlyMode = false;
         updateState(BackendState.INITIALIZING, StatusReason.UNAVAILABLE, "Choosing backend");
 
         return CompletableFuture.supplyAsync(this::reselectBackendInternal, getExecutorService());
+    }
+
+    public CompletableFuture<Boolean> initializeIfNeeded(Context context) {
+        if (applicationContext == null) {
+            return initialize(context);
+        }
+        BackendState state = getBackendState();
+        if (state == BackendState.UNINITIALIZED || state == BackendState.UNAVAILABLE || state == BackendState.SERVICE_NOT_RUNNING) {
+            return reselectBackend();
+        }
+        return CompletableFuture.completedFuture(isPrivilegedAvailable());
+    }
+
+    public CompletableFuture<Boolean> initializeShizukuOnly(Context context) {
+        this.applicationContext = context.getApplicationContext();
+        shizukuOnlyMode = true;
+        updateState(BackendState.INITIALIZING, StatusReason.UNAVAILABLE, "Initializing Shizuku");
+        return CompletableFuture.supplyAsync(() -> {
+            boolean initialized = attemptShizukuInitialization(applicationContext);
+            if (!initialized) {
+                fallbackToNoOp("Shizuku unavailable");
+            }
+            return initialized;
+        }, getExecutorService());
     }
 
     public CompletableFuture<Boolean> reselectBackend() {
@@ -127,9 +153,13 @@ public class PrivilegedBackendManager {
     }
 
     private boolean attemptShizukuInitialization(Context context) {
+        if (shizukuBackend != null && shizukuBackend != currentBackend) {
+            shizukuBackend.cleanup();
+        }
         shizukuBackend = new ShizukuBackend(shizukuCallback);
         boolean initialized = shizukuBackend.initialize(context).join();
         if (!initialized || !shizukuBackend.isAvailable()) {
+            shizukuBackend.cleanup();
             updateState(BackendState.SERVICE_NOT_RUNNING, StatusReason.SERVICE_NOT_RUNNING,
                 "Shizuku service not running");
             return false;
@@ -182,7 +212,9 @@ public class PrivilegedBackendManager {
         } else {
             applyBackend(currentBackend, BackendState.PERMISSION_DENIED, StatusReason.DENIED,
                 "Shizuku permission denied");
-            fallbackToShell("Shizuku permission denied");
+            if (!shizukuOnlyMode) {
+                fallbackToShell("Shizuku permission denied");
+            }
         }
     }
 
@@ -193,7 +225,9 @@ public class PrivilegedBackendManager {
 
         updateState(BackendState.SERVICE_NOT_RUNNING, StatusReason.BINDER_DEAD,
             "Shizuku binder died");
-        fallbackToShell("Shizuku binder dead");
+        if (!shizukuOnlyMode) {
+            fallbackToShell("Shizuku binder dead");
+        }
     }
 
     private void handleShizukuBinderReceived() {
