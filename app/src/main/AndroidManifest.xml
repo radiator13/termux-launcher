@@ -239,7 +239,7 @@
         <service
             android:name=".app.launcher.LockAccessibilityService"
             android:exported="false"
-            android:label="@string/termux_app_launcher_az_lock_method_accessibility"
+            android:label="@string/application_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
