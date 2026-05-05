@@ -212,15 +212,15 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 break;
             case "app_launcher_bw_icons":
                 mPreferences.setAppLauncherBwIconsEnabled(value);
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             case "app_launcher_apps_row_enabled":
                 mPreferences.setAppLauncherAppsRowEnabled(value);
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             case "app_launcher_az_row_enabled":
                 mPreferences.setAppLauncherAzRowEnabled(value);
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             case "app_launcher_az_double_tap_lock":
                 mPreferences.setAppLauncherAzDoubleTapLockEnabled(value);
@@ -280,17 +280,17 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 break;
             case "app_launcher_button_count":
                 mPreferences.setAppLauncherButtonCount(value);
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             case "app_launcher_icon_scale_percent":
                 mPreferences.setAppLauncherBarHeightScale(TermuxStylePreferencesFragment.barHeightForPreset(value));
                 mPreferences.setAppLauncherIconScale(TermuxStylePreferencesFragment.iconScaleForPreset(value));
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             case "app_launcher_bar_height_percent":
                 mPreferences.setAppLauncherBarHeightScale(TermuxStylePreferencesFragment.barHeightForPreset(value));
                 mPreferences.setAppLauncherIconScale(TermuxStylePreferencesFragment.iconScaleForPreset(value));
-                TermuxActivity.updateTermuxActivityStyling(mContext, false);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             default:
                 break;
