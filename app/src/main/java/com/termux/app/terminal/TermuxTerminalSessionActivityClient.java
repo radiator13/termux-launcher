@@ -157,21 +157,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void onTextChanged(@NonNull TerminalSession changedSession) {
         if (!mActivity.isVisible())
             return;
-        if (mForegroundRefreshPending)
-            return;
-        if (mActivity.getCurrentSession() != changedSession)
-            return;
-        if (mTerminalScreenUpdatePending)
-            return;
-        long now = SystemClock.uptimeMillis();
-        updateBurstTracking(now);
-        mTerminalScreenUpdatePending = true;
-        long updateDelayMs = computeTerminalScreenUpdateDelayMs(now);
-        if (updateDelayMs > 0) {
-            mUiHandler.postDelayed(mTerminalScreenUpdateRunnable, updateDelayMs);
-        } else {
-            mUiHandler.post(mTerminalScreenUpdateRunnable);
-        }
+        if (mActivity.getCurrentSession() == changedSession)
+            mActivity.getTerminalView().onScreenUpdated();
     }
 
     private void updateBurstTracking(long now) {
