@@ -73,22 +73,27 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
     }
 
     private void openHomeLauncherSettings(Context context) {
-        Intent intent = null;
+        Intent intent = new Intent(Settings.ACTION_HOME_SETTINGS);
+        if (startSettingsIntent(context, intent)) {
+            return;
+        }
+
+        intent = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+        if (startSettingsIntent(context, intent)) {
+            return;
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             RoleManager roleManager = context.getSystemService(RoleManager.class);
             if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME) && !roleManager.isRoleHeld(RoleManager.ROLE_HOME)) {
                 intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME);
-            }
-        }
-        if (!startSettingsIntent(context, intent)) {
-            intent = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
-            if (!startSettingsIntent(context, intent)) {
-                intent = new Intent(Settings.ACTION_HOME_SETTINGS);
-                if (!startSettingsIntent(context, intent)) {
-                    Toast.makeText(context, R.string.termux_app_launcher_set_home_unavailable, Toast.LENGTH_SHORT).show();
+                if (startSettingsIntent(context, intent)) {
+                    return;
                 }
             }
         }
+
+        Toast.makeText(context, R.string.termux_app_launcher_set_home_unavailable, Toast.LENGTH_SHORT).show();
     }
 
     private boolean startSettingsIntent(Context context, Intent intent) {
