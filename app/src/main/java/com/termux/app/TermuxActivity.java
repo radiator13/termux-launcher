@@ -694,14 +694,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             boolean showSurface = shouldShowTerminalOverlaySurface();
             int terminalSurfaceColor = showSurface ? resolveTerminalSurfaceColor() : Color.TRANSPARENT;
             terminalSurfaceHost.setBackgroundColor(Color.TRANSPARENT);
-            terminalBodySurface.setBackgroundColor(Color.TRANSPARENT);
-            terminalBodySurface.setVisibility(View.GONE);
+            terminalBodySurface.setBackgroundColor(terminalSurfaceColor);
+            terminalBodySurface.setVisibility(showSurface && Color.alpha(terminalSurfaceColor) > 0 ? View.VISIBLE : View.GONE);
             terminalStatusSurface.setBackgroundColor(terminalSurfaceColor);
             terminalStatusSurface.setVisibility(shouldShowTerminalStatusBarSurface(showSurface, terminalSurfaceColor) ? View.VISIBLE : View.GONE);
             if (terminalView != null) {
                 terminalView.setBackgroundColor(Color.TRANSPARENT);
                 if (terminalView instanceof TerminalView) {
-                    ((TerminalView) terminalView).setTransparentFrameOverlayColor(terminalSurfaceColor);
+                    ((TerminalView) terminalView).setTransparentFrameOverlayColor(Color.TRANSPARENT);
                 }
             }
             applyTerminalStatusBarSurfaceColor(showSurface, terminalSurfaceColor);
@@ -1392,7 +1392,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTerminalView == null) {
             return;
         }
-        mTerminalView.setUseTransparentFrameClear(shouldUseWallpaperPassthroughMode());
+        mTerminalView.setUseTransparentFrameClear(false);
     }
 
     private boolean shouldEnableSeamlessStatusBackground() {
