@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -264,8 +265,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private Intent mPendingLaunchIntent;
     private boolean mLastLaunchWasLauncherEntry;
-    private static final long FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS = 1800L;
-    private static long sSuppressEmptyHomeSessionUntilElapsedMs;
+    private static final long FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS = 6000L;
+    private static final String KEY_FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_UNTIL =
+        "termux_launcher_final_session_home_relaunch_suppress_until";
 
     /**
      * If activity was restarted like due to call to {@link #recreate()} after receiving
@@ -1665,9 +1667,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldSuppressEmptyHomeSessionStart(@Nullable Intent intent, @NonNull String source) {
-        long suppressUntil = sSuppressEmptyHomeSessionUntilElapsedMs;
+        long suppressUntil = getFinalSessionHomeRelaunchSuppressUntil();
         if (suppressUntil <= 0 || SystemClock.elapsedRealtime() > suppressUntil) {
-            sSuppressEmptyHomeSessionUntilElapsedMs = 0L;
+            clearFinalSessionHomeRelaunchSuppressUntil();
             return false;
         }
         if ((intent != null && isLauncherHomeIntent(intent)) || mLastLaunchWasLauncherEntry) {
@@ -3345,9 +3347,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void finishAfterLastSessionExit() {
         if (isDefaultHomeApp() || mLastLaunchWasLauncherEntry) {
-            sSuppressEmptyHomeSessionUntilElapsedMs = SystemClock.elapsedRealtime() + FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS;
+            setFinalSessionHomeRelaunchSuppressUntil(SystemClock.elapsedRealtime() + FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS);
+            moveTaskToBack(true);
         }
         finishActivityIfNotFinishing();
+    }
+
+    private long getFinalSessionHomeRelaunchSuppressUntil() {
+        SharedPreferences preferences = getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            MODE_PRIVATE
+        );
+        return preferences.getLong(KEY_FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_UNTIL, 0L);
+    }
+
+    private void setFinalSessionHomeRelaunchSuppressUntil(long elapsedRealtimeMs) {
+        getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            MODE_PRIVATE
+        ).edit().putLong(KEY_FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_UNTIL, elapsedRealtimeMs).apply();
+    }
+
+    private void clearFinalSessionHomeRelaunchSuppressUntil() {
+        getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            MODE_PRIVATE
+        ).edit().remove(KEY_FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_UNTIL).apply();
     }
 
     /**
