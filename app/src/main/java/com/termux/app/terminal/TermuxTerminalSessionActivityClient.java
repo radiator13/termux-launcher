@@ -157,8 +157,19 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void onTextChanged(@NonNull TerminalSession changedSession) {
         if (!mActivity.isVisible())
             return;
-        if (mActivity.getCurrentSession() == changedSession)
+        if (mActivity.getCurrentSession() != changedSession)
+            return;
+        if (mTerminalScreenUpdatePending)
+            return;
+        mTerminalScreenUpdatePending = true;
+        mActivity.getTerminalView().post(() -> {
+            mTerminalScreenUpdatePending = false;
+            if (!mActivity.isVisible())
+                return;
+            if (mActivity.getCurrentSession() != changedSession)
+                return;
             mActivity.getTerminalView().onScreenUpdated();
+        });
     }
 
     private void updateBurstTracking(long now) {
@@ -501,10 +512,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         int index = service.removeTermuxSession(finishedSession);
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
-            // Avoid finish/relaunch churn while acting as Home launcher; recreate session in-place.
-            if (!mActivity.recoverEmptyVisibleSessionInPlace(null, "last-session-finished")) {
-                mActivity.finishActivityIfNotFinishing();
-            }
+            mActivity.finishActivityIfNotFinishing();
         } else {
             if (index >= size) {
                 index = size - 1;
