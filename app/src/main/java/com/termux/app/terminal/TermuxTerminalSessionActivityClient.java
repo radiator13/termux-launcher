@@ -324,6 +324,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (mActivity.getTerminalView().attachSession(session)) {
             // notify about switched session if not already displaying the session
             notifyOfSessionChange();
+            if (mActivity.getTermuxTerminalViewClient() != null) {
+                mActivity.getTermuxTerminalViewClient().restartTerminalInputConnection();
+            }
         }
         // We call the following even when the session is already being displayed since config may
         // be stale, like current session not selected or scrolled to.
@@ -462,7 +465,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         int index = service.removeTermuxSession(finishedSession);
         int size = service.getTermuxSessionsSize();
         if (size == 0) {
-            mActivity.finishAfterLastSessionExit();
+            mActivity.finishActivityIfNotFinishing();
         } else {
             if (index >= size) {
                 index = size - 1;

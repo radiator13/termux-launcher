@@ -116,6 +116,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
      */
     public void onResume() {
         setSoftKeyboardState(true, mActivity.isActivityRecreated());
+        restartTerminalInputConnection();
         mTerminalCursorBlinkerStateAlreadySet = false;
         if (mActivity.getTerminalView().mEmulator != null) {
             // Start terminal cursor blinking if enabled
@@ -151,8 +152,14 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     public void onReloadActivityStyling() {
         // Show the soft keyboard if required
         setSoftKeyboardState(false, true);
+        restartTerminalInputConnection();
         // Start terminal cursor blinking if enabled
         setTerminalCursorBlinkerState(true);
+    }
+
+    public void restartTerminalInputConnection() {
+        mActivity.getTerminalView().requestFocus();
+        mActivity.getTerminalView().post(mActivity.getTerminalView()::restartInputConnection);
     }
 
     /**

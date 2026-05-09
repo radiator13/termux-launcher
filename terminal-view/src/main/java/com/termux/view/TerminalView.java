@@ -35,6 +35,7 @@ import android.view.autofill.AutofillValue;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Scroller;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
@@ -353,6 +354,13 @@ public final class TerminalView extends View {
         // Wait with enabling the scrollbar until we have a terminal to get scroll position from.
         setVerticalScrollBarEnabled(true);
         return true;
+    }
+
+    public void restartInputConnection() {
+        InputMethodManager inputMethodManager = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (inputMethodManager != null) {
+            inputMethodManager.restartInput(this);
+        }
     }
 
     @Override
