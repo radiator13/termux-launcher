@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.annotation.SuppressLint;
+import android.app.WallpaperInfo;
 import android.app.WallpaperManager;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -655,6 +656,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         syncRecentsVisibilityPolicy();
         applyWallpaperOffsetFixIfNeeded();
         configureBackgroundBlur(R.id.sessions_backgroundblur, R.id.sessions_background, false, mPreferences.getSessionsOpacity() / 100f, 0);
+        scheduleAccessoryRenderSync("wallpaper:resume");
         restartAccessoryBlurHeartbeat();
         scheduleAccessoryBlurRecovery();
         if (mSuggestionBarView != null) {
@@ -981,14 +983,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return new AccessoryRenderState(false, false, false, false, 1.0f, 0);
         }
         boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
+        int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         return new AccessoryRenderState(
             mPreferences.shouldShowTerminalToolbar(),
-            mPreferences.getExtraKeysBlurRadius() > 0,
+            blurRadiusDp > 0,
             appsRowEnabled,
             appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled(),
             mPreferences.getAppBarOpacity() / 100f,
-            mPreferences.getExtraKeysBlurRadius()
+            blurRadiusDp
         );
+    }
+
+    private int getEffectiveExtraKeysBlurRadius() {
+        if (mPreferences == null) {
+            return 0;
+        }
+        int blurRadiusDp = mPreferences.getExtraKeysBlurRadius();
+        if (blurRadiusDp <= 0 || isLiveWallpaperActive()) {
+            return 0;
+        }
+        return blurRadiusDp;
+    }
+
+    private boolean isLiveWallpaperActive() {
+        try {
+            WallpaperInfo wallpaperInfo = WallpaperManager.getInstance(this).getWallpaperInfo();
+            return wallpaperInfo != null;
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to detect live wallpaper state", e);
+            return false;
+        }
     }
 
     private void configureExtraKeysBackground() {
@@ -1948,7 +1972,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setIconScale(resolveDerivedDockIconScale());
         mSuggestionBarView.setDockRowHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx);
         mSuggestionBarView.setAppBarOpacity(mPreferences.getAppBarOpacity());
-        mSuggestionBarView.setBlurConfig(mPreferences.getExtraKeysBlurRadius() > 0, mPreferences.getExtraKeysBlurRadius());
+        int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
+        mSuggestionBarView.setBlurConfig(blurRadiusDp > 0, blurRadiusDp);
         mSuggestionBarView.setInheritedTintColor(resolveAccessoryGlassBaseColor());
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
