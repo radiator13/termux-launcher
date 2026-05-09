@@ -264,6 +264,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private Intent mPendingLaunchIntent;
     private boolean mLastLaunchWasLauncherEntry;
+    private static final long FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS = 1800L;
+    private static long sSuppressEmptyHomeSessionUntilElapsedMs;
 
     /**
      * If activity was restarted like due to call to {@link #recreate()} after receiving
@@ -1590,6 +1592,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         setIntent(null);
         if (mTermuxService.isTermuxSessionsEmpty()) {
+            if (shouldSuppressEmptyHomeSessionStart(intent, "service-connected")) {
+                finishActivityIfNotFinishing();
+                return;
+            }
             if (mIsVisible) {
                 if (!recoverEmptyVisibleSessionInPlace(intent, "service-connected")) {
                     startBootstrapAndSession(intent);
@@ -1651,7 +1657,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!mTermuxService.isTermuxSessionsEmpty()) {
             return;
         }
+        if (shouldSuppressEmptyHomeSessionStart(getIntent(), source)) {
+            finishActivityIfNotFinishing();
+            return;
+        }
         recoverEmptyVisibleSessionInPlace(null, source);
+    }
+
+    private boolean shouldSuppressEmptyHomeSessionStart(@Nullable Intent intent, @NonNull String source) {
+        long suppressUntil = sSuppressEmptyHomeSessionUntilElapsedMs;
+        if (suppressUntil <= 0 || SystemClock.elapsedRealtime() > suppressUntil) {
+            sSuppressEmptyHomeSessionUntilElapsedMs = 0L;
+            return false;
+        }
+        if ((intent != null && isLauncherHomeIntent(intent)) || mLastLaunchWasLauncherEntry) {
+            Logger.logWarn(LOG_TAG, "Suppressing immediate empty Home session start from " + source);
+            return true;
+        }
+        return false;
     }
 
     private boolean shouldRecoverEmptySessionInPlace() {
@@ -3318,6 +3341,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             else
                 finish();
         }
+    }
+
+    public void finishAfterLastSessionExit() {
+        if (isDefaultHomeApp() || mLastLaunchWasLauncherEntry) {
+            sSuppressEmptyHomeSessionUntilElapsedMs = SystemClock.elapsedRealtime() + FINAL_SESSION_HOME_RELAUNCH_SUPPRESS_MS;
+        }
+        finishActivityIfNotFinishing();
     }
 
     /**
