@@ -16,6 +16,12 @@ It provides menu entries for:
 - Styling the terminal by selecting a font and a color scheme.
 - Showing this help page.
 
+If terminal input or screen updates become unusually slow after an app
+update, launcher restart, or final shell exit, run
+`termux-reload-settings` from a terminal session. This refreshes the
+activity UI around the existing shell and can clear stale terminal view
+state.
+
 The navigation drawer is revealed by swiping inwards from the left part
 of the screen (if you have gesture navigation enabled in Android, you
 will need to hold briefly on the edge of the screen before swiping to

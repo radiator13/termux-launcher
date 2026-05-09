@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.13
+
+### Fixed
+- Fixed Shizuku reconnect after launcher restarts.
+- Fixed dock blur state with live wallpapers.
+- Improved terminal exit/relaunch behavior.
+- Performance refinements and cleanup.
+
 ## 0.2.10
 
 ### Changed

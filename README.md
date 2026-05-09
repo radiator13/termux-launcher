@@ -99,7 +99,13 @@ See [project-docs/dev-release-workflow.md](project-docs/dev-release-workflow.md)
 
 ## Troubleshooting
 
-If you encounter any issues, most of the times it will be fixed by running "termux-reload-settings" there is also "launcherctl restart" which emulates a full app force close and restart.
+If terminal input or screen updates become unusually slow after an app update, launcher restart, or final shell exit, run:
+
+```sh
+termux-reload-settings
+```
+
+This recreates the activity styling layer around the existing Termux session and usually clears stale terminal UI state. If the launcher itself needs a full restart, `launcherctl restart` emulates a full app close and restart.
 
 ## Demo
 

@@ -10,6 +10,12 @@ For changes to take effect after editing the properties file, either
 execute `termux-reload-settings` or restart Termux by closing all
 sessions and starting the application again.
 
+If terminal input or screen updates become unusually slow after an app
+update, launcher restart, or final shell exit, run
+`termux-reload-settings`. This reloads the activity styling layer around
+the existing session and can clear stale terminal UI state without
+changing your shell environment.
+
 # Dark theme
 
 Force the application to use dark theme for drawer and dialogs with
