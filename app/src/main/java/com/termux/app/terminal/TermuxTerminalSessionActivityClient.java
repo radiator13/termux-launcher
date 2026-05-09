@@ -12,7 +12,6 @@ import android.media.AudioAttributes;
 import android.media.SoundPool;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.text.TextUtils;
 import android.widget.ListView;
 import androidx.annotation.NonNull;
@@ -45,11 +44,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private static final int MAX_SESSIONS = 8;
     private static final long FOREGROUND_REFRESH_DEFER_MS = 120L;
-    private static final long WALLPAPER_STREAM_UPDATE_DELAY_MS = 20L;
-    private static final long STREAM_BURST_GAP_MS = 14L;
-    private static final long STREAM_BURST_WINDOW_MS = 180L;
-    private static final int STREAM_BURST_THRESHOLD = 6;
-    private static final long STREAM_BURST_FRAME_DELAY_MS = 24L;
 
     private SoundPool mBellSoundPool;
 
@@ -59,28 +53,14 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     private final Handler mUiHandler = new Handler(Looper.getMainLooper());
     private boolean mTerminalScreenUpdatePending;
     private boolean mForegroundRefreshPending;
-    private long mLastTextChangeUptimeMs;
-    private long mBurstWindowStartUptimeMs;
-    private int mBurstTextChangeCount;
-    private long mLastScreenUpdateDispatchUptimeMs;
-    private final Runnable mTerminalScreenUpdateRunnable;
     private final Runnable mForegroundTerminalRefreshRunnable;
 
     public TermuxTerminalSessionActivityClient(TermuxActivity activity) {
         this.mActivity = activity;
-        this.mTerminalScreenUpdateRunnable = () -> {
-            mTerminalScreenUpdatePending = false;
-            if (!mActivity.isVisible()) return;
-            if (mActivity.getCurrentSession() != null) {
-                mLastScreenUpdateDispatchUptimeMs = SystemClock.uptimeMillis();
-                mActivity.getTerminalView().onScreenUpdated();
-            }
-        };
         this.mForegroundTerminalRefreshRunnable = () -> {
             mForegroundRefreshPending = false;
             if (!mActivity.isVisible()) return;
             if (mActivity.getCurrentSession() != null) {
-                mLastScreenUpdateDispatchUptimeMs = SystemClock.uptimeMillis();
                 mActivity.getTerminalView().onScreenUpdated();
             }
         };
@@ -136,9 +116,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         releaseBellSoundPool();
         mTerminalScreenUpdatePending = false;
         mForegroundRefreshPending = false;
-        mUiHandler.removeCallbacks(mTerminalScreenUpdateRunnable);
         mUiHandler.removeCallbacks(mForegroundTerminalRefreshRunnable);
-        mBurstTextChangeCount = 0;
     }
 
     public void onImeVisibilityChanged(boolean visible) {
@@ -170,34 +148,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 return;
             mActivity.getTerminalView().onScreenUpdated();
         });
-    }
-
-    private void updateBurstTracking(long now) {
-        long sinceLastChange = now - mLastTextChangeUptimeMs;
-        if (sinceLastChange <= STREAM_BURST_GAP_MS) {
-            if ((now - mBurstWindowStartUptimeMs) > STREAM_BURST_WINDOW_MS) {
-                mBurstWindowStartUptimeMs = now;
-                mBurstTextChangeCount = 1;
-            } else {
-                mBurstTextChangeCount++;
-            }
-        } else {
-            mBurstWindowStartUptimeMs = now;
-            mBurstTextChangeCount = 1;
-        }
-        mLastTextChangeUptimeMs = now;
-    }
-
-    private long computeTerminalScreenUpdateDelayMs(long now) {
-        long delayMs = mActivity.isWallpaperPassthroughEnabled() ? WALLPAPER_STREAM_UPDATE_DELAY_MS : 0L;
-        boolean burstActive = mBurstTextChangeCount >= STREAM_BURST_THRESHOLD &&
-            (now - mBurstWindowStartUptimeMs) <= STREAM_BURST_WINDOW_MS;
-        if (burstActive) {
-            long sinceLastDispatch = now - mLastScreenUpdateDispatchUptimeMs;
-            long burstDelay = Math.max(0L, STREAM_BURST_FRAME_DELAY_MS - sinceLastDispatch);
-            delayMs = Math.max(delayMs, burstDelay);
-        }
-        return delayMs;
     }
 
     private boolean shouldDeferForegroundScreenRefresh() {
