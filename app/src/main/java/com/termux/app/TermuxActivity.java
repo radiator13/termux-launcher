@@ -61,6 +61,7 @@ import android.widget.ArrayAdapter;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
+import com.github.mmin18.widget.AndroidStockBlurImpl;
 import com.github.mmin18.widget.RealtimeBlurView;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -1009,7 +1010,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         return new AccessoryRenderState(
             mPreferences.shouldShowTerminalToolbar(),
-            blurRadiusDp > 0 && !mImeTransitionInProgress,
+            blurRadiusDp > 0,
             appsRowEnabled,
             appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled(),
             mPreferences.getAppBarOpacity() / 100f,
@@ -1043,9 +1044,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldUseAccessoryRenderEffectBlur(@NonNull AccessoryRenderState state) {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            && shouldUseWallpaperPassthroughMode()
-            && state.toolbarShown
+        return state.toolbarShown
             && state.blurEnabled;
     }
 
@@ -1054,7 +1053,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (backdrop == null) {
             return;
         }
-        backdrop.setRenderEffect(null);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            backdrop.setRenderEffect(null);
+        }
         backdrop.setImageDrawable(null);
         backdrop.setVisibility(View.GONE);
         mAccessoryBackdropDirty = true;
@@ -1086,7 +1087,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mImeTransitionInProgress = true;
         setAccessoryBlurLayerAlpha(1f);
-        configureExtraKeysBackground();
     }
 
     private void scheduleImeTransitionBlurRestore() {
@@ -1295,14 +1295,54 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return bitmap;
     }
 
+    @Nullable
+    private Bitmap createPreBlurredWallpaperBackdropBitmap(@NonNull Bitmap sourceBitmap, int blurRadiusDp) {
+        float blurRadiusPx = ViewUtils.dpToPx(this, Math.max(0, blurRadiusDp));
+        if (blurRadiusPx <= 0f) {
+            return sourceBitmap;
+        }
+
+        float downsampleFactor = ACCESSORY_BLUR_DOWNSAMPLE_FACTOR;
+        float scriptRadius = blurRadiusPx / downsampleFactor;
+        if (scriptRadius > 25f) {
+            downsampleFactor = (float) Math.ceil(blurRadiusPx / 25f);
+            scriptRadius = blurRadiusPx / downsampleFactor;
+        }
+        scriptRadius = Math.max(0.1f, Math.min(25f, scriptRadius));
+
+        int scaledWidth = Math.max(1, Math.round(sourceBitmap.getWidth() / downsampleFactor));
+        int scaledHeight = Math.max(1, Math.round(sourceBitmap.getHeight() / downsampleFactor));
+        Bitmap blurInput = null;
+        Bitmap blurOutput = null;
+        AndroidStockBlurImpl blurImpl = new AndroidStockBlurImpl();
+        try {
+            blurInput = Bitmap.createScaledBitmap(sourceBitmap, scaledWidth, scaledHeight, true);
+            blurOutput = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+            if (!blurImpl.prepare(this, blurInput, scriptRadius)) {
+                return null;
+            }
+            blurImpl.blur(blurInput, blurOutput);
+            return Bitmap.createScaledBitmap(blurOutput, sourceBitmap.getWidth(), sourceBitmap.getHeight(), true);
+        } catch (Throwable e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to create cached accessory wallpaper blur", e);
+            return null;
+        } finally {
+            blurImpl.release();
+            if (blurInput != null && blurInput != sourceBitmap) {
+                blurInput.recycle();
+            }
+            if (blurOutput != null) {
+                blurOutput.recycle();
+            }
+        }
+    }
+
     private void updateAccessoryRenderEffectBackdrop(@NonNull AccessoryRenderState state) {
         ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
         View surfaceHost = findViewById(R.id.accessory_surface_host);
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         boolean usingManagedWallpaperSource = shouldUseManagedWallpaperBlurSource();
-        View wallpaperFrame = usingManagedWallpaperSource
-            ? findViewById(R.id.activity_termux_root_view)
-            : findViewById(R.id.terminal_root_container);
+        View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
         applyAccessoryLayerBounds(R.id.accessory_surface_host, null);
         if (backdrop == null || surfaceHost == null || accessoryContainer == null || wallpaperFrame == null ||
             accessoryContainer.getWidth() <= 0 || accessoryContainer.getHeight() <= 0) {
@@ -1315,6 +1355,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (!shouldUseAccessoryRenderEffectBlur(state)) {
             clearAccessoryRenderEffectBackdrop();
+            return;
+        }
+        if (mImeTransitionInProgress && backdrop.getDrawable() != null) {
+            backdrop.setVisibility(View.VISIBLE);
             return;
         }
 
@@ -1339,9 +1383,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        float blurRadiusPx = ViewUtils.dpToPx(this, Math.max(0, state.blurRadiusDp));
-        backdrop.setImageBitmap(wallpaperBackdrop);
-        backdrop.setRenderEffect(RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            float blurRadiusPx = ViewUtils.dpToPx(this, Math.max(0, state.blurRadiusDp));
+            backdrop.setImageBitmap(wallpaperBackdrop);
+            backdrop.setRenderEffect(RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+        } else {
+            Bitmap blurredBackdrop = createPreBlurredWallpaperBackdropBitmap(wallpaperBackdrop, state.blurRadiusDp);
+            if (blurredBackdrop == null) {
+                wallpaperBackdrop.recycle();
+                if (backdrop.getDrawable() != null) {
+                    backdrop.setVisibility(View.VISIBLE);
+                } else {
+                    clearAccessoryRenderEffectBackdrop();
+                }
+                return;
+            }
+            backdrop.setImageBitmap(blurredBackdrop);
+            wallpaperBackdrop.recycle();
+        }
         backdrop.setVisibility(View.VISIBLE);
         mAccessoryBackdropDirty = false;
         mLastAccessoryBackdropBlurRadiusDp = state.blurRadiusDp;
