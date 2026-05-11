@@ -157,6 +157,14 @@
             </RelativeLayout>
         </androidx.drawerlayout.widget.DrawerLayout>
 
+        <View
+            android:id="@+id/ime_transition_gap_background"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_alignParentBottom="true"
+            android:visibility="gone"
+            android:background="?attr/termuxColorSurfacePanelHigh" />
+
         <RelativeLayout
             android:id="@+id/accessory_stack_container"
             android:layout_width="match_parent"

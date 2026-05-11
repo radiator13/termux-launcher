@@ -454,7 +454,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @NonNull WindowInsetsCompat insets,
                 @NonNull List<WindowInsetsAnimationCompat> runningAnimations
             ) {
-                applySmoothDockImeOffset(0);
+                boolean imeAnimationRunning = false;
+                for (WindowInsetsAnimationCompat animation : runningAnimations) {
+                    if ((animation.getTypeMask() & Type.ime()) != 0) {
+                        imeAnimationRunning = true;
+                        break;
+                    }
+                }
+                if (imeAnimationRunning) {
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 120L;
+                    int currentImeInsetPx = insets.getInsets(Type.ime()).bottom;
+                    int remainingImeInsetPx = Math.max(0, mSmoothImeTargetBottomInsetPx - currentImeInsetPx);
+                    applySmoothDockImeOffset(remainingImeInsetPx);
+                }
                 return insets;
             }
 
@@ -690,6 +702,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int accessoryBaseColor = resolveAccessoryGlassBaseColor();
         int sessionsBaseColor = resolveAccessoryGlassBaseColor();
         applyGlassSurfaceColor(R.id.extrakeys_background, accessoryBaseColor);
+        applyGlassSurfaceColor(R.id.ime_transition_gap_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.activity_termux_bottom_space_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.sessions_background, sessionsBaseColor);
 
@@ -1450,12 +1463,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applySmoothDockImeOffset(int translationYPx) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
+        View transitionBackground = findViewById(R.id.ime_transition_gap_background);
         if (accessoryContainer == null) {
             return;
         }
-        if (accessoryContainer.getTranslationY() != 0f) {
-            accessoryContainer.setTranslationY(0f);
+        float translationY = Math.max(0, translationYPx);
+        if (accessoryContainer.getTranslationY() != translationY) {
+            accessoryContainer.setTranslationY(translationY);
         }
+        if (transitionBackground == null) {
+            return;
+        }
+        if (translationY <= 0f || accessoryContainer.getVisibility() != View.VISIBLE) {
+            transitionBackground.setVisibility(View.GONE);
+            transitionBackground.setTranslationY(0f);
+            return;
+        }
+        int targetHeight = accessoryContainer.getHeight() + Math.round(translationY);
+        ViewGroup.LayoutParams layoutParams = transitionBackground.getLayoutParams();
+        if (layoutParams != null && layoutParams.height != targetHeight) {
+            layoutParams.height = targetHeight;
+            transitionBackground.setLayoutParams(layoutParams);
+        }
+        if (transitionBackground.getTranslationY() != translationY) {
+            transitionBackground.setTranslationY(translationY);
+        }
+        transitionBackground.setVisibility(View.VISIBLE);
     }
 
     private void applySeamlessStatusBackgroundModeIfNeeded() {
