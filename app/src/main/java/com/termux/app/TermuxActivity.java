@@ -387,6 +387,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private long mLastAccessoryRenderSyncUptimeMs;
     private long mLastAccessoryGeometryApplyUptimeMs;
     private long mDelayRootMarginAdjustmentsUntilUptimeMs;
+    private boolean mImeTransitionInProgress;
     private boolean mAccessoryBackdropDirty = true;
     private int mLastAccessoryBackdropBlurRadiusDp = -1;
     private boolean mLastAccessoryBackdropManagedSource;
@@ -431,6 +432,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         scheduleAccessoryRenderSync("blur:recovery");
     };
+    private final Runnable mRestoreAccessoryBlurAfterImeRunnable = () -> {
+        if (!mIsVisible) {
+            return;
+        }
+        mImeTransitionInProgress = false;
+        mAccessoryBackdropDirty = true;
+        prepareAccessoryBlurRestoreFade();
+        configureExtraKeysBackground();
+        startAccessoryBlurRestoreFade();
+        restartAccessoryBlurHeartbeat();
+        scheduleAccessoryBlurRecovery();
+    };
     private final WindowInsetsAnimationCompat.Callback mDockImeAnimationCallback =
         new WindowInsetsAnimationCompat.Callback(WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
             @NonNull
@@ -440,6 +453,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @NonNull WindowInsetsAnimationCompat.BoundsCompat bounds
             ) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
+                    beginImeTransitionBlurPause();
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 180L;
                     applySmoothDockImeOffset(0);
                 }
@@ -472,6 +486,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 40L;
                     applySmoothDockImeOffset(0);
                     mPendingImeGeometryVisible = null;
+                    scheduleImeTransitionBlurRestore();
                 }
             }
         };
@@ -994,7 +1009,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         return new AccessoryRenderState(
             mPreferences.shouldShowTerminalToolbar(),
-            blurRadiusDp > 0,
+            blurRadiusDp > 0 && !mImeTransitionInProgress,
             appsRowEnabled,
             appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled(),
             mPreferences.getAppBarOpacity() / 100f,
@@ -1062,6 +1077,64 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsVisible && state.toolbarShown && state.blurEnabled) {
             mAccessoryRenderHandler.postDelayed(mAccessoryBlurRecoveryRunnable, ACCESSORY_BLUR_RECOVERY_RETRY_MS);
         }
+    }
+
+    private void beginImeTransitionBlurPause() {
+        mAccessoryRenderHandler.removeCallbacks(mRestoreAccessoryBlurAfterImeRunnable);
+        if (mImeTransitionInProgress) {
+            return;
+        }
+        mImeTransitionInProgress = true;
+        setAccessoryBlurLayerAlpha(1f);
+        configureExtraKeysBackground();
+    }
+
+    private void scheduleImeTransitionBlurRestore() {
+        mAccessoryRenderHandler.removeCallbacks(mRestoreAccessoryBlurAfterImeRunnable);
+        mAccessoryRenderHandler.postDelayed(mRestoreAccessoryBlurAfterImeRunnable, 90L);
+    }
+
+    private void prepareAccessoryBlurRestoreFade() {
+        AccessoryRenderState state = buildAccessoryRenderState();
+        if (!state.toolbarShown || !state.blurEnabled) {
+            setAccessoryBlurLayerAlpha(1f);
+            return;
+        }
+        setAccessoryBlurLayerAlpha(0f);
+    }
+
+    private void startAccessoryBlurRestoreFade() {
+        AccessoryRenderState state = buildAccessoryRenderState();
+        if (!state.toolbarShown || !state.blurEnabled) {
+            setAccessoryBlurLayerAlpha(1f);
+            return;
+        }
+        animateAccessoryBlurLayer(findViewById(R.id.extrakeys_backgroundblur));
+        animateAccessoryBlurLayer(findViewById(R.id.accessory_blur_backdrop));
+    }
+
+    private void setAccessoryBlurLayerAlpha(float alpha) {
+        setAccessoryBlurLayerAlpha(findViewById(R.id.extrakeys_backgroundblur), alpha);
+        setAccessoryBlurLayerAlpha(findViewById(R.id.accessory_blur_backdrop), alpha);
+    }
+
+    private void setAccessoryBlurLayerAlpha(@Nullable View view, float alpha) {
+        if (view == null) {
+            return;
+        }
+        view.animate().cancel();
+        view.setAlpha(alpha);
+    }
+
+    private void animateAccessoryBlurLayer(@Nullable View view) {
+        if (view == null || view.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        view.animate()
+            .alpha(1f)
+            .setDuration(140L)
+            .withEndAction(() -> view.setAlpha(1f))
+            .start();
     }
 
     private boolean isAccessoryBlurHealthy(@NonNull AccessoryRenderState state) {
@@ -1536,8 +1609,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurHeartbeatRunnable);
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurRecoveryRunnable);
         mAccessoryRenderHandler.removeCallbacks(mDeferredImeGeometryRunnable);
+        mAccessoryRenderHandler.removeCallbacks(mRestoreAccessoryBlurAfterImeRunnable);
         mAccessoryRenderSyncPending = false;
         mPendingAccessoryRenderReason = null;
+        mImeTransitionInProgress = false;
+        setAccessoryBlurLayerAlpha(1f);
         applySmoothDockImeOffset(0);
         clearAccessoryRenderEffectBackdrop();
         mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
