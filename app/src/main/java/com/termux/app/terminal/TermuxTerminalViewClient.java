@@ -627,8 +627,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             // will also show keyboard even if it was closed before opening url. #2111
             Logger.logVerbose(LOG_TAG, "Requesting TerminalView focus and showing soft keyboard");
             mActivity.getTerminalView().requestFocus();
-            KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
-            mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 300);
+            if (mActivity.shouldDelaySoftKeyboardShowOnResume()) {
+                mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 140);
+                mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 320);
+            } else {
+                KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
+                mActivity.getTerminalView().postDelayed(getShowSoftKeyboardRunnable(), 300);
+            }
         }
     }
 

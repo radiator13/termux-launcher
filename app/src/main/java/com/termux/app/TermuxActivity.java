@@ -386,7 +386,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private final int[] mTmpViewLocation = new int[2];
     private long mLastAccessoryRenderSyncUptimeMs;
     private long mLastAccessoryGeometryApplyUptimeMs;
-    private int mSmoothImeTargetBottomInsetPx;
     private long mDelayRootMarginAdjustmentsUntilUptimeMs;
     private boolean mAccessoryBackdropDirty = true;
     private int mLastAccessoryBackdropBlurRadiusDp = -1;
@@ -442,8 +441,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 180L;
-                    mSmoothImeTargetBottomInsetPx = Math.max(bounds.getLowerBound().bottom, bounds.getUpperBound().bottom);
-                    applySmoothDockImeOffset(Math.max(0, mSmoothImeTargetBottomInsetPx));
+                    applySmoothDockImeOffset(0);
                 }
                 return bounds;
             }
@@ -463,9 +461,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
                 if (imeAnimationRunning) {
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 80L;
-                    int currentImeInsetPx = insets.getInsets(Type.ime()).bottom;
-                    int remainingImeInsetPx = Math.max(0, mSmoothImeTargetBottomInsetPx - currentImeInsetPx);
-                    applySmoothDockImeOffset(remainingImeInsetPx);
+                    applySmoothDockImeOffset(0);
                 }
                 return insets;
             }
@@ -474,7 +470,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             public void onEnd(@NonNull WindowInsetsAnimationCompat animation) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 40L;
-                    mSmoothImeTargetBottomInsetPx = 0;
                     applySmoothDockImeOffset(0);
                     mPendingImeGeometryVisible = null;
                 }
@@ -1940,6 +1935,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public boolean shouldDelayRootMarginAdjustments() {
         return SystemClock.uptimeMillis() < mDelayRootMarginAdjustmentsUntilUptimeMs;
+    }
+
+    public boolean shouldDelaySoftKeyboardShowOnResume() {
+        return isDefaultHomeApp() && isLauncherHomeIntent(getIntent());
     }
 
     private void applyAccessoryGeometryIfNeeded(boolean force, @NonNull String reason) {
