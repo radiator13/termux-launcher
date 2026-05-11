@@ -1926,7 +1926,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public boolean shouldDelayRootMarginAdjustments() {
-        return false;
+        return SystemClock.uptimeMillis() < mDelayRootMarginAdjustmentsUntilUptimeMs;
     }
 
     private void applyAccessoryGeometryIfNeeded(boolean force, @NonNull String reason) {

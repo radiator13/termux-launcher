@@ -12,6 +12,7 @@ import android.view.inputmethod.InputMethodManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.termux.shared.logger.Logger;
@@ -66,6 +67,10 @@ public class KeyboardUtils {
      */
     public static void showSoftKeyboard(final Context context, final View view) {
         if (context == null || view == null) return;
+        if (context instanceof Activity) {
+            WindowCompat.getInsetsController(((Activity) context).getWindow(), view).show(WindowInsetsCompat.Type.ime());
+            return;
+        }
         InputMethodManager inputMethodManager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         if (inputMethodManager != null)
             inputMethodManager.showSoftInput(view, 0);
