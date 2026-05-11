@@ -441,7 +441,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @NonNull WindowInsetsAnimationCompat.BoundsCompat bounds
             ) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
-                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 420L;
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 180L;
                     mSmoothImeTargetBottomInsetPx = Math.max(bounds.getLowerBound().bottom, bounds.getUpperBound().bottom);
                     applySmoothDockImeOffset(Math.max(0, mSmoothImeTargetBottomInsetPx));
                 }
@@ -462,7 +462,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     }
                 }
                 if (imeAnimationRunning) {
-                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 120L;
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 80L;
                     int currentImeInsetPx = insets.getInsets(Type.ime()).bottom;
                     int remainingImeInsetPx = Math.max(0, mSmoothImeTargetBottomInsetPx - currentImeInsetPx);
                     applySmoothDockImeOffset(remainingImeInsetPx);
@@ -473,7 +473,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @Override
             public void onEnd(@NonNull WindowInsetsAnimationCompat animation) {
                 if ((animation.getTypeMask() & Type.ime()) != 0) {
-                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 120L;
+                    mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 40L;
                     mSmoothImeTargetBottomInsetPx = 0;
                     applySmoothDockImeOffset(0);
                     mPendingImeGeometryVisible = null;
@@ -702,7 +702,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int accessoryBaseColor = resolveAccessoryGlassBaseColor();
         int sessionsBaseColor = resolveAccessoryGlassBaseColor();
         applyGlassSurfaceColor(R.id.extrakeys_background, accessoryBaseColor);
-        applyGlassSurfaceColor(R.id.ime_transition_gap_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.activity_termux_bottom_space_background, accessoryBaseColor);
         applyGlassSurfaceColor(R.id.sessions_background, sessionsBaseColor);
 
@@ -1463,7 +1462,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applySmoothDockImeOffset(int translationYPx) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
-        View transitionBackground = findViewById(R.id.ime_transition_gap_background);
         if (accessoryContainer == null) {
             return;
         }
@@ -1471,24 +1469,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (accessoryContainer.getTranslationY() != translationY) {
             accessoryContainer.setTranslationY(translationY);
         }
-        if (transitionBackground == null) {
-            return;
-        }
-        if (translationY <= 0f || accessoryContainer.getVisibility() != View.VISIBLE) {
-            transitionBackground.setVisibility(View.GONE);
-            transitionBackground.setTranslationY(0f);
-            return;
-        }
-        int targetHeight = accessoryContainer.getHeight() + Math.round(translationY);
-        ViewGroup.LayoutParams layoutParams = transitionBackground.getLayoutParams();
-        if (layoutParams != null && layoutParams.height != targetHeight) {
-            layoutParams.height = targetHeight;
-            transitionBackground.setLayoutParams(layoutParams);
-        }
-        if (transitionBackground.getTranslationY() != translationY) {
-            transitionBackground.setTranslationY(translationY);
-        }
-        transitionBackground.setVisibility(View.VISIBLE);
     }
 
     private void applySeamlessStatusBackgroundModeIfNeeded() {
