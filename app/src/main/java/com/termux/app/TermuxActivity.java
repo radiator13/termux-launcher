@@ -776,7 +776,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         try {
             WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
-            Rect frameRect = getVisibleWallpaperFrameRect(findViewById(R.id.activity_termux_root_view));
+            Rect frameRect = getWallpaperFrameRect();
             wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
             wallpaperManager.setWallpaperOffsetSteps(1f, 1f);
             wallpaperManager.setWallpaperOffsets(windowToken, 0.5f, 0.5f);
@@ -1226,19 +1226,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         try {
-            Rect frameRect = getVisibleWallpaperFrameRect(wallpaperFrame);
+            Rect frameRect = getWallpaperFrameRect();
             int targetWidth = Math.max(1, targetRect.width());
             int targetHeight = Math.max(1, targetRect.height());
 
             Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
-            float scaleX = (float) Math.max(1, frameRect.width()) / Math.max(1, sourceBitmap.getWidth());
-            float scaleY = (float) Math.max(1, frameRect.height()) / Math.max(1, sourceBitmap.getHeight());
-            float translateX = frameRect.left - targetRect.left;
-            float translateY = frameRect.top - targetRect.top;
+            int frameWidth = Math.max(1, frameRect.width());
+            int frameHeight = Math.max(1, frameRect.height());
+            int sourceWidth = Math.max(1, sourceBitmap.getWidth());
+            int sourceHeight = Math.max(1, sourceBitmap.getHeight());
+            float scale = Math.max((float) frameWidth / sourceWidth, (float) frameHeight / sourceHeight);
+            float drawWidth = sourceWidth * scale;
+            float drawHeight = sourceHeight * scale;
+            float translateX = frameRect.left + ((frameWidth - drawWidth) / 2f) - targetRect.left;
+            float translateY = frameRect.top + ((frameHeight - drawHeight) / 2f) - targetRect.top;
 
             Matrix shaderMatrix = new Matrix();
-            shaderMatrix.setScale(scaleX, scaleY);
+            shaderMatrix.setScale(scale, scale);
             shaderMatrix.postTranslate(translateX, translateY);
 
             BitmapShader shader = new BitmapShader(sourceBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
@@ -1269,15 +1274,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         int targetWidth = Math.max(1, targetRect.width());
         int targetHeight = Math.max(1, targetRect.height());
-        int frameWidth = Math.max(1, wallpaperFrame.getWidth());
-        int frameHeight = Math.max(1, wallpaperFrame.getHeight());
-
-        if (frameWidth <= 1 || frameHeight <= 1) {
-            DisplayMetrics realMetrics = new DisplayMetrics();
-            getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
-            frameWidth = Math.max(1, realMetrics.widthPixels);
-            frameHeight = Math.max(1, realMetrics.heightPixels);
-        }
+        Rect frameRect = getWallpaperFrameRect();
+        int frameWidth = Math.max(1, frameRect.width());
+        int frameHeight = Math.max(1, frameRect.height());
 
         int intrinsicWidth = wallpaper.getIntrinsicWidth() > 0 ? wallpaper.getIntrinsicWidth() : frameWidth;
         int intrinsicHeight = wallpaper.getIntrinsicHeight() > 0 ? wallpaper.getIntrinsicHeight() : frameHeight;
@@ -1285,9 +1284,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int drawWidth = Math.max(frameWidth, Math.round(intrinsicWidth * scale));
         int drawHeight = Math.max(frameHeight, Math.round(intrinsicHeight * scale));
 
-        wallpaperFrame.getLocationOnScreen(mTmpParentLocation);
-        int frameScreenX = mTmpParentLocation[0];
-        int frameScreenY = mTmpParentLocation[1];
+        int frameScreenX = frameRect.left;
+        int frameScreenY = frameRect.top;
         int offsetLeft = frameScreenX + Math.round((frameWidth - drawWidth) / 2f);
         int offsetTop = frameScreenY + Math.round((frameHeight - drawHeight) / 2f);
 
@@ -3135,7 +3133,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        Rect wallpaperFrameRect = getVisibleWallpaperFrameRect(findViewById(R.id.activity_termux_root_view));
+        Rect wallpaperFrameRect = getWallpaperFrameRect();
         CropImageOptions cropOptions = new CropImageOptions();
         cropOptions.fixAspectRatio = true;
         cropOptions.aspectRatioX = Math.max(1, wallpaperFrameRect.width());
@@ -3325,20 +3323,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     @NonNull
-    private Rect getVisibleWallpaperFrameRect(@Nullable View wallpaperFrame) {
+    private Rect getWallpaperFrameRect() {
         DisplayMetrics realMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
-        if (wallpaperFrame != null && wallpaperFrame.getWidth() > 0 && wallpaperFrame.getHeight() > 0) {
-            wallpaperFrame.getLocationOnScreen(mTmpParentLocation);
-            int left = mTmpParentLocation[0];
-            int top = mTmpParentLocation[1];
-            int right = left + wallpaperFrame.getWidth();
-            int bottom = top + wallpaperFrame.getHeight();
-            if (!isImeVisible()) {
-                bottom += Math.max(0, realMetrics.heightPixels - bottom);
-            }
-            return new Rect(left, top, right, bottom);
-        }
         return new Rect(0, 0, Math.max(1, realMetrics.widthPixels), Math.max(1, realMetrics.heightPixels));
     }
 
