@@ -3215,16 +3215,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean applyManagedWallpaper(@NonNull Uri croppedUri, int wallpaperFlags) {
         Rect visibleCropHint = getWallpaperFullImageCropHint(croppedUri);
-        try (InputStream inputStream = openWallpaperInputStream(croppedUri)) {
-            if (inputStream == null) {
-                return false;
-            }
+        try {
             WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
             if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
                 Rect frameRect = getWallpaperFrameRect();
                 wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
             }
-            wallpaperManager.setStream(inputStream, visibleCropHint, true, wallpaperFlags);
+            if (!setManagedWallpaperStream(wallpaperManager, croppedUri, visibleCropHint, wallpaperFlags)) {
+                return false;
+            }
             exportWallpaperCopyToTermuxBackgroundDirectory(croppedUri);
             if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
                 promoteManagedWallpaperTempFile();
@@ -3236,6 +3235,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return true;
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply managed wallpaper", e);
+            return false;
+        }
+    }
+
+    private boolean setManagedWallpaperStream(@NonNull WallpaperManager wallpaperManager, @NonNull Uri croppedUri,
+                                              @Nullable Rect visibleCropHint, int wallpaperFlags) {
+        if (visibleCropHint != null) {
+            try (InputStream inputStream = openWallpaperInputStream(croppedUri)) {
+                if (inputStream == null) {
+                    return false;
+                }
+                wallpaperManager.setStream(inputStream, visibleCropHint, true, wallpaperFlags);
+                return true;
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply managed wallpaper with crop hint; retrying without hint", e);
+            }
+        }
+
+        try (InputStream inputStream = openWallpaperInputStream(croppedUri)) {
+            if (inputStream == null) {
+                return false;
+            }
+            wallpaperManager.setStream(inputStream, null, true, wallpaperFlags);
+            return true;
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply managed wallpaper without crop hint", e);
             return false;
         }
     }
