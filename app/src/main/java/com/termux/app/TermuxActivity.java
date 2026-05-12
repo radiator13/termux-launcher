@@ -3214,11 +3214,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean applyManagedWallpaper(@NonNull Uri croppedUri, int wallpaperFlags) {
+        Rect visibleCropHint = getWallpaperFullImageCropHint(croppedUri);
         try (InputStream inputStream = openWallpaperInputStream(croppedUri)) {
             if (inputStream == null) {
                 return false;
             }
-            WallpaperManager.getInstance(this).setStream(inputStream, null, true, wallpaperFlags);
+            WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+            if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
+                Rect frameRect = getWallpaperFrameRect();
+                wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+            }
+            wallpaperManager.setStream(inputStream, visibleCropHint, true, wallpaperFlags);
             exportWallpaperCopyToTermuxBackgroundDirectory(croppedUri);
             if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
                 promoteManagedWallpaperTempFile();
@@ -3231,6 +3237,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply managed wallpaper", e);
             return false;
+        }
+    }
+
+    @Nullable
+    private Rect getWallpaperFullImageCropHint(@NonNull Uri uri) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        try (InputStream inputStream = openWallpaperInputStream(uri)) {
+            if (inputStream == null) {
+                return null;
+            }
+            BitmapFactory.decodeStream(inputStream, null, options);
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                return null;
+            }
+            return new Rect(0, 0, options.outWidth, options.outHeight);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to read wallpaper crop bounds", e);
+            return null;
         }
     }
 
