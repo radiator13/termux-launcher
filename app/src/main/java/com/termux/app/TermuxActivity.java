@@ -389,6 +389,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private long mLastAccessoryGeometryApplyUptimeMs;
     private long mDelayRootMarginAdjustmentsUntilUptimeMs;
     private boolean mImeTransitionInProgress;
+    private boolean mFadeAccessoryBlurAfterImeRestore;
     private boolean mAccessoryBackdropDirty = true;
     private int mLastAccessoryBackdropBlurRadiusDp = -1;
     private boolean mLastAccessoryBackdropManagedSource;
@@ -439,9 +440,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mImeTransitionInProgress = false;
         mAccessoryBackdropDirty = true;
+        mFadeAccessoryBlurAfterImeRestore = shouldFadeAccessoryBlurAfterImeRestore();
         prepareAccessoryBlurRestoreFade();
-        configureExtraKeysBackground();
+        updateAccessoryRenderEffectBackdrop(buildAccessoryRenderState());
         startAccessoryBlurRestoreFade();
+        mFadeAccessoryBlurAfterImeRestore = false;
         restartAccessoryBlurHeartbeat();
         scheduleAccessoryBlurRecovery();
     };
@@ -1100,17 +1103,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             setAccessoryBlurLayerAlpha(1f);
             return;
         }
-        setAccessoryBlurLayerAlpha(0f);
+        setAccessoryBlurLayerAlpha(mFadeAccessoryBlurAfterImeRestore ? 0f : 1f);
     }
 
     private void startAccessoryBlurRestoreFade() {
         AccessoryRenderState state = buildAccessoryRenderState();
-        if (!state.toolbarShown || !state.blurEnabled) {
+        if (!state.toolbarShown || !state.blurEnabled || !mFadeAccessoryBlurAfterImeRestore) {
             setAccessoryBlurLayerAlpha(1f);
             return;
         }
         animateAccessoryBlurLayer(findViewById(R.id.extrakeys_backgroundblur));
         animateAccessoryBlurLayer(findViewById(R.id.accessory_blur_backdrop));
+    }
+
+    private boolean shouldFadeAccessoryBlurAfterImeRestore() {
+        ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
+        return backdrop == null
+            || backdrop.getVisibility() != View.VISIBLE
+            || backdrop.getDrawable() == null
+            || backdrop.getAlpha() <= 0f;
     }
 
     private void setAccessoryBlurLayerAlpha(float alpha) {
@@ -1672,6 +1683,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAccessoryRenderSyncPending = false;
         mPendingAccessoryRenderReason = null;
         mImeTransitionInProgress = false;
+        mFadeAccessoryBlurAfterImeRestore = false;
         setAccessoryBlurLayerAlpha(1f);
         applySmoothDockImeOffset(0);
         clearAccessoryRenderEffectBackdrop();
