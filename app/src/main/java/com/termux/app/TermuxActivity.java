@@ -781,7 +781,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         try {
             WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
-            Rect frameRect = getWallpaperFrameRect();
+            Rect frameRect = getSystemWallpaperFrameRect();
             wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
             wallpaperManager.setWallpaperOffsetSteps(1f, 1f);
             wallpaperManager.setWallpaperOffsets(windowToken, 0.5f, 0.5f);
@@ -1231,7 +1231,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         try {
-            Rect frameRect = getWallpaperFrameRect();
+            Rect frameRect = getManagedWallpaperFrameRect();
             int targetWidth = Math.max(1, targetRect.width());
             int targetHeight = Math.max(1, targetRect.height());
 
@@ -1279,7 +1279,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         int targetWidth = Math.max(1, targetRect.width());
         int targetHeight = Math.max(1, targetRect.height());
-        Rect frameRect = getWallpaperFrameRect();
+        Rect frameRect = getSystemWallpaperFrameRect();
         int frameWidth = Math.max(1, frameRect.width());
         int frameHeight = Math.max(1, frameRect.height());
 
@@ -3138,7 +3138,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        Rect wallpaperFrameRect = getWallpaperFrameRect();
+        Rect wallpaperFrameRect = getSystemWallpaperFrameRect();
         CropImageOptions cropOptions = new CropImageOptions();
         cropOptions.fixAspectRatio = true;
         cropOptions.aspectRatioX = Math.max(1, wallpaperFrameRect.width());
@@ -3224,8 +3224,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         try {
             WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
             if ((wallpaperFlags & WallpaperManager.FLAG_SYSTEM) != 0) {
-                Rect frameRect = getWallpaperFrameRect();
-                wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+                suggestManagedWallpaperDimensions(wallpaperManager);
             }
             if (!setManagedWallpaperStream(wallpaperManager, croppedUri, visibleCropHint, wallpaperFlags)) {
                 return false;
@@ -3379,8 +3378,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    private void suggestManagedWallpaperDimensions(@NonNull WallpaperManager wallpaperManager) {
+        try {
+            Rect frameRect = getSystemWallpaperFrameRect();
+            wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to suggest wallpaper dimensions; continuing with wallpaper apply", e);
+        }
+    }
+
     @NonNull
-    private Rect getWallpaperFrameRect() {
+    private Rect getManagedWallpaperFrameRect() {
         if (getWindow() != null && getWindow().getDecorView() != null) {
             View decorView = getWindow().getDecorView();
             if (decorView.getWidth() > 0 && decorView.getHeight() > 0) {
@@ -3390,6 +3398,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return new Rect(left, top, left + decorView.getWidth(), top + decorView.getHeight());
             }
         }
+        return getSystemWallpaperFrameRect();
+    }
+
+    @NonNull
+    private Rect getSystemWallpaperFrameRect() {
         DisplayMetrics realMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
         return new Rect(0, 0, Math.max(1, realMetrics.widthPixels), Math.max(1, realMetrics.heightPixels));
