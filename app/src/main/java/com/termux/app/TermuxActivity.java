@@ -36,6 +36,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
@@ -399,6 +400,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable private Drawable mManagedWallpaperWindowBackground;
     private long mManagedWallpaperWindowBackgroundLastModified = -1L;
     private long mManagedWallpaperWindowBackgroundLength = -1L;
+    private int mUnavailableSystemWallpaperFileId = -1;
     @Nullable private Boolean mPendingImeGeometryVisible;
     private final Handler mAccessoryRenderHandler = new Handler(Looper.getMainLooper());
     private final Runnable mDeferredImeGeometryRunnable = () -> {
@@ -1272,6 +1274,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+        Bitmap wallpaperFileBackdrop = createSystemWallpaperFileBackdropBitmapForRect(wallpaperManager, targetRect);
+        if (wallpaperFileBackdrop != null) {
+            return wallpaperFileBackdrop;
+        }
+
         Drawable wallpaper = wallpaperManager.getDrawable();
         if (wallpaper == null) {
             return null;
@@ -1306,6 +1313,77 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             offsetTop - targetRect.top + drawHeight
         );
         drawable.draw(canvas);
+        return bitmap;
+    }
+
+    @Nullable
+    private Bitmap createSystemWallpaperFileBackdropBitmapForRect(@NonNull WallpaperManager wallpaperManager, @NonNull Rect targetRect) {
+        ParcelFileDescriptor wallpaperFile = null;
+        int currentWallpaperId = getCurrentSystemWallpaperId();
+        if (currentWallpaperId > 0 && currentWallpaperId == mUnavailableSystemWallpaperFileId) {
+            return null;
+        }
+        try {
+            wallpaperFile = wallpaperManager.getWallpaperFile(WallpaperManager.FLAG_SYSTEM);
+            if (wallpaperFile == null) {
+                if (currentWallpaperId > 0) {
+                    mUnavailableSystemWallpaperFileId = currentWallpaperId;
+                }
+                return null;
+            }
+            Bitmap sourceBitmap = BitmapFactory.decodeFileDescriptor(wallpaperFile.getFileDescriptor());
+            if (sourceBitmap == null) {
+                return null;
+            }
+            mUnavailableSystemWallpaperFileId = -1;
+            try {
+                return createWallpaperBitmapBackdropFromSource(sourceBitmap, targetRect, getSystemWallpaperFrameRect());
+            } finally {
+                sourceBitmap.recycle();
+            }
+        } catch (Exception e) {
+            if (currentWallpaperId > 0) {
+                mUnavailableSystemWallpaperFileId = currentWallpaperId;
+            }
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to create dock blur source from system wallpaper file", e);
+            return null;
+        } finally {
+            if (wallpaperFile != null) {
+                try {
+                    wallpaperFile.close();
+                } catch (Exception e) {
+                    Logger.logStackTraceWithMessage(LOG_TAG, "Failed to close system wallpaper file", e);
+                }
+            }
+        }
+    }
+
+    @NonNull
+    private Bitmap createWallpaperBitmapBackdropFromSource(@NonNull Bitmap sourceBitmap, @NonNull Rect targetRect,
+                                                          @NonNull Rect frameRect) {
+        int targetWidth = Math.max(1, targetRect.width());
+        int targetHeight = Math.max(1, targetRect.height());
+        int frameWidth = Math.max(1, frameRect.width());
+        int frameHeight = Math.max(1, frameRect.height());
+        int sourceWidth = Math.max(1, sourceBitmap.getWidth());
+        int sourceHeight = Math.max(1, sourceBitmap.getHeight());
+        float scale = Math.max((float) frameWidth / sourceWidth, (float) frameHeight / sourceHeight);
+        float drawWidth = sourceWidth * scale;
+        float drawHeight = sourceHeight * scale;
+        float translateX = frameRect.left + ((frameWidth - drawWidth) / 2f) - targetRect.left;
+        float translateY = frameRect.top + ((frameHeight - drawHeight) / 2f) - targetRect.top;
+
+        Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Matrix shaderMatrix = new Matrix();
+        shaderMatrix.setScale(scale, scale);
+        shaderMatrix.postTranslate(translateX, translateY);
+
+        BitmapShader shader = new BitmapShader(sourceBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        shader.setLocalMatrix(shaderMatrix);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        paint.setShader(shader);
+        canvas.drawRect(0f, 0f, targetWidth, targetHeight, paint);
         return bitmap;
     }
 
