@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.annotation.SuppressLint;
+import android.app.WallpaperColors;
 import android.app.WallpaperInfo;
 import android.app.WallpaperManager;
 import android.content.ActivityNotFoundException;
@@ -402,6 +403,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable private Drawable mSystemWallpaperWindowBackground;
     private int mSystemWallpaperWindowBackgroundId = -1;
     @Nullable private Boolean mPendingImeGeometryVisible;
+    @Nullable private WallpaperManager.OnColorsChangedListener mWallpaperColorsChangedListener;
     private final Handler mAccessoryRenderHandler = new Handler(Looper.getMainLooper());
     private final Runnable mDeferredImeGeometryRunnable = () -> {
         Boolean visible = mPendingImeGeometryVisible;
@@ -663,6 +665,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerTermuxActivityBroadcastReceiver();
         registerPackageChangeReceiver();
         registerLauncherAppsCallback();
+        registerWallpaperColorsChangedListener();
         getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
     }
 
@@ -789,6 +792,42 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             wallpaperManager.setWallpaperOffsets(windowToken, 0.5f, 0.5f);
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to apply wallpaper offset fix", e);
+        }
+    }
+
+    private void registerWallpaperColorsChangedListener() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || mWallpaperColorsChangedListener != null) {
+            return;
+        }
+        try {
+            WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
+            mWallpaperColorsChangedListener = (WallpaperColors colors, int which) -> {
+                if (!mIsVisible) {
+                    return;
+                }
+                if (mTermuxTerminalSessionActivityClient != null) {
+                    mTermuxTerminalSessionActivityClient.refreshMaterialTerminalColorsIfNeeded();
+                }
+                applyTerminalSurfaceAppearance();
+                scheduleAccessoryRenderSync("wallpaper:colors");
+            };
+            wallpaperManager.addOnColorsChangedListener(mWallpaperColorsChangedListener, mAccessoryRenderHandler);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to register wallpaper color listener", e);
+            mWallpaperColorsChangedListener = null;
+        }
+    }
+
+    private void unregisterWallpaperColorsChangedListener() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || mWallpaperColorsChangedListener == null) {
+            return;
+        }
+        try {
+            WallpaperManager.getInstance(this).removeOnColorsChangedListener(mWallpaperColorsChangedListener);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to unregister wallpaper color listener", e);
+        } finally {
+            mWallpaperColorsChangedListener = null;
         }
     }
 
@@ -1680,6 +1719,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         unregisterTermuxActivityBroadcastReceiver();
         unregisterPackageChangeReceiver();
         unregisterLauncherAppsCallback();
+        unregisterWallpaperColorsChangedListener();
         mAccessoryRenderHandler.removeCallbacks(mAccessoryRenderSyncRunnable);
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurHeartbeatRunnable);
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurRecoveryRunnable);

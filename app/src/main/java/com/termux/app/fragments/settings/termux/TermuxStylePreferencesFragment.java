@@ -210,6 +210,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "monet_overlay_enabled":
                 // Legacy compatibility: material overlay is always enabled now.
                 break;
+            case "terminal_dynamic_colors_enabled":
+                mPreferences.setTerminalDynamicColorsEnabled(value);
+                TermuxActivity.updateTermuxActivityStyling(mContext, true);
+                break;
             case "app_launcher_bw_icons":
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
@@ -244,6 +248,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "monet_background_enabled":
             case "monet_overlay_enabled":
                 return true;
+            case "terminal_dynamic_colors_enabled":
+                return mPreferences.isTerminalDynamicColorsEnabled();
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
             case "app_launcher_apps_row_enabled":

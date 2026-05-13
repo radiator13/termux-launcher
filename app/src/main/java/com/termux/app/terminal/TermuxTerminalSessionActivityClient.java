@@ -53,6 +53,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     private final Handler mUiHandler = new Handler(Looper.getMainLooper());
     private boolean mTerminalScreenUpdatePending;
     private boolean mForegroundRefreshPending;
+    private int mLastMaterialTerminalPaletteSignature;
     private final Runnable mForegroundTerminalRefreshRunnable;
 
     public TermuxTerminalSessionActivityClient(TermuxActivity activity) {
@@ -100,6 +101,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // the first time bell key is pressed and play() is called, since sound may not be loaded
         // quickly enough before the call to play(). https://stackoverflow.com/questions/35435625
         loadBellSoundPool();
+        refreshMaterialTerminalColorsIfNeeded();
     }
 
     /**
@@ -519,23 +521,54 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             File colorsFile = TermuxConstants.TERMUX_COLOR_PROPERTIES_FILE;
             File fontFile = TermuxConstants.TERMUX_FONT_FILE;
             File italicFontFile = TermuxConstants.TERMUX_ITALIC_FONT_FILE;
-            final Properties props = new Properties();
-            if (colorsFile.isFile()) {
+            final Properties props;
+            if (mActivity.getPreferences() != null && mActivity.getPreferences().isTerminalDynamicColorsEnabled()) {
+                props = MaterialTerminalColorScheme.create(mActivity);
+                mLastMaterialTerminalPaletteSignature = MaterialTerminalColorScheme.signature(mActivity);
+            } else {
+                props = new Properties();
+                mLastMaterialTerminalPaletteSignature = 0;
+            }
+            if (mLastMaterialTerminalPaletteSignature == 0 && colorsFile.isFile()) {
                 try (InputStream in = new FileInputStream(colorsFile)) {
                     props.load(in);
                 }
             }
             TerminalColors.COLOR_SCHEME.updateWith(props);
-            TerminalSession session = mActivity.getCurrentSession();
-            if (session != null && session.getEmulator() != null) {
-                session.getEmulator().mColors.reset();
-            }
+            resetAllSessionColors();
             updateBackgroundColor();
             final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0) ? Typeface.createFromFile(fontFile) : Typeface.MONOSPACE;
             final Typeface newItalicTypeface = (italicFontFile.exists() && italicFontFile.length() > 0) ? Typeface.createFromFile(italicFontFile) : newTypeface;
             mActivity.getTerminalView().setTypeface(newTypeface, newItalicTypeface);
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error in checkForFontAndColors()", e);
+        }
+    }
+
+    public void refreshMaterialTerminalColorsIfNeeded() {
+        if (mActivity.getPreferences() == null || !mActivity.getPreferences().isTerminalDynamicColorsEnabled()) {
+            return;
+        }
+        int signature = MaterialTerminalColorScheme.signature(mActivity);
+        if (signature != mLastMaterialTerminalPaletteSignature) {
+            checkForFontAndColors();
+        }
+    }
+
+    private void resetAllSessionColors() {
+        TermuxService service = mActivity.getTermuxService();
+        if (service != null) {
+            for (TermuxSession termuxSession : service.getTermuxSessions()) {
+                TerminalSession session = termuxSession.getTerminalSession();
+                if (session != null && session.getEmulator() != null) {
+                    session.getEmulator().mColors.reset();
+                }
+            }
+            return;
+        }
+        TerminalSession session = mActivity.getCurrentSession();
+        if (session != null && session.getEmulator() != null) {
+            session.getEmulator().mColors.reset();
         }
     }
 

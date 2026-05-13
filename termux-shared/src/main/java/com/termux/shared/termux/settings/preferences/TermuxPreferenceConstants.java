@@ -405,6 +405,13 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_VALUE_MONET_OVERLAY_ENABLED = false;
 
         /**
+         * Defines the key for whether terminal colors should follow Material dynamic colors.
+         */
+        public static final String KEY_TERMINAL_DYNAMIC_COLORS_ENABLED = "terminal_dynamic_colors_enabled";
+
+        public static final boolean DEFAULT_VALUE_TERMINAL_DYNAMIC_COLORS_ENABLED = false;
+
+        /**
          * Defines the key for whether the system wallpaper should be used.
          */
         public static final String KEY_USE_SYSTEM_WALLPAPER = "use_system_wallpaper";

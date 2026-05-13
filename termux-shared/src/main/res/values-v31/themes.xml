@@ -10,23 +10,23 @@
       https://github.com/material-components/material-components-android/blob/1.4.0/lib/java/com/google/android/material/theme/res/values/themes.xml#L33
      -->
     <style name="Theme.BaseActivity.Light.DarkActionBar" parent="Theme.Material3.DynamicColors.Light">
-        <item name="termuxColorPrimary">@color/termux_primary</item>
-        <item name="termuxColorOnPrimary">@color/termux_on_primary</item>
-        <item name="termuxColorSecondary">@color/termux_secondary</item>
-        <item name="termuxColorOnSecondary">@color/termux_on_secondary</item>
-        <item name="termuxColorSurfaceBase">@color/termux_surface_base</item>
-        <item name="termuxColorSurfacePanel">@color/termux_surface_panel</item>
-        <item name="termuxColorSurfacePanelHigh">@color/termux_surface_panel_high</item>
-        <item name="termuxColorSurfacePanelHighest">@color/termux_surface_panel_highest</item>
-        <item name="termuxColorOnSurface">@color/termux_on_surface</item>
-        <item name="termuxColorOnSurfaceVariant">@color/termux_on_surface_variant</item>
-        <item name="termuxColorOutlineVariant">@color/termux_outline_variant</item>
-        <item name="termuxColorAccentContainer">@color/termux_accent_container</item>
-        <item name="termuxColorOnAccentContainer">@color/termux_on_accent_container</item>
-        <item name="termuxColorError">@color/termux_error</item>
-        <item name="termuxColorErrorContainer">@color/termux_error_container</item>
-        <item name="termuxColorOnErrorContainer">@color/termux_on_error_container</item>
-        <item name="termuxColorScrollbar">@color/termux_scrollbar</item>
+        <item name="termuxColorPrimary">?attr/colorPrimary</item>
+        <item name="termuxColorOnPrimary">?attr/colorOnPrimary</item>
+        <item name="termuxColorSecondary">?attr/colorSecondary</item>
+        <item name="termuxColorOnSecondary">?attr/colorOnSecondary</item>
+        <item name="termuxColorSurfaceBase">?attr/colorSurface</item>
+        <item name="termuxColorSurfacePanel">?attr/colorSurfaceContainer</item>
+        <item name="termuxColorSurfacePanelHigh">?attr/colorSurfaceContainerHigh</item>
+        <item name="termuxColorSurfacePanelHighest">?attr/colorSurfaceContainerHighest</item>
+        <item name="termuxColorOnSurface">?attr/colorOnSurface</item>
+        <item name="termuxColorOnSurfaceVariant">?attr/colorOnSurfaceVariant</item>
+        <item name="termuxColorOutlineVariant">?attr/colorOutlineVariant</item>
+        <item name="termuxColorAccentContainer">?attr/colorSecondaryContainer</item>
+        <item name="termuxColorOnAccentContainer">?attr/colorOnSecondaryContainer</item>
+        <item name="termuxColorError">?attr/colorError</item>
+        <item name="termuxColorErrorContainer">?attr/colorErrorContainer</item>
+        <item name="termuxColorOnErrorContainer">?attr/colorOnErrorContainer</item>
+        <item name="termuxColorScrollbar">?attr/colorOutlineVariant</item>
         <!--
          Dialog Themes.
          These MUST be defined for the application `android:theme` so that if dialogs

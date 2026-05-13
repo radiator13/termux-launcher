@@ -346,6 +346,8 @@
         <string name="termux_background_image_enabled_title">Display background image</string>
         <string name="termux_background_image_enabled_off">Background images are disabled.</string>
         <string name="termux_background_image_enabled_on">Background images are enabled.</string>
+        <string name="termux_terminal_dynamic_colors_title">Terminal Material colors</string>
+        <string name="termux_terminal_dynamic_colors_summary">Use the current Material palette for terminal background, text, cursor, and ANSI colors.</string>
         <string name="termux_extrakeys_blur_enabled_title">Extra keys blur</string>
         <string name="termux_extrakeys_blur_enabled_off">Extra keys blur is disabled.</string>
         <string name="termux_extrakeys_blur_enabled_on">Extra keys blur is enabled.</string>
