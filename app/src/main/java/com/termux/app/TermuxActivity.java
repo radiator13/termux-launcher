@@ -1337,7 +1337,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             mUnavailableSystemWallpaperFileId = -1;
             try {
-                return createWallpaperBitmapBackdropFromSource(sourceBitmap, targetRect, getSystemWallpaperFrameRect());
+                return createSystemWallpaperFileBackdropFromSource(sourceBitmap, targetRect, getSystemWallpaperFrameRect());
             } finally {
                 sourceBitmap.recycle();
             }
@@ -1356,6 +1356,48 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             }
         }
+    }
+
+    @NonNull
+    private Bitmap createSystemWallpaperFileBackdropFromSource(@NonNull Bitmap sourceBitmap, @NonNull Rect targetRect,
+                                                              @NonNull Rect frameRect) {
+        int frameWidth = Math.max(1, frameRect.width());
+        int frameHeight = Math.max(1, frameRect.height());
+        int sourceWidth = Math.max(1, sourceBitmap.getWidth());
+        int sourceHeight = Math.max(1, sourceBitmap.getHeight());
+        int tolerancePx = Math.max(2, Math.round(getResources().getDisplayMetrics().density * 4f));
+        if (Math.abs(sourceWidth - frameWidth) <= tolerancePx || Math.abs(sourceHeight - frameHeight) <= tolerancePx) {
+            return createWallpaperBitmapBackdropFromSurface(sourceBitmap, targetRect, frameRect);
+        }
+        return createWallpaperBitmapBackdropFromSource(sourceBitmap, targetRect, frameRect);
+    }
+
+    @NonNull
+    private Bitmap createWallpaperBitmapBackdropFromSurface(@NonNull Bitmap sourceBitmap, @NonNull Rect targetRect,
+                                                           @NonNull Rect frameRect) {
+        int targetWidth = Math.max(1, targetRect.width());
+        int targetHeight = Math.max(1, targetRect.height());
+        int frameWidth = Math.max(1, frameRect.width());
+        int frameHeight = Math.max(1, frameRect.height());
+        int sourceWidth = Math.max(1, sourceBitmap.getWidth());
+        int sourceHeight = Math.max(1, sourceBitmap.getHeight());
+        float scaleX = (float) frameWidth / sourceWidth;
+        float scaleY = (float) frameHeight / sourceHeight;
+        float translateX = frameRect.left - targetRect.left;
+        float translateY = frameRect.top - targetRect.top;
+
+        Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Matrix shaderMatrix = new Matrix();
+        shaderMatrix.setScale(scaleX, scaleY);
+        shaderMatrix.postTranslate(translateX, translateY);
+
+        BitmapShader shader = new BitmapShader(sourceBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        shader.setLocalMatrix(shaderMatrix);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        paint.setShader(shader);
+        canvas.drawRect(0f, 0f, targetWidth, targetHeight, paint);
+        return bitmap;
     }
 
     @NonNull
