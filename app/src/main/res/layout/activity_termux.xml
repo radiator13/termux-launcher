@@ -162,6 +162,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:visibility="gone">
 
             <FrameLayout
@@ -179,13 +181,6 @@
                     android:scaleType="fitXY"
                     android:visibility="gone" />
 
-                <View
-                    android:id="@+id/accessory_top_edge_fx"
-                    android:layout_width="match_parent"
-                    android:layout_height="28dp"
-                    android:layout_gravity="top"
-                    android:visibility="gone" />
-
                 <com.github.mmin18.widget.RealtimeBlurView
                     android:id="@+id/extrakeys_backgroundblur"
                     android:layout_width="match_parent"
@@ -201,6 +196,16 @@
                     android:visibility="gone"
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
             </FrameLayout>
+
+            <View
+                android:id="@+id/accessory_top_edge_fx"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_alignParentTop="true"
+                android:translationY="-20dp"
+                android:clickable="false"
+                android:focusable="false"
+                android:visibility="gone" />
 
             <com.termux.app.LauncherAzGestureFxView
                 android:id="@+id/apps_bar_az_fx_underlay"

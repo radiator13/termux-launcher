@@ -954,13 +954,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         float alphaScale = Math.max(0.35f, barAlpha);
-        int surfaceGlow = withAlphaComponent(resolveAccessoryGlassBaseColor(), Math.round(34f * alphaScale));
-        int highlight = withAlphaComponent(Color.WHITE, Math.round(42f * alphaScale));
-        int shadow = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(44f * Math.max(0.40f, barAlpha)));
+        int surfaceGlow = withAlphaComponent(resolveAccessoryGlassBaseColor(), Math.round(58f * alphaScale));
+        int highlight = withAlphaComponent(Color.WHITE, Math.round(46f * alphaScale));
+        int shadow = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(50f * Math.max(0.40f, barAlpha)));
 
         GradientDrawable softGlassFade = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[] { Color.TRANSPARENT, surfaceGlow, Color.TRANSPARENT }
+            new int[] { Color.TRANSPARENT, surfaceGlow, surfaceGlow, Color.TRANSPARENT }
         );
         GradientDrawable specularHighlight = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
@@ -976,10 +976,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             specularHighlight,
             innerShadow
         });
-        int edgeHeightPx = Math.max(1, Math.round(ViewUtils.dpToPx(this, 28)));
+        int edgeHeightPx = Math.max(1, Math.round(ViewUtils.dpToPx(this, 40)));
+        int seamInsetPx = Math.max(1, Math.round(ViewUtils.dpToPx(this, 20)));
         int highlightHeightPx = Math.max(1, Math.round(ViewUtils.dpToPx(this, 2)));
-        int shadowTopInsetPx = Math.max(1, Math.round(ViewUtils.dpToPx(this, 3)));
-        edge.setLayerInset(1, 0, 0, 0, Math.max(0, edgeHeightPx - highlightHeightPx));
+        int shadowTopInsetPx = Math.max(0, seamInsetPx + Math.round(ViewUtils.dpToPx(this, 2)));
+        edge.setLayerInset(
+            1,
+            0,
+            Math.max(0, seamInsetPx - highlightHeightPx),
+            0,
+            Math.max(0, edgeHeightPx - seamInsetPx)
+        );
         edge.setLayerInset(2, 0, shadowTopInsetPx, 0, 0);
         edgeFx.setBackground(edge);
         edgeFx.setVisibility(View.VISIBLE);
