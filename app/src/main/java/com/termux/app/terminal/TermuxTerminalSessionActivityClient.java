@@ -525,6 +525,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             if (mActivity.getPreferences() != null && mActivity.getPreferences().isTerminalDynamicColorsEnabled()) {
                 props = MaterialTerminalColorScheme.create(mActivity);
                 mLastMaterialTerminalPaletteSignature = MaterialTerminalColorScheme.signature(mActivity);
+                MaterialTerminalColorScheme.writeMaterialColorFiles(mActivity);
             } else {
                 props = new Properties();
                 mLastMaterialTerminalPaletteSignature = 0;
