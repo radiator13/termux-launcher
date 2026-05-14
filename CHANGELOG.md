@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.14
+
+### Changed
+- Improved dock blur implementation and wallpaper sampling so the phone is not a hand warmer anymore.
+- Improved dock motion, IME restore, and return-home animation.
+- Improved Material theming across terminal surfaces, dock surfaces, extra keys, and app UI surfaces.
+- Added an Appearance toggle to apply Material colors to the Termux shell.
+- Exposed Material colors in `~/.termux/material-colors.sh` and `~/.termux/material-colors.properties` for shell integrations such as tmux status bars.
+
+### Fixed
+- Fixed the text input field in the extra keys bar/dock so Android keyboard text input can target the field correctly.
+- Fixed dock blur flashes and blur pauses during IME transitions.
+- Fixed managed/system wallpaper blur alignment and fallback handling.
+
 ## 0.2.13
 
 ### Fixed
