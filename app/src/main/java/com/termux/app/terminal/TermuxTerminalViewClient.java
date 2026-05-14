@@ -605,6 +605,15 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 final EditText textInputView = mActivity.findViewById(R.id.terminal_toolbar_text_input);
                 if (textInputView != null)
                     textInputViewHasFocus = textInputView.hasFocus();
+                if (textInputViewHasFocus) {
+                    if (mShowSoftKeyboardIgnoreOnce) {
+                        mShowSoftKeyboardIgnoreOnce = false;
+                        return;
+                    }
+                    Logger.logVerbose(LOG_TAG, "Showing soft keyboard for toolbar text input on focus change");
+                    KeyboardUtils.showSoftKeyboard(mActivity, textInputView);
+                    return;
+                }
                 if (hasFocus || textInputViewHasFocus) {
                     if (mShowSoftKeyboardIgnoreOnce) {
                         mShowSoftKeyboardIgnoreOnce = false;

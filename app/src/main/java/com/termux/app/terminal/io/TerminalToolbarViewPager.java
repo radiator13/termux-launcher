@@ -71,12 +71,6 @@ public class TerminalToolbarViewPager {
                 });
 
                 final EditText editText = layout.findViewById(R.id.terminal_toolbar_text_input);
-                editText.setFocusableInTouchMode(true);
-                editText.setOnFocusChangeListener((v, hasFocus) -> {
-                    if (hasFocus) {
-                        KeyboardUtils.showSoftKeyboard(mActivity, editText);
-                    }
-                });
                 if (mSavedTextInput != null) {
                     editText.setText(mSavedTextInput);
                     mSavedTextInput = null;

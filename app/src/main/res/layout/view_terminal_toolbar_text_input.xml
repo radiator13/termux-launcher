@@ -28,6 +28,7 @@
     android:inputType="text"
     android:importantForAutofill="no"
     android:backgroundTint="?attr/termuxColorOutlineVariant"
+    android:textColor="?attr/termuxColorOnSurface"
     android:textColorHighlight="?attr/termuxColorAccentContainer"
     android:paddingTop="0dp"
     android:textCursorDrawable="@null"
