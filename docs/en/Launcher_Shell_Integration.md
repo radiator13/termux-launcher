@@ -2,10 +2,12 @@
 
 `launcherctl` is the local shell bridge installed by the launcher. It talks to a localhost API running inside the app process and uses the same app catalog as the on-screen launcher.
 
-## Launch Apps
+## Common Commands
+
+Check whether the bridge is running:
 
 ```sh
-launcherctl launch whatsapp
+launcherctl status
 ```
 
 List launchable apps:
@@ -14,16 +16,42 @@ List launchable apps:
 launcherctl apps
 ```
 
-Check bridge state:
+Launch an app by label or package-style query:
 
 ```sh
-launcherctl status
+launcherctl launch whatsapp
 ```
 
 Restart the launcher:
 
 ```sh
 launcherctl restart
+```
+
+Rotate the LauncherCtl token:
+
+```sh
+launcherctl token rotate
+```
+
+## App Launch Examples
+
+Launch WhatsApp:
+
+```sh
+launcherctl launch whatsapp
+```
+
+Launch Termux:API if installed:
+
+```sh
+launcherctl launch "termux api"
+```
+
+Search the exact catalog used by the launcher UI:
+
+```sh
+launcherctl apps | less
 ```
 
 ## tmux Binding Example
@@ -44,5 +72,11 @@ launcherctl media
 launcherctl art
 launcherctl notifications
 ```
+
+Media and notification commands require Android notification listener access.
+
+## Material Colors
+
+Termux Launcher can export wallpaper-derived Material colors for shell integrations such as prompts, status bars, and tmux. See [Terminal Material colors](Launcher_Material_Colors).
 
 For endpoint details and security behavior, see [LauncherCtl API](LauncherCtl_API).

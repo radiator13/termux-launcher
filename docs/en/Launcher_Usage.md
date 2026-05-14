@@ -50,9 +50,11 @@ Settings -> Apps Bar -> Input split character
 
 Launcher appearance is configured from app settings. Current controls include wallpaper-aware Material colors, blur tuning, monochrome icons, and terminal/launcher surface styling.
 
-Material shell colors can also be written for shell integrations:
+Material shell colors are also written for shell integrations:
 
 ```sh
 ~/.termux/material-colors.sh
 ~/.termux/material-colors.properties
 ```
+
+See [Terminal Material colors](Launcher_Material_Colors) for prompt and tmux examples.

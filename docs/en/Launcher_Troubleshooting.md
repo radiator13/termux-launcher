@@ -1,14 +1,14 @@
 # Troubleshooting
 
-## Terminal Input or Screen Updates Are Slow
+## Terminal Slows Down or Stutters
 
-If terminal input or screen updates become unusually slow after an app update, launcher restart, or final shell exit, run:
+If terminal input, redraws, or screen updates become slow after an app update, launcher restart, or exiting the last terminal session, run:
 
 ```sh
 termux-reload-settings
 ```
 
-This recreates the activity styling layer around the existing Termux session and usually clears stale terminal UI state.
+This reloads the Termux settings and styling layer around the active launcher session. It usually clears stale terminal UI state without needing to reinstall or reset the app.
 
 ## Restart the Launcher
 
@@ -18,21 +18,24 @@ If the launcher itself needs a full restart:
 launcherctl restart
 ```
 
-## Shell Exited While Launcher Was Home
+## Last Terminal Session Was Closed
 
-If the shell exits while the launcher is active as the system home app, Android can leave the process in a degraded state until the launcher is restarted.
+If the shell exits while the launcher is active as the system home app, the launcher process can be left in a degraded state.
 
-Use:
+First try:
+
+```sh
+termux-reload-settings
+```
+
+If the launcher itself still feels broken, restart it:
+
 
 ```sh
 launcherctl restart
 ```
 
 If the bridge is unavailable, restart the app from Android.
-
-## Android Phantom Process Limits
-
-Android 12+ phantom process restrictions can still affect long-running Termux workloads under heavy background pressure. See [termux-app issue #2366](https://github.com/termux/termux-app/issues/2366).
 
 ## LauncherCtl Is Not Responding
 

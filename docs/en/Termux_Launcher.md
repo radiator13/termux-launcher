@@ -19,7 +19,7 @@ The goal is not to replace Termux with a separate launcher shell. The Termux ses
 - Uses wallpaper-aware Material styling and configurable blur.
 - Supports optional Shizuku-backed integrations.
 
-## What Is Optional
+## Optional Integrations
 
 Normal launcher use does not require Shizuku, root, Termux:API, or Termux:Styling.
 
@@ -35,4 +35,5 @@ Those integrations are useful for specific workflows:
 - [Getting started](Launcher_Getting_Started)
 - [Using the launcher](Launcher_Usage)
 - [Shell integration](Launcher_Shell_Integration)
+- [Terminal Material colors](Launcher_Material_Colors)
 - [Troubleshooting](Launcher_Troubleshooting)

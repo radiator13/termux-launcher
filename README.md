@@ -42,12 +42,12 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 - [Getting started](docs/en/Launcher_Getting_Started.md)
 - [Using the launcher](docs/en/Launcher_Usage.md)
 - [Shell integration](docs/en/Launcher_Shell_Integration.md)
+- [Terminal Material colors](docs/en/Launcher_Material_Colors.md)
 - [Optional Shizuku integration](docs/en/Launcher_Optional_Shizuku.md)
 - [LauncherCtl API](docs/en/LauncherCtl_API.md)
 - [Troubleshooting](docs/en/Launcher_Troubleshooting.md)
-- [Development and release workflow](docs/en/Launcher_Development.md)
 
-The repo also carries inherited Termux documentation under [docs/en](docs/en/index.md).
+The documentation is intentionally limited to Termux Launcher-specific usage.
 
 ## Quick Shell Example
 
@@ -65,8 +65,7 @@ bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl laun
 
 ## Known Limitations
 
-- Android 12+ phantom process restrictions can still affect long-running Termux workloads under heavy background pressure. See [termux-app issue #2366](https://github.com/termux/termux-app/issues/2366).
-- If the shell exits while the launcher is active as the system home app, Android can leave the process in a degraded state until it is restarted.
+- If the terminal slows down after an app update or after the last terminal session exits, run `termux-reload-settings`.
 - Opening the app from recents without setting it as the home launcher is possible, but it is less tested than normal home launcher use.
 
 ## Screenshots
@@ -81,12 +80,6 @@ bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl laun
     <td><img src="screenshots/08-light-theme.png" alt="Light theme" width="320"></td>
   </tr>
 </table>
-
-## Development
-
-Development happens on `dev`. Validate launcher behavior from GitHub Actions debug APK artifacts when local Android SDK/NDK setup is not available.
-
-See [Development and release workflow](docs/en/Launcher_Development.md).
 
 ## Upstream Base
 

@@ -19,6 +19,20 @@ When enabled and granted, Shizuku supports optional privileged launcher features
 launcherctl status
 ```
 
+The launcher should still work if Shizuku is stopped, missing, or denied. In that state, only Shizuku-backed features are unavailable.
+
+## Lock Screen Gesture
+
+When Shizuku is available, double-tap the alphabet row to lock the phone. This uses the Shizuku backend instead of an Android accessibility service.
+
+If it does not work:
+
+```sh
+launcherctl status
+```
+
+Confirm that Shizuku is running and that Termux Launcher has permission.
+
 ## LauncherCtl Exec Policy
 
 Privileged command execution is disabled by default. If you enable it, the policy is stored at:
@@ -28,6 +42,19 @@ Privileged command execution is disabled by default. If you enable it, the polic
 ```
 
 Allowed commands must match configured prefixes. See [LauncherCtl API](LauncherCtl_API) for the policy format and security model.
+
+Keep this disabled unless you have a specific command you want to expose. The launcher does not need it for normal app launching.
+
+## TTY Commands
+
+Use `tty-exec` for interactive tools that need a real terminal:
+
+```sh
+launcherctl tty-doctor
+launcherctl tty-exec "id"
+```
+
+`tty-doctor` checks the local `rish` files used for Shizuku-backed terminal commands.
 
 ## Privacy Notes
 
