@@ -1,55 +1,25 @@
 ---
-page_ref: /docs/apps/termux/index.html
+page_ref: /docs/apps/termux-launcher/index.html
 ---
 
-## Termux Documentation
+# Termux Launcher Documentation
 
-Tips and tricks about using Termux application and its packages.
+This wiki is only for Termux Launcher-specific usage: the launcher surface, shell commands, terminal integrations, optional Shizuku backend, and launcher troubleshooting.
 
+[Releases](https://github.com/PickleHik3/termux-launcher/releases) | [README](../../README.md) | [Changelog](../../CHANGELOG.md)
 
-## Introduction
+## Start Here
 
-Termux is an Android terminal emulator and Linux
-environment application that works directly with no rooting or setup
-required. A minimal base system is installed automatically, additional
-packages are available using the package manager.
+- [Launcher overview](Termux_Launcher)
+- [Getting started](Launcher_Getting_Started)
+- [Using the launcher](Launcher_Usage)
+- [Troubleshooting](Launcher_Troubleshooting)
 
-[Getting started](Getting_started): Collection of informational resources for newbies.
-[User Interface](User_Interface): How to use the app.
-[Terminal Settings](Terminal_Settings): How to configure the app.
-[Software](Software): How you can install more software.
-[Hardware](Hardware): How to use an external keyboard and mouse.
-[FAQ](FAQ): Frequently asked questions and answers to them.
+## Integrations
 
-## [Installation](Installation)
-
-You can obtain Termux builds from
-[F-Droid](https://f-droid.org/repository/browse/?fdid=com.termux). Do
-not install it from Google Play.
-
-System requirements:
-
-- Android 5.0 - 12.0
-  ([issues](https://github.com/termux/termux-packages/labels/android-12))
-- CPU: AArch64, ARM, i686, x86_64.
-- At least 300 MB of disk space.
-
-
-Please note that Termux does not support ARM devices without NEON SIMD,
-for example on devices based on Nvidia Tegra 2 CPUs.
-
-VMOS, F1VM and similar sandbox applications are not supported.
-
-## Addons
-
-## Community
-
-Unable to find solution in the [FAQs](FAQ)?
-
-Just want to get to know us?
-
-Want help Termux developers and users out by contributing to the
-project?
-
-Check out the [community pages](Community). Whether just for
-fun or serious work, please join us.
+- [Shell integration](Launcher_Shell_Integration)
+- [Terminal Material colors](Launcher_Material_Colors)
+- [tmux status setup](Launcher_Tmux_Status_Setup)
+- [LauncherCtl API](LauncherCtl_API)
+- [Optional Shizuku integration](Launcher_Optional_Shizuku)
+- [Shizuku helper examples](Launcher_Shizuku_Examples)

@@ -1,0 +1,199 @@
+#!/data/data/com.termux/files/usr/bin/sh
+
+set -u
+
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/launcher-system-monitor.json"
+CPU_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/launcher-system-monitor-cpu"
+CPU_VALUE_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/launcher-system-monitor-cpu-value"
+MAX_AGE="${LAUNCHER_MONITOR_MAX_AGE:-4}"
+FORMAT="${1:-compact}"
+
+now() {
+    date +%s
+}
+
+mtime() {
+    stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+cache_is_fresh() {
+    [ -r "$CACHE" ] || return 1
+    age=$(( $(now) - $(mtime "$CACHE") ))
+    [ "$age" -ge 0 ] && [ "$age" -le "$MAX_AGE" ]
+}
+
+refresh_cache() {
+    tmp="${CACHE}.$$"
+    if launcherctl resources > "$tmp" 2>/dev/null && jq -e '.ok == true' "$tmp" >/dev/null 2>&1; then
+        mv "$tmp" "$CACHE"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
+read_cpu_ticks() {
+    awk '/^cpu / {
+        total = 0
+        for (i = 2; i <= NF; i++) total += $i
+        idle = $5 + $6
+        print total, idle
+        exit
+    }' /proc/stat 2>/dev/null
+}
+
+calculate_cpu_percent() {
+    sample="$(read_cpu_ticks)"
+    [ -n "$sample" ] || return 1
+    set -- $sample
+    total="$1"
+    idle="$2"
+
+    if [ -r "$CPU_CACHE" ]; then
+        set -- $(cat "$CPU_CACHE" 2>/dev/null || true)
+        prev_total="${1:-}"
+        prev_idle="${2:-}"
+        if [ -n "$prev_total" ] && [ -n "$prev_idle" ] &&
+            [ "$total" -gt "$prev_total" ] 2>/dev/null; then
+            total_delta=$((total - prev_total))
+            idle_delta=$((idle - prev_idle))
+            printf '%s %s\n' "$total" "$idle" > "$CPU_CACHE"
+            awk -v total_delta="$total_delta" -v idle_delta="$idle_delta" '
+                BEGIN {
+                    if (total_delta <= 0) exit 1
+                    percent = 100 * (1 - (idle_delta / total_delta))
+                    if (percent < 0) percent = 0
+                    if (percent > 100) percent = 100
+                    printf "%.0f\n", percent
+                }'
+            return $?
+        fi
+    fi
+
+    sleep 0.2
+    sample2="$(read_cpu_ticks)"
+    [ -n "$sample2" ] || return 1
+    set -- $sample2
+    total2="$1"
+    idle2="$2"
+    printf '%s %s\n' "$total2" "$idle2" > "$CPU_CACHE"
+    total_delta=$((total2 - total))
+    idle_delta=$((idle2 - idle))
+    awk -v total_delta="$total_delta" -v idle_delta="$idle_delta" '
+        BEGIN {
+            if (total_delta <= 0) exit 1
+            percent = 100 * (1 - (idle_delta / total_delta))
+            if (percent < 0) percent = 0
+            if (percent > 100) percent = 100
+            printf "%.0f\n", percent
+        }'
+}
+
+launcher_cpu_percent() {
+    if ! cache_is_fresh; then
+        refresh_cache || [ -r "$CACHE" ] || return 1
+    fi
+
+    raw="$(jq -r '.cpuPercent // empty' "$CACHE" 2>/dev/null || true)"
+    [ -n "$raw" ] || return 1
+    rounded="$(awk -v percent="$raw" 'BEGIN {
+        p = int(percent + 0.5)
+        if (p < 0) p = 0
+        if (p > 100) p = 100
+        print p
+    }')"
+
+    current_time="$(now)"
+    if [ -r "$CPU_VALUE_CACHE" ]; then
+        set -- $(cat "$CPU_VALUE_CACHE" 2>/dev/null || true)
+        previous="${1:-}"
+        previous_time="${2:-0}"
+        age=$((current_time - previous_time))
+        if [ -n "$previous" ] && [ "$age" -ge 0 ] && [ "$age" -le 60 ]; then
+            case "$rounded" in
+                0|100)
+                    printf '%s\n' "$previous"
+                    return 0
+                    ;;
+            esac
+        fi
+    fi
+
+    printf '%s %s\n' "$rounded" "$current_time" > "$CPU_VALUE_CACHE"
+    printf '%s\n' "$rounded"
+}
+
+format_percent() {
+    awk -v percent="${1:-0}" '
+        BEGIN {
+            p = int(percent + 0.5)
+            if (p < 0) p = 0
+            if (p > 100) p = 100
+            if (p < 100) printf "%02d%%", p
+            else printf "100%%"
+        }'
+}
+
+cpu_segment() {
+    percent="$(calculate_cpu_percent 2>/dev/null || launcher_cpu_percent 2>/dev/null || true)"
+    [ -n "$percent" ] || {
+        printf ' --'
+        return
+    }
+    printf ' %s' "$(format_percent "$percent")"
+}
+
+if [ "$FORMAT" = "cpu" ]; then
+    cpu_segment
+    exit 0
+fi
+
+if ! cache_is_fresh; then
+    refresh_cache || [ -r "$CACHE" ] || {
+        printf ' --  --'
+        exit 0
+    }
+fi
+
+case "$FORMAT" in
+    json)
+        cat "$CACHE"
+        ;;
+    ram)
+        jq -r '
+          def pct($used; $total):
+            if ($total // 0) > 0 then (($used / $total) * 100 | round) else null end;
+          " " + (pct(.memUsedBytes; .memTotalBytes) // 0 | tostring) + "%"
+        ' "$CACHE" 2>/dev/null || printf ' --'
+        ;;
+    compact|'')
+        jq -r '
+          def pct($used; $total):
+            if ($total // 0) > 0 then (($used / $total) * 100 | round) else null end;
+          . as $r
+          | [
+              " " + (($r.cpuPercent // 0) | round | tostring) + "%",
+              " " + (pct($r.memUsedBytes; $r.memTotalBytes) // 0 | tostring) + "%"
+            ]
+          | join(" ")
+        ' "$CACHE" 2>/dev/null || printf ' --  --'
+        ;;
+    detailed)
+        jq -r '
+          def gb: ./1073741824;
+          def pct($used; $total):
+            if ($total // 0) > 0 then (($used / $total) * 100 | round) else null end;
+          . as $r
+          | [
+              " " + (($r.cpuPercent // 0) | round | tostring) + "%",
+              " " + (pct($r.memUsedBytes; $r.memTotalBytes) // 0 | tostring) + "%"
+                + " " + (($r.memAvailableBytes | gb) | tostring | split(".")[0]) + "G free"
+            ]
+          | join("  ")
+        ' "$CACHE" 2>/dev/null || printf ' --  --'
+        ;;
+    *)
+        printf 'usage: launcher-system-monitor [compact|detailed|json]\n' >&2
+        exit 2
+        ;;
+esac
