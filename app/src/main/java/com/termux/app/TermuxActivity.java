@@ -209,6 +209,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private LauncherAppDataProvider mLauncherAppDataProvider;
     private LauncherConfigRepository mLauncherConfigRepository;
     private LauncherTransitionController mLauncherTransitionController;
+    private int mLastLauncherIconPreferencesSignature = Integer.MIN_VALUE;
 
     /**
      * The client for the {@link #mExtraKeysView}.
@@ -2170,6 +2171,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherConfigRepository == null) {
             mLauncherConfigRepository = new LauncherConfigRepository(mPreferences);
         }
+        int iconPreferencesSignature = computeLauncherIconPreferencesSignature();
+        if (mLastLauncherIconPreferencesSignature != Integer.MIN_VALUE
+            && mLastLauncherIconPreferencesSignature != iconPreferencesSignature) {
+            mLauncherAppDataProvider.invalidate();
+            mSuggestionBarView.clearAppCache();
+        }
+        mLastLauncherIconPreferencesSignature = iconPreferencesSignature;
         int maxButtons = mPreferences.getAppLauncherButtonCount();
         if (maxButtons <= 0) {
             DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
@@ -2206,6 +2214,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mSuggestionBarView.reloadWithInput(input, mTerminalView);
         syncAzScrubLettersAndTint();
+    }
+
+    private int computeLauncherIconPreferencesSignature() {
+        if (mPreferences == null) return 0;
+        int signature = 17;
+        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherIconPackPackage());
+        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherPinnedIconPackPackage());
+        signature = (31 * signature) + (mPreferences.isAppLauncherThemedIconsEnabled() ? 1 : 0);
+        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherThemedIconPackPackage());
+        signature = (31 * signature) + (mPreferences.isAppLauncherBwIconsEnabled() ? 1 : 0);
+        return signature;
+    }
+
+    private static int stringSignature(@Nullable String value) {
+        return value == null ? 0 : value.hashCode();
     }
 
     private void onSuggestionBarOverflowInteractionChanged(boolean interacting) {

@@ -50,9 +50,11 @@ import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.GridView;
 import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -482,6 +484,7 @@ public final class SuggestionBarView extends GridLayout {
 
     public void clearAppCache() {
         allApps = new ArrayList<>();
+        lastSurfaceRenderSignature = 0;
         activeAzLetter = null;
         activeAzCandidates = new ArrayList<>();
         activeAzPageIndex = 0;
@@ -2461,16 +2464,22 @@ public final class SuggestionBarView extends GridLayout {
         EditText search = new EditText(getContext());
         search.setSingleLine(true);
         search.setHint("Search icons");
-        ListView listView = new ListView(getContext());
+        GridView iconGrid = new GridView(getContext());
+        iconGrid.setNumColumns(GridView.AUTO_FIT);
+        iconGrid.setColumnWidth(dp(74));
+        iconGrid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        iconGrid.setVerticalSpacing(dp(8));
+        iconGrid.setHorizontalSpacing(dp(8));
+        iconGrid.setClipToPadding(false);
         root.addView(search, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(listView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(360)));
+        root.addView(iconGrid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(390)));
 
         List<IconPackDrawableItem> filtered = new ArrayList<>(source);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1, iconDrawableLabels(filtered));
-        listView.setAdapter(adapter);
+        IconDrawableGridAdapter adapter = new IconDrawableGridAdapter(packInfo.packageName, filtered);
+        iconGrid.setAdapter(adapter);
 
         final AlertDialog[] alert = new AlertDialog[1];
-        listView.setOnItemClickListener((parent, view, position, id) -> {
+        iconGrid.setOnItemClickListener((parent, view, position, id) -> {
             if (position < 0 || position >= filtered.size()) return;
             IconPackDrawableItem selected = filtered.get(position);
             if (index >= 0 && index < pinnedItems.size()) {
@@ -2500,8 +2509,6 @@ public final class SuggestionBarView extends GridLayout {
                         filtered.add(candidate);
                     }
                 }
-                adapter.clear();
-                adapter.addAll(iconDrawableLabels(filtered));
                 adapter.notifyDataSetChanged();
             }
 
@@ -2517,13 +2524,64 @@ public final class SuggestionBarView extends GridLayout {
             .show();
     }
 
-    @NonNull
-    private static List<String> iconDrawableLabels(@NonNull List<IconPackDrawableItem> items) {
-        List<String> labels = new ArrayList<>(items.size());
-        for (IconPackDrawableItem item : items) {
-            labels.add(item.label + " (" + item.drawableName + ")");
+    private final class IconDrawableGridAdapter extends BaseAdapter {
+        @NonNull private final String iconPackPackage;
+        @NonNull private final List<IconPackDrawableItem> items;
+
+        IconDrawableGridAdapter(@NonNull String iconPackPackage, @NonNull List<IconPackDrawableItem> items) {
+            this.iconPackPackage = iconPackPackage;
+            this.items = items;
         }
-        return labels;
+
+        @Override
+        public int getCount() {
+            return items.size();
+        }
+
+        @Override
+        public IconPackDrawableItem getItem(int position) {
+            return items.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            LinearLayout cell;
+            ImageView iconView;
+            TextView labelView;
+            if (convertView instanceof LinearLayout && ((LinearLayout) convertView).getChildCount() >= 2) {
+                cell = (LinearLayout) convertView;
+                iconView = (ImageView) cell.getChildAt(0);
+                labelView = (TextView) cell.getChildAt(1);
+            } else {
+                cell = new LinearLayout(getContext());
+                cell.setOrientation(LinearLayout.VERTICAL);
+                cell.setGravity(Gravity.CENTER);
+                cell.setPadding(dp(4), dp(4), dp(4), dp(4));
+                iconView = new ImageView(getContext());
+                iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                cell.addView(iconView, new LinearLayout.LayoutParams(dp(48), dp(48)));
+                labelView = new TextView(getContext());
+                labelView.setGravity(Gravity.CENTER);
+                labelView.setSingleLine(true);
+                labelView.setEllipsize(TextUtils.TruncateAt.END);
+                labelView.setTextSize(10f);
+                labelView.setTextColor(resolveLauncherTextColor());
+                LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                labelParams.setMargins(0, dp(4), 0, 0);
+                cell.addView(labelView, labelParams);
+            }
+
+            IconPackDrawableItem item = getItem(position);
+            Drawable icon = getIconResolver().loadDrawableFromPack(iconPackPackage, item.drawableName);
+            iconView.setImageDrawable(icon != null ? icon : getContext().getPackageManager().getDefaultActivityIcon());
+            labelView.setText(item.label);
+            return cell;
+        }
     }
 
     private void showFolderItemOptions(int index, PinnedFolderItem folder) {
