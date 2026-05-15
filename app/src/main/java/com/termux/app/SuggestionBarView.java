@@ -151,6 +151,7 @@ public final class SuggestionBarView extends GridLayout {
     private PopupWindow folderPopupWindow;
     private PopupWindow appContextPopupWindow;
     private PopupWindow shortcutsPopupWindow;
+    private PopupWindow iconPickerPopupWindow;
 
     private String lastInput = "";
     private TerminalView lastTerminalView;
@@ -453,6 +454,7 @@ public final class SuggestionBarView extends GridLayout {
         dismissShortcutsPopup();
         dismissAppContextPopup();
         dismissFolderPopup();
+        dismissIconPickerPopup();
     }
 
     private LauncherUsageStatsStore getUsageStatsStore() {
@@ -2428,42 +2430,75 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private void showPinnedIconPackPicker(int index, @NonNull PinnedAppItem item) {
+        dismissIconPickerPopup();
         List<IconPackInfo> packs = getIconPackRepository().discoverIconPacks();
         if (packs.isEmpty()) {
-            new AlertDialog.Builder(getContext())
-                .setTitle("Change icon")
-                .setMessage("No compatible icon packs are installed.")
-                .setPositiveButton("OK", null)
-                .show();
+            showIconPickerMessagePopup("Change icon", "No compatible icon packs are installed.");
             return;
         }
-        String[] labels = new String[packs.size()];
-        for (int i = 0; i < packs.size(); i++) labels[i] = packs.get(i).label;
-        new AlertDialog.Builder(getContext())
-            .setTitle("Icon pack")
-            .setItems(labels, (dialog, which) -> showPinnedIconDrawablePicker(index, item, packs.get(which)))
-            .show();
+
+        int tintBase = inheritedTintColor & 0x00FFFFFF;
+        LinearLayout shell = new LinearLayout(getContext());
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(3), dp(3), dp(3), dp(3));
+
+        TextView header = createIconPickerHeader("Icon pack");
+        shell.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        List<MenuActionRow> rows = new ArrayList<>();
+        for (IconPackInfo pack : packs) {
+            TextView row = addPopupActionRow(shell, pack.label, tintBase, () -> {
+                dismissIconPickerPopup();
+                showPinnedIconDrawablePicker(index, item, pack);
+            });
+            rows.add(new MenuActionRow(row, () -> {
+                dismissIconPickerPopup();
+                showPinnedIconDrawablePicker(index, item, pack);
+            }, false));
+        }
+        int rowWidth = normalizePopupRowWidths(rows);
+        int contentWidth = constrainPopupHeaderWidth(header, rowWidth);
+        constrainPopupRowsWidth(rows, contentWidth);
+        iconPickerPopupWindow = buildPopupWindow(shell, tintBase, true, () -> {
+            if (iconPickerPopupWindow != null && !iconPickerPopupWindow.isShowing()) {
+                iconPickerPopupWindow = null;
+            }
+        });
+        showPopupAtAnchor(iconPickerPopupWindow, null);
     }
 
     private void showPinnedIconDrawablePicker(int index, @NonNull PinnedAppItem item, @NonNull IconPackInfo packInfo) {
+        dismissIconPickerPopup();
         IconPack pack = getIconPackRepository().loadIconPack(packInfo.packageName);
         if (pack == null || pack.drawableItems().isEmpty()) {
-            new AlertDialog.Builder(getContext())
-                .setTitle(packInfo.label)
-                .setMessage("This icon pack does not expose selectable icons.")
-                .setPositiveButton("OK", null)
-                .show();
+            showIconPickerMessagePopup(packInfo.label, "This icon pack does not expose selectable icons.");
             return;
         }
 
+        int tintBase = inheritedTintColor & 0x00FFFFFF;
         List<IconPackDrawableItem> source = pack.drawableItems();
         LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
-        int padding = dp(12);
+        int padding = dp(10);
         root.setPadding(padding, padding, padding, padding);
+
+        TextView header = createIconPickerHeader(packInfo.label);
+        header.setPadding(0, 0, 0, dp(8));
+        root.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         EditText search = new EditText(getContext());
         search.setSingleLine(true);
         search.setHint("Search icons");
+        search.setTextColor(resolveLauncherTextColor());
+        search.setHintTextColor(resolveLauncherSubtleTextColor());
+        GradientDrawable searchBg = new GradientDrawable();
+        searchBg.setCornerRadius(dp(8));
+        searchBg.setColor(blendColors(withAlphaComponent(resolveLauncherPanelColor(), 0x66), withAlphaComponent(tintBase, 0x66), 0.35f));
+        searchBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x66));
+        search.setBackground(searchBg);
+        search.setPadding(dp(10), 0, dp(10), 0);
+        search.setMinHeight(dp(38));
+
         GridView iconGrid = new GridView(getContext());
         iconGrid.setNumColumns(GridView.AUTO_FIT);
         iconGrid.setColumnWidth(dp(74));
@@ -2471,14 +2506,18 @@ public final class SuggestionBarView extends GridLayout {
         iconGrid.setVerticalSpacing(dp(8));
         iconGrid.setHorizontalSpacing(dp(8));
         iconGrid.setClipToPadding(false);
+        iconGrid.setPadding(0, dp(2), 0, dp(2));
+        iconGrid.setBackgroundColor(0x00000000);
+        iconGrid.setSelector(new ColorDrawable(0x00000000));
         root.addView(search, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(iconGrid, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(390)));
+        LinearLayout.LayoutParams gridParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(390));
+        gridParams.setMargins(0, dp(10), 0, 0);
+        root.addView(iconGrid, gridParams);
 
         List<IconPackDrawableItem> filtered = new ArrayList<>(source);
         IconDrawableGridAdapter adapter = new IconDrawableGridAdapter(packInfo.packageName, filtered);
         iconGrid.setAdapter(adapter);
 
-        final AlertDialog[] alert = new AlertDialog[1];
         iconGrid.setOnItemClickListener((parent, view, position, id) -> {
             if (position < 0 || position >= filtered.size()) return;
             IconPackDrawableItem selected = filtered.get(position);
@@ -2491,7 +2530,7 @@ public final class SuggestionBarView extends GridLayout {
                 )));
                 persistPinsAndReload();
             }
-            if (alert[0] != null) alert[0].dismiss();
+            dismissIconPickerPopup();
         });
         search.addTextChangedListener(new TextWatcher() {
             @Override
@@ -2517,11 +2556,62 @@ public final class SuggestionBarView extends GridLayout {
             }
         });
 
-        alert[0] = new AlertDialog.Builder(getContext())
-            .setTitle(packInfo.label)
-            .setView(root)
-            .setNegativeButton("Cancel", null)
-            .show();
+        iconPickerPopupWindow = buildPopupWindow(root, tintBase, false, () -> {
+            if (iconPickerPopupWindow != null && !iconPickerPopupWindow.isShowing()) {
+                iconPickerPopupWindow = null;
+            }
+        });
+        iconPickerPopupWindow.setFocusable(true);
+        iconPickerPopupWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
+        iconPickerPopupWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        showPopupAtAnchor(iconPickerPopupWindow, null);
+    }
+
+    @NonNull
+    private TextView createIconPickerHeader(@NonNull String title) {
+        TextView header = new TextView(getContext());
+        header.setText(title);
+        header.setTextColor(resolveLauncherTextColor());
+        header.setTextSize(12f);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setSingleLine(true);
+        header.setEllipsize(TextUtils.TruncateAt.END);
+        header.setPadding(dp(8), dp(4), dp(8), dp(6));
+        return header;
+    }
+
+    private void showIconPickerMessagePopup(@NonNull String title, @NonNull String message) {
+        dismissIconPickerPopup();
+        int tintBase = inheritedTintColor & 0x00FFFFFF;
+        LinearLayout shell = new LinearLayout(getContext());
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(10), dp(8), dp(10), dp(8));
+
+        TextView header = createIconPickerHeader(title);
+        header.setPadding(0, 0, 0, dp(6));
+        shell.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView body = new TextView(getContext());
+        body.setText(message);
+        body.setTextColor(resolveLauncherSubtleTextColor());
+        body.setTextSize(12f);
+        body.setPadding(0, 0, 0, dp(8));
+        shell.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView closeRow = addPopupActionRow(shell, "OK", tintBase, this::dismissIconPickerPopup);
+        List<MenuActionRow> rows = new ArrayList<>();
+        rows.add(new MenuActionRow(closeRow, this::dismissIconPickerPopup, false));
+        int rowWidth = normalizePopupRowWidths(rows);
+        int contentWidth = Math.max(rowWidth, dp(180));
+        constrainPopupHeaderWidth(header, contentWidth);
+        constrainPopupRowsWidth(rows, contentWidth);
+
+        iconPickerPopupWindow = buildPopupWindow(shell, tintBase, true, () -> {
+            if (iconPickerPopupWindow != null && !iconPickerPopupWindow.isShowing()) {
+                iconPickerPopupWindow = null;
+            }
+        });
+        showPopupAtAnchor(iconPickerPopupWindow, null);
     }
 
     private final class IconDrawableGridAdapter extends BaseAdapter {
@@ -2561,7 +2651,7 @@ public final class SuggestionBarView extends GridLayout {
                 cell = new LinearLayout(getContext());
                 cell.setOrientation(LinearLayout.VERTICAL);
                 cell.setGravity(Gravity.CENTER);
-                cell.setPadding(dp(4), dp(4), dp(4), dp(4));
+                cell.setPadding(dp(6), dp(6), dp(6), dp(6));
                 iconView = new ImageView(getContext());
                 iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
                 cell.addView(iconView, new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -2575,6 +2665,13 @@ public final class SuggestionBarView extends GridLayout {
                 labelParams.setMargins(0, dp(4), 0, 0);
                 cell.addView(labelView, labelParams);
             }
+
+            GradientDrawable cellBg = new GradientDrawable();
+            cellBg.setCornerRadius(dp(8));
+            cellBg.setColor(blendColors(withAlphaComponent(resolveLauncherPanelColor(), 0x22), withAlphaComponent(inheritedTintColor, 0x22), 0.35f));
+            cellBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x22));
+            cell.setBackground(cellBg);
+            labelView.setTextColor(resolveLauncherTextColor());
 
             IconPackDrawableItem item = getItem(position);
             Drawable icon = getIconResolver().loadDrawableFromPack(iconPackPackage, item.drawableName);
@@ -3975,6 +4072,17 @@ public final class SuggestionBarView extends GridLayout {
             dismissPopupWindowAnimated(popup, () -> {
                 if (shortcutsPopupWindow == popup) {
                     shortcutsPopupWindow = null;
+                }
+            });
+        }
+    }
+
+    private void dismissIconPickerPopup() {
+        if (iconPickerPopupWindow != null) {
+            final PopupWindow popup = iconPickerPopupWindow;
+            dismissPopupWindowAnimated(popup, () -> {
+                if (iconPickerPopupWindow == popup) {
+                    iconPickerPopupWindow = null;
                 }
             });
         }
