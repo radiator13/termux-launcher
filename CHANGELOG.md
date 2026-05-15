@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.15
+
+### Changed
+- Refreshed launcher documentation and README links around getting started, usage, Material colors, shell integration, tmux setup, and optional Shizuku helpers.
+- Restored the GitHub nightly debug build workflow for hosted APK validation.
+- Removed stale bundled status helper scripts now covered by documented examples.
+
+### Fixed
+- Fixed intermittent first-attempt app launches by preferring normal launcher intents before falling back to `LauncherApps.startMainActivity()`.
+- Improved Material color refresh behavior for terminal and shell integrations.
+
 ## 0.2.14
 
 ### Changed
