@@ -30,6 +30,18 @@ launcherctl apps
 
 `launcherctl status` shows whether the local launcher bridge is running. `launcherctl apps` prints the launchable Android app catalog used by the launcher UI.
 
+## Optional tmux Status Setup
+
+The APK does not install personal tmux config, shell helpers, or status widgets. To recreate the example setup manually, follow [tmux status setup](Launcher_Tmux_Status_Setup).
+
+That guide covers the recommended order:
+
+1. Install the small Termux packages used by the examples.
+2. Check that `launcherctl` works.
+3. Download the CPU/RAM, weather, and optional `kew` helpers.
+4. Download the example tmux config and Material theme.
+5. Optionally add Shizuku `btop` and the extra-keys reload button.
+
 ## Search Split Character
 
 By default, typing `%` in the terminal starts app search in the launcher bar. Change this from:

@@ -87,6 +87,38 @@ set -g status-right '#(launcherctl status >/dev/null 2>&1 && date "+%H:%M")'
 
 For a full theme, inspect `~/.termux/material-colors.sh`, choose the exported variables you want, and map them into tmux `status-style`, `window-status-style`, `window-status-current-style`, and `message-style`.
 
+## Full tmux Example
+
+For the full beginner-friendly setup order, including prerequisites and optional Shizuku pieces, follow [tmux status setup](Launcher_Tmux_Status_Setup).
+
+The wiki also includes the raw example files:
+
+- [tmux.conf example](examples/tmux.conf)
+- [material-theme.tmux example](examples/material-theme.tmux)
+- [kew-tmux-status example](examples/kew-tmux-status)
+- [Shizuku helper examples](Launcher_Shizuku_Examples)
+
+Install the tmux example with `curl`:
+
+```sh
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+mkdir -p ~/.tmux ~/.local/bin
+curl -fsSL "$BASE/tmux.conf" -o ~/.tmux.conf
+curl -fsSL "$BASE/material-theme.tmux" -o ~/.tmux/material-theme.tmux
+curl -fsSL "$BASE/kew-tmux-status" -o ~/.local/bin/kew-tmux-status
+chmod 600 ~/.tmux.conf
+chmod 700 ~/.tmux/material-theme.tmux
+chmod 700 ~/.local/bin/kew-tmux-status
+```
+
+If tmux is already running:
+
+```sh
+tmux source-file ~/.tmux.conf
+```
+
+The full [tmux status setup](Launcher_Tmux_Status_Setup) page includes an example `extra-keys` layout with a `termux-reload-settings` recovery button bound through tmux.
+
 ## Refreshing Colors
 
 If terminal colors or launcher styling feel stale after an update or restart:
