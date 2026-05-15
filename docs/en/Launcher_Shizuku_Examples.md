@@ -2,6 +2,8 @@
 
 These examples are optional shell helpers for users who want tmux status widgets or a Shizuku-backed `btop` workflow. They are not installed by the APK and are not required for normal launcher use.
 
+For a single ordered walkthrough, start with [tmux status setup](Launcher_Tmux_Status_Setup). This page is the lower-level reference for each downloadable helper.
+
 They assume:
 
 - Termux Launcher is installed and `launcherctl` works.

@@ -89,7 +89,9 @@ For a full theme, inspect `~/.termux/material-colors.sh`, choose the exported va
 
 ## Full tmux Example
 
-The wiki includes a fuller example config that sources the generated Material color files, uses the optional CPU/RAM/weather helper widgets, and includes a few `launcherctl launch` key binding examples.
+For the full beginner-friendly setup order, including prerequisites and optional Shizuku pieces, follow [tmux status setup](Launcher_Tmux_Status_Setup).
+
+The wiki also includes the raw example files:
 
 - [tmux.conf example](examples/tmux.conf)
 - [material-theme.tmux example](examples/material-theme.tmux)
@@ -100,7 +102,7 @@ Install the tmux example with `curl`:
 
 ```sh
 BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
-mkdir -p ~/.tmux
+mkdir -p ~/.tmux ~/.local/bin
 curl -fsSL "$BASE/tmux.conf" -o ~/.tmux.conf
 curl -fsSL "$BASE/material-theme.tmux" -o ~/.tmux/material-theme.tmux
 curl -fsSL "$BASE/kew-tmux-status" -o ~/.local/bin/kew-tmux-status

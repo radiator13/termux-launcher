@@ -58,7 +58,9 @@ launcherctl tty-exec "id"
 
 ## Optional Helper Examples
 
-The wiki includes optional downloadable examples for tmux CPU/RAM widgets, a free cached weather widget, and a `btop` helper that runs through Shizuku `rish`:
+For the full manual setup order, including tmux config, widgets, extra keys, and optional `btop`, follow [tmux status setup](Launcher_Tmux_Status_Setup).
+
+The wiki also includes optional downloadable examples for tmux CPU/RAM widgets, a free cached weather widget, and a `btop` helper that runs through Shizuku `rish`:
 
 - [Shizuku helper examples](Launcher_Shizuku_Examples)
 - [launcher-system-monitor](examples/launcher-system-monitor)
