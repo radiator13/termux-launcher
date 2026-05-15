@@ -33,6 +33,46 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        app:key="apps_bar_icons"
+        app:title="@string/apps_bar_icons_header">
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_bw_icons"
+            app:title="@string/termux_app_launcher_bw_icons_title"
+            app:summary="@string/termux_app_launcher_bw_icons_summary"
+            android:defaultValue="false" />
+
+        <ListPreference
+            app:key="app_launcher_icon_pack_package"
+            app:title="@string/termux_app_launcher_icon_pack_title"
+            app:summary="@string/termux_app_launcher_icon_pack_summary"
+            android:defaultValue="" />
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_themed_icons_enabled"
+            app:title="@string/termux_app_launcher_themed_icons_title"
+            app:summary="@string/termux_app_launcher_themed_icons_summary"
+            android:defaultValue="false" />
+
+        <ListPreference
+            app:key="app_launcher_themed_icon_pack_package"
+            app:title="@string/termux_app_launcher_themed_icon_pack_title"
+            app:summary="@string/termux_app_launcher_themed_icon_pack_summary"
+            android:defaultValue="" />
+
+        <Preference
+            app:key="app_launcher_refresh_icon_packs"
+            app:title="@string/termux_app_launcher_refresh_icon_packs_title"
+            app:summary="@string/termux_app_launcher_refresh_icon_packs_summary" />
+
+        <Preference
+            app:key="app_launcher_reset_icon_packs"
+            app:title="@string/termux_app_launcher_reset_icon_packs_title"
+            app:summary="@string/termux_app_launcher_reset_icon_packs_summary" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:key="apps_bar_search"
         app:title="@string/termux_app_launcher_search_header">
 

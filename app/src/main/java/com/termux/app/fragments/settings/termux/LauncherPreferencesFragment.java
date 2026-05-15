@@ -30,6 +30,7 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
+        LauncherIconPackPreferenceController.configure(this, context);
 
         SwitchPreferenceCompat appsRowPreference = findPreference("app_launcher_apps_row_enabled");
         SwitchPreferenceCompat azRowPreference = findPreference("app_launcher_az_row_enabled");
@@ -70,6 +71,14 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        Context context = getContext();
+        if (context == null) return;
+        LauncherIconPackPreferenceController.configure(this, context);
     }
 
     private void openHomeLauncherSettings(Context context) {
