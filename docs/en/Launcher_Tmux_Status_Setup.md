@@ -115,10 +115,21 @@ The example tmux config binds `F12` to:
 termux-reload-settings
 ```
 
-To trigger that from Termux extra keys, add this key to your `~/.termux/termux.properties` extra-keys layout:
+Binding `termux-reload-settings` through tmux gives you a quick shell recovery button after launcher updates, terminal theme changes, or stale UI state. The key runs inside tmux instead of typing the command into the active pane.
+
+Example `~/.termux/termux.properties` extra-keys layout:
 
 ```properties
-{macro: "CTRL b F12", display: "♼"}
+extra-keys = [[ \
+  {macro: "CTRL b F12", display: "♼"}, \
+  {macro: "CTRL b h", display: "𝍣", popup: {macro: "CTRL b v", display: "𝍬"}}, \
+  {macro: "CTRL b 1", display: "⓵"}, \
+  {macro: "CTRL b 2", display: "⓶"}, \
+  {macro: "CTRL b 3", display: "⓷"}, \
+  {macro: "CTRL b [", display: "✎"}, \
+  {key: KEYBOARD, popup: PASTE}, \
+  {macro: "CTRL b", display: "㋡"} \
+]]
 ```
 
 Then reload Termux settings:

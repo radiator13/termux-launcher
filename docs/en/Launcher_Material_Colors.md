@@ -117,13 +117,7 @@ If tmux is already running:
 tmux source-file ~/.tmux.conf
 ```
 
-Optional extra-keys button for reloading Termux settings through tmux:
-
-```properties
-{macro: "CTRL b F12", display: "♼"}
-```
-
-This triggers the example `F12` tmux binding instead of typing `termux-reload-settings` into the active pane.
+The full [tmux status setup](Launcher_Tmux_Status_Setup) page includes an example `extra-keys` layout with a `termux-reload-settings` recovery button bound through tmux.
 
 ## Refreshing Colors
 
