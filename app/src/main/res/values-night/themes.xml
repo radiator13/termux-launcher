@@ -48,4 +48,12 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 
+    <style name="Theme.TermuxCropImageActivity" parent="Theme.TermuxApp.DayNight.NoActionBar">
+        <item name="android:windowBackground">?attr/termuxColorSurfaceBase</item>
+        <item name="android:statusBarColor">?attr/termuxColorSurfacePanelHigh</item>
+        <item name="android:navigationBarColor">?attr/termuxColorSurfaceBase</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+
 </resources>

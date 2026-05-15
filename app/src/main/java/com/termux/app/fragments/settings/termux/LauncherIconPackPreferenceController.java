@@ -6,6 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.preference.ListPreference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.app.launcher.data.IconPackRepository;
 import com.termux.app.launcher.model.IconPackInfo;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -50,5 +51,38 @@ final class LauncherIconPackPreferenceController {
             }
         }
         preference.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        preference.setOnPreferenceClickListener(clickedPreference -> {
+            showIconPackDialog(context, preference, entries, values);
+            return true;
+        });
+    }
+
+    private static void showIconPackDialog(
+        @NonNull Context context,
+        @NonNull ListPreference preference,
+        @NonNull List<CharSequence> entries,
+        @NonNull List<CharSequence> values
+    ) {
+        String currentValue = preference.getValue();
+        int selectedIndex = 0;
+        for (int i = 0; i < values.size(); i++) {
+            if (String.valueOf(values.get(i)).equals(currentValue)) {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(preference.getTitle())
+            .setSingleChoiceItems(entries.toArray(new CharSequence[0]), selectedIndex, (dialog, which) -> {
+                if (which < 0 || which >= values.size()) return;
+                String selectedValue = String.valueOf(values.get(which));
+                if (preference.callChangeListener(selectedValue)) {
+                    preference.setValue(selectedValue);
+                }
+                dialog.dismiss();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 }

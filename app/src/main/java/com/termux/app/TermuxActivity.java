@@ -3223,15 +3223,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         cropOptions.outputCompressQuality = 100;
         cropOptions.activityTitle = "";
         cropOptions.cropMenuCropButtonTitle = getString(R.string.action_apply);
-        cropOptions.activityBackgroundColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
-        cropOptions.backgroundColor = withAlphaComponent(Color.BLACK, 176);
-        cropOptions.guidelinesColor = withAlphaComponent(Color.WHITE, 190);
-        cropOptions.toolbarColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh, R.color.termux_surface_panel_high);
-        cropOptions.toolbarTitleColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.toolbarBackButtonColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.toolbarTintColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.activityMenuIconColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.activityMenuTextColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
+        int surfaceBase = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        int surfacePanelHigh = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh, R.color.termux_surface_panel_high);
+        int onSurface = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
+        int onSurfaceVariant = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant, R.color.termux_on_surface_variant);
+        int accentContainer = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
+        cropOptions.activityBackgroundColor = surfaceBase;
+        cropOptions.backgroundColor = withAlphaComponent(Color.BLACK, 190);
+        cropOptions.guidelinesColor = withAlphaComponent(onSurfaceVariant, 210);
+        cropOptions.borderLineColor = withAlphaComponent(onSurface, 210);
+        cropOptions.borderCornerColor = onSurface;
+        cropOptions.circleCornerFillColorHexValue = onSurface;
+        cropOptions.progressBarColor = accentContainer;
+        cropOptions.toolbarColor = surfacePanelHigh;
+        cropOptions.toolbarTitleColor = onSurface;
+        cropOptions.toolbarBackButtonColor = onSurface;
+        cropOptions.toolbarTintColor = onSurface;
+        cropOptions.activityMenuIconColor = onSurface;
+        cropOptions.activityMenuTextColor = onSurface;
 
         mWallpaperCropLauncher.launch(new CropImageContractOptions(sourceUri, cropOptions));
     }
