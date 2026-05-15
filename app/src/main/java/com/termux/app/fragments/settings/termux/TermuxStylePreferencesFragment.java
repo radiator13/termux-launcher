@@ -218,11 +218,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
-            case "app_launcher_themed_icons_enabled":
-                mPreferences.setAppLauncherThemedIconsEnabled(value);
-                com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(mContext).invalidate();
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
-                break;
             case "app_launcher_apps_row_enabled":
                 mPreferences.setAppLauncherAppsRowEnabled(value);
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
@@ -257,8 +252,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isTerminalDynamicColorsEnabled();
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
-            case "app_launcher_themed_icons_enabled":
-                return mPreferences.isAppLauncherThemedIconsEnabled();
             case "app_launcher_apps_row_enabled":
                 return mPreferences.isAppLauncherAppsRowEnabled();
             case "app_launcher_az_row_enabled":
@@ -379,11 +372,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(mContext).invalidate();
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
-            case "app_launcher_themed_icon_pack_package":
-                mPreferences.setAppLauncherThemedIconPackPackage(value);
-                com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(mContext).invalidate();
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
-                break;
             case "app_launcher_bar_height":
                 mPreferences.setAppLauncherBarHeightScale(
                     TermuxStylePreferencesFragment.barHeightForPreset(
@@ -448,8 +436,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.getAppLauncherIconPackPackage();
             case "app_launcher_pinned_icon_pack_package":
                 return mPreferences.getAppLauncherPinnedIconPackPackage();
-            case "app_launcher_themed_icon_pack_package":
-                return mPreferences.getAppLauncherThemedIconPackPackage();
             case "app_launcher_bar_height":
                 return Float.toString(mPreferences.getAppLauncherBarHeightScale());
             case "app_launcher_icon_scale":

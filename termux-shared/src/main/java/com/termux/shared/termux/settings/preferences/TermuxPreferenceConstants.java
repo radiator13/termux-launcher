@@ -186,20 +186,6 @@ public final class TermuxPreferenceConstants {
         public static final String DEFAULT_APP_LAUNCHER_PINNED_ICON_PACK_PACKAGE = "";
 
         /**
-         * Defines whether themed launcher icons are enabled.
-         */
-        public static final String KEY_APP_LAUNCHER_THEMED_ICONS_ENABLED = "app_launcher_themed_icons_enabled";
-
-        public static final boolean DEFAULT_APP_LAUNCHER_THEMED_ICONS_ENABLED = false;
-
-        /**
-         * Defines the selected themed launcher icon-pack package.
-         */
-        public static final String KEY_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE = "app_launcher_themed_icon_pack_package";
-
-        public static final String DEFAULT_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE = "";
-
-        /**
          * Defines the key for app launcher icon scale.
          */
         public static final String KEY_APP_LAUNCHER_ICON_SCALE = "app_launcher_icon_scale";

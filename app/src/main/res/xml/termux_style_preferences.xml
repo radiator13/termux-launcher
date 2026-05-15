@@ -76,10 +76,6 @@
             android:defaultValue="2"
             app:showSeekBarValue="false" />
 
-        <SwitchPreferenceCompat
-            app:key="app_launcher_bw_icons"
-            app:title="@string/termux_app_launcher_bw_icons_title"
-            android:defaultValue="false" />
     </PreferenceCategory>
 
     <PreferenceCategory

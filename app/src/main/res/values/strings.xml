@@ -302,14 +302,6 @@
                 <string name="termux_app_launcher_icon_pack_summary">Use icons from an installed launcher icon pack.</string>
                 <string name="termux_app_launcher_pinned_icon_pack_title">Pinned icon pack</string>
                 <string name="termux_app_launcher_pinned_icon_pack_summary">Use a different icon pack for pinned apps only.</string>
-                <string name="termux_app_launcher_themed_icons_title">Themed icons</string>
-                <string name="termux_app_launcher_themed_icons_summary">Prefer themed icons from the themed source, or from the normal icon pack if no themed source is selected.</string>
-                <string name="termux_app_launcher_themed_icon_pack_title">Themed icon source</string>
-                <string name="termux_app_launcher_themed_icon_pack_summary">Choose the icon pack used for themed icons.</string>
-                <string name="termux_app_launcher_refresh_icon_packs_title">Refresh icon packs</string>
-                <string name="termux_app_launcher_refresh_icon_packs_summary">Reload the installed icon pack list.</string>
-                <string name="termux_app_launcher_reset_icon_packs_title">Reset icon packs</string>
-                <string name="termux_app_launcher_reset_icon_packs_summary">Return launcher icons to system defaults.</string>
                 <string name="termux_app_launcher_apps_row_enabled_title">Apps bar</string>
                 <string name="termux_app_launcher_apps_row_enabled_summary">Show the app icons row above extra keys.</string>
                 <string name="termux_app_launcher_az_row_enabled_title">Alphabets row</string>

@@ -2,12 +2,7 @@ package com.termux.app.launcher.data;
 
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.pm.ActivityInfo;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.content.res.Resources;
-import android.os.Build;
-import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 
@@ -57,15 +52,6 @@ public final class LauncherIconResolver {
     public Drawable resolve(@NonNull AppRef ref, @Nullable PinnedIconOverride override) {
         Drawable icon = loadOverride(override);
         if (icon != null) return icon;
-
-        if (preferences != null && preferences.isAppLauncherThemedIconsEnabled()) {
-            icon = loadFromPack(preferences.getAppLauncherThemedIconPackPackage(), ref);
-            if (icon != null) return icon;
-            icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref);
-            if (icon != null) return icon;
-            icon = loadPlatformMonochromeIcon(ref);
-            if (icon != null) return icon;
-        }
 
         if (preferences != null) {
             icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref);
@@ -134,40 +120,6 @@ public final class LauncherIconResolver {
             return new LayerDrawable(new Drawable[] { back, systemIcon });
         } else {
             return new LayerDrawable(new Drawable[] { systemIcon, upon });
-        }
-    }
-
-    @Nullable
-    private Drawable loadPlatformMonochromeIcon(@NonNull AppRef ref) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null;
-        try {
-            ComponentName componentName = new ComponentName(ref.packageName, IconPackXmlParser.normalizeActivityName(ref.packageName, ref.activityName));
-            ActivityInfo activityInfo = packageManager.getActivityInfo(componentName, 0);
-            Drawable icon = loadMonochromeFromResources(activityInfo.packageName, activityInfo.getIconResource());
-            if (icon != null) return icon;
-        } catch (Exception ignored) {
-        }
-        try {
-            ApplicationInfo appInfo = packageManager.getApplicationInfo(ref.packageName, 0);
-            return loadMonochromeFromResources(ref.packageName, appInfo.icon);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    @Nullable
-    private Drawable loadMonochromeFromResources(@NonNull String packageName, int iconResourceId) {
-        if (iconResourceId == 0 || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null;
-        try {
-            Context packageContext = context.createPackageContext(packageName, Context.CONTEXT_IGNORE_SECURITY);
-            Resources resources = packageContext.getResources();
-            Drawable icon = resources.getDrawableForDensity(iconResourceId, context.getResources().getDisplayMetrics().densityDpi, packageContext.getTheme());
-            if (icon instanceof AdaptiveIconDrawable) {
-                return ((AdaptiveIconDrawable) icon).getMonochrome();
-            }
-            return null;
-        } catch (Exception ignored) {
-            return null;
         }
     }
 

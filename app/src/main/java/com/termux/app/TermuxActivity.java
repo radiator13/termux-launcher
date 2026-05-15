@@ -2221,8 +2221,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int signature = 17;
         signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherIconPackPackage());
         signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherPinnedIconPackPackage());
-        signature = (31 * signature) + (mPreferences.isAppLauncherThemedIconsEnabled() ? 1 : 0);
-        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherThemedIconPackPackage());
         signature = (31 * signature) + (mPreferences.isAppLauncherBwIconsEnabled() ? 1 : 0);
         return signature;
     }

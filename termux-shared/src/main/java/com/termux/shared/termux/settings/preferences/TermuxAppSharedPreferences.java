@@ -188,24 +188,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_PINNED_ICON_PACK_PACKAGE, value == null ? "" : value, true);
     }
 
-    public boolean isAppLauncherThemedIconsEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICONS_ENABLED,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_THEMED_ICONS_ENABLED);
-    }
-
-    public void setAppLauncherThemedIconsEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICONS_ENABLED, value, true);
-    }
-
-    public String getAppLauncherThemedIconPackPackage() {
-        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE, true);
-    }
-
-    public void setAppLauncherThemedIconPackPackage(String value) {
-        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE, value == null ? "" : value, true);
-    }
-
     public float getAppLauncherIconScale() {
         float iconScale = SharedPreferenceUtils.getFloat(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_ICON_SCALE, TERMUX_APP.DEFAULT_APP_LAUNCHER_ICON_SCALE);
         return DataUtils.rangedOrDefault(iconScale, TERMUX_APP.DEFAULT_APP_LAUNCHER_ICON_SCALE, 1.0f, 1.8f);
