@@ -1,12 +1,48 @@
 #!/bin/bash
 CACHE="$HOME/.cache/kew-now-playing"
 OFFSET_FILE="$HOME/.cache/kew-ticker-offset"
-TMP_DIR="/data/data/com.termux/files/usr/tmp"
+TMP_DIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
 WIDTH=30  # visible ticker width
 SPEED=4   # characters to scroll per refresh
+PEEK=0
+
+case "${1:-}" in
+    --peek)
+        PEEK=1
+        ;;
+esac
 
 # Find D-Bus socket with kew MPRIS
 find_kew_socket() {
+    local dirs=(
+        "$TMP_DIR"
+        "/data/data/com.termux/files/usr/tmp"
+        "/data/data/com.termux/files/usr/var/run"
+        "$HOME/.tmp"
+        "$HOME/.cache"
+    )
+
+    for dir in "${dirs[@]}"; do
+        [[ -d "$dir" ]] || continue
+        for sock in "$dir"/dbus-*; do
+            [[ -S "$sock" ]] || continue
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$sock"
+            if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+                /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q "org.mpris.MediaPlayer2.kew"; then
+                echo "$sock"
+                return 0
+            fi
+        done
+    done
+
+    if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+        if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+            /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q "org.mpris.MediaPlayer2.kew"; then
+            echo "${DBUS_SESSION_BUS_ADDRESS#unix:path=}"
+            return 0
+        fi
+    fi
+
     for sock in "$TMP_DIR"/dbus-*; do
         [[ -S "$sock" ]] || continue
         export DBUS_SESSION_BUS_ADDRESS="unix:path=$sock"
@@ -16,6 +52,32 @@ find_kew_socket() {
             return 0
         fi
     done
+    return 1
+}
+
+format_track_path() {
+    local path="$1"
+    local name="${path##*/}"
+    name="${name%.*}"
+    name="${name//_/ }"
+    printf '%s' "$name"
+}
+
+get_now_playing_from_proc() {
+    local pid path
+    pid="$(pgrep -x kew | head -n 1)" || return 1
+    [[ -n "$pid" ]] || return 1
+
+    for fd in "/proc/$pid"/fd/*; do
+        path="$(readlink "$fd" 2>/dev/null || true)"
+        case "$path" in
+            *.flac|*.FLAC|*.mp3|*.MP3|*.m4a|*.M4A|*.ogg|*.OGG|*.opus|*.OPUS|*.wav|*.WAV)
+                format_track_path "$path"
+                return 0
+                ;;
+        esac
+    done
+
     return 1
 }
 
@@ -64,8 +126,10 @@ ticker() {
     printf '%s' "$visible"
 
     # Update offset for next refresh
-    local new_offset=$(( (offset + SPEED) % padded_len ))
-    echo "$new_offset" > "$OFFSET_FILE"
+    if (( PEEK == 0 )); then
+        local new_offset=$(( (offset + SPEED) % padded_len ))
+        echo "$new_offset" > "$OFFSET_FILE"
+    fi
 }
 
 # Main
@@ -75,7 +139,7 @@ if ! pgrep -x kew >/dev/null 2>&1; then
     exit 0
 fi
 
-result=$(get_now_playing 2>/dev/null)
+result=$(get_now_playing 2>/dev/null || get_now_playing_from_proc 2>/dev/null)
 if [[ -n "$result" ]]; then
     echo "$result" > "$CACHE"
     printf '♪ '

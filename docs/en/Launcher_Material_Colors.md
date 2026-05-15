@@ -93,6 +93,7 @@ The wiki includes a fuller example config that sources the generated Material co
 
 - [tmux.conf example](examples/tmux.conf)
 - [material-theme.tmux example](examples/material-theme.tmux)
+- [kew-tmux-status example](examples/kew-tmux-status)
 - [Shizuku helper examples](Launcher_Shizuku_Examples)
 
 Install the tmux example with `curl`:
@@ -102,8 +103,10 @@ BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/e
 mkdir -p ~/.tmux
 curl -fsSL "$BASE/tmux.conf" -o ~/.tmux.conf
 curl -fsSL "$BASE/material-theme.tmux" -o ~/.tmux/material-theme.tmux
+curl -fsSL "$BASE/kew-tmux-status" -o ~/.local/bin/kew-tmux-status
 chmod 600 ~/.tmux.conf
 chmod 700 ~/.tmux/material-theme.tmux
+chmod 700 ~/.local/bin/kew-tmux-status
 ```
 
 If tmux is already running:

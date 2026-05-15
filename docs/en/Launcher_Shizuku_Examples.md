@@ -101,3 +101,22 @@ Keep status polling modest:
 ```tmux
 set -g status-interval 5
 ```
+
+## Optional kew Ticker Row
+
+If you use `kew`, the repo includes a `kew-tmux-status` helper that can toggle tmux between one status row and two status rows. The second row appears only when `kew-now-playing --peek` returns a track.
+
+Install:
+
+```sh
+mkdir -p ~/.local/bin
+curl -fsSL "$BASE/kew-tmux-status" -o ~/.local/bin/kew-tmux-status
+chmod 700 ~/.local/bin/kew-tmux-status
+```
+
+Example theme lines:
+
+```tmux
+set -g status-right '#(kew-tmux-status)#(launcher-system-monitor cpu) │ #(launcher-system-monitor ram) │ #(launcher-weather-widget) '
+set -g status-format[1] '#[align=centre]#(kew-now-playing)'
+```
