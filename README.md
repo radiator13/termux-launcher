@@ -30,6 +30,7 @@ Recommended setup:
 
 - [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) for terminal and tmux-heavy use
 - [Shizuku](https://github.com/rikkaapps/shizuku) only if you want optional privileged features
+- Optional [Shizuku helper examples](docs/en/Launcher_Shizuku_Examples.md) for tmux CPU/RAM/weather widgets and rish-backed `btop`
 - Matching companion forks when using Termux add-ons:
   - [Termux:API](https://github.com/PickleHik3/termux-api)
   - [Termux:Styling](https://github.com/PickleHik3/termux-styling)
@@ -44,6 +45,7 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 - [Shell integration](docs/en/Launcher_Shell_Integration.md)
 - [Terminal Material colors](docs/en/Launcher_Material_Colors.md)
 - [Optional Shizuku integration](docs/en/Launcher_Optional_Shizuku.md)
+- [Shizuku helper examples](docs/en/Launcher_Shizuku_Examples.md)
 - [LauncherCtl API](docs/en/LauncherCtl_API.md)
 - [Troubleshooting](docs/en/Launcher_Troubleshooting.md)
 

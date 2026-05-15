@@ -12,4 +12,5 @@
 - [Material colors](Launcher_Material_Colors)
 - [LauncherCtl API](LauncherCtl_API)
 - [Optional Shizuku](Launcher_Optional_Shizuku)
+- [Shizuku helper examples](Launcher_Shizuku_Examples)
 - [Changelog](../../CHANGELOG.md)

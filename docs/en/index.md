@@ -21,3 +21,4 @@ This wiki is only for Termux Launcher-specific usage: the launcher surface, shel
 - [Terminal Material colors](Launcher_Material_Colors)
 - [LauncherCtl API](LauncherCtl_API)
 - [Optional Shizuku integration](Launcher_Optional_Shizuku)
+- [Shizuku helper examples](Launcher_Shizuku_Examples)

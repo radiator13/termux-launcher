@@ -56,6 +56,26 @@ launcherctl tty-exec "id"
 
 `tty-doctor` checks the local `rish` files used for Shizuku-backed terminal commands.
 
+## Optional Helper Examples
+
+The wiki includes optional downloadable examples for tmux CPU/RAM widgets, a free cached weather widget, and a `btop` helper that runs through Shizuku `rish`:
+
+- [Shizuku helper examples](Launcher_Shizuku_Examples)
+- [launcher-system-monitor](examples/launcher-system-monitor)
+- [launcher-weather-widget](examples/launcher-weather-widget)
+- [setup-btop-rish](examples/setup-btop-rish)
+
+Quick install:
+
+```sh
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+mkdir -p ~/.local/bin
+curl -fsSL "$BASE/launcher-system-monitor" -o ~/.local/bin/launcher-system-monitor
+curl -fsSL "$BASE/launcher-weather-widget" -o ~/.local/bin/launcher-weather-widget
+curl -fsSL "$BASE/setup-btop-rish" -o ~/setup-btop-rish
+chmod 700 ~/.local/bin/launcher-system-monitor ~/.local/bin/launcher-weather-widget ~/setup-btop-rish
+```
+
 ## Privacy Notes
 
 Notification and media helpers require Android notification listener access. Without that permission, the launcher still works normally, but `launcherctl media`, `launcherctl art`, and `launcherctl notifications` return limited or empty data.
