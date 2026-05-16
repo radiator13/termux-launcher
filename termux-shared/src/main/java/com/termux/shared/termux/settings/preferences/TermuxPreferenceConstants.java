@@ -158,6 +158,13 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_APP_LAUNCHER_APPS_ROW_ENABLED = true;
 
         /**
+         * Defines the key for showing active-notification dots on apps bar icons.
+         */
+        public static final String KEY_APP_LAUNCHER_NOTIFICATION_DOTS = "app_launcher_notification_dots";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_NOTIFICATION_DOTS = false;
+
+        /**
          * Defines the key for app launcher bar height scale.
          */
         public static final String KEY_APP_LAUNCHER_BAR_HEIGHT = "app_launcher_bar_height";

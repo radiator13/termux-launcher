@@ -11,6 +11,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Base64;
 
+import com.termux.app.launcher.notifications.LauncherNotificationBadgeStore;
 import com.termux.shared.logger.Logger;
 
 import org.json.JSONArray;
@@ -49,21 +50,36 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
     @Override
     public void onListenerDisconnected() {
         listenerConnected = false;
+        LauncherNotificationBadgeStore.clear();
         Logger.logWarn(LOG_TAG, "Notification listener disconnected");
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
+        LauncherNotificationBadgeStore.onNotificationPosted(sbn, null);
+        updateNotification(sbn);
+        refreshNowPlaying();
+    }
+
+    @Override
+    public void onNotificationPosted(StatusBarNotification sbn, NotificationListenerService.RankingMap rankingMap) {
+        LauncherNotificationBadgeStore.onNotificationPosted(sbn, rankingMap);
         updateNotification(sbn);
         refreshNowPlaying();
     }
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn) {
+        LauncherNotificationBadgeStore.onNotificationRemoved(sbn);
         if (sbn != null) {
             NOTIFICATIONS.remove(sbn.getKey());
         }
         refreshNowPlaying();
+    }
+
+    @Override
+    public void onNotificationRemoved(StatusBarNotification sbn, NotificationListenerService.RankingMap rankingMap) {
+        onNotificationRemoved(sbn);
     }
 
     public static boolean isListenerConnected() {
@@ -140,11 +156,13 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
             StatusBarNotification[] active = getActiveNotifications();
             NOTIFICATIONS.clear();
             if (active == null) {
+                LauncherNotificationBadgeStore.syncFromActiveNotifications(null, null);
                 return;
             }
             for (StatusBarNotification sbn : active) {
                 updateNotification(sbn);
             }
+            LauncherNotificationBadgeStore.syncFromActiveNotifications(active, null);
         } catch (Exception e) {
             Logger.logErrorExtended(LOG_TAG, "Failed to rebuild notification snapshot: " + e.getMessage());
         }

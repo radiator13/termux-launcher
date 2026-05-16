@@ -22,6 +22,7 @@ import android.net.Uri;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -84,6 +85,7 @@ import com.termux.app.launcher.data.IconPack;
 import com.termux.app.launcher.data.IconPackDrawableItem;
 import com.termux.app.launcher.data.IconPackRepository;
 import com.termux.app.launcher.data.LauncherIconResolver;
+import com.termux.app.launcher.notifications.LauncherNotificationBadgeStore;
 import com.termux.app.launcher.data.LauncherRankingEngine;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.model.IconPackInfo;
@@ -136,6 +138,9 @@ public final class SuggestionBarView extends GridLayout {
     private boolean blurEnabled = false;
     private int blurRadiusDp = 10;
     private int inheritedTintColor = 0;
+    private boolean notificationBadgesEnabled = false;
+    @NonNull private Set<String> notificationBadgePackages = Collections.emptySet();
+    @Nullable private LauncherNotificationBadgeStore.Listener notificationBadgeListener;
     private int dockRowHeightHintPx = 0;
     private List<String> defaultButtonStrings = new ArrayList<>();
     private final Map<String, WeakReference<View>> launchTargetViews = new HashMap<>();
@@ -303,6 +308,7 @@ public final class SuggestionBarView extends GridLayout {
                 grandParentGroup.setClipToPadding(false);
             }
         }
+        attachNotificationBadgeListener();
     }
 
     @Override
@@ -316,6 +322,8 @@ public final class SuggestionBarView extends GridLayout {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        LauncherNotificationBadgeStore.removeListener(notificationBadgeListener);
+        notificationBadgeListener = null;
     }
 
     @Override
@@ -379,6 +387,15 @@ public final class SuggestionBarView extends GridLayout {
         this.blurRadiusDp = Math.max(0, blurRadiusDp);
     }
 
+    public void setNotificationBadgesEnabled(boolean enabled) {
+        if (notificationBadgesEnabled == enabled) {
+            return;
+        }
+        notificationBadgesEnabled = enabled;
+        notificationBadgePackages = enabled ? LauncherNotificationBadgeStore.getActivePackages() : Collections.emptySet();
+        invalidateNotificationBadgeViews();
+    }
+
     public void prepareForWindowReentry() {
         suppressDrawUntilStableLayout = true;
         stableLayoutRerenderPosted = false;
@@ -391,6 +408,7 @@ public final class SuggestionBarView extends GridLayout {
     public void setInheritedTintColor(int inheritedTintColor) {
         this.inheritedTintColor = inheritedTintColor;
         this.activeMenuTintBase = inheritedTintColor & 0x00FFFFFF;
+        invalidateNotificationBadgeViews();
     }
 
     private int resolveLauncherTextColor() {
@@ -421,6 +439,49 @@ public final class SuggestionBarView extends GridLayout {
     private int resolveLauncherOutlineColor() {
         return ThemeUtils.getSystemAttrColor(getContext(), com.termux.shared.R.attr.termuxColorOutlineVariant,
             ContextCompat.getColor(getContext(), R.color.termux_outline_variant));
+    }
+
+    private int resolveNotificationBadgeColor() {
+        int tertiary = MaterialColors.getColor(this, com.google.android.material.R.attr.colorTertiary,
+            ContextCompat.getColor(getContext(), R.color.termux_accent_container));
+        return blendColors(tertiary, resolveLauncherTextColor(), 0.10f);
+    }
+
+    private int resolveNotificationBadgeStrokeColor() {
+        return MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurfaceContainerHigh,
+            ContextCompat.getColor(getContext(), R.color.termux_surface_panel_high));
+    }
+
+    private void attachNotificationBadgeListener() {
+        if (notificationBadgeListener != null) {
+            return;
+        }
+        notificationBadgeListener = packages -> post(() -> {
+            notificationBadgePackages = notificationBadgesEnabled ? packages : Collections.emptySet();
+            invalidateNotificationBadgeViews();
+        });
+        LauncherNotificationBadgeStore.addListener(notificationBadgeListener);
+    }
+
+    private void invalidateNotificationBadgeViews() {
+        for (int i = 0; i < getChildCount(); i++) {
+            invalidateBadgeViewTree(getChildAt(i));
+        }
+    }
+
+    private void invalidateBadgeViewTree(@Nullable View view) {
+        if (view == null) {
+            return;
+        }
+        if (view instanceof NotificationBadgeFrame) {
+            view.invalidate();
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                invalidateBadgeViewTree(group.getChildAt(i));
+            }
+        }
     }
 
     private static int withAlphaComponent(int color, int alpha) {
@@ -1574,8 +1635,60 @@ public final class SuggestionBarView extends GridLayout {
         return (outA << 24) | (outR << 16) | (outG << 8) | outB;
     }
 
+    private final class NotificationBadgeFrame extends FrameLayout {
+        private final Paint badgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint badgeStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        @NonNull private Set<String> badgePackages = Collections.emptySet();
+
+        NotificationBadgeFrame(@NonNull Context context) {
+            super(context);
+            setWillNotDraw(false);
+            setClipChildren(false);
+            setClipToPadding(false);
+            badgePaint.setStyle(Paint.Style.FILL);
+            badgeStrokePaint.setStyle(Paint.Style.STROKE);
+            badgeStrokePaint.setStrokeWidth(dp(1.6f));
+        }
+
+        void setBadgePackages(@Nullable Set<String> packages) {
+            badgePackages = packages == null || packages.isEmpty()
+                ? Collections.emptySet()
+                : new HashSet<>(packages);
+            invalidate();
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            super.dispatchDraw(canvas);
+            if (!notificationBadgesEnabled || badgePackages.isEmpty() || notificationBadgePackages.isEmpty()) {
+                return;
+            }
+            boolean active = false;
+            for (String packageName : badgePackages) {
+                if (notificationBadgePackages.contains(packageName)) {
+                    active = true;
+                    break;
+                }
+            }
+            if (!active || getWidth() <= 0 || getHeight() <= 0) {
+                return;
+            }
+
+            float radius = Math.max(dp(3.5f), Math.min(getWidth(), getHeight()) * 0.075f);
+            float cx = (getWidth() * 0.5f) + (iconSizePx() * 0.30f);
+            float cy = (getHeight() * 0.5f) - (iconSizePx() * 0.30f);
+            cx = clampFloat(cx, radius + dp(1f), getWidth() - radius - dp(1f));
+            cy = clampFloat(cy, radius + dp(1f), getHeight() - radius - dp(1f));
+            badgePaint.setColor(resolveNotificationBadgeColor());
+            badgeStrokePaint.setColor(resolveNotificationBadgeStrokeColor());
+            canvas.drawCircle(cx, cy, radius + dp(1.1f), badgeStrokePaint);
+            canvas.drawCircle(cx, cy, radius, badgePaint);
+        }
+    }
+
     private View createEntryButton(@NonNull LauncherAppEntry entry) {
-        FrameLayout shell = new FrameLayout(getContext());
+        NotificationBadgeFrame shell = new NotificationBadgeFrame(getContext());
+        shell.setBadgePackages(Collections.singleton(entry.appRef.packageName));
         shell.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         shell.setClipChildren(false);
         shell.setClipToPadding(false);
@@ -2353,7 +2466,14 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private View createFolderPreviewButton(@NonNull PinnedFolderItem folder) {
-        FrameLayout root = new FrameLayout(getContext());
+        NotificationBadgeFrame root = new NotificationBadgeFrame(getContext());
+        Set<String> folderPackages = new HashSet<>();
+        for (PinnedAppItem folderApp : folder.apps) {
+            if (folderApp != null && folderApp.appRef != null && !TextUtils.isEmpty(folderApp.appRef.packageName)) {
+                folderPackages.add(folderApp.appRef.packageName);
+            }
+        }
+        root.setBadgePackages(folderPackages);
         root.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         FrameLayout iconShell = new FrameLayout(getContext());
@@ -4976,6 +5096,10 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static float clampFloat(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
     }
 

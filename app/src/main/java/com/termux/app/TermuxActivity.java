@@ -2204,6 +2204,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         mSuggestionBarView.setBlurConfig(blurRadiusDp > 0, blurRadiusDp);
         mSuggestionBarView.setInheritedTintColor(resolveAccessoryGlassBaseColor());
+        mSuggestionBarView.setNotificationBadgesEnabled(mPreferences.isAppLauncherNotificationDotsEnabled());
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);

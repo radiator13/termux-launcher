@@ -300,6 +300,13 @@
                 <string name="termux_app_launcher_pinned_icon_pack_summary">Use a different icon pack for pinned apps only.</string>
                 <string name="termux_app_launcher_apps_row_enabled_title">Apps bar</string>
                 <string name="termux_app_launcher_apps_row_enabled_summary">Show the app icons row above extra keys.</string>
+                <string name="termux_app_launcher_notification_dots_title">Notification dots</string>
+                <string name="termux_app_launcher_notification_dots_summary">Show a Material color dot on apps with active notifications.</string>
+                <string name="termux_app_launcher_notification_dots_summary_needs_access">Enable notification access to show dots on apps with active notifications.</string>
+                <string name="termux_app_launcher_notification_access_title">Enable notification access?</string>
+                <string name="termux_app_launcher_notification_access_message">Notification dots use Android notification access to detect which apps currently have clearable notifications. Content is not used for apps bar dots.</string>
+                <string name="termux_app_launcher_notification_access_enable">Open settings</string>
+                <string name="termux_app_launcher_notification_access_unavailable">Notification access settings are unavailable on this device.</string>
                 <string name="termux_app_launcher_az_row_enabled_title">Alphabets row</string>
                 <string name="termux_app_launcher_az_row_enabled_summary">Shows an alphabet strip between apps bar and extra keys for quick launch scrubbing.</string>
                 <string name="termux_app_launcher_az_double_tap_lock_title">Double tap alphabets row lockscreen</string>

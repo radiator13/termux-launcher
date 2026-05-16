@@ -228,6 +228,18 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         }
     }
 
+    public boolean isAppLauncherNotificationDotsEnabled() {
+        return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_NOTIFICATION_DOTS,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_NOTIFICATION_DOTS
+        );
+    }
+
+    public void setAppLauncherNotificationDotsEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_NOTIFICATION_DOTS, value, false);
+    }
+
     public boolean isAppLauncherAzRowEnabled() {
         return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_ROW_ENABLED,
             TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_ROW_ENABLED);
