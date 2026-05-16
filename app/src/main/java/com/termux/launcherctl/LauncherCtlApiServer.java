@@ -20,10 +20,8 @@ import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.model.LauncherAppEntry;
-import com.termux.privileged.PrivilegedBackend;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.PrivilegedPolicyStore;
-import com.termux.privileged.ShizukuBackend;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 
@@ -71,7 +69,6 @@ public class LauncherCtlApiServer {
     private static final String LAUNCHERCTL_DIR_PATH = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.launcherctl";
     private static final String TOKEN_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/token";
     private static final String ENDPOINT_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/endpoint";
-    private static final String CONFIG_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/config.json";
     private static final String LAUNCHERCTL_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl";
     private static final String LAUNCHER_RESTART_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcher-restart";
 
@@ -79,7 +76,6 @@ public class LauncherCtlApiServer {
     private static final int MAX_HEADER_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINES = 64;
     private static final int MAX_BODY_BYTES = 16 * 1024;
-    private static final int MAX_EXEC_COMMAND_LENGTH = 512;
     private static final int CLIENT_SOCKET_TIMEOUT_MS = 10_000;
 
     private static LauncherCtlApiServer instance;
@@ -250,8 +246,6 @@ public class LauncherCtlApiServer {
                 return jsonResponse(buildNotifications());
             } else if ("POST".equals(request.method) && "/v1/apps/launch".equals(request.path)) {
                 return jsonResponse(runAppLaunch(context, request.body));
-            } else if ("POST".equals(request.method) && "/v1/exec".equals(request.path)) {
-                return jsonResponse(runExec(context, request.body));
             } else if ("POST".equals(request.method) && "/v1/app/restart".equals(request.path)) {
                 return jsonResponse(runAppRestart(context));
             } else if ("POST".equals(request.method) && "/v1/auth/rotate".equals(request.path)) {
@@ -316,7 +310,6 @@ public class LauncherCtlApiServer {
         data.put("isPrivilegedAvailable", manager.isPrivilegedAvailable());
         data.put("notificationListenerConnected", LauncherCtlNotificationListener.isListenerConnected());
         data.put("notificationListener", buildNotificationListenerStatus());
-        data.put("execPolicy", describeExecPolicy());
         data.put("privilegedPolicy", describePrivilegedPolicy());
         return data;
     }
@@ -463,7 +456,6 @@ public class LauncherCtlApiServer {
         data.put("statusReason", String.valueOf(manager.getStatusReason()));
         data.put("statusMessage", manager.getStatusMessage());
         data.put("isPrivilegedAvailable", manager.isPrivilegedAvailable());
-        data.put("execPolicy", describeExecPolicy());
         data.put("privilegedPolicy", describePrivilegedPolicy());
         return data;
     }
@@ -538,75 +530,6 @@ public class LauncherCtlApiServer {
         return data;
     }
 
-    private JSONObject runExec(Context context, String body) throws JSONException {
-        JSONObject endpointGuard = ensurePrivilegedEndpointEnabled(context, PrivilegedPolicyStore.Endpoint.EXEC, "/v1/exec");
-        if (endpointGuard != null) return endpointGuard;
-        JSONObject request = body != null && !body.isEmpty() ? new JSONObject(body) : new JSONObject();
-        String command = request.optString("command", "").trim();
-        if (command.isEmpty()) {
-            JSONObject error = jsonError("bad_request", "Missing command");
-            error.put("_statusCode", 400);
-            return error;
-        }
-        if (command.length() > MAX_EXEC_COMMAND_LENGTH) {
-            JSONObject error = jsonError("bad_request", "Command too long");
-            error.put("_statusCode", 400);
-            return error;
-        }
-        if (containsControlChars(command)) {
-            JSONObject error = jsonError("bad_request", "Command contains unsupported control characters");
-            error.put("_statusCode", 400);
-            return error;
-        }
-
-        ExecPolicy execPolicy = loadExecPolicy();
-        if (!execPolicy.execEnabled) {
-            JSONObject error = jsonError("forbidden", "Exec endpoint disabled by policy");
-            error.put("_statusCode", 403);
-            return error;
-        }
-        if (!isCommandAllowed(command, execPolicy.allowedCommandPrefixes)) {
-            JSONObject error = jsonError("forbidden", "Command not allowed by policy");
-            error.put("_statusCode", 403);
-            return error;
-        }
-
-        PrivilegedBackendManager manager = PrivilegedBackendManager.getInstance();
-        try {
-            manager.initializeIfNeeded(context).get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            JSONObject error = jsonError("backend_init_failed", e.getMessage());
-            error.put("_statusCode", 500);
-            return error;
-        }
-        if (manager.getBackendType() == PrivilegedBackend.Type.SHIZUKU && !manager.getBackend().hasPermission()) {
-            boolean requested = manager.requestPrivilegedPermission(ShizukuBackend.PERMISSION_REQUEST_CODE);
-            JSONObject error = jsonError("permission_required",
-                "Shizuku permission is required. Grant it, then retry command.");
-            error.put("_statusCode", 403);
-            error.put("permissionRequested", requested);
-            error.put("backendState", String.valueOf(manager.getBackendState()));
-            error.put("statusReason", String.valueOf(manager.getStatusReason()));
-            error.put("statusMessage", manager.getStatusMessage());
-            return error;
-        }
-
-        String output;
-        try {
-            output = manager.executeCommand(command).get(20, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            JSONObject error = jsonError("exec_failed", e.getMessage());
-            error.put("_statusCode", 500);
-            return error;
-        }
-
-        JSONObject data = new JSONObject();
-        data.put("ok", isSuccessfulCommandOutput(output));
-        data.put("command", command);
-        data.put("output", output == null ? "" : output);
-        return data;
-    }
-
     private JSONObject runAppRestart(Context context) throws JSONException {
         Intent restartIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (restartIntent == null) {
@@ -639,27 +562,6 @@ public class LauncherCtlApiServer {
         return data;
     }
 
-    private JSONObject ensurePrivilegedEndpointEnabled(Context context, PrivilegedPolicyStore.Endpoint endpoint, String endpointPath) throws JSONException {
-        if (context == null) {
-            JSONObject error = jsonError("unavailable", "Context unavailable for privileged policy check");
-            error.put("_statusCode", 500);
-            return error;
-        }
-        if (!PrivilegedPolicyStore.isMasterEnabled(context)) {
-            JSONObject error = jsonError("forbidden", "Privileged features disabled by settings");
-            error.put("_statusCode", 403);
-            error.put("endpoint", endpointPath);
-            return error;
-        }
-        if (!PrivilegedPolicyStore.isEndpointEnabled(context, endpoint)) {
-            JSONObject error = jsonError("forbidden", "Endpoint disabled by privileged policy");
-            error.put("_statusCode", 403);
-            error.put("endpoint", endpointPath);
-            return error;
-        }
-        return null;
-    }
-
     private JSONObject describePrivilegedPolicy() throws JSONException {
         Context context = appContext;
         JSONObject info = new JSONObject();
@@ -672,10 +574,6 @@ public class LauncherCtlApiServer {
         info.put("masterEnabled", PrivilegedPolicyStore.isMasterEnabled(context));
         info.put("preferShizuku", PrivilegedPolicyStore.isPreferShizuku(context));
         info.put("allowShellFallback", PrivilegedPolicyStore.isShellFallbackEnabled(context));
-
-        JSONObject endpoints = new JSONObject();
-        endpoints.put("exec", PrivilegedPolicyStore.isEndpointEnabled(context, PrivilegedPolicyStore.Endpoint.EXEC));
-        info.put("endpoints", endpoints);
 
         return info;
     }
@@ -866,7 +764,6 @@ public class LauncherCtlApiServer {
         rateLimiters.put("GET:/v1/media/art", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("GET:/v1/notifications", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/apps/launch", new SimpleRateLimiter(30, 60_000));
-        rateLimiters.put("POST:/v1/exec", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/app/restart", new SimpleRateLimiter(5, 60_000));
         rateLimiters.put("POST:/v1/auth/rotate", new SimpleRateLimiter(5, 60_000));
     }
@@ -878,7 +775,6 @@ public class LauncherCtlApiServer {
         }
         writeTextFile(TOKEN_FILE_PATH, token + "\n");
         writeTextFile(ENDPOINT_FILE_PATH, "http://127.0.0.1:" + port + "\n");
-        ensureDefaultConfigFile();
     }
 
     private void installLauncherCtlCliScript() {
@@ -972,12 +868,6 @@ public class LauncherCtlApiServer {
             "  notifications)\n" +
             "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/notifications\"\n" +
             "    ;;\n" +
-            "  exec)\n" +
-            "    [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl exec <command>\" >&2; exit 2; }\n" +
-            "    CMD_ESCAPED=$(json_escape \"$*\")\n" +
-            "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" \\\n" +
-            "      --data \"{\\\"command\\\":\\\"$CMD_ESCAPED\\\"}\" \"$BASE/v1/exec\"\n" +
-            "    ;;\n" +
             "  restart)\n" +
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/app/restart\"\n" +
             "    ;;\n" +
@@ -995,7 +885,7 @@ public class LauncherCtlApiServer {
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/auth/rotate\"\n" +
             "    ;;\n" +
             "  *)\n" +
-            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|exec|restart|tty-exec|tty-doctor|token rotate}\" >&2\n" +
+            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|tty-exec|tty-doctor|token rotate}\" >&2\n" +
             "    exit 2\n" +
             "    ;;\n" +
             "esac\n";
@@ -1078,84 +968,6 @@ public class LauncherCtlApiServer {
         file.setWritable(false, false);
         file.setReadable(true, true);
         file.setWritable(true, true);
-    }
-
-    private void ensureDefaultConfigFile() {
-        File file = new File(CONFIG_FILE_PATH);
-        if (file.exists()) {
-            return;
-        }
-
-        JSONObject defaultConfig = new JSONObject();
-        try {
-            defaultConfig.put("execEnabled", false);
-            JSONArray prefixes = new JSONArray();
-            prefixes.put("id");
-            prefixes.put("pm list packages");
-            prefixes.put("cmd package list packages");
-            defaultConfig.put("allowedCommandPrefixes", prefixes);
-            defaultConfig.put("help", "Set execEnabled=true and copy only needed entries from commandPrefixTemplates into allowedCommandPrefixes.");
-            JSONArray templates = new JSONArray();
-            templates.put("launcherctl restart");
-            templates.put("am start -S -n com.termux/.app.TermuxActivity");
-            templates.put("am start -n");
-            templates.put("am force-stop");
-            templates.put("cmd package query-activities");
-            templates.put("cmd package list packages");
-            templates.put("pm list packages");
-            templates.put("id");
-            defaultConfig.put("commandPrefixTemplates", templates);
-            writeTextFile(CONFIG_FILE_PATH, defaultConfig.toString(2) + "\n");
-        } catch (Exception e) {
-            Logger.logErrorExtended(LOG_TAG, "Failed to write default LauncherCtl config: " + e.getMessage());
-        }
-    }
-
-    private ExecPolicy loadExecPolicy() {
-        ExecPolicy policy = new ExecPolicy();
-        policy.execEnabled = false;
-        policy.allowedCommandPrefixes = new ArrayList<>();
-        policy.allowedCommandPrefixes.add("id");
-        policy.allowedCommandPrefixes.add("pm list packages");
-        policy.allowedCommandPrefixes.add("cmd package list packages");
-
-        File configFile = new File(CONFIG_FILE_PATH);
-        if (!configFile.exists()) {
-            return policy;
-        }
-        try {
-            byte[] bytes = readAllBytes(configFile);
-            JSONObject config = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-            policy.execEnabled = config.optBoolean("execEnabled", policy.execEnabled);
-            JSONArray allowed = config.optJSONArray("allowedCommandPrefixes");
-            if (allowed != null) {
-                List<String> prefixes = new ArrayList<>();
-                for (int i = 0; i < allowed.length(); i++) {
-                    String entry = allowed.optString(i, "").trim();
-                    if (!entry.isEmpty()) {
-                        prefixes.add(entry);
-                    }
-                }
-                if (!prefixes.isEmpty()) {
-                    policy.allowedCommandPrefixes = prefixes;
-                }
-            }
-        } catch (Exception e) {
-            Logger.logErrorExtended(LOG_TAG, "Failed to parse LauncherCtl config, using defaults: " + e.getMessage());
-        }
-        return policy;
-    }
-
-    private JSONObject describeExecPolicy() throws JSONException {
-        ExecPolicy policy = loadExecPolicy();
-        JSONObject info = new JSONObject();
-        info.put("enabled", policy.execEnabled);
-        JSONArray prefixes = new JSONArray();
-        for (String prefix : policy.allowedCommandPrefixes) {
-            prefixes.put(prefix);
-        }
-        info.put("allowedCommandPrefixes", prefixes);
-        return info;
     }
 
     private byte[] readAllBytes(File file) throws IOException {
@@ -1621,26 +1433,6 @@ public class LauncherCtlApiServer {
         }
     }
 
-    private boolean isCommandAllowed(String command, List<String> allowedPrefixes) {
-        if (allowedPrefixes == null || allowedPrefixes.isEmpty()) return false;
-        for (String prefix : allowedPrefixes) {
-            if (command.equals(prefix) || command.startsWith(prefix + " ")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean containsControlChars(String command) {
-        for (int i = 0; i < command.length(); i++) {
-            char c = command.charAt(i);
-            if (c < 32 && c != '\t') {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private boolean secureEquals(String expected, String actual) {
         byte[] e = expected.getBytes(StandardCharsets.UTF_8);
         byte[] a = actual.getBytes(StandardCharsets.UTF_8);
@@ -1650,17 +1442,6 @@ public class LauncherCtlApiServer {
             result |= (e[i] ^ a[i]);
         }
         return result == 0;
-    }
-
-    private boolean isSuccessfulCommandOutput(String output) {
-        if (output == null) return false;
-        String trimmed = output.trim();
-        if (trimmed.isEmpty()) return true;
-        String lower = trimmed.toLowerCase();
-        if (lower.startsWith("error")) return false;
-        if (lower.contains("permission required")) return false;
-        if (lower.contains("no privileged backend")) return false;
-        return true;
     }
 
     static AppLaunchMatch resolveLaunchMatch(List<LauncherAppEntry> apps, String query) throws JSONException {
@@ -1857,11 +1638,6 @@ public class LauncherCtlApiServer {
             timestamps.addLast(now);
             return true;
         }
-    }
-
-    private static class ExecPolicy {
-        boolean execEnabled;
-        List<String> allowedCommandPrefixes;
     }
 
     private static class AppSearchCandidate {

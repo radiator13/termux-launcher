@@ -43,16 +43,4 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory
-        app:key="privileged_access_endpoints"
-        app:title="@string/termux_privileged_endpoints_title">
-
-        <SwitchPreferenceCompat
-            app:key="priv_endpoint_exec"
-            app:title="@string/termux_privileged_endpoint_exec_title"
-            app:summary="@string/termux_privileged_endpoint_exec_summary"
-            app:defaultValue="true" />
-
-    </PreferenceCategory>
-
 </PreferenceScreen>

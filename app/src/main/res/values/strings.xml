@@ -243,7 +243,7 @@
         <string name="termux_theme_mode_dark">Dark</string>
 
         <string name="termux_privileged_access_preferences_title">Shizuku</string>
-        <string name="termux_privileged_access_preferences_summary">Shizuku backend and privileged endpoint controls</string>
+        <string name="termux_privileged_access_preferences_summary">Shizuku backend controls</string>
 
             <string name="termux_privileged_access_overview_title">Overview</string>
             <string name="termux_privileged_backend_status_title">Backend Status</string>
@@ -251,7 +251,7 @@
 
             <string name="termux_privileged_access_backend_title">Backend Policy</string>
             <string name="termux_privileged_master_enabled_title">Enable privileged features</string>
-            <string name="termux_privileged_master_enabled_on">Privileged backend and endpoints are enabled.</string>
+            <string name="termux_privileged_master_enabled_on">Privileged backend features are enabled.</string>
             <string name="termux_privileged_master_enabled_off">All privileged backend operations are disabled.</string>
             <string name="termux_privileged_prefer_shizuku_title">Prefer Shizuku backend</string>
             <string name="termux_privileged_prefer_shizuku_on">Try Shizuku first, then fallback based on policy.</string>
@@ -263,10 +263,6 @@
             <string name="termux_privileged_request_permission_summary">Request or re-check Shizuku permission now</string>
             <string name="termux_privileged_request_permission_requested">Shizuku permission requested.</string>
             <string name="termux_privileged_request_permission_unavailable">Permission request unavailable for current backend state.</string>
-
-            <string name="termux_privileged_endpoints_title">Allowed Privileged Endpoints</string>
-            <string name="termux_privileged_endpoint_exec_title">Allow /v1/exec</string>
-            <string name="termux_privileged_endpoint_exec_summary">Controls LauncherCtl privileged exec endpoint availability.</string>
 
             <!-- Background Category -->
             <string name="termux_background_header">Wallpaper</string>

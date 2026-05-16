@@ -6,7 +6,6 @@ When enabled and granted, Shizuku supports optional privileged launcher features
 
 - Double-tap the alphabet row to lock the phone.
 - System status helpers for tmux/status bar integrations.
-- Controlled privileged command execution through LauncherCtl policy, when explicitly enabled.
 
 ## Setup
 
@@ -32,18 +31,6 @@ launcherctl status
 ```
 
 Confirm that Shizuku is running and that Termux Launcher has permission.
-
-## LauncherCtl Exec Policy
-
-Privileged command execution is disabled by default. If you enable it, the policy is stored at:
-
-```sh
-~/.launcherctl/config.json
-```
-
-Allowed commands must match configured prefixes. See [LauncherCtl API](LauncherCtl_API) for the policy format and security model.
-
-Keep this disabled unless you have a specific command you want to expose. The launcher does not need it for normal app launching.
 
 ## TTY Commands
 

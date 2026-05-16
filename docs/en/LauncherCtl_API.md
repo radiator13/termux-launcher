@@ -8,8 +8,7 @@ LauncherCtl is a localhost API bridge for exposing Android/app data to shell too
 - Endpoint URL: `~/.launcherctl/endpoint`.
 - CLI: `$PREFIX/bin/launcherctl` (installed by the launcher app when `TermuxActivity` starts).
 
-Important behavior split:
-- `/v1/exec` is a buffered API execution path and is not suitable for full-screen interactive TUI programs.
+Important behavior:
 - `launcherctl tty-exec` is a local CLI helper that uses `~/.rish/rish` for interactive/TTY-required commands.
 
 ## Files and Components
@@ -27,7 +26,6 @@ Runtime files under `$HOME/.launcherctl`:
 
 - `token`: API bearer token.
 - `endpoint`: local base URL (`http://127.0.0.1:<port>`).
-- `config.json`: server policy (created automatically if missing).
 
 ## Endpoints (v1)
 
@@ -76,7 +74,6 @@ Returns a system resource snapshot:
   - nested `thermal` array from `/sys/class/thermal/thermal_zone*`
 - Backend diagnostics:
   - `backendType`, `backendState`, `statusReason`, `statusMessage`, `isPrivilegedAvailable`
-  - `execPolicy`
 
 ### `GET /v1/media/now-playing`
 Returns cached now-playing media session data.
@@ -90,10 +87,6 @@ Requires notification listener access.
 Returns cached notification list.
 Requires notification listener access.
 
-### `POST /v1/exec`
-Runs a privileged command through `PrivilegedBackendManager`.
-Subject to strict policy in `~/.launcherctl/config.json`.
-
 ### `POST /v1/auth/rotate`
 Rotates API token and rewrites `~/.launcherctl/token` and `~/.launcherctl/endpoint`.
 
@@ -101,7 +94,6 @@ Rotates API token and rewrites `~/.launcherctl/token` and `~/.launcherctl/endpoi
 
 ```sh
 launcherctl --help
-launcherctl help exec
 launcherctl status
 launcherctl apps
 launcherctl launch whatsapp
@@ -109,7 +101,6 @@ launcherctl resources
 launcherctl media
 launcherctl art
 launcherctl notifications
-launcherctl exec id
 launcherctl tty-doctor
 launcherctl tty-exec "id"
 launcherctl token rotate
@@ -140,7 +131,6 @@ launcherctl tty-exec "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tm
 ### Attack Surface
 - Localhost API reachable from local device processes.
 - Token theft enables API calls.
-- `exec` endpoint is highest-risk capability.
 - Notification/media endpoints may expose sensitive user content.
 
 ### Mitigations Implemented
@@ -152,8 +142,6 @@ launcherctl tty-exec "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tm
   - header line size/count,
   - max body size.
 - Endpoint rate limiting (`429` on abuse).
-- `exec` policy gate (`config.json`) with allowlist prefixes.
-- `exec` disabled by default.
 - Token rotation endpoint.
 - Sensitive files written owner-only.
 
@@ -162,41 +150,6 @@ launcherctl tty-exec "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tm
 - If same app UID ecosystem is compromised, token can be read.
 - Consider Unix domain sockets for tighter local access boundaries in future.
 - Consider endpoint toggles for media/notifications if privacy requirements increase.
-
-## `config.json` Policy
-Default generated policy:
-
-```json
-{
-  "execEnabled": false,
-  "allowedCommandPrefixes": [
-    "id",
-    "pm list packages",
-    "cmd package list packages"
-  ]
-}
-```
-
-To enable exec for controlled commands:
-
-```json
-{
-  "execEnabled": true,
-  "allowedCommandPrefixes": [
-    "id",
-    "pm list packages",
-    "cmd package list packages",
-    "input keyevent"
-  ]
-}
-```
-
-Rules:
-- Command must exactly match a prefix or start with `"<prefix> "`.
-- Commands with unsupported control chars are rejected.
-- Overlong commands are rejected.
-- If Shizuku permission is missing, `/v1/exec` returns `permission_required`
-  and attempts to trigger a permission request.
 
 ## Notification and Media Data
 
@@ -209,12 +162,7 @@ If not granted, responses include:
 
 ## Troubleshooting
 
-### `launcherctl exec` returns forbidden/disabled
-- Check `~/.launcherctl/config.json` and set `"execEnabled": true`.
-- Ensure command matches `allowedCommandPrefixes`.
-
 ### Interactive command fails with "No tty detected"
-- Use `launcherctl tty-exec "<command>"` instead of `launcherctl exec`.
 - Run `launcherctl tty-doctor` and apply its suggested fixes for `~/.rish`.
 
 ### `launcherctl media`/`notifications` empty
@@ -229,4 +177,3 @@ If not granted, responses include:
 - LauncherCtl is event-driven for notifications/media and avoids constant polling loops.
 - `/v1/apps` can be heavier than status queries; avoid frequent tight loops.
 - `/v1/system/resources` is designed for periodic dashboard polling.
-- `/v1/exec` cost depends on spawned privileged command frequency.

@@ -155,9 +155,6 @@ class PrivilegedAccessPreferencesDataStore extends PreferenceDataStore {
             case PrivilegedPolicyStore.KEY_ALLOW_SHELL_FALLBACK:
                 PrivilegedPolicyStore.setShellFallbackEnabled(mContext, value);
                 break;
-            case PrivilegedPolicyStore.KEY_ENDPOINT_EXEC:
-                PrivilegedPolicyStore.setEndpointEnabled(mContext, PrivilegedPolicyStore.Endpoint.EXEC, value);
-                break;
             default:
                 break;
         }
@@ -175,8 +172,6 @@ class PrivilegedAccessPreferencesDataStore extends PreferenceDataStore {
                 return PrivilegedPolicyStore.isPreferShizuku(mContext);
             case PrivilegedPolicyStore.KEY_ALLOW_SHELL_FALLBACK:
                 return PrivilegedPolicyStore.isShellFallbackEnabled(mContext);
-            case PrivilegedPolicyStore.KEY_ENDPOINT_EXEC:
-                return PrivilegedPolicyStore.isEndpointEnabled(mContext, PrivilegedPolicyStore.Endpoint.EXEC);
             default:
                 return defValue;
         }

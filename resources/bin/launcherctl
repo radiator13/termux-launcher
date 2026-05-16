@@ -17,7 +17,6 @@ Commands:
   media                     Get now-playing media info.
   art                       Get current media artwork metadata.
   notifications             Get active notifications snapshot.
-  exec <command>            Run policy-allowed command via /v1/exec.
   restart                   Restart the launcher through authenticated API.
   tty-exec <command>        Run interactive command via ~/.rish/rish.
   tty-doctor                Validate local rish setup and print fixes.
@@ -27,7 +26,6 @@ Examples:
   launcherctl status
   launcherctl apps
   launcherctl launch whatsapp
-  launcherctl exec "id"
   launcherctl restart
   launcherctl tty-doctor
   launcherctl tty-exec "id"
@@ -35,29 +33,8 @@ Examples:
 Config files:
   ~/.launcherctl/endpoint   Base URL (for example http://127.0.0.1:40851)
   ~/.launcherctl/token      Bearer token used by this client
-  ~/.launcherctl/config.json
-    - execEnabled: true/false
-    - allowedCommandPrefixes: prefix allowlist for 'launcherctl exec'
-
 Notes:
-  - 'launcherctl exec' returns HTTP 403 if disabled by policy or prefix is not allowed.
   - 'launcherctl tty-exec' requires a working ~/.rish/rish + rish_shizuku.dex pair.
-  - Use: launcherctl help exec
-EOF
-}
-
-print_exec_help() {
-  cat <<'EOF'
-Usage:
-  launcherctl exec "<command>"
-
-Description:
-  Sends POST /v1/exec with JSON body {"command":"..."}.
-  The command must match an allowed prefix in ~/.launcherctl/config.json.
-
-Examples:
-  launcherctl exec "id"
-  launcherctl exec "pm list packages"
 EOF
 }
 
@@ -94,9 +71,6 @@ case "$cmd" in
     case "$sub" in
       ""|all)
         print_help
-        ;;
-      exec)
-        print_exec_help
         ;;
       tty-exec)
         print_tty_exec_help
@@ -201,12 +175,6 @@ case "$cmd" in
     ;;
   notifications)
     curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/notifications"
-    ;;
-  exec)
-    [ "$#" -gt 0 ] || { print_exec_help >&2; exit 2; }
-    CMD_ESCAPED=$(json_escape "$*")
-    curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-      --data "{\"command\":\"$CMD_ESCAPED\"}" "$BASE/v1/exec"
     ;;
   restart)
     curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" "$BASE/v1/app/restart"
