@@ -47,6 +47,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
@@ -2577,9 +2578,10 @@ public final class SuggestionBarView extends GridLayout {
         Dialog dialog = new Dialog(getContext());
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         dialog.setCanceledOnTouchOutside(true);
-        dialog.setContentView(buildIconPickerDialogSurface(root));
+        View dialogSurface = buildIconPickerDialogSurface(root);
+        dialog.setContentView(dialogSurface);
         iconPickerDialog = dialog;
-        dialog.setOnShowListener(shownDialog -> configureIconPickerDialogWindow(dialog));
+        dialog.setOnShowListener(shownDialog -> configureIconPickerDialogWindow(dialog, dialogSurface, root));
         iconPickerDialog.setOnDismissListener(dismissedDialog -> {
             if (iconPickerDialog != null && !iconPickerDialog.isShowing()) {
                 iconPickerDialog = null;
@@ -2620,7 +2622,11 @@ public final class SuggestionBarView extends GridLayout {
         return overlay;
     }
 
-    private void configureIconPickerDialogWindow(@NonNull Dialog dialog) {
+    private void configureIconPickerDialogWindow(
+        @NonNull Dialog dialog,
+        @NonNull View dialogSurface,
+        @NonNull View content
+    ) {
         android.view.Window window = dialog.getWindow();
         if (window == null) {
             return;
@@ -2630,9 +2636,36 @@ public final class SuggestionBarView extends GridLayout {
         window.setDimAmount(0.32f);
         window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         window.setSoftInputMode(
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE |
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING |
             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
         );
+        installKeyboardAwareIconPickerLayout(dialogSurface, content);
+    }
+
+    private void installKeyboardAwareIconPickerLayout(@NonNull View dialogSurface, @NonNull View content) {
+        ViewTreeObserver observer = dialogSurface.getViewTreeObserver();
+        observer.addOnGlobalLayoutListener(() -> {
+            Rect visibleFrame = new Rect();
+            dialogSurface.getWindowVisibleDisplayFrame(visibleFrame);
+            int fullHeight = dialogSurface.getRootView() == null ? dialogSurface.getHeight() : dialogSurface.getRootView().getHeight();
+            int keyboardHeight = Math.max(0, fullHeight - visibleFrame.bottom);
+            int sideMargin = dp(18);
+            int topMargin = dp(24);
+            int bottomMargin = dp(24) + keyboardHeight;
+            ViewGroup.LayoutParams rawParams = content.getLayoutParams();
+            if (!(rawParams instanceof FrameLayout.LayoutParams)) {
+                return;
+            }
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) rawParams;
+            if (params.leftMargin == sideMargin
+                && params.topMargin == topMargin
+                && params.rightMargin == sideMargin
+                && params.bottomMargin == bottomMargin) {
+                return;
+            }
+            params.setMargins(sideMargin, topMargin, sideMargin, bottomMargin);
+            content.setLayoutParams(params);
+        });
     }
 
     private void showIconPickerMessagePopup(@NonNull String title, @NonNull String message) {
@@ -3026,6 +3059,7 @@ public final class SuggestionBarView extends GridLayout {
             pinnedItems = configRepository.loadPinnedItems();
         }
         pendingPinnedMutationFeedback = true;
+        lastSurfaceRenderSignature = 0;
         reloadWithInput("", lastTerminalView);
     }
 
