@@ -2464,7 +2464,7 @@ public final class SuggestionBarView extends GridLayout {
                 iconPickerPopupWindow = null;
             }
         });
-        showPopupAtAnchor(iconPickerPopupWindow, null);
+        showIconPickerPopupCentered(iconPickerPopupWindow);
     }
 
     private void showPinnedIconDrawablePicker(int index, @NonNull PinnedAppItem item, @NonNull IconPackInfo packInfo) {
@@ -2479,6 +2479,7 @@ public final class SuggestionBarView extends GridLayout {
         List<IconPackDrawableItem> source = pack.drawableItems();
         LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setFocusableInTouchMode(true);
         int padding = dp(10);
         root.setPadding(padding, padding, padding, padding);
 
@@ -2563,8 +2564,9 @@ public final class SuggestionBarView extends GridLayout {
         });
         iconPickerPopupWindow.setFocusable(true);
         iconPickerPopupWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
-        iconPickerPopupWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        showPopupAtAnchor(iconPickerPopupWindow, null);
+        iconPickerPopupWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        showIconPickerPopupCentered(iconPickerPopupWindow);
+        root.requestFocus();
     }
 
     @NonNull
@@ -2611,7 +2613,7 @@ public final class SuggestionBarView extends GridLayout {
                 iconPickerPopupWindow = null;
             }
         });
-        showPopupAtAnchor(iconPickerPopupWindow, null);
+        showIconPickerPopupCentered(iconPickerPopupWindow);
     }
 
     private final class IconDrawableGridAdapter extends BaseAdapter {
@@ -3990,6 +3992,23 @@ public final class SuggestionBarView extends GridLayout {
             root.animate()
                 .alpha(1f)
                 .translationY(0f)
+                .setDuration(150)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+        }
+    }
+
+    private void showIconPickerPopupCentered(@NonNull PopupWindow popupWindow) {
+        popupWindow.showAtLocation(this, Gravity.CENTER, 0, 0);
+        View root = popupWindow.getContentView();
+        if (root != null) {
+            root.setAlpha(0f);
+            root.setScaleX(0.985f);
+            root.setScaleY(0.985f);
+            root.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
                 .setDuration(150)
                 .setInterpolator(new DecelerateInterpolator())
                 .start();

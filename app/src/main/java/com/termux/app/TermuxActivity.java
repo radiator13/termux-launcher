@@ -838,9 +838,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private int resolveAccessoryGlassBaseColor() {
         if (isNightThemeActive()) {
-            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+            return resolveMonetDarkBackgroundColor();
         }
         return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh, R.color.termux_surface_panel_high);
+    }
+
+    private int resolveMonetDarkBackgroundColor() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            int colorResId = getResources().getIdentifier("system_neutral1_900", "color", "android");
+            if (colorResId != 0) {
+                return ContextCompat.getColor(this, colorResId);
+            }
+        }
+        return Color.parseColor("#1C1B1F");
     }
 
     private int resolveAccessoryOutlineColor() {
