@@ -2463,7 +2463,7 @@ public final class SuggestionBarView extends GridLayout {
             })
             .setNegativeButton(android.R.string.cancel, null)
             .create();
-        iconPickerDialog.setOnDismissListener(dialog -> {
+        iconPickerDialog.setOnDismissListener(dismissedDialog -> {
             if (iconPickerDialog != null && !iconPickerDialog.isShowing()) {
                 iconPickerDialog = null;
             }
@@ -2580,7 +2580,7 @@ public final class SuggestionBarView extends GridLayout {
         dialog.setContentView(buildIconPickerDialogSurface(root));
         iconPickerDialog = dialog;
         dialog.setOnShowListener(shownDialog -> configureIconPickerDialogWindow(dialog));
-        iconPickerDialog.setOnDismissListener(dialog -> {
+        iconPickerDialog.setOnDismissListener(dismissedDialog -> {
             if (iconPickerDialog != null && !iconPickerDialog.isShowing()) {
                 iconPickerDialog = null;
             }
