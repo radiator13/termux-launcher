@@ -1760,19 +1760,6 @@ public final class SuggestionBarView extends GridLayout {
         return new LauncherAppEntry(entry.appRef, entry.label, pinnedIcon);
     }
 
-    @Nullable
-    private LauncherAppEntry resolvePinnedSurfaceEntry(@NonNull AppRef ref) {
-        LauncherAppEntry entry = resolveRef(ref);
-        if (entry == null) {
-            return null;
-        }
-        Drawable icon = getIconResolver().resolvePinned(entry.appRef, null);
-        if (icon == null || icon == entry.icon) {
-            return entry;
-        }
-        return new LauncherAppEntry(entry.appRef, entry.label, icon);
-    }
-
     private LauncherAppEntry folderSyntheticEntry(@NonNull PinnedFolderItem folder) {
         Drawable icon = null;
         for (PinnedAppItem folderApp : folder.apps) {

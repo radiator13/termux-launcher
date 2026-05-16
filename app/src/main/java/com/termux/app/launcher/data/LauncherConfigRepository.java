@@ -123,14 +123,7 @@ public final class LauncherConfigRepository {
                     item.put("type", "app");
                     item.put("packageName", appItem.appRef.packageName);
                     item.put("activityName", appItem.appRef.activityName);
-                    if (appItem.iconOverride != null && appItem.iconOverride.isValid()) {
-                        JSONObject override = new JSONObject();
-                        override.put("sourceType", appItem.iconOverride.sourceType);
-                        override.put("iconPackPackage", appItem.iconOverride.iconPackPackage);
-                        override.put("drawableName", appItem.iconOverride.drawableName);
-                        override.put("displayLabel", appItem.iconOverride.displayLabel);
-                        item.put("iconOverride", override);
-                    }
+                    putIconOverrideIfValid(item, appItem.iconOverride);
                     items.put(item);
                 } catch (JSONException ignored) {
                 }
@@ -144,14 +137,7 @@ public final class LauncherConfigRepository {
                         AppRef ref = folderApp.appRef;
                         app.put("packageName", ref.packageName);
                         app.put("activityName", ref.activityName);
-                        if (folderApp.iconOverride != null && folderApp.iconOverride.isValid()) {
-                            JSONObject override = new JSONObject();
-                            override.put("sourceType", folderApp.iconOverride.sourceType);
-                            override.put("iconPackPackage", folderApp.iconOverride.iconPackPackage);
-                            override.put("drawableName", folderApp.iconOverride.drawableName);
-                            override.put("displayLabel", folderApp.iconOverride.displayLabel);
-                            app.put("iconOverride", override);
-                        }
+                        putIconOverrideIfValid(app, folderApp.iconOverride);
                         apps.put(app);
                     } catch (JSONException ignored) {
                     }
@@ -212,5 +198,15 @@ public final class LauncherConfigRepository {
             raw.optString("displayLabel", "")
         );
         return override.isValid() ? override : null;
+    }
+
+    private static void putIconOverrideIfValid(@NonNull JSONObject target, PinnedIconOverride iconOverride) throws JSONException {
+        if (iconOverride == null || !iconOverride.isValid()) return;
+        JSONObject override = new JSONObject();
+        override.put("sourceType", iconOverride.sourceType);
+        override.put("iconPackPackage", iconOverride.iconPackPackage);
+        override.put("drawableName", iconOverride.drawableName);
+        override.put("displayLabel", iconOverride.displayLabel);
+        target.put("iconOverride", override);
     }
 }
