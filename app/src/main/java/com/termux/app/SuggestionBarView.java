@@ -1640,12 +1640,20 @@ public final class SuggestionBarView extends GridLayout {
             ? buildLaunchAnimationContext(launchSourceView)
             : null;
 
+        Intent pkgDefault = packageManager.getLaunchIntentForPackage(entry.appRef.packageName);
+        ComponentName pkgDefaultComponent = pkgDefault != null ? pkgDefault.getComponent() : null;
+        ComponentName explicitComponent = explicit != null ? explicit.getComponent() : null;
+        boolean explicitIsPackageDefault = sameComponent(explicitComponent, pkgDefaultComponent);
+
         boolean launched = false;
-        if (tryStartActivity(context, explicit, launchAnimationContext)) {
+        if (explicitIsPackageDefault && tryStartActivity(context, pkgDefault, launchAnimationContext)) {
+            launched = true;
+        } else if (tryStartActivity(context, explicit, launchAnimationContext)) {
+            launched = true;
+        } else if (!explicitIsPackageDefault && tryStartActivity(context, pkgDefault, launchAnimationContext)) {
             launched = true;
         }
 
-        Intent pkgDefault = launched ? null : packageManager.getLaunchIntentForPackage(entry.appRef.packageName);
         Intent resolveFallback = null;
         ComponentName resolved = null;
         if (!launched) {
@@ -1657,9 +1665,7 @@ public final class SuggestionBarView extends GridLayout {
                 resolveFallback.setComponent(resolved);
             }
         }
-        if (!launched && tryStartActivity(context, pkgDefault, launchAnimationContext)) {
-            launched = true;
-        } else if (!launched && tryStartActivity(context, explicitNoCategory, launchAnimationContext)) {
+        if (!launched && tryStartActivity(context, explicitNoCategory, launchAnimationContext)) {
             launched = true;
         } else if (!launched && resolved != null && tryStartActivity(context, resolveFallback, launchAnimationContext)) {
             launched = true;
@@ -1712,7 +1718,7 @@ public final class SuggestionBarView extends GridLayout {
     private void launchEntryFromTouch(@NonNull View sourceView, @NonNull LauncherAppEntry entry, @Nullable TerminalView terminalView) {
         boolean touchAnimation = shouldUseTouchLaunchAnimation(sourceView);
         long launchDelay = touchAnimation ? APP_LAUNCH_TOUCH_DELAY_MS : 0L;
-        sourceView.postDelayed(() -> launchEntry(entry, terminalView, touchAnimation ? sourceView : null), launchDelay);
+        postDelayed(() -> launchEntry(entry, terminalView, touchAnimation ? sourceView : null), launchDelay);
     }
 
     private List<LauncherAppEntry> entriesForPinnedItems(@NonNull List<PinnedItem> source) {
@@ -1919,6 +1925,10 @@ public final class SuggestionBarView extends GridLayout {
             Log.d(LOG_TAG, "launch failed for intent " + intent + ": " + e.getMessage());
             return false;
         }
+    }
+
+    private static boolean sameComponent(@Nullable ComponentName first, @Nullable ComponentName second) {
+        return first != null && second != null && first.equals(second);
     }
 
     @Nullable
