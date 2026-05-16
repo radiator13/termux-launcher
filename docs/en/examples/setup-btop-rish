@@ -192,7 +192,7 @@ update_ms = 2000
 CONF
 
     cat > "$TMP_DIR/mini-btop.conf" <<'CONF'
-shown_boxes = "cpu mem proc"
+shown_boxes = "cpu proc"
 io_mode = False
 show_io_stat = False
 net_auto = False
