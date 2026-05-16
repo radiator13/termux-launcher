@@ -215,7 +215,7 @@ public class TermuxDocumentsProvider extends DocumentsProvider {
             File parent = getFileForDocId(parentDocumentId);
             File child = getFileForDocId(documentId);
             return isPathInDirectoryOrSame(parent, child);
-        } catch (FileNotFoundException | IOException e) {
+        } catch (IOException e) {
             return false;
         }
     }
