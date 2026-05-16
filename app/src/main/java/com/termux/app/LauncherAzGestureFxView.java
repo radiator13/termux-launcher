@@ -38,7 +38,6 @@ public final class LauncherAzGestureFxView extends View {
     private final Paint edgeInnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bloomPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pageIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint pageIndicatorInnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path liquidBridgePath = new Path();
 
     private final RectF tmpRect = new RectF();
@@ -122,7 +121,6 @@ public final class LauncherAzGestureFxView extends View {
         edgePaint.setStyle(Paint.Style.FILL);
         edgeInnerPaint.setStyle(Paint.Style.FILL);
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        pageIndicatorInnerPaint.setStyle(Paint.Style.FILL);
     }
 
     public void setColors(int glassTintColor, int edgeTintColor) {
@@ -499,10 +497,10 @@ public final class LauncherAzGestureFxView extends View {
             currentPageIndex,
             pageCount,
             clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            dp(2f),
-            dp(5f),
-            withAlpha(boostColor(glassTintColor, 0.94f, 0.72f), 118),
-            withAlpha(boostColor(edgeTintColor, 0.92f, 0.82f), 198),
+            dp(8.5f),
+            dp(10f),
+            withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
+            withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
             true
         );
     }
@@ -519,14 +517,14 @@ public final class LauncherAzGestureFxView extends View {
             subtle
                 ? clamp(getWidth() * 0.22f, dp(62f), dp(118f))
                 : clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            subtle ? dp(1.35f) : dp(2f),
-            subtle ? dp(3f) : dp(5f),
+            subtle ? dp(6f) : dp(8.5f),
+            subtle ? dp(7f) : dp(10f),
             subtle
-                ? withAlpha(boostColor(glassTintColor, 0.88f, 0.68f), 68)
-                : withAlpha(boostColor(glassTintColor, 0.94f, 0.72f), 118),
+                ? withAlpha(boostColor(glassTintColor, 1.16f, 1.02f), 112)
+                : withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
             subtle
-                ? withAlpha(boostColor(edgeTintColor, 0.90f, 0.76f), 136)
-                : withAlpha(boostColor(edgeTintColor, 0.92f, 0.82f), 198),
+                ? withAlpha(boostColor(edgeTintColor, 1.22f, 1.08f), 196)
+                : withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
             !subtle
         );
     }
@@ -546,25 +544,30 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
         float cy = resolvePageIndicatorCenterY();
-        float segmentWidth = (totalWidth - (segmentGap * Math.max(0, totalPages - 1))) / Math.max(1, totalPages);
-        float left = (getWidth() - totalWidth) * 0.5f;
+        float dotSize = lineHeight;
+        float activeWidth = insetActive ? dp(38f) : dp(26f);
+        float desiredWidth = activeWidth
+            + (dotSize * Math.max(0, totalPages - 1))
+            + (segmentGap * Math.max(0, totalPages - 1));
+        if (desiredWidth > totalWidth) {
+            float scale = totalWidth / Math.max(1f, desiredWidth);
+            dotSize = Math.max(dp(4.5f), dotSize * scale);
+            activeWidth = Math.max(dp(20f), activeWidth * scale);
+            segmentGap = Math.max(dp(4f), segmentGap * scale);
+            desiredWidth = activeWidth
+                + (dotSize * Math.max(0, totalPages - 1))
+                + (segmentGap * Math.max(0, totalPages - 1));
+        }
+
+        float left = (getWidth() - desiredWidth) * 0.5f;
         for (int i = 0; i < totalPages; i++) {
-            float radius = lineHeight * 0.5f;
-            tmpRect.set(left, cy - (lineHeight * 0.5f), left + segmentWidth, cy + (lineHeight * 0.5f));
-            pageIndicatorPaint.setColor(backgroundLineColor);
+            boolean activePage = i == activePageIndex;
+            float width = activePage ? activeWidth : dotSize;
+            float radius = dotSize * 0.5f;
+            tmpRect.set(left, cy - radius, left + width, cy + radius);
+            pageIndicatorPaint.setColor(activePage ? activeLineColor : backgroundLineColor);
             canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            if (i == activePageIndex) {
-                pageIndicatorPaint.setColor(activeLineColor);
-                if (insetActive) {
-                    RectF active = new RectF(tmpRect);
-                    float activeInset = dp(0.12f);
-                    active.inset(activeInset, activeInset);
-                    canvas.drawRoundRect(active, radius, radius, pageIndicatorPaint);
-                } else {
-                    canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-                }
-            }
-            left += segmentWidth + segmentGap;
+            left += width + segmentGap;
         }
     }
 
