@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 public final class LauncherConfigRepository {
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
 
     public interface PreferencesStore {
         String getPinnedItemsV2();
@@ -93,7 +93,10 @@ public final class LauncherConfigRepository {
                             String packageName = app.optString("packageName", "");
                             String activityName = app.optString("activityName", "");
                             if (!packageName.isEmpty()) {
-                                folder.apps.add(new AppRef(packageName, activityName));
+                                folder.apps.add(new PinnedAppItem(
+                                    new AppRef(packageName, activityName),
+                                    parseIconOverride(app.optJSONObject("iconOverride"))
+                                ));
                             }
                         }
                     }
@@ -135,11 +138,20 @@ public final class LauncherConfigRepository {
                 PinnedFolderItem folderItem = (PinnedFolderItem) pinnedItem;
                 JSONObject item = new JSONObject();
                 JSONArray apps = new JSONArray();
-                for (AppRef ref : folderItem.apps) {
+                for (PinnedAppItem folderApp : folderItem.apps) {
                     JSONObject app = new JSONObject();
                     try {
+                        AppRef ref = folderApp.appRef;
                         app.put("packageName", ref.packageName);
                         app.put("activityName", ref.activityName);
+                        if (folderApp.iconOverride != null && folderApp.iconOverride.isValid()) {
+                            JSONObject override = new JSONObject();
+                            override.put("sourceType", folderApp.iconOverride.sourceType);
+                            override.put("iconPackPackage", folderApp.iconOverride.iconPackPackage);
+                            override.put("drawableName", folderApp.iconOverride.drawableName);
+                            override.put("displayLabel", folderApp.iconOverride.displayLabel);
+                            app.put("iconOverride", override);
+                        }
                         apps.put(app);
                     } catch (JSONException ignored) {
                     }

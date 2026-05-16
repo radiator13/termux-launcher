@@ -78,8 +78,8 @@ public class LauncherConfigRepositoryTest {
         folder.cols = 3;
         folder.tintOverrideEnabled = true;
         folder.tintColor = 0xFF1A2B3C;
-        folder.apps.add(new AppRef("com.example.music", "Main"));
-        folder.apps.add(new AppRef("com.example.podcast", "Main"));
+        folder.apps.add(new PinnedAppItem(new AppRef("com.example.music", "Main")));
+        folder.apps.add(new PinnedAppItem(new AppRef("com.example.podcast", "Main")));
         items.add(folder);
 
         repository.savePinnedItems(items);
@@ -99,8 +99,8 @@ public class LauncherConfigRepositoryTest {
     public void folderRoundTrip_preservesPackageOnlyRefs() {
         List<PinnedItem> items = new ArrayList<>();
         PinnedFolderItem folder = new PinnedFolderItem("folder-2", "Fallbacks");
-        folder.apps.add(new AppRef("com.example.packageonly", ""));
-        folder.apps.add(new AppRef("com.example.full", "Main"));
+        folder.apps.add(new PinnedAppItem(new AppRef("com.example.packageonly", "")));
+        folder.apps.add(new PinnedAppItem(new AppRef("com.example.full", "Main")));
         items.add(folder);
 
         repository.savePinnedItems(items);
@@ -109,8 +109,8 @@ public class LauncherConfigRepositoryTest {
         assertEquals(1, loaded.size());
         PinnedFolderItem loadedFolder = (PinnedFolderItem) loaded.get(0);
         assertEquals(2, loadedFolder.apps.size());
-        assertEquals("com.example.packageonly", loadedFolder.apps.get(0).packageName);
-        assertEquals("", loadedFolder.apps.get(0).activityName);
+        assertEquals("com.example.packageonly", loadedFolder.apps.get(0).appRef.packageName);
+        assertEquals("", loadedFolder.apps.get(0).appRef.activityName);
     }
 
     @Test
@@ -123,10 +123,10 @@ public class LauncherConfigRepositoryTest {
         assertEquals(PinnedItem.TYPE_FOLDER, loaded.get(0).getType());
         PinnedFolderItem loadedFolder = (PinnedFolderItem) loaded.get(0);
         assertEquals(2, loadedFolder.apps.size());
-        assertEquals("com.example.packageonly", loadedFolder.apps.get(0).packageName);
-        assertEquals("", loadedFolder.apps.get(0).activityName);
-        assertEquals("com.example.full", loadedFolder.apps.get(1).packageName);
-        assertEquals("Main", loadedFolder.apps.get(1).activityName);
+        assertEquals("com.example.packageonly", loadedFolder.apps.get(0).appRef.packageName);
+        assertEquals("", loadedFolder.apps.get(0).appRef.activityName);
+        assertEquals("com.example.full", loadedFolder.apps.get(1).appRef.packageName);
+        assertEquals("Main", loadedFolder.apps.get(1).appRef.activityName);
     }
 
     @Test
@@ -146,6 +146,28 @@ public class LauncherConfigRepositoryTest {
         assertEquals("pack.example", item.iconOverride.iconPackPackage);
         assertEquals("ic_one", item.iconOverride.drawableName);
         assertEquals("One", item.iconOverride.displayLabel);
+    }
+
+    @Test
+    public void folderRoundTrip_preservesIconOverride() {
+        List<PinnedItem> items = new ArrayList<>();
+        PinnedFolderItem folder = new PinnedFolderItem("folder-icons", "Icons");
+        folder.apps.add(new PinnedAppItem(
+            new AppRef("com.example.custom", "Main"),
+            new PinnedIconOverride(PinnedIconOverride.SOURCE_ICON_PACK, "pack.example", "ic_custom", "Custom")
+        ));
+        items.add(folder);
+
+        repository.savePinnedItems(items);
+        List<PinnedItem> loaded = repository.loadPinnedItems();
+
+        PinnedFolderItem loadedFolder = (PinnedFolderItem) loaded.get(0);
+        assertEquals(1, loadedFolder.apps.size());
+        PinnedAppItem folderApp = loadedFolder.apps.get(0);
+        assertEquals("com.example.custom", folderApp.appRef.packageName);
+        assertEquals("pack.example", folderApp.iconOverride.iconPackPackage);
+        assertEquals("ic_custom", folderApp.iconOverride.drawableName);
+        assertEquals("Custom", folderApp.iconOverride.displayLabel);
     }
 
     @Test
