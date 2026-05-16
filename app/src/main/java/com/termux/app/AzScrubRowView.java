@@ -100,7 +100,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         setText("");
         setSingleLine(true);
         setTextSize(11f);
-        setPadding(0, dp(2), 0, dp(5));
+        setPadding(0, dp(1), 0, dp(1));
         setClickable(true);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             setElevation(dp(20));
