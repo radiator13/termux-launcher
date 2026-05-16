@@ -1,6 +1,5 @@
 package com.termux.app.fragments.settings.termux;
 
-import android.app.AlertDialog;
 import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -16,6 +15,7 @@ import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 
@@ -59,7 +59,7 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
             resetRankingPreference.setOnPreferenceClickListener(preference -> {
                 Context ctx = getContext();
                 if (ctx == null) return true;
-                new AlertDialog.Builder(ctx)
+                new MaterialAlertDialogBuilder(ctx)
                     .setTitle(R.string.termux_app_launcher_reset_usage_ranking_confirm_title)
                     .setMessage(R.string.termux_app_launcher_reset_usage_ranking_confirm_message)
                     .setPositiveButton(android.R.string.ok, (dialog, which) -> {

@@ -43,7 +43,7 @@ tmux set-option -g status-left "#[fg=${primary},bg=${surface_container_highest},
 tmux set-option -g status on
 tmux set-option -g status-right "#(kew-tmux-status)#[fg=${error},bg=${surface}]#{?pane_in_mode, COPY,}#[fg=${tertiary}]#{?client_prefix, PREFIX,}#[fg=${secondary}]#{?window_zoomed_flag, ZOOM,}#[range=user|btop,fg=${primary}] #(launcher-system-monitor cpu)#[range=none] #[fg=${outline_variant}]│ #[range=user|btop,fg=${secondary}]#(launcher-system-monitor ram)#[range=none] #[fg=${outline_variant}]│ #[fg=${tertiary}]#(launcher-weather-widget) "
 tmux set-option -g status-format[1] "#[align=centre,fg=${on_surface_variant},bg=${surface}]#(kew-now-playing)"
-tmux bind-key -n MouseDown1Status run-shell 'case "#{mouse_status_range}" in btop) command -v btop-shizuku >/dev/null 2>&1 && tmux new-window -n btop "btop-shizuku" || tmux display-message "Run ~/setup-btop-rish first" ;; esac'
+tmux bind-key -n MouseDown1Status run-shell 'case "#{mouse_status_range}" in btop) command -v mini-btop-shizuku >/dev/null 2>&1 && tmux new-window -n btop "mini-btop-shizuku" || tmux display-message "Run ~/setup-btop-rish first" ;; esac'
 
 tmux set-window-option -g window-status-format "#[fg=${on_surface_variant},bg=${surface}] #I:#W "
 tmux set-window-option -g window-status-current-format "#[fg=${on_primary},bg=${primary},bold] #I:#W #[fg=${primary},bg=${surface}]"

@@ -61,4 +61,9 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 
+    <style name="Theme.TermuxCropImageActivity" parent="Theme.TermuxApp.DayNight.DarkActionBar">
+        <item name="android:windowBackground">?attr/termuxColorSurfaceBase</item>
+        <item name="android:navigationBarColor">?attr/termuxColorSurfaceBase</item>
+    </style>
+
 </resources>

@@ -91,11 +91,11 @@ Example right-side status order: CPU, RAM, weather.
 set -g status-right '#(launcher-system-monitor cpu) │ #(launcher-system-monitor ram) │ #(launcher-weather-widget) '
 ```
 
-Clickable CPU/RAM status ranges can open `btop-shizuku` in a new tmux window on tmux 3.6 or newer:
+Clickable CPU/RAM status ranges can open `mini-btop-shizuku` in a new tmux window on tmux 3.6 or newer:
 
 ```tmux
 set -g status-right '#[range=user|btop]#(launcher-system-monitor cpu)#[range=none] │ #[range=user|btop]#(launcher-system-monitor ram)#[range=none] │ #(launcher-weather-widget) '
-bind-key -n MouseDown1Status run-shell 'case "#{mouse_status_range}" in btop) command -v btop-shizuku >/dev/null 2>&1 && tmux new-window -n btop "btop-shizuku" || tmux display-message "Run ~/setup-btop-rish first" ;; esac'
+bind-key -n MouseDown1Status run-shell 'case "#{mouse_status_range}" in btop) command -v mini-btop-shizuku >/dev/null 2>&1 && tmux new-window -n btop "mini-btop-shizuku" || tmux display-message "Run ~/setup-btop-rish first" ;; esac'
 ```
 
 Keep status polling modest:

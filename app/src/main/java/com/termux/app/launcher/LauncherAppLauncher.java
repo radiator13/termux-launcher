@@ -44,11 +44,21 @@ public final class LauncherAppLauncher {
             explicitNoCategory.setComponent(new ComponentName(entry.appRef.packageName, activityName));
         }
 
+        Intent packageDefault = packageManager.getLaunchIntentForPackage(entry.appRef.packageName);
+        ComponentName packageDefaultComponent = packageDefault != null ? packageDefault.getComponent() : null;
+        ComponentName explicitComponent = explicit != null ? explicit.getComponent() : null;
+        boolean explicitIsPackageDefault = sameComponent(explicitComponent, packageDefaultComponent);
+
+        if (explicitIsPackageDefault && tryStartActivity(context, packageDefault)) {
+            return true;
+        }
         if (tryStartActivity(context, explicit)) {
             return true;
         }
+        if (!explicitIsPackageDefault && tryStartActivity(context, packageDefault)) {
+            return true;
+        }
 
-        Intent packageDefault = packageManager.getLaunchIntentForPackage(entry.appRef.packageName);
         Intent resolveFallback = new Intent(Intent.ACTION_MAIN);
         resolveFallback.addCategory(Intent.CATEGORY_LAUNCHER);
         resolveFallback.setPackage(entry.appRef.packageName);
@@ -57,9 +67,6 @@ public final class LauncherAppLauncher {
             resolveFallback.setComponent(resolved);
         }
 
-        if (tryStartActivity(context, packageDefault)) {
-            return true;
-        }
         if (tryStartActivity(context, explicitNoCategory)) {
             return true;
         }
@@ -95,6 +102,10 @@ public final class LauncherAppLauncher {
         }
 
         return false;
+    }
+
+    private static boolean sameComponent(@Nullable ComponentName first, @Nullable ComponentName second) {
+        return first != null && second != null && first.equals(second);
     }
 
     private static boolean tryStartMainActivity(@NonNull Context context, @Nullable ComponentName componentName) {

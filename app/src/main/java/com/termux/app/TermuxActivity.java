@@ -209,6 +209,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private LauncherAppDataProvider mLauncherAppDataProvider;
     private LauncherConfigRepository mLauncherConfigRepository;
     private LauncherTransitionController mLauncherTransitionController;
+    private int mLastLauncherIconPreferencesSignature = Integer.MIN_VALUE;
 
     /**
      * The client for the {@link #mExtraKeysView}.
@@ -837,9 +838,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private int resolveAccessoryGlassBaseColor() {
         if (isNightThemeActive()) {
-            return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+            return resolveMonetDarkBackgroundColor();
         }
         return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh, R.color.termux_surface_panel_high);
+    }
+
+    private int resolveMonetDarkBackgroundColor() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            int colorResId = getResources().getIdentifier("system_neutral1_900", "color", "android");
+            if (colorResId != 0) {
+                return ContextCompat.getColor(this, colorResId);
+            }
+        }
+        return Color.parseColor("#1C1B1F");
     }
 
     private int resolveAccessoryOutlineColor() {
@@ -2170,6 +2181,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherConfigRepository == null) {
             mLauncherConfigRepository = new LauncherConfigRepository(mPreferences);
         }
+        int iconPreferencesSignature = computeLauncherIconPreferencesSignature();
+        if (mLastLauncherIconPreferencesSignature != Integer.MIN_VALUE
+            && mLastLauncherIconPreferencesSignature != iconPreferencesSignature) {
+            mLauncherAppDataProvider.invalidate();
+            mSuggestionBarView.clearAppCache();
+        }
+        mLastLauncherIconPreferencesSignature = iconPreferencesSignature;
         int maxButtons = mPreferences.getAppLauncherButtonCount();
         if (maxButtons <= 0) {
             DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
@@ -2206,6 +2224,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mSuggestionBarView.reloadWithInput(input, mTerminalView);
         syncAzScrubLettersAndTint();
+    }
+
+    private int computeLauncherIconPreferencesSignature() {
+        if (mPreferences == null) return 0;
+        int signature = 17;
+        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherIconPackPackage());
+        signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherPinnedIconPackPackage());
+        signature = (31 * signature) + (mPreferences.isAppLauncherBwIconsEnabled() ? 1 : 0);
+        return signature;
+    }
+
+    private static int stringSignature(@Nullable String value) {
+        return value == null ? 0 : value.hashCode();
     }
 
     private void onSuggestionBarOverflowInteractionChanged(boolean interacting) {
@@ -3202,15 +3233,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         cropOptions.outputCompressQuality = 100;
         cropOptions.activityTitle = "";
         cropOptions.cropMenuCropButtonTitle = getString(R.string.action_apply);
-        cropOptions.activityBackgroundColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
-        cropOptions.backgroundColor = withAlphaComponent(Color.BLACK, 176);
-        cropOptions.guidelinesColor = withAlphaComponent(Color.WHITE, 190);
-        cropOptions.toolbarColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh, R.color.termux_surface_panel_high);
-        cropOptions.toolbarTitleColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.toolbarBackButtonColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.toolbarTintColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.activityMenuIconColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
-        cropOptions.activityMenuTextColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
+        int surfaceBase = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        int onSurface = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface, R.color.termux_on_surface);
+        int onSurfaceVariant = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant, R.color.termux_on_surface_variant);
+        int accentContainer = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorAccentContainer, R.color.termux_accent_container);
+        cropOptions.activityBackgroundColor = surfaceBase;
+        cropOptions.backgroundColor = withAlphaComponent(Color.BLACK, 190);
+        cropOptions.guidelinesColor = withAlphaComponent(onSurfaceVariant, 210);
+        cropOptions.borderLineColor = withAlphaComponent(onSurface, 210);
+        cropOptions.borderCornerColor = onSurface;
+        cropOptions.circleCornerFillColorHexValue = onSurface;
+        cropOptions.progressBarColor = accentContainer;
 
         mWallpaperCropLauncher.launch(new CropImageContractOptions(sourceUri, cropOptions));
     }

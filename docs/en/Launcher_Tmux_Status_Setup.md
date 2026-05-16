@@ -105,7 +105,9 @@ Run it:
 ~/setup-btop-rish
 ```
 
-After setup, tapping the CPU or RAM area in the example tmux status bar opens `btop-shizuku` in a new tmux window on tmux 3.6 or newer.
+After setup, tapping the CPU or RAM area in the example tmux status bar opens `mini-btop-shizuku` in a new tmux window on tmux 3.6 or newer.
+
+The mini layout is the better default for Android: it keeps CPU and processes visible, uses a slower two-second refresh, and disables network, disk, and I/O panels because those counters are often unavailable or incomplete through Shizuku `rish`.
 
 ## 6. Optional Extra-Keys Button
 

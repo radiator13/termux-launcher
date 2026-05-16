@@ -16,7 +16,7 @@ public final class PinnedFolderItem implements PinnedItem {
     public int cols;
     public boolean tintOverrideEnabled;
     public int tintColor;
-    public final List<AppRef> apps;
+    public final List<PinnedAppItem> apps;
 
     public PinnedFolderItem(@NonNull String id, @NonNull String title) {
         this.id = id;
@@ -33,4 +33,3 @@ public final class PinnedFolderItem implements PinnedItem {
         return TYPE_FOLDER;
     }
 }
-

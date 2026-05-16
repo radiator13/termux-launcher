@@ -53,17 +53,25 @@ public final class LauncherIconResolver {
         Drawable icon = loadOverride(override);
         if (icon != null) return icon;
 
-        if (preferences != null && preferences.isAppLauncherThemedIconsEnabled()) {
-            icon = loadFromPack(preferences.getAppLauncherThemedIconPackPackage(), ref);
-            if (icon != null) return icon;
-        }
-
         if (preferences != null) {
             icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref);
             if (icon != null) return icon;
         }
 
         return loadSystemIcon(ref);
+    }
+
+    @Nullable
+    public Drawable resolvePinned(@NonNull AppRef ref, @Nullable PinnedIconOverride override) {
+        Drawable icon = loadOverride(override);
+        if (icon != null) return icon;
+
+        if (preferences != null) {
+            icon = loadFromPack(preferences.getAppLauncherPinnedIconPackPackage(), ref);
+            if (icon != null) return icon;
+        }
+
+        return resolve(ref, null);
     }
 
     @Nullable

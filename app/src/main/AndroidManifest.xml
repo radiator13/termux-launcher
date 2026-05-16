@@ -146,6 +146,11 @@
             android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
 
         <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Theme.TermuxCropImageActivity"
+            tools:replace="android:theme" />
+
+        <activity
             android:name=".shared.activities.ReportActivity"
             android:theme="@style/Theme.MarkdownViewActivity.DayNight"
             android:documentLaunchMode="intoExisting" />

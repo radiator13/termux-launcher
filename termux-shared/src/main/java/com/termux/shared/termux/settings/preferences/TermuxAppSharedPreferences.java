@@ -176,25 +176,16 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public void setAppLauncherIconPackPackage(String value) {
-        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_ICON_PACK_PACKAGE, value == null ? "" : value, false);
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_ICON_PACK_PACKAGE, value == null ? "" : value, true);
     }
 
-    public boolean isAppLauncherThemedIconsEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICONS_ENABLED,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_THEMED_ICONS_ENABLED);
+    public String getAppLauncherPinnedIconPackPackage() {
+        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_PINNED_ICON_PACK_PACKAGE,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_PINNED_ICON_PACK_PACKAGE, true);
     }
 
-    public void setAppLauncherThemedIconsEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICONS_ENABLED, value, false);
-    }
-
-    public String getAppLauncherThemedIconPackPackage() {
-        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE, true);
-    }
-
-    public void setAppLauncherThemedIconPackPackage(String value) {
-        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_THEMED_ICON_PACK_PACKAGE, value == null ? "" : value, false);
+    public void setAppLauncherPinnedIconPackPackage(String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_PINNED_ICON_PACK_PACKAGE, value == null ? "" : value, true);
     }
 
     public float getAppLauncherIconScale() {
