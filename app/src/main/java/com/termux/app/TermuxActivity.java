@@ -3035,7 +3035,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             matrix = mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
         }
 
-        int toolbarHeightPx = Math.round(mTerminalToolbarDefaultHeight * matrix * mProperties.getTerminalToolbarHeightScaleFactor());
+        int toolbarHeightPx = AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(
+            Math.round(mTerminalToolbarDefaultHeight),
+            matrix,
+            mProperties.getTerminalToolbarHeightScaleFactor(),
+            mPreferences != null && mPreferences.isAppLauncherCompactDockEnabled()
+        );
         toolbarLayoutParams.height = toolbarHeightPx;
         terminalToolbarViewPager.setLayoutParams(toolbarLayoutParams);
 
@@ -3109,12 +3114,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             : 0;
 
         boolean azEnabled = appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled();
-        int azRowHeightPx = 0;
-        int indicatorBandHeightPx = 0;
-        if (azEnabled) {
-            azRowHeightPx = Math.round(19f * density);
-            indicatorBandHeightPx = Math.round(9f * density);
-        }
+        boolean compactDock = mPreferences.isAppLauncherCompactDockEnabled();
+        int azRowHeightPx = AccessoryStackLayoutPolicy.computeAzRowHeightPx(azEnabled, compactDock, density);
+        int indicatorBandHeightPx = AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(azEnabled, compactDock, density);
 
         int interRowGapPx = indicatorBandHeightPx;
 
@@ -3769,10 +3771,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void setExtraKeysView(ExtraKeysView extraKeysView, int i) {
         mExtraKeysView = extraKeysView;
+        if (mExtraKeysView != null && mPreferences != null) {
+            mExtraKeysView.setCompactDockSpacingEnabled(mPreferences.isAppLauncherCompactDockEnabled());
+        }
     }
 
     public void setExtraKeysView(ExtraKeysView extraKeysView) {
         mExtraKeysView = extraKeysView;
+        if (mExtraKeysView != null && mPreferences != null) {
+            mExtraKeysView.setCompactDockSpacingEnabled(mPreferences.isAppLauncherCompactDockEnabled());
+        }
     }
 
     public DrawerLayout getDrawer() {
@@ -3785,6 +3793,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public float getTerminalToolbarDefaultHeight() {
         return mTerminalToolbarDefaultHeight;
+    }
+
+    public boolean isCompactDockSpacingEnabled() {
+        return mPreferences != null && mPreferences.isAppLauncherCompactDockEnabled();
     }
 
     public boolean isTerminalViewSelected() {
@@ -4453,7 +4465,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             reloadProperties();
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
-               mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
+                if (mPreferences != null) {
+                    mExtraKeysView.setCompactDockSpacingEnabled(mPreferences.isAppLauncherCompactDockEnabled());
+                }
+                mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
             }
             // Update NightMode.APP_NIGHT_MODE
             TermuxThemeUtils.setAppNightMode(mProperties.getNightMode());

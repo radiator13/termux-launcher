@@ -324,6 +324,8 @@
                 <string name="termux_app_launcher_reset_usage_ranking_summary">Apps are ordered based on how often you use them. Tap to reset this order.</string>
                 <string name="termux_app_launcher_bar_height_title">Dock size</string>
                 <string name="termux_app_launcher_bar_height_summary">Choose the overall dock size.</string>
+                <string name="termux_app_launcher_compact_dock_title">Compact dock spacing</string>
+                <string name="termux_app_launcher_compact_dock_summary">Tighten vertical spacing between dock rows while keeping your selected rows and dock size.</string>
                 <string name="termux_app_launcher_icon_scale_title">Icon scaling</string>
                 <string name="termux_app_launcher_icon_scale_summary">Choose how large app icons should appear inside the dock.</string>
                 <string name="termux_app_launcher_icon_scale_auto">Auto</string>

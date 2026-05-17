@@ -31,4 +31,24 @@ public class AccessoryStackLayoutPolicyTest {
         assertEquals(9, gapDefaultScale);
         assertEquals(12, gapLargeScale);
     }
+
+    @Test
+    public void pageIndicatorBandHeight_usesThinStripInCompactMode() {
+        assertEquals(27, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(true, false, 3f));
+        assertEquals(9, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(true, true, 3f));
+        assertEquals(0, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(false, true, 3f));
+    }
+
+    @Test
+    public void azRowHeight_tightensInCompactMode() {
+        assertEquals(57, AccessoryStackLayoutPolicy.computeAzRowHeightPx(true, false, 3f));
+        assertEquals(51, AccessoryStackLayoutPolicy.computeAzRowHeightPx(true, true, 3f));
+        assertEquals(0, AccessoryStackLayoutPolicy.computeAzRowHeightPx(false, true, 3f));
+    }
+
+    @Test
+    public void terminalToolbarHeight_reducesForCompactDock() {
+        assertEquals(228, AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(38, 2, 3f, false));
+        assertEquals(196, AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(38, 2, 3f, true));
+    }
 }

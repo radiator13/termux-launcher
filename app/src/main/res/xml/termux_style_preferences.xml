@@ -76,6 +76,12 @@
             android:defaultValue="2"
             app:showSeekBarValue="false" />
 
+        <SwitchPreferenceCompat
+            app:key="app_launcher_compact_dock"
+            app:title="@string/termux_app_launcher_compact_dock_title"
+            app:summary="@string/termux_app_launcher_compact_dock_summary"
+            android:defaultValue="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

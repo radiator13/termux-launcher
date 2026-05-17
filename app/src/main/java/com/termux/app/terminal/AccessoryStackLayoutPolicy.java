@@ -19,4 +19,24 @@ public final class AccessoryStackLayoutPolicy {
         float safeIconScale = Math.max(0f, iconScale);
         return Math.round(safeDensity * (3f + (Math.max(0f, safeIconScale - 1f) * 2f)));
     }
+
+    public static int computePageIndicatorBandHeightPx(boolean azEnabled, boolean compactDock, float density) {
+        if (!azEnabled)
+            return 0;
+        return Math.round(Math.max(0f, density) * (compactDock ? 3f : 9f));
+    }
+
+    public static int computeAzRowHeightPx(boolean azEnabled, boolean compactDock, float density) {
+        if (!azEnabled)
+            return 0;
+        return Math.round(Math.max(0f, density) * (compactDock ? 17f : 19f));
+    }
+
+    public static int computeTerminalToolbarHeightPx(int baseHeightPx, int rowCount, float scaleFactor, boolean compactDock) {
+        int safeBaseHeight = Math.max(0, baseHeightPx);
+        int safeRows = Math.max(0, rowCount);
+        float safeScale = Math.max(0f, scaleFactor);
+        float compactFactor = compactDock ? 0.86f : 1f;
+        return Math.round(safeBaseHeight * safeRows * safeScale * compactFactor);
+    }
 }

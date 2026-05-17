@@ -172,6 +172,13 @@ public final class TermuxPreferenceConstants {
         public static final float DEFAULT_APP_LAUNCHER_BAR_HEIGHT = 1.45f;
 
         /**
+         * Defines the key for compact vertical dock spacing.
+         */
+        public static final String KEY_APP_LAUNCHER_COMPACT_DOCK = "app_launcher_compact_dock";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_COMPACT_DOCK = false;
+
+        /**
          * Defines the key for app launcher black and white icons.
          */
         public static final String KEY_APP_LAUNCHER_BW_ICONS = "app_launcher_bw_icons";
