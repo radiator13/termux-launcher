@@ -5397,19 +5397,42 @@ public final class SuggestionBarView extends GridLayout {
 
         int miniSize = Math.max(dp(9), Math.round(iconSize * 0.42f));
         float miniGap = dp(1.5f);
-        float left = cx - miniSize - (miniGap * 0.5f);
-        float top = cy - miniSize - (miniGap * 0.5f);
-        int placed = 0;
+        List<LauncherAppEntry> miniEntries = new ArrayList<>();
         for (PinnedAppItem folderApp : folder.apps) {
-            if (placed >= 4) break;
+            if (miniEntries.size() >= 4) break;
             LauncherAppEntry entry = resolvePinnedApp(folderApp);
             if (entry == null || entry.icon == null) continue;
-            int col = placed % 2;
-            int row = placed / 2;
-            float miniCx = left + (col * (miniSize + miniGap)) + (miniSize * 0.5f);
-            float miniCy = top + (row * (miniSize + miniGap)) + (miniSize * 0.5f);
-            drawSwipePreviewIcon(canvas, entry, miniCx, miniCy, miniSize, alpha, false);
-            placed++;
+            miniEntries.add(entry);
+        }
+
+        int count = miniEntries.size();
+        if (count == 1) {
+            drawSwipePreviewIcon(canvas, miniEntries.get(0), cx, cy, miniSize, alpha, false);
+        } else if (count == 2) {
+            float groupWidth = (miniSize * 2f) + miniGap;
+            float left = cx - (groupWidth * 0.5f);
+            for (int i = 0; i < count; i++) {
+                float miniCx = left + (i * (miniSize + miniGap)) + (miniSize * 0.5f);
+                drawSwipePreviewIcon(canvas, miniEntries.get(i), miniCx, cy, miniSize, alpha, false);
+            }
+        } else if (count > 0) {
+            float groupWidth = (miniSize * 2f) + miniGap;
+            float groupHeight = (miniSize * 2f) + miniGap;
+            float left = cx - (groupWidth * 0.5f);
+            float top = cy - (groupHeight * 0.5f);
+            for (int i = 0; i < count; i++) {
+                int row = i / 2;
+                int col = i % 2;
+                if (count == 3 && i == 2) {
+                    col = 0;
+                }
+                float miniCx = left + (col * (miniSize + miniGap)) + (miniSize * 0.5f);
+                if (count == 3 && i == 2) {
+                    miniCx = cx;
+                }
+                float miniCy = top + (row * (miniSize + miniGap)) + (miniSize * 0.5f);
+                drawSwipePreviewIcon(canvas, miniEntries.get(i), miniCx, miniCy, miniSize, alpha, false);
+            }
         }
 
         if (notificationBadgesEnabled && folderHasNotification(folder)) {
