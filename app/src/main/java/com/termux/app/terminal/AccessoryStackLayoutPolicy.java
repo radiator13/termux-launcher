@@ -23,20 +23,20 @@ public final class AccessoryStackLayoutPolicy {
     public static int computePageIndicatorBandHeightPx(boolean azEnabled, boolean compactDock, float density) {
         if (!azEnabled)
             return 0;
-        return Math.round(Math.max(0f, density) * (compactDock ? 3f : 9f));
+        return Math.round(Math.max(0f, density) * (compactDock ? 2f : 9f));
     }
 
     public static int computeAzRowHeightPx(boolean azEnabled, boolean compactDock, float density) {
         if (!azEnabled)
             return 0;
-        return Math.round(Math.max(0f, density) * (compactDock ? 17f : 19f));
+        return Math.round(Math.max(0f, density) * (compactDock ? 14f : 19f));
     }
 
     public static int computeTerminalToolbarHeightPx(int baseHeightPx, int rowCount, float scaleFactor, boolean compactDock) {
         int safeBaseHeight = Math.max(0, baseHeightPx);
         int safeRows = Math.max(0, rowCount);
         float safeScale = Math.max(0f, scaleFactor);
-        float compactFactor = compactDock ? 0.86f : 1f;
+        float compactFactor = compactDock ? 0.78f : 1f;
         return Math.round(safeBaseHeight * safeRows * safeScale * compactFactor);
     }
 }

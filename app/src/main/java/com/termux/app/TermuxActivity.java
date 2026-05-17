@@ -2269,8 +2269,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzScrubRowView.setLockedInlineLetter(null);
         int orbColor = brightMonetShade(base);
         int edgeColor = edgeMonetVariant(base);
+        boolean compactDock = mPreferences != null && mPreferences.isAppLauncherCompactDockEnabled();
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setColors(orbColor, edgeColor);
+            mLauncherAzGestureFxUnderlayView.setCompactDockSpacingEnabled(compactDock);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxUnderlayView.setElevation(0f);
                 mLauncherAzGestureFxUnderlayView.setTranslationZ(-dpToPx(8));
@@ -2278,6 +2280,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setColors(orbColor, edgeColor);
+            mLauncherAzGestureFxOverlayView.setCompactDockSpacingEnabled(compactDock);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxOverlayView.setElevation(dpToPx(30));
                 mLauncherAzGestureFxOverlayView.setTranslationZ(dpToPx(30));

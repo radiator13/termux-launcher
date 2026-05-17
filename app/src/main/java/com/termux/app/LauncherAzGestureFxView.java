@@ -85,6 +85,7 @@ public final class LauncherAzGestureFxView extends View {
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
     private boolean interactionUseSubtlePageIndicators;
+    private boolean compactDockSpacingEnabled;
     private float subtlePageIndicatorAttention = 1f;
     private boolean subtlePageIndicatorFadeScheduled;
     @Nullable private ValueAnimator subtlePageIndicatorAttentionAnimator;
@@ -272,6 +273,14 @@ public final class LauncherAzGestureFxView extends View {
     public void setRenderLayer(@NonNull RenderLayer renderLayer) {
         this.renderLayer = renderLayer;
         refreshVisibility();
+        invalidate();
+    }
+
+    public void setCompactDockSpacingEnabled(boolean enabled) {
+        if (compactDockSpacingEnabled == enabled) {
+            return;
+        }
+        compactDockSpacingEnabled = enabled;
         invalidate();
     }
 
@@ -570,15 +579,22 @@ public final class LauncherAzGestureFxView extends View {
         }
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
+        boolean compactSubtle = subtle && compactDockSpacingEnabled;
         drawPageIndicatorStrip(
             canvas,
             interactionPageIndicatorPosition,
             interactionPageCount,
-            subtle
+            compactSubtle
+                ? clamp(getWidth() * lerp(0.11f, 0.16f, attention), dp(34f), dp(86f))
+                : subtle
                 ? clamp(getWidth() * lerp(0.16f, 0.22f, attention), dp(48f), dp(118f))
                 : clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            subtle ? dp(lerp(4.6f, 6f, attention)) : dp(8.5f),
-            subtle ? dp(lerp(5.8f, 7f, attention)) : dp(10f),
+            compactSubtle
+                ? dp(lerp(2.1f, 3.1f, attention))
+                : subtle ? dp(lerp(4.6f, 6f, attention)) : dp(8.5f),
+            compactSubtle
+                ? dp(lerp(3.8f, 5f, attention))
+                : subtle ? dp(lerp(5.8f, 7f, attention)) : dp(10f),
             subtle
                 ? withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, attention)))
                 : withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
@@ -606,7 +622,7 @@ public final class LauncherAzGestureFxView extends View {
         float cy = resolvePageIndicatorCenterY();
         float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
         float dotSize = lineHeight;
-        float activeWidth = insetActive ? dp(38f) : dp(26f);
+        float activeWidth = insetActive ? dp(38f) : (compactDockSpacingEnabled ? dp(18f) : dp(26f));
         float desiredWidth = activeWidth
             + (dotSize * Math.max(0, totalPages - 1))
             + (segmentGap * Math.max(0, totalPages - 1));
