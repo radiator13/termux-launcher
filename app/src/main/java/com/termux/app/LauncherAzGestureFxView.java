@@ -797,12 +797,14 @@ public final class LauncherAzGestureFxView extends View {
             float appTop = appsRowRawBounds.top - locationOnScreen[1];
             float appBottom = appsRowRawBounds.bottom - locationOnScreen[1];
             float appHeight = Math.max(1f, appBottom - appTop);
-            float appIconVisualBottom = ((appTop + appBottom) * 0.5f)
-                + Math.max(0f, Math.min(appHeight * 0.43f, (appHeight * 0.5f) - dp(1f)));
-            float azVisualTop = (azRowRawBounds.top - locationOnScreen[1]) + dp(1.2f);
-            if (appIconVisualBottom < azVisualTop) {
-                return (appIconVisualBottom + azVisualTop) * 0.5f;
+            float appCenter = (appTop + appBottom) * 0.5f;
+            float iconBottomEstimate = appCenter + Math.min(appHeight * 0.36f, (appHeight * 0.5f) - dp(6f));
+            float visualGapTop = Math.min(appBottom - dp(5.5f), iconBottomEstimate);
+            float visualGapBottom = (azRowRawBounds.top - locationOnScreen[1]) + dp(0.6f);
+            if (visualGapTop >= visualGapBottom) {
+                visualGapTop = visualGapBottom - dp(4f);
             }
+            return (visualGapTop + visualGapBottom) * 0.5f;
         }
         if (!indicatorBandRawBounds.isEmpty()) {
             return ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
