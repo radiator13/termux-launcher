@@ -59,7 +59,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         default void onDoubleTap() {}
     }
 
-    public static final char PINNED_APPS_SYMBOL = '\u2605';
+    public static final char PINNED_APPS_SYMBOL = '\u2606';
     private static final char[] ALPHABET_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".toCharArray();
     private static final char[] LETTERS = (PINNED_APPS_SYMBOL + "ABCDEFGHIJKLMNOPQRSTUVWXYZ#").toCharArray();
     private char[] visibleLetters = LETTERS;

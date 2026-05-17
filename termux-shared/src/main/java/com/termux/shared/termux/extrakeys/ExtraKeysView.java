@@ -521,7 +521,7 @@ public final class ExtraKeysView extends GridLayout {
                 button.setOnTouchListener((view, event) -> {
                     switch(event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
-                            view.setBackgroundColor(mButtonActiveBackgroundColor);
+                            setButtonPressedVisualState(button, buttonInfo, true);
                             // Start long press scheduled executors which will be stopped in next MotionEvent
                             startScheduledExecutors(view, buttonInfo, button);
                             return true;
@@ -530,21 +530,21 @@ public final class ExtraKeysView extends GridLayout {
                                 // Show popup on swipe up
                                 if (mPopupWindow == null && event.getY() < 0) {
                                     stopScheduledExecutors();
-                                    view.setBackgroundColor(mButtonBackgroundColor);
+                                    setButtonPressedVisualState(button, buttonInfo, false);
                                     showPopup(view, buttonInfo.getPopup());
                                 }
                                 if (mPopupWindow != null && event.getY() > 0) {
-                                    view.setBackgroundColor(mButtonActiveBackgroundColor);
+                                    setButtonPressedVisualState(button, buttonInfo, true);
                                     dismissPopup();
                                 }
                             }
                             return true;
                         case MotionEvent.ACTION_CANCEL:
-                            view.setBackgroundColor(mButtonBackgroundColor);
+                            setButtonPressedVisualState(button, buttonInfo, false);
                             stopScheduledExecutors();
                             return true;
                         case MotionEvent.ACTION_UP:
-                            view.setBackgroundColor(mButtonBackgroundColor);
+                            setButtonPressedVisualState(button, buttonInfo, false);
                             stopScheduledExecutors();
                             // If ACTION_UP up was not from a repetitive key or was with a key with a popup button
                             if (mLongPressCount == 0 || mPopupWindow != null) {
@@ -715,7 +715,7 @@ public final class ExtraKeysView extends GridLayout {
         applyDockSpacingToButton(button);
         button.setWidth(width);
         button.setHeight(height);
-        button.setBackgroundColor(mButtonActiveBackgroundColor);
+        setPopupButtonVisualState(button);
         mPopupWindow = new PopupWindow(this);
         mPopupWindow.setWidth(LayoutParams.WRAP_CONTENT);
         mPopupWindow.setHeight(LayoutParams.WRAP_CONTENT);
@@ -723,6 +723,30 @@ public final class ExtraKeysView extends GridLayout {
         mPopupWindow.setOutsideTouchable(true);
         mPopupWindow.setFocusable(false);
         mPopupWindow.showAsDropDown(view, 0, -2 * height);
+    }
+
+    private void setButtonPressedVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
+                                             boolean pressed) {
+        button.setBackgroundColor(pressed ? mButtonActiveBackgroundColor : mButtonBackgroundColor);
+        if (pressed) {
+            button.setTextColor(mButtonActiveTextColor);
+        } else {
+            restoreButtonTextColor(button, buttonInfo);
+        }
+    }
+
+    private void restoreButtonTextColor(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo) {
+        if (isSpecialButton(buttonInfo)) {
+            SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getKey()));
+            button.setTextColor(state != null && state.isActive ? mButtonActiveTextColor : mButtonTextColor);
+        } else {
+            button.setTextColor(mButtonTextColor);
+        }
+    }
+
+    private void setPopupButtonVisualState(@NonNull MaterialButton button) {
+        button.setTextColor(mButtonActiveTextColor);
+        button.setBackgroundColor(mButtonActiveBackgroundColor);
     }
 
     public void dismissPopup() {
