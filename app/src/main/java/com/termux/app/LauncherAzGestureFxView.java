@@ -85,6 +85,16 @@ public final class LauncherAzGestureFxView extends View {
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
     private boolean interactionUseSubtlePageIndicators;
+    private float subtlePageIndicatorAttention = 1f;
+    private boolean subtlePageIndicatorFadeScheduled;
+    @Nullable private ValueAnimator subtlePageIndicatorAttentionAnimator;
+    private final Runnable fadeSubtlePageIndicatorRunnable = new Runnable() {
+        @Override
+        public void run() {
+            subtlePageIndicatorFadeScheduled = false;
+            animateSubtlePageIndicatorAttentionTo(0f);
+        }
+    };
     private float edgeProximityLeft;
     private float edgeProximityRight;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
@@ -92,6 +102,8 @@ public final class LauncherAzGestureFxView extends View {
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
     private long lastFocusUpdateUptimeMs = 0L;
     private static final long FOCUS_HOLD_MS = 140L;
+    private static final long PINNED_INDICATOR_IDLE_DELAY_MS = 5000L;
+    private static final long PINNED_INDICATOR_FADE_DURATION_MS = 520L;
 
     private boolean launchBloomActive;
     private float launchBloomRawX;
@@ -219,6 +231,10 @@ public final class LauncherAzGestureFxView extends View {
         float newPagePosition = clamp(currentPagePosition, 0f, newPageCount - 1f);
         int newPageIndex = Math.min(Math.max(0, Math.round(newPagePosition)), newPageCount - 1);
         boolean directPosition = Math.abs(newPagePosition - newPageIndex) > 0.001f;
+        boolean pagePositionChanged = Math.abs(newPagePosition - interactionPageIndicatorPosition) > 0.001f
+            || interactionPageCount != newPageCount
+            || interactionUseSubtlePageIndicators != useSubtlePageIndicators
+            || interactionShowsPageIndicators != showPageIndicators;
         boolean shouldAnimatePage = active
             && interactionOverflowActive
             && interactionPageCount == newPageCount
@@ -228,13 +244,21 @@ public final class LauncherAzGestureFxView extends View {
         interactionCanPageRight = pageRight;
         interactionCurrentPageIndex = newPageIndex;
         interactionPageCount = newPageCount;
+        interactionShowsPageIndicators = showPageIndicators;
+        interactionUseSubtlePageIndicators = useSubtlePageIndicators;
+        if (!active || !showPageIndicators || !useSubtlePageIndicators) {
+            cancelSubtlePageIndicatorIdleFade();
+            subtlePageIndicatorAttention = 1f;
+        } else if (directPosition || pagePositionChanged || shouldAnimatePage) {
+            showSubtlePageIndicatorAttention();
+        } else {
+            scheduleSubtlePageIndicatorIdleFade();
+        }
         if (directPosition) {
             setInteractionPageIndicatorPosition(newPagePosition);
         } else {
             animateInteractionPageIndicatorTo(newPageIndex, shouldAnimatePage);
         }
-        interactionShowsPageIndicators = showPageIndicators;
-        interactionUseSubtlePageIndicators = useSubtlePageIndicators;
         refreshVisibility();
         invalidate();
     }
@@ -274,6 +298,8 @@ public final class LauncherAzGestureFxView extends View {
             pageIndicatorPosition = 0f;
             interactionPageIndicatorPosition = 0f;
             cancelPageIndicatorAnimations();
+            cancelSubtlePageIndicatorIdleFade();
+            subtlePageIndicatorAttention = 1f;
             interactionShowsPageIndicators = false;
             interactionUseSubtlePageIndicators = false;
         }
@@ -306,6 +332,7 @@ public final class LauncherAzGestureFxView extends View {
             launchBloomAnimator = null;
         }
         cancelPageIndicatorAnimations();
+        cancelSubtlePageIndicatorIdleFade();
     }
 
     @Override
@@ -542,20 +569,21 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
         boolean subtle = interactionUseSubtlePageIndicators;
+        float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
         drawPageIndicatorStrip(
             canvas,
             interactionPageIndicatorPosition,
             interactionPageCount,
             subtle
-                ? clamp(getWidth() * 0.22f, dp(62f), dp(118f))
+                ? clamp(getWidth() * lerp(0.16f, 0.22f, attention), dp(48f), dp(118f))
                 : clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            subtle ? dp(6f) : dp(8.5f),
-            subtle ? dp(7f) : dp(10f),
+            subtle ? dp(lerp(4.6f, 6f, attention)) : dp(8.5f),
+            subtle ? dp(lerp(5.8f, 7f, attention)) : dp(10f),
             subtle
-                ? withAlpha(boostColor(glassTintColor, 1.16f, 1.02f), 112)
+                ? withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, attention)))
                 : withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
             subtle
-                ? withAlpha(boostColor(edgeTintColor, 1.22f, 1.08f), 196)
+                ? withAlpha(boostColor(edgeTintColor, 1.20f, 1.08f), Math.round(lerp(104f, 196f, attention)))
                 : withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
             !subtle
         );
@@ -640,6 +668,51 @@ public final class LauncherAzGestureFxView extends View {
             interactionPageIndicatorAnimator = null;
         }
         interactionPageIndicatorPosition = pagePosition;
+    }
+
+    private void showSubtlePageIndicatorAttention() {
+        cancelSubtlePageIndicatorIdleFade();
+        subtlePageIndicatorAttention = 1f;
+        scheduleSubtlePageIndicatorIdleFade();
+    }
+
+    private void scheduleSubtlePageIndicatorIdleFade() {
+        if (!subtlePageIndicatorFadeScheduled
+            && interactionUseSubtlePageIndicators
+            && interactionShowsPageIndicators
+            && interactionOverflowActive) {
+            subtlePageIndicatorFadeScheduled = true;
+            postDelayed(fadeSubtlePageIndicatorRunnable, PINNED_INDICATOR_IDLE_DELAY_MS);
+        }
+    }
+
+    private void animateSubtlePageIndicatorAttentionTo(float target) {
+        if (!interactionUseSubtlePageIndicators || !interactionShowsPageIndicators || !interactionOverflowActive) {
+            subtlePageIndicatorAttention = 1f;
+            return;
+        }
+        if (subtlePageIndicatorAttentionAnimator != null) {
+            subtlePageIndicatorAttentionAnimator.cancel();
+            subtlePageIndicatorAttentionAnimator = null;
+        }
+        ValueAnimator animator = ValueAnimator.ofFloat(subtlePageIndicatorAttention, clamp01(target));
+        subtlePageIndicatorAttentionAnimator = animator;
+        animator.setDuration(PINNED_INDICATOR_FADE_DURATION_MS);
+        animator.setInterpolator(new DecelerateInterpolator(1.35f));
+        animator.addUpdateListener(animation -> {
+            subtlePageIndicatorAttention = (float) animation.getAnimatedValue();
+            invalidate();
+        });
+        animator.start();
+    }
+
+    private void cancelSubtlePageIndicatorIdleFade() {
+        removeCallbacks(fadeSubtlePageIndicatorRunnable);
+        subtlePageIndicatorFadeScheduled = false;
+        if (subtlePageIndicatorAttentionAnimator != null) {
+            subtlePageIndicatorAttentionAnimator.cancel();
+            subtlePageIndicatorAttentionAnimator = null;
+        }
     }
 
     private ValueAnimator createPageIndicatorAnimator(float start, float end, @NonNull FloatUpdate update) {
