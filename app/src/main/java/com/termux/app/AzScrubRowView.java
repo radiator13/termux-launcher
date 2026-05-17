@@ -17,6 +17,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatTextView;
 
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -102,6 +103,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         setTextSize(11f);
         setPadding(0, dp(1), 0, dp(1));
         setClickable(true);
+        setLayerType(LAYER_TYPE_HARDWARE, null);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             setElevation(dp(20));
             setTranslationZ(dp(20));
@@ -168,12 +170,20 @@ public final class AzScrubRowView extends AppCompatTextView {
         }
     }
 
+    @Override
+    public boolean hasOverlappingRendering() {
+        return false;
+    }
+
     public void setScrubCallback(@Nullable ScrubCallback callback) {
         this.callback = callback;
     }
 
     public void setVisibleLetters(@NonNull Set<Character> letters) {
         if (letters.isEmpty()) {
+            if (Arrays.equals(visibleLetters, LETTERS)) {
+                return;
+            }
             visibleLetters = LETTERS;
             invalidate();
             return;
@@ -187,6 +197,9 @@ public final class AzScrubRowView extends AppCompatTextView {
             }
         }
         if (normalized.isEmpty()) {
+            if (Arrays.equals(visibleLetters, LETTERS)) {
+                return;
+            }
             visibleLetters = LETTERS;
             invalidate();
             return;
@@ -199,24 +212,35 @@ public final class AzScrubRowView extends AppCompatTextView {
                 out[i++] = base;
             }
         }
+        char[] nextVisibleLetters;
         if (i <= 1) {
-            visibleLetters = LETTERS;
+            nextVisibleLetters = LETTERS;
         } else if (i == out.length) {
-            visibleLetters = out;
+            nextVisibleLetters = out;
         } else {
             char[] trimmed = new char[i];
             System.arraycopy(out, 0, trimmed, 0, i);
-            visibleLetters = trimmed;
+            nextVisibleLetters = trimmed;
         }
+        if (Arrays.equals(visibleLetters, nextVisibleLetters)) {
+            return;
+        }
+        visibleLetters = nextVisibleLetters;
         invalidate();
     }
 
     public void setInteractionAccentColor(int color) {
+        if (accentColor == color) {
+            return;
+        }
         accentColor = color;
         invalidate();
     }
 
     public void setInteractionMode(@NonNull InteractionMode mode) {
+        if (interactionMode == mode && (mode != InteractionMode.WAVE_TRACK || lockedInlineLetter == null)) {
+            return;
+        }
         interactionMode = mode;
         if (mode == InteractionMode.WAVE_TRACK) {
             lockedInlineLetter = null;
@@ -225,6 +249,9 @@ public final class AzScrubRowView extends AppCompatTextView {
     }
 
     public void setLockedInlineLetter(@Nullable Character letter) {
+        if (lockedInlineLetter == null ? letter == null : lockedInlineLetter.equals(letter)) {
+            return;
+        }
         lockedInlineLetter = letter;
         invalidate();
     }

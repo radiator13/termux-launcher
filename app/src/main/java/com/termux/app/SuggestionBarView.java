@@ -152,6 +152,8 @@ public final class SuggestionBarView extends GridLayout {
     private final Map<String, List<ShortcutInfo>> shortcutCache = new HashMap<>();
     private final Paint swipePreviewBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint swipePreviewBadgeStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint swipePreviewFolderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint swipePreviewFolderStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private LauncherAppDataProvider appDataProvider;
     private LauncherConfigRepository configRepository;
@@ -184,6 +186,7 @@ public final class SuggestionBarView extends GridLayout {
     private int swipePreviewDirection = 0;
     private int swipePreviewPageIndex = -1;
     @NonNull private List<LauncherAppEntry> swipePreviewEntries = Collections.emptyList();
+    @NonNull private List<PinnedItem> swipePreviewPinnedItems = Collections.emptyList();
     @Nullable private ValueAnimator swipePreviewReboundAnimator;
     private VelocityTracker swipeVelocityTracker;
     private boolean pageSwitchAnimating = false;
@@ -302,6 +305,8 @@ public final class SuggestionBarView extends GridLayout {
         setAlignmentMode(GridLayout.ALIGN_BOUNDS);
         swipePreviewBadgePaint.setStyle(Paint.Style.FILL);
         swipePreviewBadgeStrokePaint.setStyle(Paint.Style.STROKE);
+        swipePreviewFolderPaint.setStyle(Paint.Style.FILL);
+        swipePreviewFolderStrokePaint.setStyle(Paint.Style.STROKE);
     }
 
     @Override
@@ -2699,17 +2704,7 @@ public final class SuggestionBarView extends GridLayout {
         List<IconPackDrawableItem> source = pack.drawableItems();
         LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(10), dp(18), dp(12));
-
-        View handle = new View(getContext());
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setCornerRadius(dp(2));
-        handleBg.setColor(withAlphaComponent(resolveLauncherSubtleTextColor(), 0x66));
-        handle.setBackground(handleBg);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(36), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.setMargins(0, 0, 0, dp(14));
-        root.addView(handle, handleParams);
+        root.setPadding(dp(18), dp(18), dp(18), dp(12));
 
         TextView title = new TextView(getContext());
         title.setText(packInfo.label);
@@ -5296,6 +5291,7 @@ public final class SuggestionBarView extends GridLayout {
             swipePreviewDirection = direction;
             swipePreviewPageIndex = -1;
             swipePreviewEntries = Collections.emptyList();
+            swipePreviewPinnedItems = Collections.emptyList();
             return;
         }
         if (swipePreviewDirection == direction && swipePreviewPageIndex == targetPage && !swipePreviewEntries.isEmpty()) {
@@ -5303,6 +5299,9 @@ public final class SuggestionBarView extends GridLayout {
         }
         swipePreviewDirection = direction;
         swipePreviewPageIndex = targetPage;
+        swipePreviewPinnedItems = activeAzLetter != null
+            ? Collections.emptyList()
+            : buildSwipePreviewPinnedItems(targetPage);
         swipePreviewEntries = buildSwipePreviewEntries(targetPage);
     }
 
@@ -5329,6 +5328,14 @@ public final class SuggestionBarView extends GridLayout {
             }
             return pageEntries;
         }
+        List<PinnedItem> pageItems = swipePreviewPinnedItems.isEmpty()
+            ? buildSwipePreviewPinnedItems(pageIndex)
+            : swipePreviewPinnedItems;
+        return entriesForPinnedItems(pageItems);
+    }
+
+    @NonNull
+    private List<PinnedItem> buildSwipePreviewPinnedItems(int pageIndex) {
         if (pinnedItems == null || pinnedItems.isEmpty()) {
             return Collections.emptyList();
         }
@@ -5339,7 +5346,7 @@ public final class SuggestionBarView extends GridLayout {
             PinnedItem item = pinnedItems.get(i);
             if (item != null) pageItems.add(item);
         }
-        return entriesForPinnedItems(pageItems);
+        return pageItems;
     }
 
     private void drawSwipePreviewPage(@NonNull Canvas canvas) {
@@ -5362,7 +5369,51 @@ public final class SuggestionBarView extends GridLayout {
             float cx = (left + right) * 0.5f;
             float cy = getHeight() * 0.5f;
             LauncherAppEntry entry = swipePreviewEntries.get(i);
-            drawSwipePreviewIcon(canvas, entry, cx, cy, iconSize, previewAlpha);
+            PinnedItem pinnedItem = (activeAzLetter == null && i < swipePreviewPinnedItems.size())
+                ? swipePreviewPinnedItems.get(i)
+                : null;
+            if (pinnedItem instanceof PinnedFolderItem) {
+                drawSwipePreviewFolder(canvas, (PinnedFolderItem) pinnedItem, cx, cy, iconSize, previewAlpha);
+            } else {
+                drawSwipePreviewIcon(canvas, entry, cx, cy, iconSize, previewAlpha);
+            }
+        }
+    }
+
+    private void drawSwipePreviewFolder(
+        @NonNull Canvas canvas,
+        @NonNull PinnedFolderItem folder,
+        float cx,
+        float cy,
+        int iconSize,
+        int alpha
+    ) {
+        float radius = iconSize * 0.5f;
+        swipePreviewFolderPaint.setColor(withAlphaComponent(resolveLauncherTextColor(), Math.round(alpha * 0.14f)));
+        swipePreviewFolderStrokePaint.setStrokeWidth(dp(1f));
+        swipePreviewFolderStrokePaint.setColor(withAlphaComponent(resolveLauncherTextColor(), Math.round(alpha * 0.20f)));
+        canvas.drawCircle(cx, cy, radius, swipePreviewFolderPaint);
+        canvas.drawCircle(cx, cy, radius - dp(0.5f), swipePreviewFolderStrokePaint);
+
+        int miniSize = Math.max(dp(9), Math.round(iconSize * 0.42f));
+        float miniGap = dp(1.5f);
+        float left = cx - miniSize - (miniGap * 0.5f);
+        float top = cy - miniSize - (miniGap * 0.5f);
+        int placed = 0;
+        for (PinnedAppItem folderApp : folder.apps) {
+            if (placed >= 4) break;
+            LauncherAppEntry entry = resolvePinnedApp(folderApp);
+            if (entry == null || entry.icon == null) continue;
+            int col = placed % 2;
+            int row = placed / 2;
+            float miniCx = left + (col * (miniSize + miniGap)) + (miniSize * 0.5f);
+            float miniCy = top + (row * (miniSize + miniGap)) + (miniSize * 0.5f);
+            drawSwipePreviewIcon(canvas, entry, miniCx, miniCy, miniSize, alpha, false);
+            placed++;
+        }
+
+        if (notificationBadgesEnabled && folderHasNotification(folder)) {
+            drawSwipePreviewBadge(canvas, cx + (iconSize * 0.30f), cy - (iconSize * 0.30f), iconSize);
         }
     }
 
@@ -5374,6 +5425,18 @@ public final class SuggestionBarView extends GridLayout {
         int iconSize,
         int alpha
     ) {
+        drawSwipePreviewIcon(canvas, entry, cx, cy, iconSize, alpha, true);
+    }
+
+    private void drawSwipePreviewIcon(
+        @NonNull Canvas canvas,
+        @NonNull LauncherAppEntry entry,
+        float cx,
+        float cy,
+        int iconSize,
+        int alpha,
+        boolean showBadge
+    ) {
         Drawable icon = entry.icon != null ? entry.icon : getContext().getPackageManager().getDefaultActivityIcon();
         int half = Math.max(1, iconSize / 2);
         int saveAlpha = icon.getAlpha();
@@ -5383,16 +5446,28 @@ public final class SuggestionBarView extends GridLayout {
         icon.draw(canvas);
         icon.setAlpha(saveAlpha);
         icon.setBounds(oldBounds);
-        if (notificationBadgesEnabled && notificationBadgePackages.contains(entry.appRef.packageName)) {
-            swipePreviewBadgePaint.setColor(resolveNotificationBadgeColor());
-            swipePreviewBadgeStrokePaint.setStrokeWidth(dp(1.4f));
-            swipePreviewBadgeStrokePaint.setColor(resolveNotificationBadgeStrokeColor());
-            float radius = Math.max(dp(3.5f), iconSize * 0.075f);
-            float dotX = cx + (iconSize * 0.30f);
-            float dotY = cy - (iconSize * 0.30f);
-            canvas.drawCircle(dotX, dotY, radius + dp(1f), swipePreviewBadgeStrokePaint);
-            canvas.drawCircle(dotX, dotY, radius, swipePreviewBadgePaint);
+        if (showBadge && notificationBadgesEnabled && notificationBadgePackages.contains(entry.appRef.packageName)) {
+            drawSwipePreviewBadge(canvas, cx + (iconSize * 0.30f), cy - (iconSize * 0.30f), iconSize);
         }
+    }
+
+    private void drawSwipePreviewBadge(@NonNull Canvas canvas, float dotX, float dotY, int iconSize) {
+        swipePreviewBadgePaint.setColor(resolveNotificationBadgeColor());
+        swipePreviewBadgeStrokePaint.setStrokeWidth(dp(1.4f));
+        swipePreviewBadgeStrokePaint.setColor(resolveNotificationBadgeStrokeColor());
+        float radius = Math.max(dp(3.5f), iconSize * 0.075f);
+        canvas.drawCircle(dotX, dotY, radius + dp(1f), swipePreviewBadgeStrokePaint);
+        canvas.drawCircle(dotX, dotY, radius, swipePreviewBadgePaint);
+    }
+
+    private boolean folderHasNotification(@NonNull PinnedFolderItem folder) {
+        for (PinnedAppItem folderApp : folder.apps) {
+            if (folderApp != null && folderApp.appRef != null
+                && notificationBadgePackages.contains(folderApp.appRef.packageName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void clearSwipePagePreview() {
@@ -5401,15 +5476,7 @@ public final class SuggestionBarView extends GridLayout {
         swipePreviewDirection = 0;
         swipePreviewPageIndex = -1;
         swipePreviewEntries = Collections.emptyList();
-    }
-
-    private void handOffSwipePreviewToLiveRow() {
-        cancelSwipePreviewRebound();
-        if (swipePageDragging && Math.abs(swipeVisualOffsetX) > 0.5f) {
-            setTranslationX(swipeVisualOffsetX);
-            setAlpha(1f - (0.10f * swipeDragProgress));
-        }
-        clearSwipePagePreview();
+        swipePreviewPinnedItems = Collections.emptyList();
     }
 
     private void runSwipePreviewPageSwitch(

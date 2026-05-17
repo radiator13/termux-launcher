@@ -2261,7 +2261,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzScrubRowView.setVisibleLetters(letters);
         int base = resolveAzGestureAccentColor();
         int muted = mutedMonetShade(base);
-        mAzScrubRowView.setTextColor(muted);
+        if (mAzScrubRowView.getCurrentTextColor() != muted) {
+            mAzScrubRowView.setTextColor(muted);
+        }
         mAzScrubRowView.setInteractionAccentColor(base);
         mAzScrubRowView.setInteractionMode(AzScrubRowView.InteractionMode.WAVE_TRACK);
         mAzScrubRowView.setLockedInlineLetter(null);
