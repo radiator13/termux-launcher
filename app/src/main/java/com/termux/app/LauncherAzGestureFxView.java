@@ -792,12 +792,20 @@ public final class LauncherAzGestureFxView extends View {
     }
 
     private float resolvePageIndicatorCenterY() {
-        if (!indicatorBandRawBounds.isEmpty()) {
-            float cy = ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
-            if (compactDockSpacingEnabled && interactionUseSubtlePageIndicators) {
-                cy -= dp(1.1f);
+        if (compactDockSpacingEnabled && interactionUseSubtlePageIndicators
+            && !appsRowRawBounds.isEmpty() && !azRowRawBounds.isEmpty()) {
+            float appTop = appsRowRawBounds.top - locationOnScreen[1];
+            float appBottom = appsRowRawBounds.bottom - locationOnScreen[1];
+            float appHeight = Math.max(1f, appBottom - appTop);
+            float appIconVisualBottom = ((appTop + appBottom) * 0.5f)
+                + Math.max(0f, Math.min(appHeight * 0.43f, (appHeight * 0.5f) - dp(1f)));
+            float azVisualTop = (azRowRawBounds.top - locationOnScreen[1]) + dp(1.2f);
+            if (appIconVisualBottom < azVisualTop) {
+                return (appIconVisualBottom + azVisualTop) * 0.5f;
             }
-            return cy;
+        }
+        if (!indicatorBandRawBounds.isEmpty()) {
+            return ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
         }
         float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
         if (azRowRawBounds.isEmpty()) {
