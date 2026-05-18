@@ -668,6 +668,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerPackageChangeReceiver();
         registerLauncherAppsCallback();
         registerWallpaperColorsChangedListener();
+        scheduleSuggestionBarPackageRefresh(false, true);
         getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
     }
 

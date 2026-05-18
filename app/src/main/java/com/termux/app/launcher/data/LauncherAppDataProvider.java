@@ -114,7 +114,6 @@ public final class LauncherAppDataProvider {
             List<Runnable> callbacks;
             synchronized (LauncherAppDataProvider.this) {
                 if (capturedGeneration != refreshGeneration) {
-                    loading = false;
                     return;
                 }
                 cachedApps.clear();
