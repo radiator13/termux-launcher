@@ -69,13 +69,6 @@ public final class LauncherAzGestureFxView extends View {
     private float anchorRawY;
 
     private boolean hasFocus;
-    private boolean filteredOverflowActive;
-    private boolean canPageLeft;
-    private boolean canPageRight;
-    private int currentPageIndex;
-    private int pageCount = 1;
-    private float pageIndicatorPosition;
-    @Nullable private ValueAnimator pageIndicatorAnimator;
     private boolean interactionOverflowActive;
     private boolean interactionCanPageLeft;
     private boolean interactionCanPageRight;
@@ -203,23 +196,6 @@ public final class LauncherAzGestureFxView extends View {
         }
     }
 
-    public void setFilteredOverflowState(boolean active, boolean pageLeft, boolean pageRight, int currentPageIndex, int pageCount) {
-        int newPageCount = Math.max(1, pageCount);
-        int newPageIndex = Math.min(Math.max(0, currentPageIndex), newPageCount - 1);
-        boolean shouldAnimatePage = active
-            && filteredOverflowActive
-            && this.pageCount == newPageCount
-            && this.currentPageIndex != newPageIndex;
-        filteredOverflowActive = active;
-        canPageLeft = pageLeft;
-        canPageRight = pageRight;
-        this.currentPageIndex = newPageIndex;
-        this.pageCount = newPageCount;
-        animatePageIndicatorTo(newPageIndex, shouldAnimatePage);
-        refreshVisibility();
-        invalidate();
-    }
-
     public void setInteractionOverflowState(
         boolean active,
         boolean pageLeft,
@@ -295,17 +271,11 @@ public final class LauncherAzGestureFxView extends View {
         edgeProximityRight = 0f;
         interactionMode = InteractionMode.LETTER_TRACK;
         if (!keepOverflowAffordance) {
-            filteredOverflowActive = false;
-            canPageLeft = false;
-            canPageRight = false;
-            currentPageIndex = 0;
-            pageCount = 1;
             interactionOverflowActive = false;
             interactionCanPageLeft = false;
             interactionCanPageRight = false;
             interactionCurrentPageIndex = 0;
             interactionPageCount = 1;
-            pageIndicatorPosition = 0f;
             interactionPageIndicatorPosition = 0f;
             cancelPageIndicatorAnimations();
             cancelSubtlePageIndicatorIdleFade();
@@ -322,10 +292,7 @@ public final class LauncherAzGestureFxView extends View {
     private void refreshVisibility() {
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        boolean shouldDrawAzOverflow = filteredOverflowActive
-            && interactionShowsPageIndicators
-            && (canPageLeft || canPageRight || pageCount > 1);
-        setVisibility((shouldDrawInteractionOverflow || shouldDrawAzOverflow) ? VISIBLE : GONE);
+        setVisibility(shouldDrawInteractionOverflow ? VISIBLE : GONE);
     }
 
     public void playLaunchBloom(float rawX, float rawY) {
@@ -352,10 +319,7 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        boolean shouldDrawAzOverflow = filteredOverflowActive
-            && interactionShowsPageIndicators
-            && (canPageLeft || canPageRight || pageCount > 1);
-        if (!shouldDrawInteractionOverflow && !shouldDrawAzOverflow) {
+        if (!shouldDrawInteractionOverflow) {
             return;
         }
         if (shouldDrawInteractionOverflow) {
@@ -365,10 +329,6 @@ public final class LauncherAzGestureFxView extends View {
             if (renderLayer == RenderLayer.OVERLAY) {
                 drawInteractionPageIndicators(canvas);
             }
-        }
-        if (shouldDrawAzOverflow && renderLayer == RenderLayer.OVERLAY) {
-            drawGlassEdgeCapsules(canvas);
-            drawPageIndicators(canvas);
         }
     }
 
@@ -553,31 +513,6 @@ public final class LauncherAzGestureFxView extends View {
         canvas.drawPath(liquidBridgePath, bridgePaint);
     }
 
-    private void drawGlassEdgeCapsules(Canvas canvas) {
-        // Side capsules removed to keep the overflow affordance clean.
-    }
-
-    private void drawPageIndicators(Canvas canvas) {
-        if (!filteredOverflowActive || pageCount <= 1 || appsRowRawBounds.isEmpty() || azRowRawBounds.isEmpty()) {
-            return;
-        }
-        if (compactDockSpacingEnabled) {
-            drawCompactActivePageIndicator(canvas, pageIndicatorPosition, pageCount, 1f);
-            return;
-        }
-        drawPageIndicatorStrip(
-            canvas,
-            pageIndicatorPosition,
-            pageCount,
-            clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            dp(8.5f),
-            dp(10f),
-            withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
-            withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
-            true
-        );
-    }
-
     private void drawInteractionPageIndicators(Canvas canvas) {
         if (!interactionOverflowActive || interactionPageCount <= 1 || appsRowRawBounds.isEmpty()) {
             return;
@@ -718,19 +653,6 @@ public final class LauncherAzGestureFxView extends View {
         }
     }
 
-    private void animatePageIndicatorTo(int pageIndex, boolean animate) {
-        if (pageIndicatorAnimator != null) {
-            pageIndicatorAnimator.cancel();
-            pageIndicatorAnimator = null;
-        }
-        if (!animate) {
-            pageIndicatorPosition = pageIndex;
-            return;
-        }
-        pageIndicatorAnimator = createPageIndicatorAnimator(pageIndicatorPosition, pageIndex, value -> pageIndicatorPosition = value);
-        pageIndicatorAnimator.start();
-    }
-
     private void animateInteractionPageIndicatorTo(int pageIndex, boolean animate) {
         if (interactionPageIndicatorAnimator != null) {
             interactionPageIndicatorAnimator.cancel();
@@ -813,10 +735,6 @@ public final class LauncherAzGestureFxView extends View {
     }
 
     private void cancelPageIndicatorAnimations() {
-        if (pageIndicatorAnimator != null) {
-            pageIndicatorAnimator.cancel();
-            pageIndicatorAnimator = null;
-        }
         if (interactionPageIndicatorAnimator != null) {
             interactionPageIndicatorAnimator.cancel();
             interactionPageIndicatorAnimator = null;

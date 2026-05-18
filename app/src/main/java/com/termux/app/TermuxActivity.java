@@ -2547,10 +2547,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean overflowActive = mSuggestionBarView != null && mSuggestionBarView.hasAzOverflowPages();
         boolean canLeft = mSuggestionBarView != null && mSuggestionBarView.canAzPageLeft();
         boolean canRight = mSuggestionBarView != null && mSuggestionBarView.canAzPageRight();
-        int currentPageIndex = mSuggestionBarView != null ? mSuggestionBarView.getAzCurrentPageIndex() : 0;
+        float currentPagePosition = mSuggestionBarView != null ? mSuggestionBarView.getAzVisualPagePosition() : 0f;
         int pageCount = mSuggestionBarView != null ? mSuggestionBarView.getAzVisiblePageCount() : 1;
-        applyAzFxFilteredOverflowState(overflowActive, canLeft, canRight, currentPageIndex, pageCount);
-        applyAzFxInteractionOverflowState(mAzGestureActive, canLeft, canRight, currentPageIndex, pageCount, true, false);
+        applyAzFxInteractionOverflowState(overflowActive, canLeft, canRight, currentPagePosition, pageCount, overflowActive, true);
 
         float leftProximity = 0f;
         float rightProximity = 0f;
@@ -2604,32 +2603,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
         applyAzFxRowBounds();
         boolean azOverflowActive = mSuggestionBarView.hasAzOverflowPages();
-        applyAzFxFilteredOverflowState(
-            azOverflowActive,
-            mSuggestionBarView.canAzPageLeft(),
-            mSuggestionBarView.canAzPageRight(),
-            mSuggestionBarView.getAzCurrentPageIndex(),
-            mSuggestionBarView.getAzVisiblePageCount()
-        );
-        boolean interactionActive = mAzGestureActive || mSuggestionBarInteractionActive;
+        boolean interactionActive = mSuggestionBarInteractionActive;
         boolean canLeft = false;
         boolean canRight = false;
         float currentPagePosition = 0f;
         int pageCount = 1;
-        boolean showPageIndicators = azOverflowActive;
-        boolean subtlePinnedIndicators = false;
-        if (mAzGestureActive && azOverflowActive) {
+        boolean showPageIndicators = false;
+        boolean subtlePageIndicators = false;
+        if (azOverflowActive) {
             canLeft = mSuggestionBarView.canAzPageLeft();
             canRight = mSuggestionBarView.canAzPageRight();
             currentPagePosition = mSuggestionBarView.getAzVisualPagePosition();
             pageCount = mSuggestionBarView.getAzVisiblePageCount();
+            showPageIndicators = true;
+            interactionActive = true;
+            subtlePageIndicators = true;
         } else if (mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
             currentPagePosition = mSuggestionBarView.getPinnedVisualPagePosition();
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
-            subtlePinnedIndicators = true;
+            subtlePageIndicators = true;
         } else if (!mAzGestureActive && !mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
@@ -2637,7 +2632,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
             interactionActive = true;
-            subtlePinnedIndicators = true;
+            subtlePageIndicators = true;
         }
         applyAzFxInteractionOverflowState(
             interactionActive,
@@ -2646,7 +2641,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             currentPagePosition,
             pageCount,
             showPageIndicators,
-            subtlePinnedIndicators
+            subtlePageIndicators
         );
     }
 
@@ -2656,15 +2651,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
-        }
-    }
-
-    private void applyAzFxFilteredOverflowState(boolean active, boolean canLeft, boolean canRight, int currentPageIndex, int pageCount) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setFilteredOverflowState(active, canLeft, canRight, currentPageIndex, pageCount);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setFilteredOverflowState(active, canLeft, canRight, currentPageIndex, pageCount);
         }
     }
 
