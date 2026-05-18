@@ -2355,8 +2355,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ? extraKeysRow.getHeight()
             : (rowHeight * 1.2f);
         float filterUpperBound = -(rowHeight * 0.10f);
-        // Preserve forgiving AZ filtering in the region below the alphabet row,
-        // through the extra-keys row, plus a small margin.
         float filterLowerBound = rowHeight + extraKeysHeight + (rowHeight * 0.25f);
         float unlockThreshold = rowHeight * AZ_RETURN_TOUCH_Y_RATIO;
         float unlockMaxBound = filterLowerBound + (rowHeight * 0.18f);
@@ -2366,7 +2364,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean upwardIntent = touchY <= (rowHeight * AZ_UPWARD_LOCK_TOUCH_Y_RATIO)
             && dyFromDown <= -minUpwardTravel
             && Math.abs(dyFromDown) >= (Math.abs(dxFromDown) * AZ_UPWARD_DIRECTION_RATIO);
-        boolean withinAzFilterBand = touchY >= filterUpperBound && touchY <= filterLowerBound;
+        // Once the drag starts on the AZ row, keep horizontal letter filtering captured below it.
+        // This matches the visual wave tracking and avoids requiring exact vertical placement.
+        boolean withinAzFilterBand = touchY >= filterUpperBound;
         boolean enteringUpwardLock = upwardIntent;
         boolean enteringIconTrack = isInAppsRowCorridor(rawY) || isInAzCaptureWedge(rawX, rawY);
         boolean returningToUpwardTrack = touchY >= unlockThreshold && touchY <= unlockMaxBound;
