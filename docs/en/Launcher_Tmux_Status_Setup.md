@@ -2,6 +2,8 @@
 
 This page shows the manual setup path for the example tmux status bar used with Termux Launcher. Nothing here is installed by the APK. Each command is optional and can be copied one step at a time.
 
+If you use TPM, the easiest path is the separate [termux-launcher-tmux](https://github.com/PickleHik3/termux-launcher-tmux) plugin. It packages the Material tmux theme and keeps this page focused on the helper scripts and manual example files.
+
 The example status bar includes:
 
 - Material colors from the launcher wallpaper theme.
@@ -26,6 +28,18 @@ Optional features need extra setup:
 
 - Shizuku is needed for Shizuku-backed launcher features, CPU/RAM resource access, and the rish-backed `btop` helper.
 - `kew` is only needed if you want the second-row music ticker.
+
+## TPM Theme Plugin
+
+Install the helper scripts in section 3 if you want CPU, RAM, weather, or `kew` widgets. Then add the theme plugin to `~/.tmux.conf`:
+
+```tmux
+set -g @plugin 'PickleHik3/termux-launcher-tmux'
+
+run '~/.tmux/plugins/tpm/tpm'
+```
+
+Reload tmux and press `prefix + I` to install it. The plugin README includes a screenshot and the current layout details.
 
 ## 2. Check LauncherCtl
 

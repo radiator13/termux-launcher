@@ -2,7 +2,7 @@
 
 These examples are optional shell helpers for users who want tmux status widgets or a Shizuku-backed `btop` workflow. They are not installed by the APK and are not required for normal launcher use.
 
-For a single ordered walkthrough, start with [tmux status setup](Launcher_Tmux_Status_Setup). This page is the lower-level reference for each downloadable helper.
+For a single ordered walkthrough, start with [tmux status setup](Launcher_Tmux_Status_Setup). TPM users can install the packaged [termux-launcher-tmux](https://github.com/PickleHik3/termux-launcher-tmux) theme after installing these helpers. This page is the lower-level reference for each downloadable helper.
 
 They assume:
 

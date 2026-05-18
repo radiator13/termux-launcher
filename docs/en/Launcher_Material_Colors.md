@@ -89,7 +89,7 @@ For a full theme, inspect `~/.termux/material-colors.sh`, choose the exported va
 
 ## Full tmux Example
 
-For the full beginner-friendly setup order, including prerequisites and optional Shizuku pieces, follow [tmux status setup](Launcher_Tmux_Status_Setup).
+For the full beginner-friendly setup order, including prerequisites and optional Shizuku pieces, follow [tmux status setup](Launcher_Tmux_Status_Setup). If you use TPM, install the packaged [termux-launcher-tmux](https://github.com/PickleHik3/termux-launcher-tmux) theme plugin instead of copying the raw theme file.
 
 The wiki also includes the raw example files:
 

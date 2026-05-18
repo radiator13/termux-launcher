@@ -30,7 +30,7 @@ Recommended setup:
 
 - [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) for terminal and tmux-heavy use
 - [Shizuku](https://github.com/rikkaapps/shizuku) only if you want optional privileged features
-- Optional [tmux status setup](docs/en/Launcher_Tmux_Status_Setup.md) for Material colors, CPU/RAM/weather widgets, extra keys, `kew`, and rish-backed `btop`
+- Optional [termux-launcher-tmux](https://github.com/PickleHik3/termux-launcher-tmux) theme plugin, or the manual [tmux status setup](docs/en/Launcher_Tmux_Status_Setup.md), for Material colors, CPU/RAM/weather widgets, extra keys, `kew`, and rish-backed `btop`
 - Matching companion forks when using Termux add-ons:
   - [Termux:API](https://github.com/PickleHik3/termux-api)
   - [Termux:Styling](https://github.com/PickleHik3/termux-styling)
@@ -44,7 +44,7 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 - [Using the launcher](docs/en/Launcher_Usage.md)
 - [Shell integration](docs/en/Launcher_Shell_Integration.md)
 - [Terminal Material colors](docs/en/Launcher_Material_Colors.md)
-- [tmux status setup](docs/en/Launcher_Tmux_Status_Setup.md)
+- [tmux status setup](docs/en/Launcher_Tmux_Status_Setup.md) and [theme plugin](https://github.com/PickleHik3/termux-launcher-tmux)
 - [Optional Shizuku integration](docs/en/Launcher_Optional_Shizuku.md)
 - [Shizuku helper examples](docs/en/Launcher_Shizuku_Examples.md)
 - [LauncherCtl API](docs/en/LauncherCtl_API.md)
