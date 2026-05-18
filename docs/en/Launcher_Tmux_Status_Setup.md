@@ -119,18 +119,27 @@ termux-reload-settings
 
 Binding `termux-reload-settings` through tmux gives you a quick shell recovery button after launcher updates, terminal theme changes, or stale UI state. The key runs inside tmux instead of typing the command into the active pane.
 
-Example `~/.termux/termux.properties` extra-keys layout:
+Example two-row `~/.termux/termux.properties` extra-keys layout:
 
 ```properties
 extra-keys = [[ \
-  {macro: "CTRL b F12", display: "♼"}, \
-  {macro: "CTRL b h", display: "𝍣", popup: {macro: "CTRL b v", display: "𝍬"}}, \
-  {macro: "CTRL b 1", display: "⓵"}, \
-  {macro: "CTRL b 2", display: "⓶"}, \
-  {macro: "CTRL b 3", display: "⓷"}, \
-  {macro: "CTRL b [", display: "✎"}, \
-  {key: KEYBOARD, popup: PASTE}, \
-  {macro: "CTRL b", display: "㋡"} \
+  {macro: "CTRL b h", display: "𝍣"}, \
+  {macro: "CTRL b v", display: "𝍬"}, \
+  {macro: "ALT LEFT", display: "⬸"}, \
+  {macro: "CTRL b c", display: "+"}, \
+  {macro: "ALT RIGHT", display: "⤑"}, \
+  {macro: "CTRL b [", display: "✏"}, \
+  {macro: "CTRL b z", display: "□"}, \
+  {macro: "CTRL b x", display: "×", popup: {macro: "CTRL b k", display: "⊠"}} \
+], [ \
+  {key: ESC, display: "Esc", popup: {macro: "CTRL b F12", display: "⟲"}}, \
+  {key: TAB, display: "TAB"}, \
+  {key: SHIFT, display: "SHFT"}, \
+  {key: CTRL, display: "CTRL"}, \
+  {key: ALT, display: "ALT"}, \
+  {key: LEFT, popup: DOWN}, \
+  {key: RIGHT, popup: UP}, \
+  {key: KEYBOARD, popup: PASTE} \
 ]]
 ```
 
@@ -141,6 +150,7 @@ termux-reload-settings
 ```
 
 The macro assumes the example tmux prefix is active. The example config keeps `CTRL b` available as a secondary prefix.
+This two-row layout pairs well with the launcher apps bar and AZ row when compact dock spacing is enabled.
 
 ## 7. Optional kew Ticker
 
