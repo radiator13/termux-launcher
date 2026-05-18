@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.17
+
+### Added
+- Added notification dots.
+- Added a compact dock toggle for users who need two rows of extra keys, available in Settings > Appearance.
+
+### Changed
+- Reworked the apps bar page indicator.
+- Removed some items for better security.
+- Refined the UI.
+
 ## 0.2.16
 
 ### Added
