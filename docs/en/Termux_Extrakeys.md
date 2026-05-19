@@ -4,7 +4,7 @@ In addition to original [wiki](https://wiki.termux.com/wiki/Touch_Keyboard) term
 
 extrakeys row can display characters supported by android (not nerd fonts), i often use [Glyphy](https://glyphy.io/) to find suitable characters. 
 
-Below are some examples for extrakeys, just copy and paste the entire block to your ~/.termux/termux.properties & run `terux-reload-settings` to apply.
+Below are some examples for extrakeys, just copy and paste the entire block to your ~/.termux/termux.properties & run `termux-reload-settings` to apply.
 
 ### One-Row Layout
 

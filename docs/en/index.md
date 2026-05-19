@@ -10,7 +10,6 @@ This wiki is only for Termux Launcher-specific usage: the launcher surface, shel
 
 ## Start Here
 
-- [Launcher overview](Termux_Launcher)
 - [Getting started](Launcher_Getting_Started)
 - [Using the launcher](Launcher_Usage)
 - [Troubleshooting](Launcher_Troubleshooting)
@@ -19,6 +18,7 @@ This wiki is only for Termux Launcher-specific usage: the launcher surface, shel
 
 - [Shell integration](Launcher_Shell_Integration)
 - [Terminal Material colors](Launcher_Material_Colors)
+- [Termux extra keys](Termux_Extrakeys)
 - [tmux status setup](Launcher_Tmux_Status_Setup) and [theme plugin](https://github.com/PickleHik3/termux-launcher-tmux)
 - [LauncherCtl API](LauncherCtl_API)
 - [Optional Shizuku integration](Launcher_Optional_Shizuku)

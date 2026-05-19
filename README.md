@@ -38,11 +38,11 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 
 ## Documentation
 
-- [Launcher overview](docs/en/Termux_Launcher.md)
 - [Getting started](docs/en/Launcher_Getting_Started.md)
 - [Using the launcher](docs/en/Launcher_Usage.md)
 - [Shell integration](docs/en/Launcher_Shell_Integration.md)
 - [Terminal Material colors](docs/en/Launcher_Material_Colors.md)
+- [Termux extra keys](docs/en/Termux_Extrakeys.md)
 - [tmux status setup](docs/en/Launcher_Tmux_Status_Setup.md) and [theme plugin](https://github.com/PickleHik3/termux-launcher-tmux)
 - [Optional Shizuku integration](docs/en/Launcher_Optional_Shizuku.md)
 - [Shizuku helper examples](docs/en/Launcher_Shizuku_Examples.md)

@@ -1,7 +1,6 @@
 # Termux Launcher
 
 - [Home](index)
-- [Overview](Termux_Launcher)
 - [Getting started](Launcher_Getting_Started)
 - [Using the launcher](Launcher_Usage)
 - [Troubleshooting](Launcher_Troubleshooting)
@@ -10,6 +9,7 @@
 
 - [Shell integration](Launcher_Shell_Integration)
 - [Material colors](Launcher_Material_Colors)
+- [Termux extra keys](Termux_Extrakeys)
 - [tmux status setup](Launcher_Tmux_Status_Setup)
 - [tmux theme plugin](https://github.com/PickleHik3/termux-launcher-tmux)
 - [LauncherCtl API](LauncherCtl_API)
