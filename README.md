@@ -16,8 +16,7 @@ It began as a TEL-style launcher with sixel image support, used pieces from [ter
 
 - Termux as the actual Android home launcher
 - Pinned apps, folders, and alphabet scrub filtering for installed apps
-- Terminal-driven app search with configurable split character handling
-- Live app install/uninstall refresh without restarting the launcher
+- Terminal-driven app search with configurable split character handling (the character which triggers the app search)
 - Wallpaper-aware Material theming, blur controls, monochrome icons, and launcher visual tuning
 - `launcherctl` shell bridge for launching apps and reading launcher/system data
 - Optional Shizuku integration for screen lock and privileged status helpers
@@ -50,8 +49,6 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 - [LauncherCtl API](docs/en/LauncherCtl_API.md)
 - [Troubleshooting](docs/en/Launcher_Troubleshooting.md)
 
-The documentation is intentionally limited to Termux Launcher-specific usage.
-
 ## Quick Shell Example
 
 Launch an Android app from the terminal:
@@ -69,7 +66,7 @@ bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl laun
 ## Known Limitations
 
 - If the terminal slows down after an app update or after the last terminal session exits, run `termux-reload-settings`.
-- Opening the app from recents without setting it as the home launcher is possible, but it is less tested than normal home launcher use.
+    - When termux is set as home launcher, and you exit out of the last terminal shell: android seems to recreate the activity immediatly preventing termux from exiting its process cleanly (is my best guess).
 
 ## Screenshots
 
