@@ -109,6 +109,8 @@ public final class LauncherAzGestureFxView extends View {
     @Nullable private Drawable focusedAppPreviewIcon;
     private float focusedAppLabelProgress;
     @Nullable private ValueAnimator focusedAppLabelAnimator;
+    private boolean hasPreviewPosition;
+    private float previewDisplayRawX;
     private boolean darkThemeActive = true;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
 
@@ -188,8 +190,20 @@ public final class LauncherAzGestureFxView extends View {
         if (focusedBoundsRaw != null) {
             hasFocus = true;
             focusRawRect.set(focusedBoundsRaw);
+            if (mode == InteractionMode.ICON_TRACK_LOCKED) {
+                float nextPreviewRawX = focusRawRect.centerX();
+                if (!hasPreviewPosition) {
+                    previewDisplayRawX = nextPreviewRawX;
+                    hasPreviewPosition = true;
+                } else {
+                    previewDisplayRawX = lerp(previewDisplayRawX, nextPreviewRawX, 0.42f);
+                }
+            }
         } else {
             hasFocus = false;
+            if (!active || mode != InteractionMode.ICON_TRACK_LOCKED) {
+                hasPreviewPosition = false;
+            }
         }
         invalidate();
     }
@@ -349,6 +363,7 @@ public final class LauncherAzGestureFxView extends View {
         edgeDwellProgress = 0f;
         setFocusedAppLabel(null);
         setFocusedAppPreviewIcon(null);
+        hasPreviewPosition = false;
         interactionMode = InteractionMode.LETTER_TRACK;
         if (!keepOverflowAffordance) {
             interactionOverflowActive = false;
@@ -430,34 +445,50 @@ public final class LauncherAzGestureFxView extends View {
         float rowTop = appsRowRawBounds.top - locationOnScreen[1];
         float rowLeft = appsRowRawBounds.left - locationOnScreen[0];
         float rowRight = appsRowRawBounds.right - locationOnScreen[0];
-        float focusCx = hasFocus && !focusRawRect.isEmpty()
-            ? focusRawRect.centerX() - locationOnScreen[0]
-            : targetRawX - locationOnScreen[0];
+        float focusCx = hasPreviewPosition
+            ? previewDisplayRawX - locationOnScreen[0]
+            : (hasFocus && !focusRawRect.isEmpty()
+                ? focusRawRect.centerX() - locationOnScreen[0]
+                : targetRawX - locationOnScreen[0]);
         focusCx = clamp(focusCx, rowLeft + dp(8f), rowRight - dp(8f));
 
-        float baseSize = hasFocus && !focusRawRect.isEmpty()
-            ? Math.max(focusRawRect.width(), focusRawRect.height())
-            : dp(52f);
-        float iconSize = clamp(baseSize * 1.18f, dp(54f), dp(74f));
-        float left = clamp(focusCx - (iconSize * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - iconSize - dp(8f)));
-        float top = rowTop - iconSize - dp(18f);
+        float bubbleSize = dp(56f);
+        float iconSize = dp(40f);
+        float left = clamp(focusCx - (bubbleSize * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - bubbleSize - dp(8f)));
+        float top = rowTop - bubbleSize - dp(10f);
         if (top < dp(8f)) {
             top = dp(8f);
         }
-        top += lerp(dp(8f), 0f, progress);
-        float scale = lerp(0.84f, 1f, progress);
+        top += lerp(dp(6f), 0f, progress);
+        float scale = lerp(0.88f, 1f, progress);
         float alpha = lerp(0f, 1f, progress);
-        float cx = left + (iconSize * 0.5f);
-        float cy = top + (iconSize * 0.5f);
+        float cx = left + (bubbleSize * 0.5f);
+        float cy = top + (bubbleSize * 0.5f);
+        float iconLeft = cx - (iconSize * 0.5f);
+        float iconTop = cy - (iconSize * 0.5f);
+        float radius = bubbleSize * 0.5f;
+        appLabelRect.set(left, top, left + bubbleSize, top + bubbleSize);
 
         int save = canvas.save();
         canvas.scale(scale, scale, cx, cy);
+        int shadowAlpha = Math.round((darkThemeActive ? 64f : 28f) * alpha);
+        appLabelFillPaint.setColor(withAlpha(Color.BLACK, shadowAlpha));
+        tmpRect.set(appLabelRect);
+        tmpRect.offset(0f, dp(2f));
+        canvas.drawRoundRect(tmpRect, radius, radius, appLabelFillPaint);
+
+        int baseFill = darkThemeActive
+            ? lerpColor(Color.rgb(34, 30, 39), edgeTintColor, 0.06f)
+            : lerpColor(Color.rgb(238, 234, 242), edgeTintColor, 0.05f);
+        appLabelFillPaint.setColor(withAlpha(baseFill, Math.round((darkThemeActive ? 222f : 236f) * alpha)));
+        canvas.drawRoundRect(appLabelRect, radius, radius, appLabelFillPaint);
+
         focusedAppPreviewIcon.setAlpha(Math.round(255f * alpha));
         focusedAppPreviewIcon.setBounds(
-            Math.round(left),
-            Math.round(top),
-            Math.round(left + iconSize),
-            Math.round(top + iconSize)
+            Math.round(iconLeft),
+            Math.round(iconTop),
+            Math.round(iconLeft + iconSize),
+            Math.round(iconTop + iconSize)
         );
         focusedAppPreviewIcon.draw(canvas);
         focusedAppPreviewIcon.setAlpha(255);
