@@ -2751,6 +2751,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.updateDrag(active, rawX, rawY, anchorVisible, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
         }
+        if (mLauncherAzGestureFxLabelOverlayView != null) {
+            mLauncherAzGestureFxLabelOverlayView.updateDrag(active, rawX, rawY, false, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
+        }
     }
 
     private void applyAzFxFocusedAppLabel(@Nullable CharSequence label) {
