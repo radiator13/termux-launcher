@@ -451,10 +451,14 @@ public final class LauncherAzGestureFxView extends View {
                 : targetRawX - locationOnScreen[0]);
         focusCx = clamp(focusCx, rowLeft + dp(8f), rowRight - dp(8f));
 
-        float bubbleSize = dp(56f);
-        float iconSize = dp(40f);
+        float sourceIconSize = hasFocus && !focusRawRect.isEmpty()
+            ? Math.max(focusRawRect.width(), focusRawRect.height())
+            : dp(44f);
+        float bubbleSize = clamp(sourceIconSize * 1.18f, dp(46f), dp(64f));
+        float iconSize = clamp(sourceIconSize * 0.82f, dp(32f), bubbleSize - dp(14f));
         float left = clamp(focusCx - (bubbleSize * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - bubbleSize - dp(8f)));
-        float top = rowTop - bubbleSize - dp(10f);
+        float verticalGap = clamp(sourceIconSize * 0.22f, dp(8f), dp(14f));
+        float top = rowTop - bubbleSize - verticalGap;
         if (top < dp(8f)) {
             top = dp(8f);
         }

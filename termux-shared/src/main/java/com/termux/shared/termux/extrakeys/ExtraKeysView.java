@@ -731,16 +731,19 @@ public final class ExtraKeysView extends GridLayout {
         if (pressed) {
             button.setTextColor(mButtonActiveTextColor);
         } else {
-            restoreButtonTextColor(button, buttonInfo);
+            restoreButtonVisualState(button, buttonInfo);
         }
     }
 
-    private void restoreButtonTextColor(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo) {
+    private void restoreButtonVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo) {
         if (isSpecialButton(buttonInfo)) {
             SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getKey()));
-            button.setTextColor(state != null && state.isActive ? mButtonActiveTextColor : mButtonTextColor);
+            boolean active = state != null && state.isActive;
+            button.setTextColor(active ? mButtonActiveTextColor : mButtonTextColor);
+            button.setBackgroundColor(active ? mButtonActiveBackgroundColor : mButtonBackgroundColor);
         } else {
             button.setTextColor(mButtonTextColor);
+            button.setBackgroundColor(mButtonBackgroundColor);
         }
     }
 
@@ -806,6 +809,7 @@ public final class ExtraKeysView extends GridLayout {
         state.setIsCreated(true);
         MaterialButton button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
         button.setTextColor(state.isActive ? mButtonActiveTextColor : mButtonTextColor);
+        button.setBackgroundColor(state.isActive ? mButtonActiveBackgroundColor : mButtonBackgroundColor);
         if (needUpdate) {
             state.buttons.add(button);
         }
