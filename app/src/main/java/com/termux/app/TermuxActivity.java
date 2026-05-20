@@ -2282,6 +2282,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setColors(orbColor, edgeColor);
             mLauncherAzGestureFxUnderlayView.setCompactDockSpacingEnabled(compactDock);
+            mLauncherAzGestureFxUnderlayView.setDarkThemeActive(isNightThemeActive());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxUnderlayView.setElevation(0f);
                 mLauncherAzGestureFxUnderlayView.setTranslationZ(-dpToPx(8));
@@ -2290,6 +2291,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setColors(orbColor, edgeColor);
             mLauncherAzGestureFxOverlayView.setCompactDockSpacingEnabled(compactDock);
+            mLauncherAzGestureFxOverlayView.setDarkThemeActive(isNightThemeActive());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxOverlayView.setElevation(dpToPx(30));
                 mLauncherAzGestureFxOverlayView.setTranslationZ(dpToPx(30));

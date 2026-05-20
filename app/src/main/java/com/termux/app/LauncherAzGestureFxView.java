@@ -107,6 +107,7 @@ public final class LauncherAzGestureFxView extends View {
     @Nullable private String focusedAppLabel;
     private float focusedAppLabelProgress;
     @Nullable private ValueAnimator focusedAppLabelAnimator;
+    private boolean darkThemeActive = true;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
 
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
@@ -308,6 +309,14 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
+    public void setDarkThemeActive(boolean active) {
+        if (darkThemeActive == active) {
+            return;
+        }
+        darkThemeActive = active;
+        invalidate();
+    }
+
     public void clearDrag(boolean keepOverflowAffordance) {
         dragActive = false;
         hasFocus = false;
@@ -403,9 +412,13 @@ public final class LauncherAzGestureFxView extends View {
             ? focusDisplayRect.centerX() - locationOnScreen[0]
             : targetRawX - locationOnScreen[0];
         focusCx = clamp(focusCx, rowLeft + dp(8f), rowRight - dp(8f));
+        focusCx = clamp((focusCx * 0.65f) + ((getWidth() * 0.5f) * 0.35f), rowLeft + dp(8f), rowRight - dp(8f));
 
         appLabelTextPaint.setTextSize(dp(11f));
-        appLabelTextPaint.setColor(withAlpha(lerpColor(Color.WHITE, boostColor(edgeTintColor, 0.72f, 0.92f), 0.26f), Math.round(224f * progress)));
+        int textColor = darkThemeActive
+            ? lerpColor(Color.rgb(232, 238, 247), boostColor(edgeTintColor, 0.55f, 0.72f), 0.16f)
+            : lerpColor(Color.rgb(18, 24, 32), boostColor(edgeTintColor, 0.75f, 0.62f), 0.12f);
+        appLabelTextPaint.setColor(withAlpha(textColor, Math.round(230f * progress)));
         String label = TextUtils.ellipsize(
             focusedAppLabel,
             appLabelTextPaint,
@@ -418,10 +431,11 @@ public final class LauncherAzGestureFxView extends View {
         float labelWidth = appLabelTextPaint.measureText(label) + (padX * 2f);
         float labelHeight = (fm.descent - fm.ascent) + (padY * 2f);
         float left = clamp(focusCx - (labelWidth * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - labelWidth - dp(8f)));
-        float top = rowTop - labelHeight - dp(10f);
+        float top = rowTop - labelHeight - dp(58f);
         if (top < dp(8f)) {
             top = dp(8f);
         }
+        top += lerp(dp(7f), 0f, progress);
         float scale = lerp(0.96f, 1f, progress);
         float cx = left + (labelWidth * 0.5f);
         float cy = top + (labelHeight * 0.5f);
@@ -430,14 +444,19 @@ public final class LauncherAzGestureFxView extends View {
         int save = canvas.save();
         canvas.scale(scale, scale, cx, cy);
         float radius = Math.min(dp(12f), labelHeight * 0.5f);
-        int fill = lerpColor(withAlpha(glassTintColor, 0), withAlpha(boostColor(glassTintColor, 0.72f, 0.68f), 188), progress);
-        int tintVeil = lerpColor(withAlpha(edgeTintColor, 0), withAlpha(boostColor(edgeTintColor, 0.88f, 0.86f), 74), progress);
+        int baseFill = darkThemeActive ? Color.rgb(15, 20, 27) : Color.rgb(238, 243, 250);
+        int fill = lerpColor(withAlpha(baseFill, 0), withAlpha(baseFill, darkThemeActive ? 210 : 222), progress);
+        int tintVeil = lerpColor(
+            withAlpha(edgeTintColor, 0),
+            withAlpha(boostColor(edgeTintColor, darkThemeActive ? 0.58f : 0.64f, darkThemeActive ? 0.54f : 0.88f), darkThemeActive ? 38 : 46),
+            progress
+        );
         appLabelFillPaint.setColor(fill);
         canvas.drawRoundRect(appLabelRect, radius, radius, appLabelFillPaint);
         appLabelFillPaint.setColor(tintVeil);
         canvas.drawRoundRect(appLabelRect, radius, radius, appLabelFillPaint);
         appLabelStrokePaint.setStrokeWidth(dp(1f));
-        appLabelStrokePaint.setColor(withAlpha(boostColor(edgeTintColor, 0.95f, 0.98f), Math.round(92f * progress)));
+        appLabelStrokePaint.setColor(withAlpha(boostColor(edgeTintColor, 0.72f, darkThemeActive ? 0.72f : 0.82f), Math.round((darkThemeActive ? 76f : 96f) * progress)));
         canvas.drawRoundRect(appLabelRect, radius, radius, appLabelStrokePaint);
         float baseline = top + padY - fm.ascent;
         canvas.drawText(label, left + padX, baseline, appLabelTextPaint);
