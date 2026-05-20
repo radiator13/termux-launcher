@@ -430,7 +430,7 @@ public final class LauncherAzGestureFxView extends View {
         float labelWidth = appLabelTextPaint.measureText(label) + (padX * 2f);
         float labelHeight = (fm.descent - fm.ascent) + (padY * 2f);
         float left = clamp(focusCx - (labelWidth * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - labelWidth - dp(8f)));
-        float top = rowTop - labelHeight - dp(62f);
+        float top = rowTop - labelHeight - dp(18f);
         if (top < dp(8f)) {
             top = dp(8f);
         }
