@@ -10,12 +10,9 @@ import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.SystemClock;
-import android.text.TextPaint;
-import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
-import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 
 import androidx.annotation.NonNull;
@@ -48,15 +45,13 @@ public final class LauncherAzGestureFxView extends View {
     private final Paint edgeInnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bloomPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pageIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint appLabelFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint appLabelStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final TextPaint appLabelTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint previewFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path liquidBridgePath = new Path();
 
     private final RectF tmpRect = new RectF();
     private final RectF focusDisplayRect = new RectF();
     private final RectF focusRawRect = new RectF();
-    private final RectF appLabelRect = new RectF();
+    private final RectF previewRect = new RectF();
     private final RectF azRowRawBounds = new RectF();
     private final RectF appsRowRawBounds = new RectF();
     private final RectF indicatorBandRawBounds = new RectF();
@@ -105,10 +100,11 @@ public final class LauncherAzGestureFxView extends View {
     private float edgeDwellProgress;
     private float edgeDwellRawX;
     private float edgeDwellRawY;
-    @Nullable private String focusedAppLabel;
     @Nullable private Drawable focusedAppPreviewIcon;
-    private float focusedAppLabelProgress;
-    @Nullable private ValueAnimator focusedAppLabelAnimator;
+    private float focusedAppPreviewProgress;
+    @Nullable private ValueAnimator focusedAppPreviewAnimator;
+    private float focusedAppPreviewSettleProgress;
+    @Nullable private ValueAnimator focusedAppPreviewSettleAnimator;
     private boolean hasPreviewPosition;
     private float previewDisplayRawX;
     private boolean focusedAppPreviewLaunchDismissing;
@@ -157,9 +153,7 @@ public final class LauncherAzGestureFxView extends View {
         edgePaint.setStyle(Paint.Style.FILL);
         edgeInnerPaint.setStyle(Paint.Style.FILL);
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        appLabelFillPaint.setStyle(Paint.Style.FILL);
-        appLabelStrokePaint.setStyle(Paint.Style.STROKE);
-        appLabelTextPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        previewFillPaint.setStyle(Paint.Style.FILL);
     }
 
     public void setColors(int glassTintColor, int edgeTintColor) {
@@ -291,27 +285,6 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
-    public void setFocusedAppLabel(@Nullable CharSequence label) {
-        String next = label == null ? null : label.toString().trim();
-        if (next != null && next.isEmpty()) {
-            next = null;
-        }
-        boolean same = focusedAppLabel == null ? next == null : focusedAppLabel.equals(next);
-        float target = next == null ? 0f : 1f;
-        if (same && Math.abs(focusedAppLabelProgress - target) < 0.01f) {
-            return;
-        }
-        if (next != null) {
-            focusedAppLabel = next;
-        } else if (focusedAppLabel == null) {
-            focusedAppLabelProgress = 0f;
-            refreshVisibility();
-            invalidate();
-            return;
-        }
-        animateFocusedAppLabelTo(target, false);
-    }
-
     public void setRenderLayer(@NonNull RenderLayer renderLayer) {
         this.renderLayer = renderLayer;
         refreshVisibility();
@@ -327,14 +300,14 @@ public final class LauncherAzGestureFxView extends View {
         boolean same = (focusedAppPreviewIcon == null && next == null)
             || (focusedAppPreviewIcon != null && next != null && focusedAppPreviewIcon.getConstantState() == next.getConstantState());
         float target = next == null ? 0f : 1f;
-        if (same && Math.abs(focusedAppLabelProgress - target) < 0.01f) {
+        if (same && Math.abs(focusedAppPreviewProgress - target) < 0.01f) {
             return;
         }
         if (next != null) {
             focusedAppPreviewIcon = next;
             focusedAppPreviewLaunchDismissing = false;
         }
-        animateFocusedAppLabelTo(target, false);
+        animateFocusedAppPreviewTo(target, false);
         invalidate();
     }
 
@@ -363,7 +336,6 @@ public final class LauncherAzGestureFxView extends View {
         edgeProximityLeft = 0f;
         edgeProximityRight = 0f;
         edgeDwellProgress = 0f;
-        setFocusedAppLabel(null);
         if (!focusedAppPreviewLaunchDismissing) {
             setFocusedAppPreviewIcon(null);
         }
@@ -388,17 +360,35 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
+    public void playFocusedAppPreviewSettle() {
+        if (focusedAppPreviewIcon == null || focusedAppPreviewProgress <= 0.01f) {
+            return;
+        }
+        if (focusedAppPreviewSettleAnimator != null) {
+            focusedAppPreviewSettleAnimator.cancel();
+        }
+        focusedAppPreviewSettleProgress = 1f;
+        focusedAppPreviewSettleAnimator = ValueAnimator.ofFloat(1f, 0f);
+        focusedAppPreviewSettleAnimator.setDuration(170L);
+        focusedAppPreviewSettleAnimator.setInterpolator(new DecelerateInterpolator(1.7f));
+        focusedAppPreviewSettleAnimator.addUpdateListener(animation -> {
+            focusedAppPreviewSettleProgress = (float) animation.getAnimatedValue();
+            invalidate();
+        });
+        focusedAppPreviewSettleAnimator.start();
+    }
+
     private void refreshVisibility() {
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        setVisibility(shouldDrawInteractionOverflow || edgeDwellProgress > 0.01f || focusedAppLabelProgress > 0.01f ? VISIBLE : GONE);
+        setVisibility(shouldDrawInteractionOverflow || edgeDwellProgress > 0.01f || focusedAppPreviewProgress > 0.01f ? VISIBLE : GONE);
     }
 
     public void playLaunchBloom(float rawX, float rawY) {
         launchBloomRawX = rawX;
         launchBloomRawY = rawY;
         focusedAppPreviewLaunchDismissing = true;
-        animateFocusedAppLabelTo(0f, true);
+        animateFocusedAppPreviewTo(0f, true);
     }
 
     @Override
@@ -408,9 +398,13 @@ public final class LauncherAzGestureFxView extends View {
             launchBloomAnimator.cancel();
             launchBloomAnimator = null;
         }
-        if (focusedAppLabelAnimator != null) {
-            focusedAppLabelAnimator.cancel();
-            focusedAppLabelAnimator = null;
+        if (focusedAppPreviewAnimator != null) {
+            focusedAppPreviewAnimator.cancel();
+            focusedAppPreviewAnimator = null;
+        }
+        if (focusedAppPreviewSettleAnimator != null) {
+            focusedAppPreviewSettleAnimator.cancel();
+            focusedAppPreviewSettleAnimator = null;
         }
         cancelPageIndicatorAnimations();
         cancelSubtlePageIndicatorIdleFade();
@@ -423,7 +417,7 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f && focusedAppLabelProgress <= 0.01f) {
+        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f && focusedAppPreviewProgress <= 0.01f) {
             return;
         }
         if (edgeDwellProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
@@ -437,7 +431,7 @@ public final class LauncherAzGestureFxView extends View {
                 drawInteractionPageIndicators(canvas);
             }
         }
-        if (focusedAppLabelProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
+        if (focusedAppPreviewProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
             drawFocusedAppPreviewIcon(canvas);
         }
     }
@@ -446,7 +440,7 @@ public final class LauncherAzGestureFxView extends View {
         if (focusedAppPreviewIcon == null || appsRowRawBounds.isEmpty()) {
             return;
         }
-        float progress = clamp01(focusedAppLabelProgress);
+        float progress = clamp01(focusedAppPreviewProgress);
         float rowTop = appsRowRawBounds.top - locationOnScreen[1];
         float rowLeft = appsRowRawBounds.left - locationOnScreen[0];
         float rowRight = appsRowRawBounds.right - locationOnScreen[0];
@@ -467,30 +461,31 @@ public final class LauncherAzGestureFxView extends View {
         top += focusedAppPreviewLaunchDismissing
             ? lerp(dp(-8f), 0f, progress)
             : lerp(dp(6f), 0f, progress);
+        float settleScale = 1f + (0.035f * focusedAppPreviewSettleProgress);
         float scale = focusedAppPreviewLaunchDismissing
             ? lerp(0.92f, 1f, progress)
-            : lerp(0.88f, 1f, progress);
+            : lerp(0.88f, 1f, progress) * settleScale;
         float alpha = lerp(0f, 1f, progress);
         float cx = left + (bubbleSize * 0.5f);
         float cy = top + (bubbleSize * 0.5f);
         float iconLeft = cx - (iconSize * 0.5f);
         float iconTop = cy - (iconSize * 0.5f);
         float radius = bubbleSize * 0.5f;
-        appLabelRect.set(left, top, left + bubbleSize, top + bubbleSize);
+        previewRect.set(left, top, left + bubbleSize, top + bubbleSize);
 
         int save = canvas.save();
         canvas.scale(scale, scale, cx, cy);
         int shadowAlpha = Math.round((darkThemeActive ? 64f : 28f) * alpha);
-        appLabelFillPaint.setColor(withAlpha(Color.BLACK, shadowAlpha));
-        tmpRect.set(appLabelRect);
+        previewFillPaint.setColor(withAlpha(Color.BLACK, shadowAlpha));
+        tmpRect.set(previewRect);
         tmpRect.offset(0f, dp(2f));
-        canvas.drawRoundRect(tmpRect, radius, radius, appLabelFillPaint);
+        canvas.drawRoundRect(tmpRect, radius, radius, previewFillPaint);
 
         int baseFill = darkThemeActive
             ? lerpColor(Color.rgb(34, 30, 39), edgeTintColor, 0.06f)
             : lerpColor(Color.rgb(238, 234, 242), edgeTintColor, 0.05f);
-        appLabelFillPaint.setColor(withAlpha(baseFill, Math.round((darkThemeActive ? 222f : 236f) * alpha)));
-        canvas.drawRoundRect(appLabelRect, radius, radius, appLabelFillPaint);
+        previewFillPaint.setColor(withAlpha(baseFill, Math.round((darkThemeActive ? 222f : 236f) * alpha)));
+        canvas.drawRoundRect(previewRect, radius, radius, previewFillPaint);
 
         focusedAppPreviewIcon.setAlpha(Math.round(255f * alpha));
         focusedAppPreviewIcon.setBounds(
@@ -504,60 +499,6 @@ public final class LauncherAzGestureFxView extends View {
         canvas.restoreToCount(save);
     }
 
-    private void drawFocusedAppLabel(Canvas canvas) {
-        if (TextUtils.isEmpty(focusedAppLabel) || appsRowRawBounds.isEmpty()) {
-            return;
-        }
-        float progress = clamp01(focusedAppLabelProgress);
-        float rowTop = appsRowRawBounds.top - locationOnScreen[1];
-        float rowLeft = appsRowRawBounds.left - locationOnScreen[0];
-        float rowRight = appsRowRawBounds.right - locationOnScreen[0];
-        float focusCx = hasFocus && !focusRawRect.isEmpty()
-            ? focusRawRect.centerX() - locationOnScreen[0]
-            : targetRawX - locationOnScreen[0];
-        focusCx = clamp(focusCx, rowLeft + dp(8f), rowRight - dp(8f));
-
-        appLabelTextPaint.setTextSize(dp(11f));
-        int textColor = darkThemeActive
-            ? Color.rgb(226, 222, 232)
-            : Color.rgb(38, 34, 42);
-        appLabelTextPaint.setColor(withAlpha(textColor, Math.round(230f * progress)));
-        String label = TextUtils.ellipsize(
-            focusedAppLabel,
-            appLabelTextPaint,
-            clamp(getWidth() * 0.42f, dp(92f), dp(172f)),
-            TextUtils.TruncateAt.END
-        ).toString();
-        Paint.FontMetrics fm = appLabelTextPaint.getFontMetrics();
-        float padX = dp(10f);
-        float padY = dp(4.5f);
-        float labelWidth = appLabelTextPaint.measureText(label) + (padX * 2f);
-        float labelHeight = (fm.descent - fm.ascent) + (padY * 2f);
-        float left = clamp(focusCx - (labelWidth * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - labelWidth - dp(8f)));
-        float top = rowTop - labelHeight - dp(18f);
-        if (top < dp(8f)) {
-            top = dp(8f);
-        }
-        top += lerp(dp(7f), 0f, progress);
-        float scale = lerp(0.96f, 1f, progress);
-        float cx = left + (labelWidth * 0.5f);
-        float cy = top + (labelHeight * 0.5f);
-        appLabelRect.set(left, top, left + labelWidth, top + labelHeight);
-
-        int save = canvas.save();
-        canvas.scale(scale, scale, cx, cy);
-        float radius = Math.min(dp(12f), labelHeight * 0.5f);
-        int baseFill = darkThemeActive
-            ? lerpColor(Color.rgb(34, 31, 40), edgeTintColor, 0.08f)
-            : lerpColor(Color.rgb(236, 232, 241), edgeTintColor, 0.05f);
-        int fill = lerpColor(withAlpha(baseFill, 0), withAlpha(baseFill, darkThemeActive ? 232 : 236), progress);
-        appLabelFillPaint.setColor(fill);
-        canvas.drawRoundRect(appLabelRect, radius, radius, appLabelFillPaint);
-        float baseline = top + padY - fm.ascent;
-        canvas.drawText(label, left + padX, baseline, appLabelTextPaint);
-        canvas.restoreToCount(save);
-    }
-
     private void drawEdgeDwellBloom(Canvas canvas) {
         float progress = clamp01(edgeDwellProgress);
         float cx = edgeDwellRawX - locationOnScreen[0];
@@ -568,10 +509,13 @@ public final class LauncherAzGestureFxView extends View {
             cy = clamp(cy, top + dp(8f), bottom - dp(8f));
         }
         float radius = lerp(dp(18f), dp(38f), progress);
-        int outerAlpha = Math.round(lerp(34f, 86f, progress));
-        int innerAlpha = Math.round(lerp(76f, 168f, progress));
-        int coreColor = withAlpha(boostColor(edgeTintColor, 1.18f, 1.12f), innerAlpha);
-        int outerColor = withAlpha(boostColor(edgeTintColor, 1.05f, 1.08f), outerAlpha);
+        int mutedTint = darkThemeActive
+            ? lerpColor(Color.rgb(34, 30, 39), edgeTintColor, 0.20f)
+            : lerpColor(Color.rgb(238, 234, 242), edgeTintColor, 0.16f);
+        int outerAlpha = Math.round(lerp(24f, 62f, progress));
+        int innerAlpha = Math.round(lerp(58f, 132f, progress));
+        int coreColor = withAlpha(mutedTint, innerAlpha);
+        int outerColor = withAlpha(mutedTint, outerAlpha);
         bloomPaint.setShader(new RadialGradient(
             cx,
             cy,
@@ -585,7 +529,10 @@ public final class LauncherAzGestureFxView extends View {
 
         float ringRadius = radius * lerp(0.42f, 0.78f, progress);
         glassStrokePaint.setStrokeWidth(dp(1.15f));
-        glassStrokePaint.setColor(withAlpha(Color.WHITE, Math.round(lerp(52f, 132f, progress))));
+        glassStrokePaint.setColor(withAlpha(
+            darkThemeActive ? Color.rgb(226, 222, 232) : Color.rgb(70, 64, 78),
+            Math.round(lerp(24f, 72f, progress))
+        ));
         canvas.drawCircle(cx, cy, ringRadius, glassStrokePaint);
     }
 
@@ -991,50 +938,50 @@ public final class LauncherAzGestureFxView extends View {
         return animator;
     }
 
-    private void animateFocusedAppLabelTo(float target, boolean launchDismiss) {
+    private void animateFocusedAppPreviewTo(float target, boolean launchDismiss) {
         float boundedTarget = clamp01(target);
-        if (focusedAppLabelAnimator != null) {
-            focusedAppLabelAnimator.cancel();
-            focusedAppLabelAnimator = null;
+        if (focusedAppPreviewAnimator != null) {
+            focusedAppPreviewAnimator.cancel();
+            focusedAppPreviewAnimator = null;
         }
-        float start = focusedAppLabelProgress;
+        float start = focusedAppPreviewProgress;
         if (Math.abs(start - boundedTarget) < 0.01f) {
-            focusedAppLabelProgress = boundedTarget;
+            focusedAppPreviewProgress = boundedTarget;
             if (boundedTarget <= 0.01f) {
-                focusedAppLabel = null;
                 focusedAppPreviewIcon = null;
                 focusedAppPreviewLaunchDismissing = false;
+                focusedAppPreviewSettleProgress = 0f;
             }
             refreshVisibility();
             invalidate();
             return;
         }
-        focusedAppLabelAnimator = ValueAnimator.ofFloat(start, boundedTarget);
-        focusedAppLabelAnimator.setDuration(launchDismiss ? 112L : (boundedTarget > start ? 96L : 84L));
-        focusedAppLabelAnimator.setInterpolator(new DecelerateInterpolator(launchDismiss ? 1.75f : 1.55f));
-        focusedAppLabelAnimator.addUpdateListener(animation -> {
-            focusedAppLabelProgress = (Float) animation.getAnimatedValue();
+        focusedAppPreviewAnimator = ValueAnimator.ofFloat(start, boundedTarget);
+        focusedAppPreviewAnimator.setDuration(launchDismiss ? 112L : (boundedTarget > start ? 96L : 84L));
+        focusedAppPreviewAnimator.setInterpolator(new DecelerateInterpolator(launchDismiss ? 1.75f : 1.55f));
+        focusedAppPreviewAnimator.addUpdateListener(animation -> {
+            focusedAppPreviewProgress = (Float) animation.getAnimatedValue();
             refreshVisibility();
             invalidate();
         });
-        focusedAppLabelAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+        focusedAppPreviewAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(android.animation.Animator animation) {
-                if (focusedAppLabelAnimator != animation) {
+                if (focusedAppPreviewAnimator != animation) {
                     return;
                 }
-                focusedAppLabelAnimator = null;
-                focusedAppLabelProgress = boundedTarget;
+                focusedAppPreviewAnimator = null;
+                focusedAppPreviewProgress = boundedTarget;
                 if (boundedTarget <= 0.01f) {
-                    focusedAppLabel = null;
                     focusedAppPreviewIcon = null;
                     focusedAppPreviewLaunchDismissing = false;
+                    focusedAppPreviewSettleProgress = 0f;
                 }
                 refreshVisibility();
                 invalidate();
             }
         });
-        focusedAppLabelAnimator.start();
+        focusedAppPreviewAnimator.start();
     }
 
     private void cancelPageIndicatorAnimations() {

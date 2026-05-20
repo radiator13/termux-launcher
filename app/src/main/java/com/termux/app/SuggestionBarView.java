@@ -238,7 +238,7 @@ public final class SuggestionBarView extends GridLayout {
     private long azFocusLastSeenUptimeMs = 0L;
     private static final long AZ_FOCUS_BOUNCE_COOLDOWN_MS = 320L;
     private static final long AZ_FOCUS_LOSS_GRACE_MS = 180L;
-    private static final float AZ_FOCUS_REST_ALPHA = 0.18f;
+    private static final float AZ_FOCUS_REST_ALPHA = 0.26f;
 
     public static final int AZ_EDGE_NONE = 0;
     public static final int AZ_EDGE_LEFT = -1;

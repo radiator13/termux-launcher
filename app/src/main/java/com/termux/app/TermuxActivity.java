@@ -2760,26 +2760,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
-    private void applyAzFxFocusedAppLabel(@Nullable CharSequence label) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setFocusedAppLabel(null);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setFocusedAppLabel(null);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setFocusedAppLabel(label);
-        }
-    }
-
     private void applyAzFxFocusedAppIcon(@Nullable Drawable icon) {
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setFocusedAppPreviewIcon(null);
-            mLauncherAzGestureFxUnderlayView.setFocusedAppLabel(null);
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setFocusedAppPreviewIcon(null);
-            mLauncherAzGestureFxOverlayView.setFocusedAppLabel(null);
         }
         if (mLauncherAzGestureFxLabelOverlayView != null) {
             mLauncherAzGestureFxLabelOverlayView.setFocusedAppPreviewIcon(icon);
@@ -2842,6 +2828,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 int pageDelta = mAzEdgePagingEdge == SuggestionBarView.AZ_EDGE_LEFT ? -1 : 1;
                 boolean changed = mSuggestionBarView.requestAzPageDelta(pageDelta, 640f);
                 if (changed) {
+                    if (mLauncherAzGestureFxLabelOverlayView != null) {
+                        mLauncherAzGestureFxLabelOverlayView.playFocusedAppPreviewSettle();
+                    }
                     updateAzOverflowAffordance();
                 }
                 mAzEdgePageCooldownUntilUptimeMs = frameNow + AZ_EDGE_PAGE_COOLDOWN_MS;
