@@ -5,6 +5,8 @@ import android.app.WallpaperManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -168,9 +170,18 @@ public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
 
 class TermuxStylePreferencesDataStore extends PreferenceDataStore {
 
+    private static final long STYLE_SYNC_DEBOUNCE_MS = 140L;
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+
     private final Context mContext;
 
     private final TermuxAppSharedPreferences mPreferences;
+    private boolean mPendingRecreateActivity;
+    private final Runnable mStyleSyncRunnable = () -> {
+        boolean recreateActivity = mPendingRecreateActivity;
+        mPendingRecreateActivity = false;
+        TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, recreateActivity);
+    };
 
     private static TermuxStylePreferencesDataStore mInstance;
     private static final String LOG_TAG = "TermuxStylePreferences";
@@ -185,6 +196,12 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             mInstance = new TermuxStylePreferencesDataStore(context);
         }
         return mInstance;
+    }
+
+    private void scheduleTermuxActivityStylingSync(boolean recreateActivity) {
+        mPendingRecreateActivity = mPendingRecreateActivity || recreateActivity;
+        MAIN_HANDLER.removeCallbacks(mStyleSyncRunnable);
+        MAIN_HANDLER.postDelayed(mStyleSyncRunnable, STYLE_SYNC_DEBOUNCE_MS);
     }
 
     @Override
@@ -212,27 +229,27 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 break;
             case "terminal_dynamic_colors_enabled":
                 mPreferences.setTerminalDynamicColorsEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_bw_icons":
                 mPreferences.setAppLauncherBwIconsEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_apps_row_enabled":
                 mPreferences.setAppLauncherAppsRowEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_compact_dock":
                 mPreferences.setAppLauncherCompactDockEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_notification_dots":
                 mPreferences.setAppLauncherNotificationDotsEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_az_row_enabled":
                 mPreferences.setAppLauncherAzRowEnabled(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_az_double_tap_lock":
                 mPreferences.setAppLauncherAzDoubleTapLockEnabled(value);
@@ -285,30 +302,33 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "terminal_background_opacity":
                 mPreferences.setTerminalBackgroundOpacity(value);
                 syncBackgroundOverlayColor(value, null);
-                TermuxActivity.updateTermuxActivityStyling(mContext, true);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "sessions_opacity":
                 mPreferences.setSessionsOpacity(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "extrakeys_blur_radius":
                 mPreferences.setExtraKeysBlurRadius(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_bar_opacity":
                 mPreferences.setAppBarOpacity(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_button_count":
                 mPreferences.setAppLauncherButtonCount(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_icon_scale_percent":
                 mPreferences.setAppLauncherBarHeightScale(TermuxStylePreferencesFragment.barHeightForPreset(value));
                 mPreferences.setAppLauncherIconScale(TermuxStylePreferencesFragment.iconScaleForPreset(value));
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_bar_height_percent":
                 mPreferences.setAppLauncherBarHeightScale(TermuxStylePreferencesFragment.barHeightForPreset(value));
                 mPreferences.setAppLauncherIconScale(TermuxStylePreferencesFragment.iconScaleForPreset(value));
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             default:
                 break;
@@ -357,32 +377,36 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             case "theme_mode":
                 writeTermuxPropertyToProperties(TermuxPropertyConstants.KEY_NIGHT_MODE, value);
                 TermuxThemeUtils.setAppNightMode(value);
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, true);
+                scheduleTermuxActivityStylingSync(true);
                 break;
             case "app_launcher_button_count":
                 mPreferences.setAppLauncherButtonCount(DataUtils.getIntFromString(value, mPreferences.getAppLauncherButtonCount()));
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_search_mode":
                 mPreferences.setAppLauncherSearchMode(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_input_char":
                 mPreferences.setAppLauncherInputChar(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_az_lock_method":
                 mPreferences.setAppLauncherAzLockMethod(value);
                 break;
             case "app_launcher_default_buttons":
                 mPreferences.setAppLauncherDefaultButtons(value);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_icon_pack_package":
                 mPreferences.setAppLauncherIconPackPackage(value);
                 com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(mContext).invalidate();
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_pinned_icon_pack_package":
                 mPreferences.setAppLauncherPinnedIconPackPackage(value);
                 com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(mContext).invalidate();
-                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_bar_height":
                 mPreferences.setAppLauncherBarHeightScale(
@@ -401,6 +425,7 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                         )
                     )
                 );
+                scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_icon_scale":
                 mPreferences.setAppLauncherBarHeightScale(
@@ -419,6 +444,7 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                         )
                     )
                 );
+                scheduleTermuxActivityStylingSync(false);
                 break;
             default:
                 break;

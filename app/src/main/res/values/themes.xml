@@ -45,9 +45,9 @@
 
         <!-- Extra keys colors. -->
         <item name="extraKeysButtonTextColor">?attr/termuxColorOnSurface</item>
-        <item name="extraKeysButtonActiveTextColor">?attr/termuxColorOnSurface</item>
+        <item name="extraKeysButtonActiveTextColor">?attr/termuxColorPrimary</item>
         <item name="extraKeysButtonBackgroundColor">@android:color/transparent</item>
-        <item name="extraKeysButtonActiveBackgroundColor">?attr/termuxColorSurfacePanelHighest</item>
+        <item name="extraKeysButtonActiveBackgroundColor">@android:color/transparent</item>
 
     </style>
 
