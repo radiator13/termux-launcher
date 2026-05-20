@@ -156,6 +156,9 @@ public final class SuggestionBarView extends GridLayout {
     private final Paint swipePreviewBadgeStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint swipePreviewFolderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint swipePreviewFolderStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint azFocusedLabelFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint azFocusedLabelStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint azFocusedLabelTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private LauncherAppDataProvider appDataProvider;
     private LauncherConfigRepository configRepository;
@@ -232,6 +235,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean hostVisible = true;
     private boolean rowInteractionActive = false;
     @Nullable private String azFocusedEntryKey;
+    @Nullable private String azFocusedEntryLabel;
     @Nullable private View azFocusedView;
     @Nullable private Animator azFocusAnimator;
     private long lastAzFocusBounceUptimeMs = 0L;
@@ -909,7 +913,7 @@ public final class SuggestionBarView extends GridLayout {
         float height = Math.max(1f, getHeight());
 
         int edge = AZ_EDGE_NONE;
-        float edgeZone = Math.max(dp(28), width * 0.12f);
+        float edgeZone = Math.max(dp(18), width * 0.055f);
         if (localX <= edgeZone && pageLeft) {
             edge = AZ_EDGE_LEFT;
         } else if (localX >= (width - edgeZone) && pageRight) {
@@ -1026,6 +1030,7 @@ public final class SuggestionBarView extends GridLayout {
         }
         clearAzFocusedEntry();
         azFocusedEntryKey = key;
+        azFocusedEntryLabel = focusResult.entry.label == null ? "" : focusResult.entry.label.trim();
         azFocusedView = target;
         if ((now - lastAzFocusBounceUptimeMs) >= AZ_FOCUS_BOUNCE_COOLDOWN_MS) {
             lastAzFocusBounceUptimeMs = now;
@@ -1048,7 +1053,60 @@ public final class SuggestionBarView extends GridLayout {
         }
         azFocusedView = null;
         azFocusedEntryKey = null;
+        azFocusedEntryLabel = null;
         azFocusLastSeenUptimeMs = 0L;
+    }
+
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        drawAzFocusedLabel(canvas);
+    }
+
+    private void drawAzFocusedLabel(@NonNull Canvas canvas) {
+        if (azFocusedView == null || TextUtils.isEmpty(azFocusedEntryLabel) || getWidth() <= 0 || getHeight() <= 0) {
+            return;
+        }
+        View target = azFocusedView;
+        if (!target.isAttachedToWindow()) {
+            return;
+        }
+        int[] rowLoc = new int[2];
+        int[] targetLoc = new int[2];
+        getLocationOnScreen(rowLoc);
+        target.getLocationOnScreen(targetLoc);
+        float targetCx = targetLoc[0] - rowLoc[0] + (target.getWidth() * 0.5f);
+        float labelTextSize = dp(11);
+        azFocusedLabelTextPaint.setTextSize(labelTextSize);
+        azFocusedLabelTextPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        azFocusedLabelTextPaint.setColor(resolveLauncherTextColor());
+        String label = TextUtils.ellipsize(
+            azFocusedEntryLabel,
+            new android.text.TextPaint(azFocusedLabelTextPaint),
+            Math.max(dp(72), Math.min(dp(148), getWidth() - dp(24))),
+            TextUtils.TruncateAt.END
+        ).toString();
+        float textWidth = azFocusedLabelTextPaint.measureText(label);
+        Paint.FontMetrics fm = azFocusedLabelTextPaint.getFontMetrics();
+        float padX = dp(9);
+        float padY = dp(4);
+        float labelWidth = textWidth + (padX * 2f);
+        float labelHeight = (fm.descent - fm.ascent) + (padY * 2f);
+        float left = clampFloat(targetCx - (labelWidth * 0.5f), dp(6), Math.max(dp(6), getWidth() - labelWidth - dp(6)));
+        float top = Math.max(dp(2), targetLoc[1] - rowLoc[1] - labelHeight - dp(3));
+        if (top + labelHeight > getHeight() - dp(2)) {
+            top = Math.max(dp(2), getHeight() - labelHeight - dp(2));
+        }
+        tmpRect.set(left, top, left + labelWidth, top + labelHeight);
+        float radius = Math.min(dp(10), labelHeight * 0.5f);
+        azFocusedLabelFillPaint.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0xEA));
+        azFocusedLabelStrokePaint.setStyle(Paint.Style.STROKE);
+        azFocusedLabelStrokePaint.setStrokeWidth(dp(1));
+        azFocusedLabelStrokePaint.setColor(withAlphaComponent(resolveLauncherOutlineColor(), 0x7A));
+        canvas.drawRoundRect(tmpRect, radius, radius, azFocusedLabelFillPaint);
+        canvas.drawRoundRect(tmpRect, radius, radius, azFocusedLabelStrokePaint);
+        float baseline = top + padY - fm.ascent;
+        canvas.drawText(label, left + padX, baseline, azFocusedLabelTextPaint);
     }
 
     private void animateAzFocusBounce(@NonNull View target) {
@@ -1369,15 +1427,26 @@ public final class SuggestionBarView extends GridLayout {
         int renderStartCol = 0;
         List<PinnedItem> pinnedForSlots = new ArrayList<>();
         int pinnedPageOffset = 0;
+        Set<String> azFreshPageEntryKeys = Collections.emptySet();
 
         if (azPreview) {
             int perPage = Math.max(1, maxButtonCount);
             int totalPages = getAzPagesCount();
             activeAzPageIndex = clamp(activeAzPageIndex, 0, Math.max(0, totalPages - 1));
             int offset = getAzPageStart(entries, activeAzPageIndex, perPage);
+            int previousPageEnd = -1;
+            if (activeAzPageIndex > 0) {
+                int previousOffset = getAzPageStart(entries, activeAzPageIndex - 1, perPage);
+                previousPageEnd = Math.min(entries.size(), previousOffset + perPage);
+                azFreshPageEntryKeys = new HashSet<>();
+            }
             List<LauncherAppEntry> pageEntries = new ArrayList<>();
             for (int i = offset; i < entries.size() && pageEntries.size() < perPage; i++) {
-                pageEntries.add(entries.get(i));
+                LauncherAppEntry pageEntry = entries.get(i);
+                pageEntries.add(pageEntry);
+                if (activeAzPageIndex > 0 && i >= previousPageEnd) {
+                    azFreshPageEntryKeys.add(stableEntryKey(pageEntry));
+                }
             }
             entries = pageEntries;
             buttonCount = perPage;
@@ -1465,6 +1534,10 @@ public final class SuggestionBarView extends GridLayout {
                 : (renderStartCol + col);
             LayoutParams param = createSlotParams(renderCol);
             view.setLayoutParams(param);
+            if (azPreview && activeAzPageIndex > 0 && !azFreshPageEntryKeys.isEmpty()
+                && !azFreshPageEntryKeys.contains(stableEntryKey(entry))) {
+                view.setAlpha(0.38f);
+            }
 
             if (!azPreview && col < pinnedForSlots.size()) {
                 final int pinnedIndex = pinnedPageOffset + col;

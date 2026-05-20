@@ -300,6 +300,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable private Runnable mAzEdgePagingRunnable;
     @Nullable private SuggestionBarView.AzDragFocusResult mAzCurrentFocusResult;
     @Nullable private Runnable mAzOverflowRefreshRunnable;
+    private int mAzEdgePagingEdge = SuggestionBarView.AZ_EDGE_NONE;
+    private long mAzEdgeDwellStartUptimeMs = 0L;
+    private long mAzEdgePageCooldownUntilUptimeMs = 0L;
+    private boolean mAzEdgeRequiresReentry = false;
     private boolean mAzGestureActive = false;
     private boolean mSuggestionBarInteractionActive = false;
     private char mAzLockedLetter = '#';
@@ -322,8 +326,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private final RectF mExtraKeysRawBounds = new RectF();
     private final RectF mAzFocusLetterRawBounds = new RectF();
     private final AzScrubRowView.LetterVisualMetrics mAzLetterVisualMetrics = new AzScrubRowView.LetterVisualMetrics();
-    private static final long AZ_EDGE_PAGE_INITIAL_DELAY_MS = 180L;
-    private static final long AZ_EDGE_PAGE_REPEAT_INTERVAL_MS = 260L;
+    private static final long AZ_EDGE_PAGE_INITIAL_DELAY_MS = 560L;
+    private static final long AZ_EDGE_PAGE_REPEAT_INTERVAL_MS = 420L;
+    private static final long AZ_EDGE_PAGE_COOLDOWN_MS = 520L;
+    private static final long AZ_EDGE_DWELL_FRAME_MS = 16L;
     private static final long AZ_PREVIEW_TIMEOUT_REFRESH_MS = 5200L;
     private static final float AZ_UPWARD_LOCK_TOUCH_Y_RATIO = 0.45f;
     private static final float AZ_RETURN_TOUCH_Y_RATIO = 0.55f;
@@ -2711,42 +2717,105 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void updateAzEdgePagingLoop(@Nullable SuggestionBarView.AzDragFocusResult focusResult) {
-        stopAzEdgePagingLoop();
         if (!isAzRowEnabled() || !mAzGestureActive || mAzGestureMode != AzGestureMode.ICON_TRACKING_LOCKED || focusResult == null) {
+            stopAzEdgePagingLoop();
             return;
         }
         if (focusResult.edge != SuggestionBarView.AZ_EDGE_LEFT && focusResult.edge != SuggestionBarView.AZ_EDGE_RIGHT) {
+            mAzEdgeRequiresReentry = false;
+            stopAzEdgePagingLoop();
             return;
         }
         if (mSuggestionBarView == null) {
+            stopAzEdgePagingLoop();
             return;
         }
-        int pageDelta = focusResult.edge == SuggestionBarView.AZ_EDGE_LEFT ? -1 : 1;
+        long now = SystemClock.uptimeMillis();
+        if (mAzEdgeRequiresReentry || now < mAzEdgePageCooldownUntilUptimeMs) {
+            applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
+            return;
+        }
+        if (mAzEdgePagingRunnable != null && mAzEdgePagingEdge == focusResult.edge) {
+            updateAzEdgeDwellProgress(now);
+            return;
+        }
+        stopAzEdgePagingLoop();
+        mAzEdgePagingEdge = focusResult.edge;
+        mAzEdgeDwellStartUptimeMs = now;
+        updateAzEdgeDwellProgress(now);
         mAzEdgePagingRunnable = new Runnable() {
             @Override
             public void run() {
                 if (!mAzGestureActive || mSuggestionBarView == null) {
+                    stopAzEdgePagingLoop();
                     return;
                 }
+                SuggestionBarView.AzDragFocusResult fresh = mSuggestionBarView.resolveAzDragFocus(mAzLastRawX, mAzLastRawY);
+                if (fresh.edge != mAzEdgePagingEdge) {
+                    mAzCurrentFocusResult = fresh;
+                    updateAzOverlayState(fresh, mAzLockedLetter);
+                    updateAzEdgePagingLoop(fresh);
+                    return;
+                }
+                long frameNow = SystemClock.uptimeMillis();
+                if (frameNow < mAzEdgePageCooldownUntilUptimeMs || mAzEdgeRequiresReentry) {
+                    applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
+                    mAzGestureHandler.postDelayed(this, AZ_EDGE_DWELL_FRAME_MS);
+                    return;
+                }
+                long dwellMs = frameNow - mAzEdgeDwellStartUptimeMs;
+                updateAzEdgeDwellProgress(frameNow);
+                if (dwellMs < AZ_EDGE_PAGE_INITIAL_DELAY_MS) {
+                    mAzGestureHandler.postDelayed(this, AZ_EDGE_DWELL_FRAME_MS);
+                    return;
+                }
+                int pageDelta = mAzEdgePagingEdge == SuggestionBarView.AZ_EDGE_LEFT ? -1 : 1;
                 boolean changed = mSuggestionBarView.requestAzPageDelta(pageDelta, 640f);
                 if (changed) {
                     updateAzOverflowAffordance();
                 }
-                SuggestionBarView.AzDragFocusResult fresh = mSuggestionBarView.resolveAzDragFocus(mAzLastRawX, mAzLastRawY);
-                mAzCurrentFocusResult = fresh;
-                updateAzOverlayState(fresh, mAzLockedLetter);
-                if (mAzGestureActive && fresh.edge == focusResult.edge) {
-                    mAzGestureHandler.postDelayed(this, AZ_EDGE_PAGE_REPEAT_INTERVAL_MS);
-                }
+                mAzEdgePageCooldownUntilUptimeMs = frameNow + AZ_EDGE_PAGE_COOLDOWN_MS;
+                mAzEdgeRequiresReentry = true;
+                mAzEdgePagingRunnable = null;
+                applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
+                mAzGestureHandler.postDelayed(() -> {
+                    if (!mAzGestureActive || mSuggestionBarView == null) return;
+                    SuggestionBarView.AzDragFocusResult afterSwitch = mSuggestionBarView.resolveAzDragFocus(mAzLastRawX, mAzLastRawY);
+                    mAzCurrentFocusResult = afterSwitch;
+                    updateAzOverlayState(afterSwitch, mAzLockedLetter);
+                    updateAzEdgePagingLoop(afterSwitch);
+                }, AZ_EDGE_PAGE_REPEAT_INTERVAL_MS);
             }
         };
-        mAzGestureHandler.postDelayed(mAzEdgePagingRunnable, AZ_EDGE_PAGE_INITIAL_DELAY_MS);
+        mAzGestureHandler.postDelayed(mAzEdgePagingRunnable, AZ_EDGE_DWELL_FRAME_MS);
     }
 
     private void stopAzEdgePagingLoop() {
         if (mAzEdgePagingRunnable != null) {
             mAzGestureHandler.removeCallbacks(mAzEdgePagingRunnable);
             mAzEdgePagingRunnable = null;
+        }
+        mAzEdgePagingEdge = SuggestionBarView.AZ_EDGE_NONE;
+        mAzEdgeDwellStartUptimeMs = 0L;
+        mAzEdgeRequiresReentry = false;
+        applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
+    }
+
+    private void updateAzEdgeDwellProgress(long now) {
+        if (mAzEdgeDwellStartUptimeMs <= 0L) {
+            applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
+            return;
+        }
+        float progress = Math.min(1f, (now - mAzEdgeDwellStartUptimeMs) / (float) AZ_EDGE_PAGE_INITIAL_DELAY_MS);
+        applyAzFxEdgeDwellProgress(progress, mAzLastRawX, mAzLastRawY);
+    }
+
+    private void applyAzFxEdgeDwellProgress(float progress, float rawX, float rawY) {
+        if (mLauncherAzGestureFxUnderlayView != null) {
+            mLauncherAzGestureFxUnderlayView.setEdgeDwellProgress(0f, rawX, rawY);
+        }
+        if (mLauncherAzGestureFxOverlayView != null) {
+            mLauncherAzGestureFxOverlayView.setEdgeDwellProgress(progress, rawX, rawY);
         }
     }
 

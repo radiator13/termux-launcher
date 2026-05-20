@@ -6,7 +6,9 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.View;
@@ -92,6 +94,9 @@ public final class LauncherAzGestureFxView extends View {
     };
     private float edgeProximityLeft;
     private float edgeProximityRight;
+    private float edgeDwellProgress;
+    private float edgeDwellRawX;
+    private float edgeDwellRawY;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
 
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
@@ -247,6 +252,14 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
+    public void setEdgeDwellProgress(float progress, float rawX, float rawY) {
+        edgeDwellProgress = clamp01(progress);
+        edgeDwellRawX = rawX;
+        edgeDwellRawY = rawY;
+        refreshVisibility();
+        invalidate();
+    }
+
     public void setRenderLayer(@NonNull RenderLayer renderLayer) {
         this.renderLayer = renderLayer;
         refreshVisibility();
@@ -269,6 +282,7 @@ public final class LauncherAzGestureFxView extends View {
         displayRawY = 0f;
         edgeProximityLeft = 0f;
         edgeProximityRight = 0f;
+        edgeDwellProgress = 0f;
         interactionMode = InteractionMode.LETTER_TRACK;
         if (!keepOverflowAffordance) {
             interactionOverflowActive = false;
@@ -292,7 +306,7 @@ public final class LauncherAzGestureFxView extends View {
     private void refreshVisibility() {
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        setVisibility(shouldDrawInteractionOverflow ? VISIBLE : GONE);
+        setVisibility(shouldDrawInteractionOverflow || edgeDwellProgress > 0.01f ? VISIBLE : GONE);
     }
 
     public void playLaunchBloom(float rawX, float rawY) {
@@ -319,8 +333,11 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        if (!shouldDrawInteractionOverflow) {
+        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f) {
             return;
+        }
+        if (edgeDwellProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
+            drawEdgeDwellBloom(canvas);
         }
         if (shouldDrawInteractionOverflow) {
             if (renderLayer == RenderLayer.UNDERLAY && !interactionUseSubtlePageIndicators) {
@@ -330,6 +347,37 @@ public final class LauncherAzGestureFxView extends View {
                 drawInteractionPageIndicators(canvas);
             }
         }
+    }
+
+    private void drawEdgeDwellBloom(Canvas canvas) {
+        float progress = clamp01(edgeDwellProgress);
+        float cx = edgeDwellRawX - locationOnScreen[0];
+        float cy = edgeDwellRawY - locationOnScreen[1];
+        if (!appsRowRawBounds.isEmpty()) {
+            float top = appsRowRawBounds.top - locationOnScreen[1];
+            float bottom = appsRowRawBounds.bottom - locationOnScreen[1];
+            cy = clamp(cy, top + dp(8f), bottom - dp(8f));
+        }
+        float radius = lerp(dp(18f), dp(38f), progress);
+        int outerAlpha = Math.round(lerp(34f, 86f, progress));
+        int innerAlpha = Math.round(lerp(76f, 168f, progress));
+        int coreColor = withAlpha(boostColor(edgeTintColor, 1.18f, 1.12f), innerAlpha);
+        int outerColor = withAlpha(boostColor(edgeTintColor, 1.05f, 1.08f), outerAlpha);
+        bloomPaint.setShader(new RadialGradient(
+            cx,
+            cy,
+            radius,
+            new int[] { coreColor, outerColor, withAlpha(edgeTintColor, 0) },
+            new float[] { 0f, 0.48f, 1f },
+            Shader.TileMode.CLAMP
+        ));
+        canvas.drawCircle(cx, cy, radius, bloomPaint);
+        bloomPaint.setShader(null);
+
+        float ringRadius = radius * lerp(0.42f, 0.78f, progress);
+        glassStrokePaint.setStrokeWidth(dp(1.15f));
+        glassStrokePaint.setColor(withAlpha(Color.WHITE, Math.round(lerp(52f, 132f, progress))));
+        canvas.drawCircle(cx, cy, ringRadius, glassStrokePaint);
     }
 
     private void drawEdgeGlowAmbient(Canvas canvas) {
