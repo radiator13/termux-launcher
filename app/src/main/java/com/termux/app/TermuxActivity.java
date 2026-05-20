@@ -2588,6 +2588,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             focusBounds,
             interactionMode
         );
+        CharSequence focusedLabel = interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
+            && focusResult != null
+            && focusResult.entry != null
+            ? focusResult.entry.label
+            : null;
+        applyAzFxFocusedAppLabel(focusedLabel);
     }
 
     private void populateRawBounds(@Nullable View view, @NonNull RectF out) {
@@ -2713,6 +2719,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.updateDrag(active, rawX, rawY, anchorVisible, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
+        }
+    }
+
+    private void applyAzFxFocusedAppLabel(@Nullable CharSequence label) {
+        if (mLauncherAzGestureFxUnderlayView != null) {
+            mLauncherAzGestureFxUnderlayView.setFocusedAppLabel(null);
+        }
+        if (mLauncherAzGestureFxOverlayView != null) {
+            mLauncherAzGestureFxOverlayView.setFocusedAppLabel(label);
         }
     }
 
