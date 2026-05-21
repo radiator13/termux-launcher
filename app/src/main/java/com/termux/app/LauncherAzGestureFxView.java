@@ -487,10 +487,10 @@ public final class LauncherAzGestureFxView extends View {
         boolean drawLabel = focusedAppPreviewLabelEnabled
             && focusedAppPreviewLabel != null
             && !focusedAppPreviewLabel.isEmpty();
-        float bubbleScale = drawLabel ? 1.10f : 1.18f;
-        float iconScale = drawLabel ? 0.76f : 0.82f;
-        float bubbleSize = clamp(sourceIconSize * bubbleScale, dp(44f), dp(62f));
-        float iconSize = clamp(sourceIconSize * iconScale, dp(30f), bubbleSize - dp(14f));
+        float bubbleScale = drawLabel ? 1.02f : 1.18f;
+        float iconScale = drawLabel ? 0.72f : 0.82f;
+        float bubbleSize = clamp(sourceIconSize * bubbleScale, dp(40f), dp(58f));
+        float iconSize = clamp(sourceIconSize * iconScale, dp(28f), bubbleSize - dp(12f));
         float left = clamp(focusCx - (bubbleSize * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - bubbleSize - dp(8f)));
         float verticalGap = clamp(sourceIconSize * 0.22f, dp(8f), dp(14f));
         float top = rowTop - bubbleSize - verticalGap;
@@ -550,15 +550,17 @@ public final class LauncherAzGestureFxView extends View {
         float sourceIconSize,
         float alpha
     ) {
-        previewLabelPaint.setTextSize(clamp(sourceIconSize * 0.24f, dp(10f), dp(12f)));
+        previewLabelPaint.setTextSize(clamp(sourceIconSize * 0.22f, dp(9.5f), dp(11.5f)));
         previewLabelPaint.setColor(darkThemeActive
             ? withAlpha(Color.rgb(230, 224, 233), Math.round(245f * alpha))
             : withAlpha(Color.rgb(29, 27, 32), Math.round(235f * alpha)));
 
-        int maxWidth = Math.round(clamp(getWidth() * 0.38f, dp(92f), dp(156f)));
-        int minWidth = Math.round(dp(48f));
+        float horizontalPadding = dp(7f);
+        float verticalPadding = dp(4f);
+        int maxInnerWidth = Math.round(clamp(getWidth() * 0.32f, dp(78f), dp(132f)));
+        int minInnerWidth = Math.round(dp(38f));
         float measuredTextWidth = previewLabelPaint.measureText(label);
-        int textWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(measuredTextWidth + dp(1f))));
+        int textWidth = Math.max(minInnerWidth, Math.min(maxInnerWidth, Math.round(measuredTextWidth + dp(1f))));
         StaticLayout layout = StaticLayout.Builder.obtain(label, 0, label.length(), previewLabelPaint, textWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
@@ -566,12 +568,10 @@ public final class LauncherAzGestureFxView extends View {
             .setEllipsize(TextUtils.TruncateAt.END)
             .build();
 
-        float horizontalPadding = dp(9f);
-        float verticalPadding = dp(5f);
-        float pillWidth = Math.min(maxWidth + (horizontalPadding * 2f), Math.max(dp(58f), layout.getWidth() + (horizontalPadding * 2f)));
+        float pillWidth = Math.min(maxInnerWidth + (horizontalPadding * 2f), Math.max(dp(52f), layout.getWidth() + (horizontalPadding * 2f)));
         float pillHeight = layout.getHeight() + (verticalPadding * 2f);
         float pillLeft = clamp(centerX - (pillWidth * 0.5f), dp(8f), Math.max(dp(8f), getWidth() - pillWidth - dp(8f)));
-        float pillTop = bubbleTop - pillHeight - dp(6f);
+        float pillTop = bubbleTop - pillHeight - dp(5f);
         if (pillTop < dp(8f)) {
             pillTop = dp(8f);
         }
@@ -589,7 +589,7 @@ public final class LauncherAzGestureFxView extends View {
         canvas.drawRoundRect(tmpRect, pillHeight * 0.5f, pillHeight * 0.5f, previewFillPaint);
 
         int save = canvas.save();
-        float textLeft = tmpRect.centerX() - (layout.getWidth() * 0.5f);
+        float textLeft = tmpRect.left + ((tmpRect.width() - layout.getWidth()) * 0.5f);
         float textTop = tmpRect.top + ((pillHeight - layout.getHeight()) * 0.5f);
         canvas.translate(textLeft, textTop);
         layout.draw(canvas);
