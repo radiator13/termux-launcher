@@ -4,7 +4,7 @@ Termux Launcher is a terminal-first Android home launcher inspired by [TEL](http
 
 [Download builds](https://github.com/PickleHik3/termux-launcher/releases) | [Documentation](docs/en/index.md) | [LauncherCtl API](docs/en/LauncherCtl_API.md) | [Changelog](CHANGELOG.md)
 
-<video src="screenshots/launcher-demo.mp4" controls muted loop playsinline></video>
+![Launcher demo](screenshots/launcher-demo.gif)
 
 ## Why This Exists
 
