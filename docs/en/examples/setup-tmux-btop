@@ -18,6 +18,52 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
+show_material_colors_help() {
+    cat >&2 <<'EOF'
+
+Terminal Material colors are required for the tmux theme.
+
+Do this in Termux Launcher:
+  1. Long press Terminal.
+  2. Open More -> Settings -> Appearance.
+  3. Turn on Terminal Material colors.
+  4. Return to the terminal and run this script again.
+EOF
+}
+
+show_rish_help() {
+    cat >&2 <<'EOF'
+
+rish is required for the Shizuku btop helper.
+
+Set it up first:
+  1. Install and start Shizuku.
+  2. In Shizuku, open Use Shizuku in terminal apps.
+  3. Let Shizuku create rish and rish_shizuku.dex.
+  4. Put both files in a Termux PATH directory. For example, use
+       ~/.local/bin
+     only if that directory is already in PATH or you add it to PATH.
+  5. Make rish executable if needed:
+       chmod +x "$(command -v rish)"
+  6. Edit the bottom of rish so it uses:
+       RISH_APPLICATION_ID="com.termux"
+  7. Run rish once and grant the Shizuku permission prompt.
+  8. Run this setup script again.
+
+The full manual walkthrough is in the Termux Launcher Getting Started page.
+EOF
+}
+
+show_launcherctl_help() {
+    cat >&2 <<'EOF'
+
+launcherctl is installed when a Termux Launcher session starts.
+
+Open Termux Launcher normally once, wait for the Termux terminal to finish
+starting, then return here and run this script again.
+EOF
+}
+
 welcome() {
     cat <<'EOF'
 Termux Launcher optional tmux and btop setup
@@ -97,7 +143,7 @@ install_tmux_plugin() {
     log "Setting up tmux theme and TPM..."
     if ! material_colors_ready; then
         warn "Terminal Material colors export was not found."
-        warn "Turn on Settings -> Appearance -> Terminal Material colors, then run this script again."
+        show_material_colors_help
         return 1
     fi
 
@@ -131,20 +177,21 @@ install_tmux_plugin() {
 install_btop_helper() {
     log
     log "Setting up btop through Shizuku rish..."
-    install_missing_packages curl:curl tar:tar
-    require_cmd curl
 
     if ! command -v rish >/dev/null 2>&1; then
         warn "rish is not available in PATH."
-        warn "Set up Shizuku rish first, then run this script again for btop."
+        show_rish_help
         return 1
     fi
 
     if ! command -v launcherctl >/dev/null 2>&1; then
         warn "launcherctl is not available yet."
-        warn "Open Termux Launcher once, then run this script again for btop."
+        show_launcherctl_help
         return 1
     fi
+
+    install_missing_packages curl:curl tar:tar
+    require_cmd curl
 
     curl -fsSL "$RAW_BASE/setup-btop-rish" -o "$BTOP_SETUP"
     chmod 700 "$BTOP_SETUP"
