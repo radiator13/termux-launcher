@@ -54,11 +54,13 @@ All launcher-specific settings are configured here.
 
 ## Additional Notes
 
-### Terminal Multiplexer
+This section is sort of guided setup for setting up tmux and btop (without root, using shizuku), you can read through and copy paste each snippet, or you can use the  optional installation script.
 
-[tmux](https://github.com/tmux/tmux/wiki) is recommended. You can read about my setup, which uses Material colors and the Shizuku backend for real system stats, at [tmux setup](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Tmux_Status_Setup.md).
+Prerequisites;
+* turn on **Terminal Material colors** from Appearance settings first. 
+* ensure rish is available in your $PATH.
 
-For the guided optional setup path, turn on **Terminal Material colors** from Appearance settings first. Start Shizuku for tmux CPU/RAM widgets, and set up `rish` first if you want the Shizuku-backed `btop` helper. Then run:
+Then run:
 
 ```sh
 curl -fsSL "https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples/setup-tmux-btop" -o ~/setup-tmux-btop
@@ -66,7 +68,9 @@ chmod 700 ~/setup-tmux-btop
 ~/setup-tmux-btop
 ```
 
-The script presents a choice for tmux plus btop, tmux only, or btop only. It installs missing tmux widget packages with `pkg`, installs TPM and the Termux Launcher tmux theme plugin for the tmux path, checks `rish` before the btop path, and prints the optional Extra Keys snippets at the end. The rest of this section explains the manual pieces.
+### Terminal Multiplexer
+
+[tmux](https://github.com/tmux/tmux/wiki) is recommended. You can read about my setup, which uses Material colors and the Shizuku backend for real system stats, at [tmux setup](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Tmux_Status_Setup.md).
 
 You can create tmux key bindings to launch Android apps using the example below. In this example, `Alt + w` opens WhatsApp:
 
