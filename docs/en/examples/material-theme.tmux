@@ -16,7 +16,7 @@ elif [ -r "$colors_properties" ]; then
 		eval "TERMUX_MATERIAL_${name}=\$value"
 	done < "$colors_properties"
 else
-	exit 0
+	:
 fi
 
 surface=${TERMUX_MATERIAL_SURFACE:-#0F1512}

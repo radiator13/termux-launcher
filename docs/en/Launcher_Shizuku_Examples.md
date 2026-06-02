@@ -6,7 +6,8 @@ For a single ordered walkthrough, start with [tmux status setup](Launcher_Tmux_S
 
 They assume:
 
-- Termux Launcher is installed and `launcherctl` works.
+- Termux Launcher is installed and `launcherctl` works for the most efficient CPU/RAM status path.
+- Plain Termux users can use the `rish` fallback for CPU/RAM and the btop helper, but this is less efficient than `launcherctl resources`.
 - `jq` is installed for JSON parsing.
 - A Nerd Font is configured if you want the icons to render correctly.
 - Shizuku/rish is configured for the `btop` helper.
@@ -20,6 +21,8 @@ BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/e
 ## System Stats Widget
 
 Downloads a cached CPU/RAM formatter for tmux status bars. It uses `launcherctl resources` and caches results to avoid high-frequency API calls.
+
+If `launcherctl` is unavailable, it can fall back to `rish` and read Android system files from the Shizuku shell. That compatibility path is intentionally bounded and cached, but it is still less efficient than the Launcher API path.
 
 Install:
 
@@ -35,6 +38,12 @@ Usage:
 launcher-system-monitor cpu
 launcher-system-monitor ram
 launcher-system-monitor compact
+```
+
+Refresh an existing install without rerunning setup:
+
+```sh
+launcherctl update-scripts
 ```
 
 ## Weather Widget
@@ -63,6 +72,8 @@ Downloads a helper that installs a Linux `btop` binary into `/data/local/tmp` th
 - `mini-btop-shizuku`
 
 The helper resolves `rish` from `$PATH` by default. Set `RISH_BIN=/path/to/rish` only if you need an explicit path.
+
+This helper does not require Termux Launcher. It only needs working Termux, Shizuku, and `rish`.
 
 Install:
 

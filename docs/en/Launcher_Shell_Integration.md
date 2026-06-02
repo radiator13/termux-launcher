@@ -73,6 +73,14 @@ launcherctl art
 launcherctl notifications
 ```
 
+Refresh optional shell/tmux helper scripts after an APK update:
+
+```sh
+launcherctl update-scripts
+```
+
+This command updates repo-owned helper scripts and leaves `~/.tmux.conf` alone.
+
 Media and notification commands require Android notification listener access.
 
 ## Material Colors

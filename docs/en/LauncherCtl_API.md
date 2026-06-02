@@ -101,12 +101,19 @@ launcherctl resources
 launcherctl media
 launcherctl art
 launcherctl notifications
+launcherctl update-scripts
 launcherctl tty-doctor
 launcherctl tty-exec "id"
 launcherctl token rotate
 ```
 
 Note: `launcherctl-status` is not a command. Use `launcherctl status`.
+
+### `launcherctl update-scripts`
+
+Refreshes repo-owned shell helpers such as `launcher-system-monitor`, `launcher-weather-widget`, `setup-btop-rish`, and the tmux material theme script. It backs up existing files before replacing them and does not overwrite `~/.tmux.conf`.
+
+Use this after an APK update when you want the latest helper scripts without repeating the Getting Started flow.
 
 ## Interactive Commands (`tty-exec`)
 

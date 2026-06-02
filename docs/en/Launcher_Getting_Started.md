@@ -68,6 +68,14 @@ chmod 700 ~/setup-tmux-btop
 ~/setup-tmux-btop
 ```
 
+If you have already completed this flow and later update the APK, refresh the shell helper scripts with:
+
+```sh
+launcherctl update-scripts
+```
+
+This keeps your tmux config intact and updates only the repo-owned helper scripts.
+
 ### Terminal Multiplexer
 
 [tmux](https://github.com/tmux/tmux/wiki) is recommended. You can read about my setup, which uses Material colors and the Shizuku backend for real system stats, at [tmux setup](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Tmux_Status_Setup.md).
@@ -110,6 +118,8 @@ chmod +x "$(command -v rish)"
 ```
 
 Once `rish` is available in your path, you can use my script, [setup-btop-rish](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/examples/setup-btop-rish), to configure it properly.
+
+For tmux status widgets, Termux Launcher users should use the `launcherctl resources` path. The helper keeps a `rish` fallback for vanilla Termux, but that fallback is less efficient because it starts a Shizuku shell to sample system files.
 
 The script does the following:
 

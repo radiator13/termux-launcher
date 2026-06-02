@@ -787,6 +787,19 @@ public class LauncherCtlApiServer {
         String script =
             "#!/data/data/com.termux/files/usr/bin/sh\n" +
             "set -eu\n" +
+            "cmd=\"${1:-status}\"\n" +
+            "if [ \"$cmd\" = \"update-scripts\" ]; then\n" +
+            "  shift || true\n" +
+            "  command -v curl >/dev/null 2>&1 || { echo \"launcherctl update-scripts: missing required command: curl\" >&2; echo \"install it with: pkg install curl\" >&2; exit 1; }\n" +
+            "  raw_root=\"${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev}\"\n" +
+            "  tmp_dir=\"${TMPDIR:-$HOME/.tmp}/launcherctl-update-scripts.$$\"\n" +
+            "  mkdir -p \"$tmp_dir\" || exit 1\n" +
+            "  trap 'rm -rf \"$tmp_dir\"' EXIT HUP INT TERM\n" +
+            "  curl -fsSL \"$raw_root/resources/bin/launcherctl\" -o \"$tmp_dir/launcherctl\" || exit 1\n" +
+            "  sh -n \"$tmp_dir/launcherctl\" || exit 1\n" +
+            "  sh \"$tmp_dir/launcherctl\" update-scripts \"$@\"\n" +
+            "  exit $?\n" +
+            "fi\n" +
             "LAUNCHERCTL_DIR=\"$HOME/.launcherctl\"\n" +
             "TOKEN_FILE=\"$LAUNCHERCTL_DIR/token\"\n" +
             "ENDPOINT_FILE=\"$LAUNCHERCTL_DIR/endpoint\"\n" +
@@ -797,7 +810,6 @@ public class LauncherCtlApiServer {
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
             "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 10\"\n" +
-            "cmd=\"${1:-status}\"\n" +
             "shift || true\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
             "RISH_DIR=\"$HOME/.rish\"\n" +
@@ -871,6 +883,10 @@ public class LauncherCtlApiServer {
             "  restart)\n" +
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/app/restart\"\n" +
             "    ;;\n" +
+            "  update-scripts)\n" +
+            "    echo \"launcherctl update-scripts must be run before API command dispatch\" >&2\n" +
+            "    exit 1\n" +
+            "    ;;\n" +
             "  tty-exec)\n" +
             "    [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl tty-exec <command>\" >&2; exit 2; }\n" +
             "    tty_doctor >/dev/null || { tty_doctor >&2; exit 1; }\n" +
@@ -885,7 +901,7 @@ public class LauncherCtlApiServer {
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/auth/rotate\"\n" +
             "    ;;\n" +
             "  *)\n" +
-            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|tty-exec|tty-doctor|token rotate}\" >&2\n" +
+            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|update-scripts|tty-exec|tty-doctor|token rotate}\" >&2\n" +
             "    exit 2\n" +
             "    ;;\n" +
             "esac\n";

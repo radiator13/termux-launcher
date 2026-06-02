@@ -7,7 +7,7 @@ If you use TPM, the easiest path is the separate [termux-launcher-tmux](https://
 The example status bar includes:
 
 - Material colors from the launcher wallpaper theme.
-- CPU and RAM widgets from `launcherctl resources`.
+- CPU and RAM widgets from `launcherctl resources`, with a `rish` fallback for plain Termux setups.
 - A free cached weather widget using automatic location lookup.
 - Optional click-to-open `btop` through Shizuku `rish`.
 - Optional second tmux status row for the `kew` now-playing ticker.
@@ -75,6 +75,16 @@ launcher-system-monitor ram
 launcher-weather-widget
 ```
 
+If you already installed the helper scripts and only want to refresh them after an APK or docs update, run:
+
+```sh
+launcherctl update-scripts
+```
+
+This updates the repo-owned helper scripts and keeps your `~/.tmux.conf` unchanged.
+
+The `launcher-system-monitor` helper prefers `launcherctl resources`. The `rish` fallback is kept for compatibility with plain Termux + Shizuku users, but it is less efficient because it has to start a Shizuku shell to sample system files.
+
 ## 4. Download the tmux Example
 
 This replaces `~/.tmux.conf`, so make a backup first if you already have one:
@@ -122,6 +132,8 @@ Run it:
 After setup, tapping the CPU or RAM area in the example tmux status bar opens `mini-btop-shizuku` in a new tmux window on tmux 3.6 or newer.
 
 The mini layout is the better default for Android: it keeps CPU and processes visible, uses a slower two-second refresh, and disables network, disk, and I/O panels because those counters are often unavailable or incomplete through Shizuku `rish`.
+
+`setup-btop-rish` works in plain Termux as long as `rish` works. Termux Launcher users should still prefer `launcherctl resources` for tmux CPU/RAM widgets because it avoids repeated Shizuku shell startup.
 
 ## 6. Optional Extra-Keys Layouts
 

@@ -21,13 +21,15 @@ require_cmd() {
 show_material_colors_help() {
     cat >&2 <<'EOF'
 
-Terminal Material colors are required for the tmux theme.
+Terminal Material colors are recommended for the tmux theme.
 
-Do this in Termux Launcher:
+To use wallpaper-derived colors in Termux Launcher:
   1. Long press Terminal.
   2. Open More -> Settings -> Appearance.
   3. Turn on Terminal Material colors.
   4. Return to the terminal and run this script again.
+
+Plain Termux users can continue with the built-in fallback colors.
 EOF
 }
 
@@ -54,24 +56,16 @@ The full manual walkthrough is in the Termux Launcher Getting Started page.
 EOF
 }
 
-show_launcherctl_help() {
-    cat >&2 <<'EOF'
-
-launcherctl is installed when a Termux Launcher session starts.
-
-Open Termux Launcher normally once, wait for the Termux terminal to finish
-starting, then return here and run this script again.
-EOF
-}
-
 welcome() {
     cat <<'EOF'
 Termux Launcher optional tmux and btop setup
 
-Before the tmux theme will look right:
+Before the tmux theme will use wallpaper-derived colors:
   - Open Settings -> Appearance in Termux Launcher.
   - Turn on Terminal Material colors.
   - Start Shizuku for launcher resource widgets such as CPU and RAM.
+    In plain Termux without Termux Launcher, the status helper can fall back
+    to rish, but that path is less efficient than launcherctl.
 
 Before the Shizuku btop helper can be installed:
   - Put rish in your PATH and grant it Shizuku access.
@@ -144,7 +138,7 @@ install_tmux_plugin() {
     if ! material_colors_ready; then
         warn "Terminal Material colors export was not found."
         show_material_colors_help
-        return 1
+        log "Continuing with built-in fallback colors."
     fi
 
     install_missing_packages tmux:tmux curl:curl jq:jq git:git
@@ -181,12 +175,6 @@ install_btop_helper() {
     if ! command -v rish >/dev/null 2>&1; then
         warn "rish is not available in PATH."
         show_rish_help
-        return 1
-    fi
-
-    if ! command -v launcherctl >/dev/null 2>&1; then
-        warn "launcherctl is not available yet."
-        show_launcherctl_help
         return 1
     fi
 

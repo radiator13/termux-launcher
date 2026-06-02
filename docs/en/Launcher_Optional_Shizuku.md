@@ -65,6 +65,14 @@ curl -fsSL "$BASE/setup-btop-rish" -o ~/setup-btop-rish
 chmod 700 ~/.local/bin/launcher-system-monitor ~/.local/bin/launcher-weather-widget ~/setup-btop-rish
 ```
 
+After updating the APK, refresh already-installed helper scripts without repeating the full setup:
+
+```sh
+launcherctl update-scripts
+```
+
+The CPU/RAM helper uses `launcherctl resources` first. Its `rish` fallback is useful for plain Termux + Shizuku setups, but it is less efficient because it has to start a Shizuku shell for system sampling.
+
 ## Privacy Notes
 
 Notification and media helpers require Android notification listener access. Without that permission, the launcher still works normally, but `launcherctl media`, `launcherctl art`, and `launcherctl notifications` return limited or empty data.

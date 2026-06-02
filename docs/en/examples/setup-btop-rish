@@ -235,7 +235,6 @@ WRAP
 
 main() {
     require_cmd find
-    require_cmd launcherctl
     resolve_rish
     rish_exec "echo ready" >/dev/null || fail "rish did not execute successfully; check Shizuku permission"
 

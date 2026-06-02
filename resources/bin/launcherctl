@@ -18,6 +18,7 @@ Commands:
   art                       Get current media artwork metadata.
   notifications             Get active notifications snapshot.
   restart                   Restart the launcher through authenticated API.
+  update-scripts            Refresh Termux Launcher shell helper scripts.
   tty-exec <command>        Run interactive command via ~/.rish/rish.
   tty-doctor                Validate local rish setup and print fixes.
   token rotate              Rotate LauncherCtl API auth token.
@@ -26,6 +27,7 @@ Examples:
   launcherctl status
   launcherctl apps
   launcherctl launch whatsapp
+  launcherctl update-scripts
   launcherctl restart
   launcherctl tty-doctor
   launcherctl tty-exec "id"
@@ -35,6 +37,34 @@ Config files:
   ~/.launcherctl/token      Bearer token used by this client
 Notes:
   - 'launcherctl tty-exec' requires a working ~/.rish/rish + rish_shizuku.dex pair.
+EOF
+}
+
+print_update_scripts_help() {
+  cat <<'EOF'
+Usage:
+  launcherctl update-scripts
+
+Description:
+  Refreshes Termux Launcher shell helper scripts without rerunning Getting Started.
+  Existing files are backed up before replacement.
+
+Updated files:
+  ~/.local/bin/launcher-system-monitor
+  ~/.local/bin/launcher-weather-widget
+  ~/.local/bin/kew-tmux-status
+  ~/.local/bin/kew-now-playing
+  ~/setup-btop-rish
+  ~/setup-tmux-btop
+  ~/.tmux/material-theme.tmux
+
+Environment:
+  TERMUX_LAUNCHER_RAW_BASE  Override examples raw URL.
+  TERMUX_LAUNCHER_RAW_ROOT  Override repository raw URL.
+
+Notes:
+  - ~/.tmux.conf is not overwritten.
+  - rish-backed status fallback is supported, but launcherctl resources is more efficient.
 EOF
 }
 
@@ -63,6 +93,89 @@ Description:
 EOF
 }
 
+update_scripts() {
+  case "${1:-}" in
+    -h|--help|help)
+      print_update_scripts_help
+      return 0
+      ;;
+    "")
+      ;;
+    *)
+      echo "usage: launcherctl update-scripts" >&2
+      return 2
+      ;;
+  esac
+
+  command -v curl >/dev/null 2>&1 || {
+    echo "launcherctl update-scripts: missing required command: curl" >&2
+    echo "install it with: pkg install curl" >&2
+    return 1
+  }
+
+  raw_root="${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev}"
+  raw_base="${TERMUX_LAUNCHER_RAW_BASE:-$raw_root/docs/en/examples}"
+  stamp="$(date +%Y%m%d-%H%M%S 2>/dev/null || date +%s)"
+  tmp_dir="${TMPDIR:-$HOME/.tmp}/launcherctl-update-scripts.$$"
+  mkdir -p "$tmp_dir" || return 1
+  trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
+
+  update_one() {
+    url="$1"
+    dest="$2"
+    mode="$3"
+    syntax="${4:-sh}"
+    tmp="$tmp_dir/$(basename "$dest")"
+
+    printf 'Fetching %s\n' "$url"
+    if ! curl -fsSL "$url" -o "$tmp"; then
+      echo "launcherctl update-scripts: download failed: $url" >&2
+      return 1
+    fi
+
+    case "$syntax" in
+      sh)
+        sh -n "$tmp" || {
+          echo "launcherctl update-scripts: shell syntax check failed: $url" >&2
+          return 1
+        }
+        ;;
+      bash)
+        if command -v bash >/dev/null 2>&1; then
+          bash -n "$tmp" || {
+            echo "launcherctl update-scripts: bash syntax check failed: $url" >&2
+            return 1
+          }
+        fi
+        ;;
+      none)
+        ;;
+    esac
+
+    mkdir -p "$(dirname "$dest")" || return 1
+    if [ -e "$dest" ]; then
+      cp -p "$dest" "$dest.backup.$stamp" || return 1
+    fi
+    mv "$tmp" "$dest" || return 1
+    chmod "$mode" "$dest" || return 1
+    printf 'Updated %s\n' "$dest"
+  }
+
+  update_one "$raw_base/launcher-system-monitor" "$HOME/.local/bin/launcher-system-monitor" 700 sh
+  update_one "$raw_base/launcher-weather-widget" "$HOME/.local/bin/launcher-weather-widget" 700 sh
+  update_one "$raw_base/kew-tmux-status" "$HOME/.local/bin/kew-tmux-status" 700 sh
+  update_one "$raw_root/resources/scripts/statusbar/kew-now-playing" "$HOME/.local/bin/kew-now-playing" 700 bash
+  update_one "$raw_base/setup-btop-rish" "$HOME/setup-btop-rish" 700 sh
+  update_one "$raw_base/setup-tmux-btop" "$HOME/setup-tmux-btop" 700 sh
+  update_one "$raw_base/material-theme.tmux" "$HOME/.tmux/material-theme.tmux" 700 sh
+
+  cat <<'EOF'
+Shell helper scripts are up to date.
+Note: ~/.tmux.conf was not changed. Reload tmux if it is already running:
+  tmux source-file ~/.tmux.conf
+EOF
+}
+
 cmd="${1:-status}"
 
 case "$cmd" in
@@ -78,6 +191,9 @@ case "$cmd" in
       tty-doctor)
         print_tty_doctor_help
         ;;
+      update-scripts)
+        print_update_scripts_help
+        ;;
       *)
         echo "launcherctl: unknown help topic: $sub" >&2
         print_help >&2
@@ -85,6 +201,11 @@ case "$cmd" in
         ;;
     esac
     exit 0
+    ;;
+  update-scripts)
+    shift || true
+    update_scripts "$@"
+    exit $?
     ;;
 esac
 
@@ -178,6 +299,9 @@ case "$cmd" in
     ;;
   restart)
     curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" "$BASE/v1/app/restart"
+    ;;
+  update-scripts)
+    update_scripts "$@"
     ;;
   tty-exec)
     [ "$#" -gt 0 ] || { print_tty_exec_help >&2; exit 2; }
