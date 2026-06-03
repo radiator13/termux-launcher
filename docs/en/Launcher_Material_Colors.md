@@ -101,7 +101,7 @@ The wiki also includes the raw example files:
 Install the tmux example with `curl`:
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 mkdir -p ~/.tmux ~/.local/bin
 curl -fsSL "$BASE/tmux.conf" -o ~/.tmux.conf
 curl -fsSL "$BASE/material-theme.tmux" -o ~/.tmux/material-theme.tmux

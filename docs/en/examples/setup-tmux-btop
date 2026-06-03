@@ -2,7 +2,7 @@
 
 set -eu
 
-RAW_BASE="${TERMUX_LAUNCHER_RAW_BASE:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples}"
+RAW_BASE="${TERMUX_LAUNCHER_RAW_BASE:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples}"
 TPM_REPO="${TPM_REPO:-https://github.com/tmux-plugins/tpm}"
 PLUGIN_REPO="${TERMUX_LAUNCHER_TMUX_REPO:-https://github.com/PickleHik3/termux-launcher-tmux}"
 TPM_DIR="${TPM_DIR:-$HOME/.tmux/plugins/tpm}"

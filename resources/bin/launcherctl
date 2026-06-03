@@ -113,7 +113,7 @@ update_scripts() {
     return 1
   }
 
-  raw_root="${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev}"
+  raw_root="${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/main}"
   raw_base="${TERMUX_LAUNCHER_RAW_BASE:-$raw_root/docs/en/examples}"
   stamp="$(date +%Y%m%d-%H%M%S 2>/dev/null || date +%s)"
   tmp_dir="${TMPDIR:-$HOME/.tmp}/launcherctl-update-scripts.$$"

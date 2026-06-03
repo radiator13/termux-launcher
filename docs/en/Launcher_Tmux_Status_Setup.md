@@ -57,7 +57,7 @@ If `launcherctl` is missing, restart Termux Launcher and try again. The APK inst
 The helper scripts live in the wiki examples. They are downloaded into your Termux home directory, not bundled into the APK.
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 mkdir -p ~/.local/bin
 curl -fsSL "$BASE/launcher-system-monitor" -o ~/.local/bin/launcher-system-monitor
 curl -fsSL "$BASE/launcher-weather-widget" -o ~/.local/bin/launcher-weather-widget
@@ -90,7 +90,7 @@ The `launcher-system-monitor` helper prefers `launcherctl resources`. The `rish`
 This replaces `~/.tmux.conf`, so make a backup first if you already have one:
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 [ -f ~/.tmux.conf ] && cp ~/.tmux.conf ~/.tmux.conf.backup
 mkdir -p ~/.tmux
 curl -fsSL "$BASE/tmux.conf" -o ~/.tmux.conf
@@ -118,7 +118,7 @@ Install and start Shizuku first, then make sure `rish` is available in your `$PA
 Download the helper:
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 curl -fsSL "$BASE/setup-btop-rish" -o ~/setup-btop-rish
 chmod 700 ~/setup-btop-rish
 ```
@@ -222,7 +222,7 @@ Install `kew-now-playing` from this repo if you do not already have it:
 
 ```sh
 mkdir -p ~/.local/bin
-curl -fsSL 'https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/resources/scripts/statusbar/kew-now-playing' -o ~/.local/bin/kew-now-playing
+curl -fsSL 'https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/resources/scripts/statusbar/kew-now-playing' -o ~/.local/bin/kew-now-playing
 chmod 700 ~/.local/bin/kew-now-playing
 ```
 

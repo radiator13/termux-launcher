@@ -63,7 +63,7 @@ Prerequisites;
 Then run:
 
 ```sh
-curl -fsSL "https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples/setup-tmux-btop" -o ~/setup-tmux-btop
+curl -fsSL "https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples/setup-tmux-btop" -o ~/setup-tmux-btop
 chmod 700 ~/setup-tmux-btop
 ~/setup-tmux-btop
 ```

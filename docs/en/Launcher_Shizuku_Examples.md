@@ -15,7 +15,7 @@ They assume:
 Raw script base URL:
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 ```
 
 ## System Stats Widget

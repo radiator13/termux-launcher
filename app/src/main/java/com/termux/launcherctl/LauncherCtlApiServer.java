@@ -796,7 +796,7 @@ public class LauncherCtlApiServer {
             "if [ \"$cmd\" = \"update-scripts\" ] || [ \"$update_scripts_help\" = \"1\" ]; then\n" +
             "  [ \"$update_scripts_help\" = \"1\" ] || shift || true\n" +
             "  command -v curl >/dev/null 2>&1 || { echo \"launcherctl update-scripts: missing required command: curl\" >&2; echo \"install it with: pkg install curl\" >&2; exit 1; }\n" +
-            "  raw_root=\"${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev}\"\n" +
+            "  raw_root=\"${TERMUX_LAUNCHER_RAW_ROOT:-https://raw.githubusercontent.com/PickleHik3/termux-launcher/main}\"\n" +
             "  tmp_dir=\"${TMPDIR:-$HOME/.tmp}/launcherctl-update-scripts.$$\"\n" +
             "  mkdir -p \"$tmp_dir\" || exit 1\n" +
             "  trap 'rm -rf \"$tmp_dir\"' EXIT HUP INT TERM\n" +

@@ -57,7 +57,7 @@ The wiki also includes optional downloadable examples for tmux CPU/RAM widgets, 
 Quick install:
 
 ```sh
-BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/dev/docs/en/examples'
+BASE='https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples'
 mkdir -p ~/.local/bin
 curl -fsSL "$BASE/launcher-system-monitor" -o ~/.local/bin/launcher-system-monitor
 curl -fsSL "$BASE/launcher-weather-widget" -o ~/.local/bin/launcher-weather-widget
