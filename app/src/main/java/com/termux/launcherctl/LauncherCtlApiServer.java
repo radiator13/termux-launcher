@@ -896,11 +896,6 @@ public class LauncherCtlApiServer {
             "    echo \"launcherctl update-scripts must be run before API command dispatch\" >&2\n" +
             "    exit 1\n" +
             "    ;;\n" +
-            "  tty-exec)\n" +
-            "    [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl tty-exec <command>\" >&2; exit 2; }\n" +
-            "    tty_doctor >/dev/null || { tty_doctor >&2; exit 1; }\n" +
-            "    exec \"$RISH_BIN\" -c \"$*\"\n" +
-            "    ;;\n" +
             "  tty-doctor)\n" +
             "    tty_doctor\n" +
             "    ;;\n" +
@@ -910,7 +905,7 @@ public class LauncherCtlApiServer {
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/auth/rotate\"\n" +
             "    ;;\n" +
             "  *)\n" +
-            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|update-scripts|tty-exec|tty-doctor|token rotate}\" >&2\n" +
+            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|update-scripts|tty-doctor|token rotate}\" >&2\n" +
             "    exit 2\n" +
             "    ;;\n" +
             "esac\n";

@@ -32,16 +32,19 @@ launcherctl status
 
 Confirm that Shizuku is running and that Termux Launcher has permission.
 
-## TTY Commands
+## rish Setup Check
 
-Use `tty-exec` for interactive tools that need a real terminal:
+Use `tty-doctor` to check the local `rish` files used for optional Shizuku-backed shell helpers:
 
 ```sh
 launcherctl tty-doctor
-launcherctl tty-exec "id"
 ```
 
-`tty-doctor` checks the local `rish` files used for Shizuku-backed terminal commands.
+For one-off Shizuku shell commands, call `rish` directly:
+
+```sh
+rish -c "id"
+```
 
 ## Optional Helper Examples
 

@@ -19,7 +19,6 @@ Commands:
   notifications             Get active notifications snapshot.
   restart                   Restart the launcher through authenticated API.
   update-scripts            Refresh Termux Launcher shell helper scripts.
-  tty-exec <command>        Run interactive command via ~/.rish/rish.
   tty-doctor                Validate local rish setup and print fixes.
   token rotate              Rotate LauncherCtl API auth token.
 
@@ -30,13 +29,10 @@ Examples:
   launcherctl update-scripts
   launcherctl restart
   launcherctl tty-doctor
-  launcherctl tty-exec "id"
 
 Config files:
   ~/.launcherctl/endpoint   Base URL (for example http://127.0.0.1:40851)
   ~/.launcherctl/token      Bearer token used by this client
-Notes:
-  - 'launcherctl tty-exec' requires a working ~/.rish/rish + rish_shizuku.dex pair.
 EOF
 }
 
@@ -65,21 +61,6 @@ Environment:
 Notes:
   - ~/.tmux.conf is not overwritten.
   - rish-backed status fallback is supported, but launcherctl resources is more efficient.
-EOF
-}
-
-print_tty_exec_help() {
-  cat <<'EOF'
-Usage:
-  launcherctl tty-exec "<command>"
-
-Description:
-  Executes a command through ~/.rish/rish in interactive tty mode.
-  This is intended for full-screen/interactive tools (for example btop).
-
-Examples:
-  launcherctl tty-exec "id"
-  launcherctl tty-exec "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tmp/btop/btop --force-utf"
 EOF
 }
 
@@ -184,9 +165,6 @@ case "$cmd" in
     case "$sub" in
       ""|all)
         print_help
-        ;;
-      tty-exec)
-        print_tty_exec_help
         ;;
       tty-doctor)
         print_tty_doctor_help
@@ -302,11 +280,6 @@ case "$cmd" in
     ;;
   update-scripts)
     update_scripts "$@"
-    ;;
-  tty-exec)
-    [ "$#" -gt 0 ] || { print_tty_exec_help >&2; exit 2; }
-    tty_doctor >/dev/null || { tty_doctor >&2; exit 1; }
-    exec "$RISH_BIN" -c "$*"
     ;;
   tty-doctor)
     tty_doctor

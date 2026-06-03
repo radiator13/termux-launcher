@@ -5,6 +5,7 @@
 - Added `launcherctl update-scripts` so existing users can refresh optional tmux/status helper scripts without repeating Getting Started.
 - Updated the tmux CPU/RAM helper to prefer efficient `launcherctl resources` data, with a bounded cached `rish` fallback for plain Termux + Shizuku setups.
 - Improved optional Shizuku btop setup so explicit `RISH_BIN=/path/to/rish` is preserved in generated wrappers.
+- Removed the redundant arbitrary `rish` wrapper. Use `rish -c` directly for custom Shizuku shell commands, and use `launcherctl tty-doctor` to check local `rish` setup.
 - Updated tmux/Shizuku docs and helper download URLs for release use.
 
 ## Quick user help
@@ -23,3 +24,4 @@ tmux source-file ~/.tmux.conf
 ```
 
 - `launcher-system-monitor cpu` and `launcher-system-monitor ram` should now show real values through `launcherctl resources`.
+- Custom Shizuku shell commands should use `rish -c "..."`; `launcherctl tty-doctor` is still available for setup checks.

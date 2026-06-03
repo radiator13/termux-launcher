@@ -9,7 +9,8 @@ LauncherCtl is a localhost API bridge for exposing Android/app data to shell too
 - CLI: `$PREFIX/bin/launcherctl` (installed by the launcher app when `TermuxActivity` starts).
 
 Important behavior:
-- `launcherctl tty-exec` is a local CLI helper that uses `~/.rish/rish` for interactive/TTY-required commands.
+- `launcherctl tty-doctor` validates the optional local `~/.rish/rish` setup.
+- Custom Shizuku shell commands should use `rish -c` directly.
 
 ## Files and Components
 
@@ -103,7 +104,6 @@ launcherctl art
 launcherctl notifications
 launcherctl update-scripts
 launcherctl tty-doctor
-launcherctl tty-exec "id"
 launcherctl token rotate
 ```
 
@@ -115,9 +115,13 @@ Refreshes repo-owned shell helpers such as `launcher-system-monitor`, `launcher-
 
 Use this after an APK update when you want the latest helper scripts without repeating the Getting Started flow.
 
-## Interactive Commands (`tty-exec`)
+## rish Compatibility Commands
 
-Use `tty-exec` when a tool requires an interactive terminal (for example `btop`).
+`launcherctl` does not wrap arbitrary `rish` commands. For custom Shizuku shell commands, call `rish` directly:
+
+```sh
+rish -c "id"
+```
 
 Prerequisites in user home:
 - `~/.rish/rish` (executable)
@@ -128,10 +132,7 @@ Diagnostics:
 launcherctl tty-doctor
 ```
 
-Example:
-```sh
-launcherctl tty-exec "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tmp/btop/btop --force-utf"
-```
+For btop, use the documented `setup-btop-rish` helper. For tmux CPU/RAM widgets, prefer `launcherctl resources`; the `rish` fallback is kept for plain Termux + Shizuku compatibility and is less efficient because it starts a Shizuku shell for sampling.
 
 ## Security Model
 

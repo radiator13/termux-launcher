@@ -5,6 +5,9 @@
 ### Added
 - Added `launcherctl update-scripts` to refresh optional shell/tmux helper scripts without rerunning Getting Started.
 
+### Changed
+- Removed the redundant arbitrary `rish` wrapper; use `rish -c` directly for custom Shizuku shell commands and `launcherctl tty-doctor` for setup checks.
+
 ### Fixed
 - Fixed tmux CPU/RAM helper behavior to prefer efficient `launcherctl resources` data, with a bounded `rish` fallback for plain Termux setups.
 - Fixed Shizuku btop helper wrappers to preserve an explicit `RISH_BIN` path.
