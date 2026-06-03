@@ -5,9 +5,12 @@
 ### Added
 - Added launcher permission access settings and an accessibility lock prompt.
 - Added a guided optional tmux and Shizuku btop setup helper.
+- Added `launcherctl update-scripts` to refresh optional shell/tmux helper scripts without rerunning Getting Started.
 
 ### Fixed
 - Fixed launch failure when Android denies access to the system wallpaper backdrop.
+- Fixed tmux CPU/RAM helper behavior to prefer efficient `launcherctl resources` data, with a bounded `rish` fallback for plain Termux setups.
+- Fixed Shizuku btop helper wrappers to preserve an explicit `RISH_BIN` path.
 
 ## 0.2.20
 
