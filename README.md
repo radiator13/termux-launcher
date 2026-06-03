@@ -9,7 +9,7 @@ Termux Launcher is a terminal-first Android home launcher inspired by [TEL](http
 
 [Download builds](https://github.com/PickleHik3/termux-launcher/releases) | [Documentation](docs/en/index.md) | [LauncherCtl API](docs/en/LauncherCtl_API.md) | [Changelog](CHANGELOG.md)
 
-<img src="screenshots/launcher-demo-20260521.gif" alt="Launcher demo" width="360">
+<img src="screenshots/demo.gif" alt="Launcher demo" width="360">
 
 ## Why This Exists
 
@@ -52,6 +52,7 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 - [Optional Shizuku integration](docs/en/Launcher_Optional_Shizuku.md)
 - [Shizuku helper examples](docs/en/Launcher_Shizuku_Examples.md)
 - [LauncherCtl API](docs/en/LauncherCtl_API.md)
+- [tui apps/toys](docs/tui.txt)
 - [Troubleshooting](docs/en/Launcher_Troubleshooting.md)
 
 ## Quick Shell Example
@@ -76,12 +77,12 @@ bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl laun
 
 <table>
   <tr>
-    <td><img src="screenshots/01-home.png" alt="Home screen" width="320"></td>
-    <td><img src="screenshots/03-apps-bar.png" alt="Apps bar" width="320"></td>
+    <td><img src="screenshots/1.png" alt="Home screen" width="320"></td>
+    <td><img src="screenshots/2.png" alt="Apps bar" width="320"></td>
   </tr>
   <tr>
-    <td><img src="screenshots/04-settings-home.png" alt="Settings" width="320"></td>
-    <td><img src="screenshots/08-light-theme.png" alt="Light theme" width="320"></td>
+    <td><img src="screenshots/3.png" alt="Settings" width="320"></td>
+    <td><img src="screenshots/4.png" alt="Light theme" width="320"></td>
   </tr>
 </table>
 
