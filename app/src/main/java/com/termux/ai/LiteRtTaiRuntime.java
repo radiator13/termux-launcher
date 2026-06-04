@@ -29,6 +29,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     private String loadedModelId;
     private String loadedModelPath;
     private String backendName = "none";
+    private String backendFallbackReason = "";
     private String statusMessage = "LiteRT-LM runtime is idle.";
 
     public LiteRtTaiRuntime(@NonNull Context context) {
@@ -38,7 +39,9 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     @NonNull
     @Override
     public synchronized TaiRuntimeState getState() {
-        return new TaiRuntimeState(engine != null, loadedModelId, "litert-lm", statusMessage + " Backend: " + backendName);
+        String status = statusMessage + " Backend: " + backendName;
+        if (!backendFallbackReason.isEmpty()) status += ". " + backendFallbackReason;
+        return new TaiRuntimeState(engine != null, loadedModelId, "litert-lm", status);
     }
 
     @NonNull
@@ -60,10 +63,12 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         closeEngine();
         applyExperimentalFlags(options);
         try {
+            backendFallbackReason = "";
             engine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, preferredBackend(options));
         } catch (Exception gpuError) {
-            if (options.accelerator == null || "gpu".equalsIgnoreCase(options.accelerator) || "auto".equalsIgnoreCase(String.valueOf(options.accelerator))) {
+            if (isAutoAccelerator(options)) {
                 try {
+                    backendFallbackReason = "GPU backend failed in Auto mode; fell back to CPU: " + gpuError.getMessage();
                     engine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, new Backend.CPU(null));
                 } catch (Exception cpuError) {
                     statusMessage = "LiteRT-LM load failed: " + cpuError.getMessage();
@@ -71,6 +76,9 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                 }
             } else {
                 statusMessage = "LiteRT-LM load failed: " + gpuError.getMessage();
+                if ("gpu".equalsIgnoreCase(options.accelerator)) {
+                    statusMessage = "GPU backend was explicitly requested and failed: " + gpuError.getMessage();
+                }
                 return error(500, "litert_lm_load_failed", statusMessage);
             }
         }
@@ -83,6 +91,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         data.put("loadedModelId", loadedModelId);
         data.put("runtime", "litert-lm");
         data.put("backend", backendName);
+        data.put("backendFallbackReason", backendFallbackReason.isEmpty() ? JSONObject.NULL : backendFallbackReason);
         data.put("modelPath", loadedModelPath);
         data.put("options", options.toJson());
         return data;
@@ -126,6 +135,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             data.put("model", modelId);
             data.put("runtime", "litert-lm");
             data.put("backend", backendName);
+            data.put("backendFallbackReason", backendFallbackReason.isEmpty() ? JSONObject.NULL : backendFallbackReason);
             data.put("loaded", true);
             data.put("response", responseText);
             data.put("elapsedMs", System.currentTimeMillis() - startedAt);
@@ -156,6 +166,10 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     private Backend preferredBackend(@NonNull TaiRuntimeOptions options) {
         if ("cpu".equalsIgnoreCase(options.accelerator)) return new Backend.CPU(null);
         return new Backend.GPU();
+    }
+
+    private boolean isAutoAccelerator(@NonNull TaiRuntimeOptions options) {
+        return options.accelerator == null || "auto".equalsIgnoreCase(String.valueOf(options.accelerator));
     }
 
     private void applyExperimentalFlags(@NonNull TaiRuntimeOptions options) {
@@ -211,6 +225,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         loadedModelId = null;
         loadedModelPath = null;
         backendName = "none";
+        backendFallbackReason = "";
         statusMessage = "LiteRT-LM runtime is idle.";
     }
 

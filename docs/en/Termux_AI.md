@@ -48,6 +48,7 @@ tai import ~/models/gemma.task Gemma-4-E2B-it-local
 tai download Gemma-4-E2B-it https://example.invalid/path/to/model.task --accept-terms
 tai downloads
 tai load Gemma-4-E2B-it
+tai load Gemma-4-E2B-it --gpu
 tai unload
 tai ask "hello"
 tai plan "update packages"
@@ -84,17 +85,21 @@ Implemented foundation endpoints:
 
 Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
 
+The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. The accelerator setting supports Auto, CPU, and GPU. Auto can fall back to CPU if the device/runtime rejects GPU. Explicit `tai load <model> --gpu` fails visibly if GPU cannot be initialized instead of silently using CPU.
+
 ## Safety Policy
 
 TAI does not silently run destructive shell commands.
 
-The terminal planner is plan-only in this foundation build. It flags package updates, installs, and destructive patterns for review. It avoids unattended package flags unless a future explicit mode supports them.
+The terminal planner is plan-only in this foundation build. It returns structured plan JSON with commands, safety status, and confirmation flags. It flags package updates, installs, and destructive patterns for review. It avoids unattended package flags unless a future explicit mode supports them.
 
 Examples:
 
 - `tai plan "update packages"` detects `pkg`/`apt` versus `pacman` and prints interactive update commands.
 - `@tai where is the config files for neovim?` prints read-only `find` commands for common Neovim locations.
 - `@tai find me the file fish.config` searches for both `fish.config` and the common `config.fish` name.
+
+`tai code` uses the coding/build model role. If the request looks like a terminal helper task covered by the built-in planner, it is routed to the structured terminal planner instead of asking the model for free-form prose.
 
 Risky actions such as `rm -rf`, `find ... -delete`, `dd`, `mkfs`, mass `chmod -R`, and mass `chown -R` must require explicit confirmation in future execute/agent modes. Destructive `find` tasks should show a dry run first.
 

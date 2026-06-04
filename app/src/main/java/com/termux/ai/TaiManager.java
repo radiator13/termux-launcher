@@ -182,7 +182,12 @@ public final class TaiManager {
         TaiModelSpec spec = modelStore.getUserModel(modelId);
         if (spec == null) spec = registry.getModel(modelId);
         if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
-        return runtime.load(spec, settings.getRuntimeOptions());
+        TaiRuntimeOptions options = settings.getRuntimeOptions();
+        if (request.has("accelerator")) {
+            String accelerator = request.optString("accelerator", "").trim();
+            options = options.withAccelerator(accelerator.isEmpty() || "auto".equalsIgnoreCase(accelerator) ? null : accelerator);
+        }
+        return runtime.load(spec, options);
     }
 
     @NonNull
@@ -195,9 +200,27 @@ public final class TaiManager {
         JSONObject request = parseBody(body);
         String prompt = request.optString("message", request.optString("prompt", ""));
         if (prompt.trim().isEmpty()) return error(400, "bad_request", "Missing message");
-        String modelId = request.optString("model", settings.getDefaultAssistantModel());
-        String systemPrompt = request.optString("systemPrompt", settings.getGeneralSystemPrompt());
-        return runtime.chat(modelId, systemPrompt, prompt, settings.getRuntimeOptions());
+        String profile = normalizeProfile(request.optString("profile", TaiPromptProfile.GENERAL_CHAT));
+        if (TaiPromptProfile.TERMINAL_HELPER.equals(profile) ||
+            (TaiPromptProfile.CODING_ASSISTANT.equals(profile) && shellPlanner.hasBuiltInMatch(prompt))) {
+            JSONObject plan = shellPlanner.plan(prompt, settings.isUnattendedModeEnabled());
+            plan.put("profile", TaiPromptProfile.TERMINAL_HELPER);
+            plan.put("routedFrom", profile);
+            plan.put("modelBypassed", true);
+            return plan;
+        }
+
+        String modelId = request.optString("model", modelForProfile(profile));
+        String systemPrompt = request.optString("systemPrompt", systemPromptForProfile(profile));
+        JSONObject data = runtime.chat(modelId, systemPrompt, prompt, settings.getRuntimeOptions());
+        data.put("profile", profile);
+        if (data.optBoolean("ok", false)) {
+            JSONObject output = new JSONObject();
+            output.put("format", "text");
+            output.put("text", data.optString("response", ""));
+            data.put("output", output);
+        }
+        return data;
     }
 
     @NonNull
@@ -348,6 +371,46 @@ public final class TaiManager {
         limitations.put("Image input, audio scribe, streaming, and monitored build execution are TODO.");
         limitations.put("TAI command execution is plan-only unless a future confirmed execution mode is added.");
         return limitations;
+    }
+
+    @NonNull
+    private String normalizeProfile(@NonNull String profile) {
+        switch (profile) {
+            case "ask":
+            case "chat":
+            case "general":
+                return TaiPromptProfile.GENERAL_CHAT;
+            case "code":
+            case "coding":
+                return TaiPromptProfile.CODING_ASSISTANT;
+            case "plan":
+            case "terminal":
+                return TaiPromptProfile.TERMINAL_HELPER;
+            default:
+                return profile.trim().isEmpty() ? TaiPromptProfile.GENERAL_CHAT : profile;
+        }
+    }
+
+    @NonNull
+    private String modelForProfile(@NonNull String profile) {
+        if (TaiPromptProfile.CODING_ASSISTANT.equals(profile) || TaiPromptProfile.BUILD_AGENT.equals(profile)) {
+            return settings.getCodingBuildModel();
+        }
+        if (TaiPromptProfile.MOBILE_ACTION_ROUTER.equals(profile)) {
+            return settings.getMobileActionsModel();
+        }
+        return settings.getDefaultAssistantModel();
+    }
+
+    @NonNull
+    private String systemPromptForProfile(@NonNull String profile) {
+        if (TaiPromptProfile.CODING_ASSISTANT.equals(profile)) {
+            return "You are TAI's coding and Termux build assistant. Return concise, structured Markdown with sections named Summary, Commands, Safety, and Notes when commands are relevant. Never claim you inspected local files unless tool output was provided. Prefer reviewable commands and do not suggest destructive actions without explicit confirmation.";
+        }
+        if (TaiPromptProfile.TERMINAL_HELPER.equals(profile)) {
+            return settings.getTerminalSystemPrompt();
+        }
+        return settings.getGeneralSystemPrompt();
     }
 
     @NonNull

@@ -47,6 +47,19 @@ public final class TaiRuntimeOptions {
         return json;
     }
 
+    @NonNull
+    public TaiRuntimeOptions withAccelerator(@Nullable String overrideAccelerator) {
+        return new TaiRuntimeOptions(
+            maxTokens,
+            topK,
+            topP,
+            temperature,
+            overrideAccelerator,
+            thinkingEnabled,
+            speculativeDecodingEnabled
+        );
+    }
+
     private static void putNullable(JSONObject json, String key, Object value) throws JSONException {
         json.put(key, value == null ? JSONObject.NULL : value);
     }

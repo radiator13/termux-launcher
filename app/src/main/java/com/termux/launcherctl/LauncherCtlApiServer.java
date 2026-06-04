@@ -1060,7 +1060,7 @@ public class LauncherCtlApiServer {
             "  tai download <model-id> <https-url> --accept-terms\n" +
             "  tai downloads\n" +
             "  tai delete <model-id>\n" +
-            "  tai load [model]\n" +
+            "  tai load [model] [--auto|--cpu|--gpu]\n" +
             "  tai unload\n" +
             "  tai ask \"question\"\n" +
             "  tai chat [message]\n" +
@@ -1071,7 +1071,8 @@ public class LauncherCtlApiServer {
             "  tai doctor\n" +
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
-            "This foundation build uses a stub model runtime and never auto-runs shell commands.\n" +
+            "LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.\n" +
+            "Terminal plans are structured and never auto-run shell commands.\n" +
             "EOF\n" +
             "}\n" +
             "LAUNCHERCTL_DIR=\"$HOME/.launcherctl\"\n" +
@@ -1083,7 +1084,7 @@ public class LauncherCtlApiServer {
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
             "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
-            "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 30\"\n" +
+            "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 180\"\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
             "post_json() { path=\"$1\"; data=\"$2\"; curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"; }\n" +
             "get_json() { path=\"$1\"; curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE$path\"; }\n" +
@@ -1121,8 +1122,21 @@ public class LauncherCtlApiServer {
             "    post_json /v1/ai/models/delete \"{\\\"modelId\\\":\\\"$model\\\"}\"\n" +
             "    ;;\n" +
             "  load)\n" +
-            "    model=\"${1:-}\"\n" +
-            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/models/load \"{\\\"model\\\":\\\"$model_escaped\\\"}\"; else post_json /v1/ai/models/load '{}'; fi\n" +
+            "    model=\"\"\n" +
+            "    accelerator=\"\"\n" +
+            "    while [ \"$#\" -gt 0 ]; do\n" +
+            "      case \"$1\" in\n" +
+            "        --auto) accelerator=auto ;;\n" +
+            "        --cpu) accelerator=cpu ;;\n" +
+            "        --gpu) accelerator=gpu ;;\n" +
+            "        --*) echo \"usage: tai load [model] [--auto|--cpu|--gpu]\" >&2; exit 2 ;;\n" +
+            "        *) [ -z \"$model\" ] || { echo \"usage: tai load [model] [--auto|--cpu|--gpu]\" >&2; exit 2; }; model=\"$1\" ;;\n" +
+            "      esac\n" +
+            "      shift\n" +
+            "    done\n" +
+            "    accel_json=\"\"\n" +
+            "    if [ -n \"$accelerator\" ]; then accel_json=\",\\\"accelerator\\\":\\\"$accelerator\\\"\"; fi\n" +
+            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/models/load \"{\\\"model\\\":\\\"$model_escaped\\\"$accel_json}\"; elif [ -n \"$accelerator\" ]; then post_json /v1/ai/models/load \"{\\\"accelerator\\\":\\\"$accelerator\\\"}\"; else post_json /v1/ai/models/load '{}'; fi\n" +
             "    ;;\n" +
             "  unload)\n" +
             "    post_json /v1/ai/models/unload '{}'\n" +

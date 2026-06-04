@@ -9,12 +9,17 @@ import org.json.JSONObject;
 import java.util.Locale;
 
 public final class TaiShellPlanner {
+    public boolean hasBuiltInMatch(@NonNull String task) {
+        String normalized = task.trim().toLowerCase(Locale.US);
+        return isPackageUpdate(normalized) || isNeovimConfig(normalized) || isFishConfig(normalized);
+    }
+
     @NonNull
     public JSONObject plan(@NonNull String task, boolean unattendedMode) throws JSONException {
         String normalized = task.trim().toLowerCase(Locale.US);
         JSONObject data = basePlan(task);
 
-        if (normalized.contains("update") && (normalized.contains("package") || normalized.contains("pkg") || normalized.contains("apt") || normalized.contains("pacman"))) {
+        if (isPackageUpdate(normalized)) {
             data.put("summary", "Detect the active Termux package manager and run the matching interactive update command.");
             JSONArray commands = new JSONArray();
             commands.put(command("Detect package manager",
@@ -36,7 +41,7 @@ public final class TaiShellPlanner {
             return data;
         }
 
-        if (normalized.contains("neovim") || normalized.contains("nvim")) {
+        if (isNeovimConfig(normalized)) {
             data.put("summary", "Search common Neovim configuration locations without modifying files.");
             JSONArray commands = new JSONArray();
             commands.put(command("Check standard config directories",
@@ -48,7 +53,7 @@ public final class TaiShellPlanner {
             return data;
         }
 
-        if (normalized.contains("fish.config") || normalized.contains("config.fish") || normalized.contains("fish config")) {
+        if (isFishConfig(normalized)) {
             data.put("summary", "Search likely fish shell config locations, including the common config.fish filename.");
             JSONArray commands = new JSONArray();
             commands.put(command("Find fish config",
@@ -98,5 +103,18 @@ public final class TaiShellPlanner {
         safety.put("level", level);
         safety.put("note", note);
         return safety;
+    }
+
+    private boolean isPackageUpdate(@NonNull String normalized) {
+        return normalized.contains("update") &&
+            (normalized.contains("package") || normalized.contains("pkg") || normalized.contains("apt") || normalized.contains("pacman"));
+    }
+
+    private boolean isNeovimConfig(@NonNull String normalized) {
+        return normalized.contains("neovim") || normalized.contains("nvim");
+    }
+
+    private boolean isFishConfig(@NonNull String normalized) {
+        return normalized.contains("fish.config") || normalized.contains("config.fish") || normalized.contains("fish config");
     }
 }
