@@ -38,7 +38,7 @@ fi
 
 TOKEN=$(cat "$TOKEN_FILE")
 BASE=$(cat "$ENDPOINT_FILE")
-CURL_COMMON="-fsS --connect-timeout 2 --max-time 180"
+CURL_COMMON="-sS --connect-timeout 2 --max-time 180"
 
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 post_json() { path="$1"; data="$2"; curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$data" "$BASE$path"; }

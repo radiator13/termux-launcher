@@ -1084,7 +1084,7 @@ public class LauncherCtlApiServer {
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
             "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
-            "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 180\"\n" +
+            "CURL_COMMON=\"-sS --connect-timeout 2 --max-time 180\"\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
             "post_json() { path=\"$1\"; data=\"$2\"; curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"; }\n" +
             "get_json() { path=\"$1\"; curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE$path\"; }\n" +
