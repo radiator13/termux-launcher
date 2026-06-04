@@ -24,6 +24,10 @@ import java.io.File;
 import java.util.Collections;
 
 public final class LiteRtTaiRuntime implements TaiRuntime {
+    private static final String GPU_DISABLED_REASON =
+        "LiteRT-LM GPU backend is disabled in this build because nativeCreateEngine produced a native crash on this device. " +
+        "Use CPU/Auto until GPU probing can run in an isolated runtime process.";
+
     private final Context appContext;
     private Engine engine;
     private String loadedModelId;
@@ -59,28 +63,18 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             error.put("path", modelSpec.localPath);
             return error;
         }
+        if (isGpuAccelerator(options)) {
+            return gpuDisabledError(modelSpec.id);
+        }
 
         closeEngine();
         applyExperimentalFlags(options);
         try {
-            backendFallbackReason = "";
-            engine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, preferredBackend(options));
-        } catch (Exception gpuError) {
-            if (isAutoAccelerator(options)) {
-                try {
-                    backendFallbackReason = "GPU backend failed in Auto mode; fell back to CPU: " + gpuError.getMessage();
-                    engine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, new Backend.CPU(null));
-                } catch (Exception cpuError) {
-                    statusMessage = "LiteRT-LM load failed: " + cpuError.getMessage();
-                    return error(500, "litert_lm_load_failed", statusMessage);
-                }
-            } else {
-                statusMessage = "LiteRT-LM load failed: " + gpuError.getMessage();
-                if ("gpu".equalsIgnoreCase(options.accelerator)) {
-                    statusMessage = "GPU backend was explicitly requested and failed: " + gpuError.getMessage();
-                }
-                return error(500, "litert_lm_load_failed", statusMessage);
-            }
+            backendFallbackReason = isAutoAccelerator(options) ? "Auto selected CPU. " + GPU_DISABLED_REASON : "";
+            engine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, preferredBackend());
+        } catch (Exception e) {
+            statusMessage = "LiteRT-LM load failed: " + e.getMessage();
+            return error(500, "litert_lm_load_failed", statusMessage);
         }
 
         loadedModelId = modelSpec.id;
@@ -163,13 +157,27 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     }
 
     @NonNull
-    private Backend preferredBackend(@NonNull TaiRuntimeOptions options) {
-        if ("cpu".equalsIgnoreCase(options.accelerator)) return new Backend.CPU(null);
-        return new Backend.GPU();
+    private Backend preferredBackend() {
+        return new Backend.CPU(null);
     }
 
     private boolean isAutoAccelerator(@NonNull TaiRuntimeOptions options) {
         return options.accelerator == null || "auto".equalsIgnoreCase(String.valueOf(options.accelerator));
+    }
+
+    private boolean isGpuAccelerator(@NonNull TaiRuntimeOptions options) {
+        return "gpu".equalsIgnoreCase(options.accelerator);
+    }
+
+    @NonNull
+    private JSONObject gpuDisabledError(@NonNull String modelId) throws JSONException {
+        JSONObject data = error(501, "litert_lm_gpu_disabled_native_crash", GPU_DISABLED_REASON);
+        data.put("model", modelId);
+        data.put("backend", "none");
+        data.put("gpuCrashObserved", true);
+        data.put("safeFallback", "tai load " + modelId + " --cpu");
+        data.put("requiresIsolatedRuntimeProcess", true);
+        return data;
     }
 
     private void applyExperimentalFlags(@NonNull TaiRuntimeOptions options) {

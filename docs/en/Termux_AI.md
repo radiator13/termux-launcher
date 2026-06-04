@@ -49,7 +49,7 @@ tai import ~/models/gemma.task Gemma-4-E2B-it-local
 tai download Gemma-4-E2B-it https://example.invalid/path/to/model.task --accept-terms
 tai downloads
 tai load Gemma-4-E2B-it
-tai load Gemma-4-E2B-it --gpu
+tai load Gemma-4-E2B-it --cpu
 tai unload
 tai ask "hello"
 tai plan "update packages"
@@ -88,7 +88,7 @@ Implemented foundation endpoints:
 
 Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
 
-The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. The accelerator setting supports Auto, CPU, and GPU. Auto can fall back to CPU if the device/runtime rejects GPU. Explicit `tai load <model> --gpu` fails visibly if GPU cannot be initialized instead of silently using CPU.
+The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. The accelerator setting is preserved in settings, but direct LiteRT-LM GPU loading is disabled in this build because native GPU engine creation crashed the Android app process on this device. Auto selects CPU. Explicit `tai load <model> --gpu` returns a visible error instead of calling the unsafe native GPU path. GPU support should be re-enabled only after probing/loading can run in an isolated runtime process.
 
 ## Safety Policy
 
@@ -146,6 +146,7 @@ For gated Hugging Face models, first accept the provider terms on Hugging Face, 
 ## Current Limitations / TODO
 
 - Expand the LiteRT-LM runtime adapter with streaming, benchmark counters, multimodal prompts, and tool-calling integration.
+- Move LiteRT-LM GPU probing/loading into an isolated runtime process before enabling GPU acceleration again.
 - Add copy-into-private-storage import mode and UI file picker.
 - Add pause/cancel/retry controls for foreground downloads.
 - Add streaming/SSE responses.
