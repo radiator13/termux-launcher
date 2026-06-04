@@ -30,4 +30,100 @@
         <item>shizuku</item>
         <item>accessibility</item>
     </string-array>
+    <string-array name="termux_ai_model_entries">
+        <item>Gemma-4-E2B-it</item>
+        <item>Gemma-4-E4B-it</item>
+        <item>MobileActions-270M</item>
+    </string-array>
+    <string-array name="termux_ai_model_values">
+        <item>Gemma-4-E2B-it</item>
+        <item>Gemma-4-E4B-it</item>
+        <item>MobileActions-270M</item>
+    </string-array>
+    <string-array name="termux_ai_max_tokens_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>512</item>
+        <item>1024</item>
+        <item>2048</item>
+        <item>4096</item>
+    </string-array>
+    <string-array name="termux_ai_max_tokens_values">
+        <item>auto</item>
+        <item>512</item>
+        <item>1024</item>
+        <item>2048</item>
+        <item>4096</item>
+    </string-array>
+    <string-array name="termux_ai_top_k_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>16</item>
+        <item>32</item>
+        <item>40</item>
+        <item>64</item>
+    </string-array>
+    <string-array name="termux_ai_top_k_values">
+        <item>auto</item>
+        <item>16</item>
+        <item>32</item>
+        <item>40</item>
+        <item>64</item>
+    </string-array>
+    <string-array name="termux_ai_top_p_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>0.8</item>
+        <item>0.9</item>
+        <item>0.95</item>
+        <item>1.0</item>
+    </string-array>
+    <string-array name="termux_ai_top_p_values">
+        <item>auto</item>
+        <item>0.8</item>
+        <item>0.9</item>
+        <item>0.95</item>
+        <item>1.0</item>
+    </string-array>
+    <string-array name="termux_ai_temperature_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>0.2</item>
+        <item>0.7</item>
+        <item>1.0</item>
+    </string-array>
+    <string-array name="termux_ai_temperature_values">
+        <item>auto</item>
+        <item>0.2</item>
+        <item>0.7</item>
+        <item>1.0</item>
+    </string-array>
+    <string-array name="termux_ai_accelerator_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>CPU</item>
+        <item>GPU</item>
+    </string-array>
+    <string-array name="termux_ai_accelerator_values">
+        <item>auto</item>
+        <item>cpu</item>
+        <item>gpu</item>
+    </string-array>
+    <string-array name="termux_ai_auto_boolean_entries">
+        <item>@string/termux_ai_auto_model_default</item>
+        <item>@string/termux_ai_enabled</item>
+        <item>@string/termux_ai_disabled</item>
+    </string-array>
+    <string-array name="termux_ai_auto_boolean_values">
+        <item>auto</item>
+        <item>true</item>
+        <item>false</item>
+    </string-array>
+    <string-array name="termux_ai_idle_unload_entries">
+        <item>@string/termux_ai_disabled</item>
+        <item>5 minutes</item>
+        <item>10 minutes</item>
+        <item>30 minutes</item>
+    </string-array>
+    <string-array name="termux_ai_idle_unload_values">
+        <item>0</item>
+        <item>5</item>
+        <item>10</item>
+        <item>30</item>
+    </string-array>
 </resources>

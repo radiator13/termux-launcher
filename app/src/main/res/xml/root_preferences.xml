@@ -19,6 +19,12 @@
         app:fragment="com.termux.app.fragments.settings.termux.PrivilegedAccessPreferencesFragment"/>
 
     <Preference
+        app:key="termux_ai"
+        app:title="@string/termux_ai_preferences_title"
+        app:summary="@string/termux_ai_preferences_summary"
+        app:fragment="com.termux.app.fragments.settings.termux.TaiPreferencesFragment"/>
+
+    <Preference
         app:key="apps_bar"
         app:title="@string/termux_launcher_preferences_title"
         app:summary="@string/termux_launcher_preferences_summary"

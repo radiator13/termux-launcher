@@ -10,6 +10,7 @@ LauncherCtl is a localhost API bridge for exposing Android/app data to shell too
 
 Important behavior:
 - `launcherctl tty-doctor` validates the optional local `~/.rish/rish` setup.
+- `tai` and `@tai` use the same authenticated bridge for Termux AI commands.
 - Custom Shizuku shell commands should use `rish -c` directly.
 
 ## Files and Components
@@ -29,6 +30,18 @@ Runtime files under `$HOME/.launcherctl`:
 - `endpoint`: local base URL (`http://127.0.0.1:<port>`).
 
 ## Endpoints (v1)
+
+### TAI / Termux AI
+TAI endpoints are documented in [TAI / Termux AI](Termux_AI). They share this API server, bearer token, and localhost endpoint.
+
+Common routes:
+- `GET /v1/ai/status`
+- `GET /v1/ai/models`
+- `POST /v1/ai/chat`
+- `POST /v1/ai/terminal/plan`
+- `POST /v1/ai/notifications/summarize`
+- `POST /v1/ai/build/plan`
+- `POST /v1/chat/completions`
 
 ### `GET /v1/status`
 Returns backend + LauncherCtl runtime status.

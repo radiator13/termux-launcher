@@ -1,0 +1,123 @@
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/termux_ai_overview_header">
+        <Preference
+            app:key="tai_model_privacy_notice"
+            app:title="@string/termux_ai_model_privacy_notice_title"
+            app:persistent="false"
+            app:selectable="false"/>
+        <SwitchPreferenceCompat
+            app:key="tai_unattended_mode"
+            app:title="@string/termux_ai_unattended_mode_title"
+            app:summaryOff="@string/termux_ai_unattended_mode_off"
+            app:summaryOn="@string/termux_ai_unattended_mode_on"
+            app:defaultValue="false"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/termux_ai_model_roles_header">
+        <ListPreference
+            app:key="tai_role_default_assistant"
+            app:title="@string/termux_ai_default_assistant_model_title"
+            app:entries="@array/termux_ai_model_entries"
+            app:entryValues="@array/termux_ai_model_values"
+            app:defaultValue="Gemma-4-E2B-it"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_role_coding_build"
+            app:title="@string/termux_ai_coding_build_model_title"
+            app:entries="@array/termux_ai_model_entries"
+            app:entryValues="@array/termux_ai_model_values"
+            app:defaultValue="Gemma-4-E4B-it"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_role_mobile_actions"
+            app:title="@string/termux_ai_mobile_actions_model_title"
+            app:entries="@array/termux_ai_model_entries"
+            app:entryValues="@array/termux_ai_model_values"
+            app:defaultValue="MobileActions-270M"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/termux_ai_runtime_header">
+        <ListPreference
+            app:key="tai_max_tokens"
+            app:title="@string/termux_ai_max_tokens_title"
+            app:entries="@array/termux_ai_max_tokens_entries"
+            app:entryValues="@array/termux_ai_max_tokens_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_top_k"
+            app:title="@string/termux_ai_top_k_title"
+            app:entries="@array/termux_ai_top_k_entries"
+            app:entryValues="@array/termux_ai_top_k_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_top_p"
+            app:title="@string/termux_ai_top_p_title"
+            app:entries="@array/termux_ai_top_p_entries"
+            app:entryValues="@array/termux_ai_top_p_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_temperature"
+            app:title="@string/termux_ai_temperature_title"
+            app:entries="@array/termux_ai_temperature_entries"
+            app:entryValues="@array/termux_ai_temperature_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_accelerator"
+            app:title="@string/termux_ai_accelerator_title"
+            app:entries="@array/termux_ai_accelerator_entries"
+            app:entryValues="@array/termux_ai_accelerator_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_thinking"
+            app:title="@string/termux_ai_thinking_title"
+            app:entries="@array/termux_ai_auto_boolean_entries"
+            app:entryValues="@array/termux_ai_auto_boolean_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_speculative_decoding"
+            app:title="@string/termux_ai_speculative_decoding_title"
+            app:entries="@array/termux_ai_auto_boolean_entries"
+            app:entryValues="@array/termux_ai_auto_boolean_values"
+            app:defaultValue="auto"
+            app:useSimpleSummaryProvider="true"/>
+        <ListPreference
+            app:key="tai_idle_unload_minutes"
+            app:title="@string/termux_ai_idle_unload_title"
+            app:entries="@array/termux_ai_idle_unload_entries"
+            app:entryValues="@array/termux_ai_idle_unload_values"
+            app:defaultValue="10"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/termux_ai_prompts_header">
+        <EditTextPreference
+            app:key="tai_system_prompt_general"
+            app:title="@string/termux_ai_general_prompt_title"
+            app:useSimpleSummaryProvider="true"/>
+        <EditTextPreference
+            app:key="tai_system_prompt_terminal"
+            app:title="@string/termux_ai_terminal_prompt_title"
+            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/termux_ai_capabilities_header">
+        <Preference
+            app:key="tai_notification_privacy_notice"
+            app:title="@string/termux_ai_notification_privacy_notice_title"
+            app:persistent="false"
+            app:selectable="false"/>
+        <Preference
+            app:title="@string/termux_ai_stub_status_title"
+            app:summary="@string/termux_ai_stub_status_summary"
+            app:persistent="false"
+            app:selectable="false"/>
+    </PreferenceCategory>
+</PreferenceScreen>

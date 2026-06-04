@@ -8,6 +8,7 @@
 ## Integrations
 
 - [Shell integration](Launcher_Shell_Integration)
+- [TAI / Termux AI](Termux_AI)
 - [Material colors](Launcher_Material_Colors)
 - [Termux extra keys](Termux_Extrakeys)
 - [tmux status setup](Launcher_Tmux_Status_Setup)

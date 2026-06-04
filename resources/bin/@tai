@@ -1,0 +1,9 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+
+if [ "$#" -eq 0 ]; then
+  echo "usage: @tai <natural language terminal task>" >&2
+  exit 2
+fi
+
+exec tai plan "$@"

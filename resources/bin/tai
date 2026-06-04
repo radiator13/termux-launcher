@@ -1,0 +1,101 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+
+print_help() {
+  cat <<'EOF'
+TAI / Termux AI - local assistant bridge
+
+Usage:
+  tai status
+  tai models
+  tai load [model]
+  tai unload
+  tai ask "question"
+  tai chat [message]
+  tai code "task"
+  tai plan "natural language terminal task"
+  tai notifications today
+  tai build [--run|--print-command]
+  tai doctor
+
+TAI is authenticated through ~/.launcherctl and runs in the Android app process.
+This foundation build uses a stub model runtime and never auto-runs shell commands.
+EOF
+}
+
+LAUNCHERCTL_DIR="$HOME/.launcherctl"
+TOKEN_FILE="$LAUNCHERCTL_DIR/token"
+ENDPOINT_FILE="$LAUNCHERCTL_DIR/endpoint"
+if [ ! -r "$TOKEN_FILE" ] || [ ! -r "$ENDPOINT_FILE" ]; then
+  echo "tai: missing $TOKEN_FILE or $ENDPOINT_FILE; start Termux Launcher first" >&2
+  exit 1
+fi
+
+TOKEN=$(cat "$TOKEN_FILE")
+BASE=$(cat "$ENDPOINT_FILE")
+CURL_COMMON="-fsS --connect-timeout 2 --max-time 30"
+
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+post_json() { path="$1"; data="$2"; curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$data" "$BASE$path"; }
+get_json() { path="$1"; curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE$path"; }
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+  -h|--help|help)
+    print_help
+    ;;
+  status)
+    get_json /v1/ai/status
+    ;;
+  models)
+    get_json /v1/ai/models
+    ;;
+  load)
+    model="${1:-}"
+    if [ -n "$model" ]; then
+      model_escaped=$(json_escape "$model")
+      post_json /v1/ai/models/load "{\"model\":\"$model_escaped\"}"
+    else
+      post_json /v1/ai/models/load '{}'
+    fi
+    ;;
+  unload)
+    post_json /v1/ai/models/unload '{}'
+    ;;
+  ask|chat|code)
+    [ "$#" -gt 0 ] || { echo "usage: tai $cmd <message>" >&2; exit 2; }
+    message=$(json_escape "$*")
+    post_json /v1/ai/chat "{\"message\":\"$message\",\"profile\":\"$cmd\"}"
+    ;;
+  plan)
+    [ "$#" -gt 0 ] || { echo "usage: tai plan <task>" >&2; exit 2; }
+    task=$(json_escape "$*")
+    post_json /v1/ai/terminal/plan "{\"task\":\"$task\"}"
+    ;;
+  notifications)
+    range=$(json_escape "${1:-today}")
+    post_json /v1/ai/notifications/summarize "{\"range\":\"$range\"}"
+    ;;
+  build)
+    mode=print_command
+    case "${1:-}" in
+      --run) mode=monitor ;;
+      --print-command|"") mode=print_command ;;
+      *) echo "usage: tai build [--run|--print-command]" >&2; exit 2 ;;
+    esac
+    cwd=$(json_escape "$(pwd)")
+    post_json /v1/ai/build/plan "{\"cwd\":\"$cwd\",\"mode\":\"$mode\"}"
+    ;;
+  doctor)
+    get_json /v1/ai/status
+    printf '\n'
+    get_json /v1/status
+    ;;
+  *)
+    echo "tai: unknown command: $cmd" >&2
+    print_help >&2
+    exit 2
+    ;;
+esac

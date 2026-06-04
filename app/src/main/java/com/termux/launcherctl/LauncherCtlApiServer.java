@@ -17,6 +17,7 @@ import android.os.StatFs;
 import android.os.SystemClock;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
+import com.termux.ai.TaiManager;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.model.LauncherAppEntry;
@@ -71,6 +72,8 @@ public class LauncherCtlApiServer {
     private static final String ENDPOINT_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/endpoint";
     private static final String LAUNCHERCTL_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl";
     private static final String LAUNCHER_RESTART_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcher-restart";
+    private static final String TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/tai";
+    private static final String AT_TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/@tai";
 
     private static final int MAX_REQUEST_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINE_BYTES = 4096;
@@ -124,6 +127,7 @@ public class LauncherCtlApiServer {
             writeClientConfig();
             installLauncherCtlCliScript();
             installLauncherRestartScript();
+            installTaiCliScripts();
             startAcceptLoop(context.getApplicationContext());
             Logger.logInfo(LOG_TAG, "LauncherCtl API listening on 127.0.0.1:" + port);
         } catch (Exception e) {
@@ -154,6 +158,7 @@ public class LauncherCtlApiServer {
         try {
             installLauncherCtlCliScript();
             installLauncherRestartScript();
+            installTaiCliScripts();
         } catch (Throwable t) {
             Logger.logErrorExtended(LOG_TAG, "Failed to ensure launcher CLI scripts are installed: " + t.getMessage());
         }
@@ -250,6 +255,38 @@ public class LauncherCtlApiServer {
                 return jsonResponse(runAppRestart(context));
             } else if ("POST".equals(request.method) && "/v1/auth/rotate".equals(request.path)) {
                 return jsonResponse(rotateAuthToken());
+            } else if ("GET".equals(request.method) && "/v1/ai/status".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).status());
+            } else if ("GET".equals(request.method) && "/v1/ai/models".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).models());
+            } else if ("POST".equals(request.method) && "/v1/ai/models/import".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).importModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/models/download".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).downloadModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).loadModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).unloadModel());
+            } else if ("POST".equals(request.method) && "/v1/ai/chat".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).chat(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/terminal/plan".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).terminalPlan(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/terminal/execute".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).terminalExecute(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/notifications/summarize".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).summarizeNotifications(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/actions/route".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).routeAction(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/actions/execute".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).executeAction(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/build/plan".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).buildPlan(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/build/run".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).buildRun(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/prompt-lab/run".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).promptLabRun(request.body));
+            } else if ("POST".equals(request.method) && "/v1/chat/completions".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).openAiChatCompletions(request.body));
             }
 
             JSONObject notFound = jsonError("not_found", "Unknown endpoint");
@@ -723,6 +760,7 @@ public class LauncherCtlApiServer {
         switch (code) {
             case 200: return "OK";
             case 409: return "Conflict";
+            case 501: return "Not Implemented";
             case 400: return "Bad Request";
             case 401: return "Unauthorized";
             case 403: return "Forbidden";
@@ -766,6 +804,22 @@ public class LauncherCtlApiServer {
         rateLimiters.put("POST:/v1/apps/launch", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/app/restart", new SimpleRateLimiter(5, 60_000));
         rateLimiters.put("POST:/v1/auth/rotate", new SimpleRateLimiter(5, 60_000));
+        rateLimiters.put("GET:/v1/ai/status", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("GET:/v1/ai/models", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/import", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/download", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/unload", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/chat", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/terminal/plan", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/ai/terminal/execute", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/notifications/summarize", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/actions/route", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/ai/actions/execute", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/build/plan", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/build/run", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/prompt-lab/run", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/chat/completions", new SimpleRateLimiter(60, 60_000));
     }
 
     private void writeClientConfig() throws IOException {
@@ -975,6 +1029,118 @@ public class LauncherCtlApiServer {
         }
     }
 
+    private void installTaiCliScripts() {
+        File loginBinary = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/login");
+        if (!loginBinary.exists()) {
+            Logger.logInfo(LOG_TAG, "Skipping TAI CLI install until bootstrap is initialized.");
+            return;
+        }
+
+        String taiScript =
+            "#!/data/data/com.termux/files/usr/bin/sh\n" +
+            "set -eu\n" +
+            "print_help() {\n" +
+            "  cat <<'EOF'\n" +
+            "TAI / Termux AI - local assistant bridge\n" +
+            "\n" +
+            "Usage:\n" +
+            "  tai status\n" +
+            "  tai models\n" +
+            "  tai load [model]\n" +
+            "  tai unload\n" +
+            "  tai ask \"question\"\n" +
+            "  tai chat [message]\n" +
+            "  tai code \"task\"\n" +
+            "  tai plan \"natural language terminal task\"\n" +
+            "  tai notifications today\n" +
+            "  tai build [--run|--print-command]\n" +
+            "  tai doctor\n" +
+            "\n" +
+            "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
+            "This foundation build uses a stub model runtime and never auto-runs shell commands.\n" +
+            "EOF\n" +
+            "}\n" +
+            "LAUNCHERCTL_DIR=\"$HOME/.launcherctl\"\n" +
+            "TOKEN_FILE=\"$LAUNCHERCTL_DIR/token\"\n" +
+            "ENDPOINT_FILE=\"$LAUNCHERCTL_DIR/endpoint\"\n" +
+            "if [ ! -r \"$TOKEN_FILE\" ] || [ ! -r \"$ENDPOINT_FILE\" ]; then\n" +
+            "  echo \"tai: missing $TOKEN_FILE or $ENDPOINT_FILE; start Termux Launcher first\" >&2\n" +
+            "  exit 1\n" +
+            "fi\n" +
+            "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
+            "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
+            "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 30\"\n" +
+            "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
+            "post_json() { path=\"$1\"; data=\"$2\"; curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"; }\n" +
+            "get_json() { path=\"$1\"; curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE$path\"; }\n" +
+            "cmd=\"${1:-status}\"\n" +
+            "shift || true\n" +
+            "case \"$cmd\" in\n" +
+            "  -h|--help|help)\n" +
+            "    print_help\n" +
+            "    ;;\n" +
+            "  status)\n" +
+            "    get_json /v1/ai/status\n" +
+            "    ;;\n" +
+            "  models)\n" +
+            "    get_json /v1/ai/models\n" +
+            "    ;;\n" +
+            "  load)\n" +
+            "    model=\"${1:-}\"\n" +
+            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/models/load \"{\\\"model\\\":\\\"$model_escaped\\\"}\"; else post_json /v1/ai/models/load '{}'; fi\n" +
+            "    ;;\n" +
+            "  unload)\n" +
+            "    post_json /v1/ai/models/unload '{}'\n" +
+            "    ;;\n" +
+            "  ask|chat|code)\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai $cmd <message>\" >&2; exit 2; }\n" +
+            "    message=$(json_escape \"$*\")\n" +
+            "    post_json /v1/ai/chat \"{\\\"message\\\":\\\"$message\\\",\\\"profile\\\":\\\"$cmd\\\"}\"\n" +
+            "    ;;\n" +
+            "  plan)\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai plan <task>\" >&2; exit 2; }\n" +
+            "    task=$(json_escape \"$*\")\n" +
+            "    post_json /v1/ai/terminal/plan \"{\\\"task\\\":\\\"$task\\\"}\"\n" +
+            "    ;;\n" +
+            "  notifications)\n" +
+            "    range=$(json_escape \"${1:-today}\")\n" +
+            "    post_json /v1/ai/notifications/summarize \"{\\\"range\\\":\\\"$range\\\"}\"\n" +
+            "    ;;\n" +
+            "  build)\n" +
+            "    mode=print_command\n" +
+            "    case \"${1:-}\" in --run) mode=monitor ;; --print-command|\"\") mode=print_command ;; *) echo \"usage: tai build [--run|--print-command]\" >&2; exit 2 ;; esac\n" +
+            "    cwd=$(json_escape \"$(pwd)\")\n" +
+            "    post_json /v1/ai/build/plan \"{\\\"cwd\\\":\\\"$cwd\\\",\\\"mode\\\":\\\"$mode\\\"}\"\n" +
+            "    ;;\n" +
+            "  doctor)\n" +
+            "    get_json /v1/ai/status\n" +
+            "    printf '\\n'\n" +
+            "    get_json /v1/status\n" +
+            "    ;;\n" +
+            "  *)\n" +
+            "    echo \"tai: unknown command: $cmd\" >&2\n" +
+            "    print_help >&2\n" +
+            "    exit 2\n" +
+            "    ;;\n" +
+            "esac\n";
+
+        String atTaiScript =
+            "#!/data/data/com.termux/files/usr/bin/sh\n" +
+            "set -eu\n" +
+            "if [ \"$#\" -eq 0 ]; then\n" +
+            "  echo \"usage: @tai <natural language terminal task>\" >&2\n" +
+            "  exit 2\n" +
+            "fi\n" +
+            "exec tai plan \"$@\"\n";
+
+        try {
+            writeExecutableTextFile(TAI_BIN_PATH, taiScript);
+            writeExecutableTextFile(AT_TAI_BIN_PATH, atTaiScript);
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to install TAI cli: " + e.getMessage());
+        }
+    }
+
     private void writeTextFile(String path, String content) throws IOException {
         File file = new File(path);
         File parent = file.getParentFile();
@@ -988,6 +1154,15 @@ public class LauncherCtlApiServer {
         file.setWritable(false, false);
         file.setReadable(true, true);
         file.setWritable(true, true);
+    }
+
+    private void writeExecutableTextFile(String path, String content) throws IOException {
+        writeTextFile(path, content);
+        File file = new File(path);
+        if (file.exists()) {
+            file.setExecutable(true, false);
+            file.setReadable(true, false);
+        }
     }
 
     private byte[] readAllBytes(File file) throws IOException {
