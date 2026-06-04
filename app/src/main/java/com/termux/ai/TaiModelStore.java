@@ -60,6 +60,37 @@ public final class TaiModelStore {
         preferences.edit().putString(KEY_USER_MODELS, array.toString()).apply();
     }
 
+    public synchronized boolean deleteUserModel(@NonNull String modelId) {
+        Map<String, TaiModelSpec> models = getUserModels();
+        TaiModelSpec removed = models.remove(modelId);
+        JSONArray array = new JSONArray();
+        for (TaiModelSpec model : models.values()) {
+            try {
+                array.put(model.toJson());
+            } catch (JSONException ignored) {
+            }
+        }
+
+        JSONArray downloads = getDownloads();
+        JSONArray keptDownloads = new JSONArray();
+        for (int i = 0; i < downloads.length(); i++) {
+            JSONObject item = downloads.optJSONObject(i);
+            if (item == null) continue;
+            if (!modelId.equals(item.optString("modelId", ""))) {
+                keptDownloads.put(item);
+            }
+        }
+
+        preferences.edit()
+            .putString(KEY_USER_MODELS, array.toString())
+            .putString(KEY_DOWNLOADS, keptDownloads.toString())
+            .apply();
+
+        File modelDir = new File(getModelsDirectory(), modelId);
+        deleteRecursively(modelDir);
+        return removed != null;
+    }
+
     @NonNull
     public synchronized JSONArray getDownloads() {
         return parseArray(preferences.getString(KEY_DOWNLOADS, "[]"));
@@ -92,5 +123,18 @@ public final class TaiModelStore {
         } catch (JSONException e) {
             return new JSONArray();
         }
+    }
+
+    private void deleteRecursively(@Nullable File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        file.delete();
     }
 }

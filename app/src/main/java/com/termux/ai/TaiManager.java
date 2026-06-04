@@ -69,6 +69,7 @@ public final class TaiManager {
         JSONObject data = registry.toJson(settings, modelStore.getUserModels());
         data.put("storageDirectory", modelStore.getModelsDirectory().getAbsolutePath());
         data.put("downloads", modelStore.getDownloads());
+        data.put("catalog", catalogJson());
         return data;
     }
 
@@ -132,6 +133,33 @@ public final class TaiManager {
         );
         data.put("downloadsRequireExplicitUserAction", true);
         data.put("huggingFaceTokenBundled", false);
+        return data;
+    }
+
+    @NonNull
+    public JSONObject downloadCatalogModel(@NonNull String modelId) throws JSONException {
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
+        if (entry == null) return error(404, "model_not_found", "Unknown catalog model: " + modelId);
+        if (entry.gated) {
+            JSONObject error = error(403, "gated_model_requires_auth", "This model is gated on Hugging Face and needs authenticated download support.");
+            error.put("providerPageUrl", entry.providerPageUrl);
+            error.put("downloadUrl", entry.downloadUrl);
+            error.put("huggingFaceTokenBundled", false);
+            return error;
+        }
+        return modelDownloader.startDownload(entry.modelId, entry.downloadUrl, entry.displayName, entry.license, entry.capabilities);
+    }
+
+    @NonNull
+    public JSONObject deleteModel(@NonNull String body) throws JSONException {
+        JSONObject request = parseBody(body);
+        String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", "")));
+        if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
+        boolean deleted = modelStore.deleteUserModel(modelId);
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("deleted", deleted);
+        data.put("modelId", modelId);
         return data;
     }
 
@@ -335,5 +363,26 @@ public final class TaiManager {
     @NonNull
     private String sanitizeModelId(@NonNull String value) {
         return value.trim().replaceAll("[^A-Za-z0-9._-]", "-");
+    }
+
+    @NonNull
+    private JSONArray catalogJson() throws JSONException {
+        JSONArray array = new JSONArray();
+        for (TaiModelCatalog.CatalogEntry entry : TaiModelCatalog.entries().values()) {
+            JSONObject json = new JSONObject();
+            json.put("modelId", entry.modelId);
+            json.put("displayName", entry.displayName);
+            json.put("roleHint", entry.roleHint);
+            json.put("providerPageUrl", entry.providerPageUrl);
+            json.put("downloadUrl", entry.downloadUrl);
+            json.put("license", entry.license);
+            json.put("sizeBytes", entry.sizeBytes);
+            json.put("gated", entry.gated);
+            JSONArray capabilities = new JSONArray();
+            for (String capability : entry.capabilities) capabilities.put(capability);
+            json.put("capabilities", capabilities);
+            array.put(json);
+        }
+        return array;
     }
 }

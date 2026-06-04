@@ -263,8 +263,13 @@ public class LauncherCtlApiServer {
                 return jsonResponse(TaiManager.getInstance(context).importModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/download".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).downloadModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/models/download-catalog".equals(request.path)) {
+                JSONObject body = request.body == null || request.body.trim().isEmpty() ? new JSONObject() : new JSONObject(request.body);
+                return jsonResponse(TaiManager.getInstance(context).downloadCatalogModel(body.optString("modelId", body.optString("model", ""))));
             } else if ("GET".equals(request.method) && "/v1/ai/models/downloads".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).downloads());
+            } else if ("POST".equals(request.method) && "/v1/ai/models/delete".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).deleteModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).loadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
@@ -810,7 +815,9 @@ public class LauncherCtlApiServer {
         rateLimiters.put("GET:/v1/ai/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/ai/models/import", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/download", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/download-catalog", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("GET:/v1/ai/models/downloads", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/delete", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/unload", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/chat", new SimpleRateLimiter(60, 60_000));
@@ -1052,6 +1059,7 @@ public class LauncherCtlApiServer {
             "  tai import <path> [model-id]\n" +
             "  tai download <model-id> <https-url> --accept-terms\n" +
             "  tai downloads\n" +
+            "  tai delete <model-id>\n" +
             "  tai load [model]\n" +
             "  tai unload\n" +
             "  tai ask \"question\"\n" +
@@ -1106,6 +1114,11 @@ public class LauncherCtlApiServer {
             "    ;;\n" +
             "  downloads)\n" +
             "    get_json /v1/ai/models/downloads\n" +
+            "    ;;\n" +
+            "  delete)\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai delete <model-id>\" >&2; exit 2; }\n" +
+            "    model=$(json_escape \"$1\")\n" +
+            "    post_json /v1/ai/models/delete \"{\\\"modelId\\\":\\\"$model\\\"}\"\n" +
             "    ;;\n" +
             "  load)\n" +
             "    model=\"${1:-}\"\n" +

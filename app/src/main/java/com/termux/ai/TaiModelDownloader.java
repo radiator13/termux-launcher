@@ -93,6 +93,10 @@ public final class TaiModelDownloader {
                 }
             }
 
+            if (!looksLikeModelFile(output)) {
+                throw new IllegalStateException("Downloaded file does not look like a LiteRT-LM model. It may be an HTML login or error page.");
+            }
+
             TaiModelSpec spec = new TaiModelSpec(
                 modelId,
                 displayName.isEmpty() ? modelId : displayName,
@@ -152,5 +156,24 @@ public final class TaiModelDownloader {
         if (query >= 0) name = name.substring(0, query);
         name = sanitize(name);
         return name.isEmpty() ? "model.bin" : name;
+    }
+
+    private boolean looksLikeModelFile(@NonNull File file) {
+        String lowerName = file.getName().toLowerCase();
+        if (!lowerName.endsWith(".litertlm") && !lowerName.endsWith(".task")) {
+            return false;
+        }
+        if (file.length() < 1024L * 1024L) {
+            return false;
+        }
+        try (InputStream input = new BufferedInputStream(new java.io.FileInputStream(file))) {
+            byte[] buffer = new byte[256];
+            int read = input.read(buffer);
+            if (read <= 0) return false;
+            String prefix = new String(buffer, 0, read, java.nio.charset.StandardCharsets.UTF_8).trim().toLowerCase();
+            return !(prefix.startsWith("<!doctype html") || prefix.startsWith("<html") || prefix.contains("<head"));
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

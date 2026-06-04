@@ -7,9 +7,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 
 public final class TaiModelRegistry {
@@ -24,36 +22,18 @@ public final class TaiModelRegistry {
     private final Map<String, TaiModelSpec> builtInModels = new LinkedHashMap<>();
 
     public TaiModelRegistry() {
-        addBuiltIn(new TaiModelSpec(
-            MODEL_GEMMA_4_E2B_IT,
-            "Gemma 4 E2B IT",
-            "Fast assistant",
-            "built-in-catalog",
-            null,
-            "User-provided model; review upstream license before download/import",
-            0L,
-            setOf("text_chat", "image_input", "tool_use")
-        ));
-        addBuiltIn(new TaiModelSpec(
-            MODEL_GEMMA_4_E4B_IT,
-            "Gemma 4 E4B IT",
-            "Coding, build, and reasoning",
-            "built-in-catalog",
-            null,
-            "User-provided model; review upstream license before download/import",
-            0L,
-            setOf("text_chat", "image_input", "tool_use")
-        ));
-        addBuiltIn(new TaiModelSpec(
-            MODEL_MOBILE_ACTIONS_270M,
-            "MobileActions 270M",
-            "Mobile action routing",
-            "built-in-catalog",
-            null,
-            "User-provided model; review upstream license before download/import",
-            0L,
-            setOf("text_chat", "tool_use", "mobile_actions")
-        ));
+        for (TaiModelCatalog.CatalogEntry entry : TaiModelCatalog.entries().values()) {
+            addBuiltIn(new TaiModelSpec(
+                entry.modelId,
+                entry.displayName,
+                entry.roleHint,
+                "built-in-catalog",
+                null,
+                "User-provided model; review upstream license before download/import",
+                0L,
+                entry.capabilities
+            ));
+        }
     }
 
     private void addBuiltIn(TaiModelSpec spec) {
@@ -96,7 +76,4 @@ public final class TaiModelRegistry {
         return data;
     }
 
-    private static LinkedHashSet<String> setOf(String... values) {
-        return new LinkedHashSet<>(Arrays.asList(values));
-    }
 }

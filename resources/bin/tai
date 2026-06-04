@@ -11,6 +11,7 @@ Usage:
   tai import <path> [model-id]
   tai download <model-id> <https-url> --accept-terms
   tai downloads
+  tai delete <model-id>
   tai load [model]
   tai unload
   tai ask "question"
@@ -75,6 +76,11 @@ case "$cmd" in
     ;;
   downloads)
     get_json /v1/ai/models/downloads
+    ;;
+  delete)
+    [ "$#" -gt 0 ] || { echo "usage: tai delete <model-id>" >&2; exit 2; }
+    model=$(json_escape "$1")
+    post_json /v1/ai/models/delete "{\"modelId\":\"$model\"}"
     ;;
   load)
     model="${1:-}"

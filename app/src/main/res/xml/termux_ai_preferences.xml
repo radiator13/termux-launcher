@@ -14,6 +14,16 @@
             app:defaultValue="false"/>
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:key="tai_models_category"
+        app:title="@string/termux_ai_models_header">
+        <Preference
+            app:key="tai_models_refresh"
+            app:title="@string/termux_ai_models_refresh_title"
+            app:summary="@string/termux_ai_models_refresh_summary"
+            app:persistent="false"/>
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/termux_ai_model_roles_header">
         <ListPreference
             app:key="tai_role_default_assistant"
