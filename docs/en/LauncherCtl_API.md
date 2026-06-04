@@ -37,6 +37,9 @@ TAI endpoints are documented in [TAI / Termux AI](Termux_AI). They share this AP
 Common routes:
 - `GET /v1/ai/status`
 - `GET /v1/ai/models`
+- `POST /v1/ai/models/import`
+- `POST /v1/ai/models/download`
+- `GET /v1/ai/models/downloads`
 - `POST /v1/ai/chat`
 - `POST /v1/ai/terminal/plan`
 - `POST /v1/ai/notifications/summarize`

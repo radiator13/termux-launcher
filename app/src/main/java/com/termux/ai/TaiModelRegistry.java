@@ -73,13 +73,23 @@ public final class TaiModelRegistry {
 
     @NonNull
     public JSONObject toJson(@NonNull TaiSettings settings) throws JSONException {
+        return toJson(settings, new LinkedHashMap<>());
+    }
+
+    @NonNull
+    public JSONObject toJson(@NonNull TaiSettings settings, @NonNull Map<String, TaiModelSpec> userModels) throws JSONException {
         JSONObject data = new JSONObject();
         data.put("ok", true);
         JSONArray models = new JSONArray();
         for (TaiModelSpec spec : builtInModels.values()) {
             models.put(spec.toJson());
         }
+        for (TaiModelSpec spec : userModels.values()) {
+            models.put(spec.toJson());
+        }
         data.put("models", models);
+        data.put("builtInCount", builtInModels.size());
+        data.put("userModelCount", userModels.size());
         data.put("roles", settings.getRoleAssignmentsJson());
         data.put("downloadsRequireExplicitUserAction", true);
         data.put("bundledModelFiles", false);

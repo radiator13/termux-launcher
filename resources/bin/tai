@@ -8,6 +8,9 @@ TAI / Termux AI - local assistant bridge
 Usage:
   tai status
   tai models
+  tai import <path> [model-id]
+  tai download <model-id> <https-url> --accept-terms
+  tai downloads
   tai load [model]
   tai unload
   tai ask "question"
@@ -51,6 +54,27 @@ case "$cmd" in
     ;;
   models)
     get_json /v1/ai/models
+    ;;
+  import)
+    [ "$#" -gt 0 ] || { echo "usage: tai import <path> [model-id]" >&2; exit 2; }
+    path=$(json_escape "$1")
+    model="${2:-}"
+    if [ -n "$model" ]; then
+      model=$(json_escape "$model")
+      post_json /v1/ai/models/import "{\"path\":\"$path\",\"modelId\":\"$model\"}"
+    else
+      post_json /v1/ai/models/import "{\"path\":\"$path\"}"
+    fi
+    ;;
+  download)
+    [ "$#" -ge 3 ] || { echo "usage: tai download <model-id> <https-url> --accept-terms" >&2; exit 2; }
+    model=$(json_escape "$1")
+    url=$(json_escape "$2")
+    [ "${3:-}" = "--accept-terms" ] || { echo "tai download: pass --accept-terms after reviewing the provider license/terms" >&2; exit 2; }
+    post_json /v1/ai/models/download "{\"modelId\":\"$model\",\"url\":\"$url\",\"acceptedTerms\":true}"
+    ;;
+  downloads)
+    get_json /v1/ai/models/downloads
     ;;
   load)
     model="${1:-}"

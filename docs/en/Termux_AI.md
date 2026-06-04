@@ -44,6 +44,9 @@ Useful commands:
 ```sh
 tai status
 tai models
+tai import ~/models/gemma.task Gemma-4-E2B-it-local
+tai download Gemma-4-E2B-it https://example.invalid/path/to/model.task --accept-terms
+tai downloads
 tai load Gemma-4-E2B-it
 tai unload
 tai ask "hello"
@@ -79,7 +82,7 @@ Implemented foundation endpoints:
 - `POST /v1/ai/prompt-lab/run`
 - `POST /v1/chat/completions`
 
-Several endpoints intentionally return clear stub/TODO responses until the real runtime, import/download registry persistence, and execution flows are implemented.
+Model import and download registry persistence is implemented. The real model runtime is still stubbed, so loading a downloaded/imported model records runtime intent but does not run inference yet.
 
 ## Safety Policy
 
@@ -112,11 +115,31 @@ Future monitored mode should:
 - diagnose errors
 - unload the model before long builds when memory pressure matters
 
+## Importing and Downloading Models
+
+TAI supports two explicit model registration paths:
+
+```sh
+tai import /absolute/path/to/model.task MyLocalModel
+tai download MyDownloadedModel https://provider.example/model.task --accept-terms
+tai downloads
+```
+
+Import registers a readable local file path. It does not copy the file into app-private storage yet.
+
+Download starts a background app-process transfer into app-private storage under `files/tai/models/`. It requires:
+
+- an explicit HTTPS URL
+- an explicit model id
+- `--accept-terms`, meaning you reviewed the provider license/terms yourself
+
+TAI does not bundle provider tokens. Do not put Hugging Face or other private tokens in shell history. Gated model support needs a future UI/token-handling flow.
+
 ## Current Limitations / TODO
 
 - Replace `StubTaiRuntime` with LiteRT-LM or another Android-side local runtime.
-- Persist imported models with local path, source, capabilities, license metadata, and size.
-- Add explicit model download/import UI with license/terms awareness.
+- Add copy-into-private-storage import mode and UI file picker.
+- Add explicit model download/import UI with safer license/terms and token handling.
 - Add streaming/SSE responses.
 - Add image input and audio scribe support for capable models.
 - Implement safe Android-side flashlight/device action execution.

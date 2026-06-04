@@ -10,12 +10,17 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.util.LinkedHashSet;
+
 public final class TaiManager {
     private static TaiManager instance;
 
     private final Context appContext;
     private final TaiSettings settings;
     private final TaiModelRegistry registry;
+    private final TaiModelStore modelStore;
+    private final TaiModelDownloader modelDownloader;
     private final TaiRuntime runtime;
     private final TaiShellPlanner shellPlanner;
     private final TaiNotificationSummarizer notificationSummarizer;
@@ -26,6 +31,8 @@ public final class TaiManager {
         appContext = context.getApplicationContext();
         settings = new TaiSettings(appContext);
         registry = new TaiModelRegistry();
+        modelStore = new TaiModelStore(appContext);
+        modelDownloader = new TaiModelDownloader(modelStore);
         runtime = new StubTaiRuntime();
         shellPlanner = new TaiShellPlanner();
         notificationSummarizer = new TaiNotificationSummarizer();
@@ -59,25 +66,80 @@ public final class TaiManager {
 
     @NonNull
     public JSONObject models() throws JSONException {
-        return registry.toJson(settings);
+        JSONObject data = registry.toJson(settings, modelStore.getUserModels());
+        data.put("storageDirectory", modelStore.getModelsDirectory().getAbsolutePath());
+        data.put("downloads", modelStore.getDownloads());
+        return data;
     }
 
     @NonNull
     public JSONObject importModel(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);
-        JSONObject data = notImplemented("model_import_stub", "Model import registry persistence is scaffolded but not implemented yet.");
-        data.put("requestedPath", request.optString("path", ""));
+        String path = request.optString("path", "").trim();
+        if (path.isEmpty()) return error(400, "bad_request", "Missing model path");
+        File modelFile = new File(path);
+        if (!modelFile.isFile() || !modelFile.canRead()) {
+            JSONObject error = error(404, "model_file_not_readable", "Model file does not exist or is not readable by the app process");
+            error.put("path", path);
+            return error;
+        }
+
+        String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", modelFile.getName())));
+        if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
+        TaiModelSpec spec = new TaiModelSpec(
+            modelId,
+            request.optString("displayName", modelId),
+            request.optString("roleHint", "Imported local model"),
+            "imported",
+            modelFile.getAbsolutePath(),
+            request.optString("license", "User-provided model; license accepted externally"),
+            modelFile.length(),
+            capabilitiesFromRequest(request),
+            false
+        );
+        modelStore.upsertUserModel(spec);
+
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("imported", true);
+        data.put("model", spec.toJson());
         data.put("requiresUserApprovedPath", true);
+        data.put("copiedIntoAppPrivateStorage", false);
+        data.put("message", "Model path registered. The runtime is still stubbed until LiteRT-LM integration is added.");
         return data;
     }
 
     @NonNull
     public JSONObject downloadModel(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);
-        JSONObject data = notImplemented("model_download_stub", "Model downloads require an explicit future UI flow with license/terms awareness.");
-        data.put("requestedModel", request.optString("model", request.optString("modelId", "")));
+        boolean acceptedTerms = request.optBoolean("acceptedTerms", false);
+        if (!acceptedTerms) {
+            JSONObject error = error(403, "terms_not_accepted", "Model downloads require acceptedTerms=true after reviewing provider license/terms");
+            error.put("downloadsRequireExplicitUserAction", true);
+            error.put("huggingFaceTokenBundled", false);
+            return error;
+        }
+        String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", "")));
+        String url = request.optString("url", "").trim();
+        if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
+        if (url.isEmpty()) return error(400, "bad_request", "Missing download URL");
+        JSONObject data = modelDownloader.startDownload(
+            modelId,
+            url,
+            request.optString("displayName", modelId),
+            request.optString("license", "User accepted provider terms externally"),
+            capabilitiesFromRequest(request)
+        );
         data.put("downloadsRequireExplicitUserAction", true);
         data.put("huggingFaceTokenBundled", false);
+        return data;
+    }
+
+    @NonNull
+    public JSONObject downloads() throws JSONException {
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("downloads", modelStore.getDownloads());
         return data;
     }
 
@@ -86,6 +148,7 @@ public final class TaiManager {
         JSONObject request = parseBody(body);
         String modelId = request.optString("model", request.optString("modelId", settings.getDefaultAssistantModel()));
         TaiModelSpec spec = registry.getModel(modelId);
+        if (spec == null) spec = modelStore.getUserModel(modelId);
         if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
         return runtime.load(spec, settings.getRuntimeOptions());
     }
@@ -249,9 +312,28 @@ public final class TaiManager {
     private JSONArray currentLimitations() {
         JSONArray limitations = new JSONArray();
         limitations.put("LiteRT-LM inference is not integrated yet.");
-        limitations.put("Model import/download persistence is TODO and no model files are bundled.");
+        limitations.put("Model import/download registry persistence exists, but runtime loading is still stubbed.");
         limitations.put("Image input, audio scribe, streaming, and monitored build execution are TODO.");
         limitations.put("TAI command execution is plan-only unless a future confirmed execution mode is added.");
         return limitations;
+    }
+
+    @NonNull
+    private LinkedHashSet<String> capabilitiesFromRequest(@NonNull JSONObject request) {
+        LinkedHashSet<String> capabilities = new LinkedHashSet<>();
+        JSONArray array = request.optJSONArray("capabilities");
+        if (array != null) {
+            for (int i = 0; i < array.length(); i++) {
+                String capability = array.optString(i, "");
+                if (!capability.isEmpty()) capabilities.add(capability);
+            }
+        }
+        if (capabilities.isEmpty()) capabilities.add("text_chat");
+        return capabilities;
+    }
+
+    @NonNull
+    private String sanitizeModelId(@NonNull String value) {
+        return value.trim().replaceAll("[^A-Za-z0-9._-]", "-");
     }
 }

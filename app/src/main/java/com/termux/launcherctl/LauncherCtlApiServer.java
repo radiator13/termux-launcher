@@ -263,6 +263,8 @@ public class LauncherCtlApiServer {
                 return jsonResponse(TaiManager.getInstance(context).importModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/download".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).downloadModel(request.body));
+            } else if ("GET".equals(request.method) && "/v1/ai/models/downloads".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).downloads());
             } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).loadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
@@ -808,6 +810,7 @@ public class LauncherCtlApiServer {
         rateLimiters.put("GET:/v1/ai/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/ai/models/import", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/download", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("GET:/v1/ai/models/downloads", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/unload", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/chat", new SimpleRateLimiter(60, 60_000));
@@ -1046,6 +1049,9 @@ public class LauncherCtlApiServer {
             "Usage:\n" +
             "  tai status\n" +
             "  tai models\n" +
+            "  tai import <path> [model-id]\n" +
+            "  tai download <model-id> <https-url> --accept-terms\n" +
+            "  tai downloads\n" +
             "  tai load [model]\n" +
             "  tai unload\n" +
             "  tai ask \"question\"\n" +
@@ -1084,6 +1090,22 @@ public class LauncherCtlApiServer {
             "    ;;\n" +
             "  models)\n" +
             "    get_json /v1/ai/models\n" +
+            "    ;;\n" +
+            "  import)\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai import <path> [model-id]\" >&2; exit 2; }\n" +
+            "    path=$(json_escape \"$1\")\n" +
+            "    model=\"${2:-}\"\n" +
+            "    if [ -n \"$model\" ]; then model=$(json_escape \"$model\"); post_json /v1/ai/models/import \"{\\\"path\\\":\\\"$path\\\",\\\"modelId\\\":\\\"$model\\\"}\"; else post_json /v1/ai/models/import \"{\\\"path\\\":\\\"$path\\\"}\"; fi\n" +
+            "    ;;\n" +
+            "  download)\n" +
+            "    [ \"$#\" -ge 3 ] || { echo \"usage: tai download <model-id> <https-url> --accept-terms\" >&2; exit 2; }\n" +
+            "    model=$(json_escape \"$1\")\n" +
+            "    url=$(json_escape \"$2\")\n" +
+            "    [ \"${3:-}\" = \"--accept-terms\" ] || { echo \"tai download: pass --accept-terms after reviewing the provider license/terms\" >&2; exit 2; }\n" +
+            "    post_json /v1/ai/models/download \"{\\\"modelId\\\":\\\"$model\\\",\\\"url\\\":\\\"$url\\\",\\\"acceptedTerms\\\":true}\"\n" +
+            "    ;;\n" +
+            "  downloads)\n" +
+            "    get_json /v1/ai/models/downloads\n" +
             "    ;;\n" +
             "  load)\n" +
             "    model=\"${1:-}\"\n" +

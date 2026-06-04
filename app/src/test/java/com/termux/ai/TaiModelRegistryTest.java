@@ -35,4 +35,30 @@ public class TaiModelRegistryTest {
         assertTrue(!json.has("topP"));
         assertTrue(!json.has("maxTokens"));
     }
+
+    @Test
+    public void modelSpec_roundTripsImportedModelMetadata() throws Exception {
+        TaiModelSpec spec = new TaiModelSpec(
+            "local-test",
+            "Local Test",
+            "Imported local model",
+            "imported",
+            "/tmp/local-test.task",
+            "User accepted license externally",
+            1234L,
+            new java.util.LinkedHashSet<>(java.util.Arrays.asList("text_chat", "tool_use")),
+            false
+        );
+
+        TaiModelSpec roundTrip = TaiModelSpec.fromJson(spec.toJson());
+
+        assertEquals("local-test", roundTrip.id);
+        assertEquals("Local Test", roundTrip.displayName);
+        assertEquals("imported", roundTrip.source);
+        assertEquals("/tmp/local-test.task", roundTrip.localPath);
+        assertEquals(1234L, roundTrip.sizeBytes);
+        assertTrue(!roundTrip.builtInCatalogEntry);
+        assertTrue(roundTrip.capabilities.contains("text_chat"));
+        assertTrue(roundTrip.capabilities.contains("tool_use"));
+    }
 }
