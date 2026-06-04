@@ -6,6 +6,7 @@ print_help() {
 TAI / Termux AI - local assistant bridge
 
 Usage:
+  tai --json <command>
   tai status
   tai models
   tai import <path> [model-id]
@@ -25,6 +26,7 @@ Usage:
 TAI is authenticated through ~/.launcherctl and runs in the Android app process.
 LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.
 Terminal plans are structured and never auto-run shell commands.
+Use tai --json <command> for raw API JSON.
 EOF
 }
 
@@ -41,9 +43,31 @@ BASE=$(cat "$ENDPOINT_FILE")
 CURL_COMMON="-sS --connect-timeout 2 --max-time 180"
 
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-post_json() { path="$1"; data="$2"; curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$data" "$BASE$path"; }
-get_json() { path="$1"; curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE$path"; }
+post_json() {
+  path="$1"
+  data="$2"
+  if [ "$OUTPUT_MODE" = "text" ]; then
+    curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -H "X-TAI-Output: text" --data "$data" "$BASE$path"
+  else
+    curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$data" "$BASE$path"
+  fi
+}
+get_json() {
+  path="$1"
+  if [ "$OUTPUT_MODE" = "text" ]; then
+    curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" -H "X-TAI-Output: text" "$BASE$path"
+  else
+    curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE$path"
+  fi
+}
 
+OUTPUT_MODE=text
+case "${1:-}" in
+  --json|-j)
+    OUTPUT_MODE=json
+    shift || true
+    ;;
+esac
 cmd="${1:-status}"
 shift || true
 

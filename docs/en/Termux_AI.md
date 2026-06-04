@@ -42,6 +42,7 @@ tai
 Useful commands:
 
 ```sh
+tai --json status
 tai status
 tai models
 tai import ~/models/gemma.task Gemma-4-E2B-it-local
@@ -57,6 +58,8 @@ tai notifications today
 tai build --print-command
 tai doctor
 ```
+
+The `tai` CLI prints human-readable text by default. Use `tai --json <command>` when scripts or debugging need the raw authenticated API JSON response.
 
 `@tai` is the first practical terminal helper. It prints a proposed plan through `tai plan`. True command-line replacement will need shell widgets, readline integration, fish/zsh bindings, or tmux integration.
 

@@ -17,6 +17,7 @@ import android.os.StatFs;
 import android.os.SystemClock;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
+import com.termux.ai.TaiCliFormatter;
 import com.termux.ai.TaiManager;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
@@ -236,7 +237,7 @@ public class LauncherCtlApiServer {
     private HttpResponse routeRequest(Context context, HttpRequest request) {
         try {
             if ("GET".equals(request.method) && "/v1/status".equals(request.path)) {
-                return jsonResponse(buildStatus());
+                return maybeTextResponse(request, "launcher-status", buildStatus());
             } else if ("GET".equals(request.method) && "/v1/apps".equals(request.path)) {
                 return jsonResponse(buildApps(context));
             } else if ("GET".equals(request.method) && isAppIconPath(request.path)) {
@@ -256,42 +257,42 @@ public class LauncherCtlApiServer {
             } else if ("POST".equals(request.method) && "/v1/auth/rotate".equals(request.path)) {
                 return jsonResponse(rotateAuthToken());
             } else if ("GET".equals(request.method) && "/v1/ai/status".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).status());
+                return maybeTextResponse(request, "status", TaiManager.getInstance(context).status());
             } else if ("GET".equals(request.method) && "/v1/ai/models".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).models());
+                return maybeTextResponse(request, "models", TaiManager.getInstance(context).models());
             } else if ("POST".equals(request.method) && "/v1/ai/models/import".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).importModel(request.body));
+                return maybeTextResponse(request, "import", TaiManager.getInstance(context).importModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/download".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).downloadModel(request.body));
+                return maybeTextResponse(request, "download", TaiManager.getInstance(context).downloadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/download-catalog".equals(request.path)) {
                 JSONObject body = request.body == null || request.body.trim().isEmpty() ? new JSONObject() : new JSONObject(request.body);
-                return jsonResponse(TaiManager.getInstance(context).downloadCatalogModel(body.optString("modelId", body.optString("model", ""))));
+                return maybeTextResponse(request, "download", TaiManager.getInstance(context).downloadCatalogModel(body.optString("modelId", body.optString("model", ""))));
             } else if ("GET".equals(request.method) && "/v1/ai/models/downloads".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).downloads());
+                return maybeTextResponse(request, "downloads", TaiManager.getInstance(context).downloads());
             } else if ("POST".equals(request.method) && "/v1/ai/models/delete".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).deleteModel(request.body));
+                return maybeTextResponse(request, "delete", TaiManager.getInstance(context).deleteModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).loadModel(request.body));
+                return maybeTextResponse(request, "load", TaiManager.getInstance(context).loadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).unloadModel());
+                return maybeTextResponse(request, "unload", TaiManager.getInstance(context).unloadModel());
             } else if ("POST".equals(request.method) && "/v1/ai/chat".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).chat(request.body));
+                return maybeTextResponse(request, "chat", TaiManager.getInstance(context).chat(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/terminal/plan".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).terminalPlan(request.body));
+                return maybeTextResponse(request, "plan", TaiManager.getInstance(context).terminalPlan(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/terminal/execute".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).terminalExecute(request.body));
+                return maybeTextResponse(request, "plan", TaiManager.getInstance(context).terminalExecute(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/notifications/summarize".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).summarizeNotifications(request.body));
+                return maybeTextResponse(request, "notifications", TaiManager.getInstance(context).summarizeNotifications(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/actions/route".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).routeAction(request.body));
+                return maybeTextResponse(request, "action", TaiManager.getInstance(context).routeAction(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/actions/execute".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).executeAction(request.body));
+                return maybeTextResponse(request, "action", TaiManager.getInstance(context).executeAction(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/build/plan".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).buildPlan(request.body));
+                return maybeTextResponse(request, "build", TaiManager.getInstance(context).buildPlan(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/build/run".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).buildRun(request.body));
+                return maybeTextResponse(request, "build", TaiManager.getInstance(context).buildRun(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/prompt-lab/run".equals(request.path)) {
-                return jsonResponse(TaiManager.getInstance(context).promptLabRun(request.body));
+                return maybeTextResponse(request, "chat", TaiManager.getInstance(context).promptLabRun(request.body));
             } else if ("POST".equals(request.method) && "/v1/chat/completions".equals(request.path)) {
                 return jsonResponse(TaiManager.getInstance(context).openAiChatCompletions(request.body));
             }
@@ -1054,6 +1055,7 @@ public class LauncherCtlApiServer {
             "TAI / Termux AI - local assistant bridge\n" +
             "\n" +
             "Usage:\n" +
+            "  tai --json <command>\n" +
             "  tai status\n" +
             "  tai models\n" +
             "  tai import <path> [model-id]\n" +
@@ -1073,6 +1075,7 @@ public class LauncherCtlApiServer {
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.\n" +
             "Terminal plans are structured and never auto-run shell commands.\n" +
+            "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
             "}\n" +
             "LAUNCHERCTL_DIR=\"$HOME/.launcherctl\"\n" +
@@ -1086,8 +1089,30 @@ public class LauncherCtlApiServer {
             "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"-sS --connect-timeout 2 --max-time 180\"\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
-            "post_json() { path=\"$1\"; data=\"$2\"; curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"; }\n" +
-            "get_json() { path=\"$1\"; curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE$path\"; }\n" +
+            "post_json() {\n" +
+            "  path=\"$1\"\n" +
+            "  data=\"$2\"\n" +
+            "  if [ \"$OUTPUT_MODE\" = \"text\" ]; then\n" +
+            "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -H \"X-TAI-Output: text\" --data \"$data\" \"$BASE$path\"\n" +
+            "  else\n" +
+            "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"\n" +
+            "  fi\n" +
+            "}\n" +
+            "get_json() {\n" +
+            "  path=\"$1\"\n" +
+            "  if [ \"$OUTPUT_MODE\" = \"text\" ]; then\n" +
+            "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" -H \"X-TAI-Output: text\" \"$BASE$path\"\n" +
+            "  else\n" +
+            "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE$path\"\n" +
+            "  fi\n" +
+            "}\n" +
+            "OUTPUT_MODE=text\n" +
+            "case \"${1:-}\" in\n" +
+            "  --json|-j)\n" +
+            "    OUTPUT_MODE=json\n" +
+            "    shift || true\n" +
+            "    ;;\n" +
+            "esac\n" +
             "cmd=\"${1:-status}\"\n" +
             "shift || true\n" +
             "case \"$cmd\" in\n" +
@@ -1231,6 +1256,17 @@ public class LauncherCtlApiServer {
         response.remove("_statusCode");
         return new HttpResponse(statusCode, "application/json; charset=utf-8",
             response.toString().getBytes(StandardCharsets.UTF_8), null);
+    }
+
+    private HttpResponse maybeTextResponse(HttpRequest request, String command, JSONObject response) {
+        if (!"text".equalsIgnoreCase(request.headers.get("x-tai-output"))) {
+            return jsonResponse(response);
+        }
+        int statusCode = response.optInt("_statusCode", 200);
+        response.remove("_statusCode");
+        String body = TaiCliFormatter.format(command, response);
+        return new HttpResponse(statusCode, "text/plain; charset=utf-8",
+            body.getBytes(StandardCharsets.UTF_8), null);
     }
 
     private boolean isAppIconPath(String path) {
