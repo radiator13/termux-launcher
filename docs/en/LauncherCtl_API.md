@@ -10,7 +10,7 @@ LauncherCtl is a localhost API bridge for exposing Android/app data to shell too
 
 Important behavior:
 - `launcherctl tty-doctor` validates the optional local `~/.rish/rish` setup.
-- `tai` and `@tai` use the same authenticated bridge for Termux AI commands.
+- `tai` uses the same authenticated bridge for the local Termux AI endpoint.
 - Custom Shizuku shell commands should use `rish -c` directly.
 
 ## Files and Components
@@ -36,15 +36,24 @@ TAI endpoints are documented in [TAI / Termux AI](Termux_AI). They share this AP
 
 Common routes:
 - `GET /v1/ai/status`
+- `GET /v1/ai/runtime`
+- `POST /v1/ai/runtime/load`
+- `POST /v1/ai/runtime/unload`
+- `POST /v1/ai/runtime/keep-warm`
+- `POST /v1/ai/runtime/cancel`
 - `GET /v1/ai/models`
 - `POST /v1/ai/models/import`
 - `POST /v1/ai/models/download`
+- `POST /v1/ai/models/download-catalog`
 - `GET /v1/ai/models/downloads`
-- `POST /v1/ai/chat`
-- `POST /v1/ai/terminal/plan`
-- `POST /v1/ai/notifications/summarize`
-- `POST /v1/ai/build/plan`
+- `POST /v1/ai/models/delete`
+- `POST /v1/ai/models/load`
+- `POST /v1/ai/models/unload`
+- `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/completions`
+
+`/v1/chat/completions` and `/v1/completions` support `stream: true` and return `text/event-stream` chunks ending with `data: [DONE]`.
 
 ### `GET /v1/status`
 Returns backend + LauncherCtl runtime status.

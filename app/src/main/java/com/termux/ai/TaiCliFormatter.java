@@ -20,6 +20,8 @@ public final class TaiCliFormatter {
             switch (command) {
                 case "status":
                     return formatStatus(data);
+                case "runtime":
+                    return formatRuntime(data);
                 case "models":
                     return formatModels(data);
                 case "downloads":
@@ -34,16 +36,10 @@ public final class TaiCliFormatter {
                     return formatLoad(data);
                 case "unload":
                     return formatUnload(data);
-                case "chat":
-                    if (data.has("commands") || "terminal_helper".equals(data.optString("profile", ""))) {
-                        return formatPlan(data, "TAI plan");
-                    }
-                    return formatChat(data);
-                case "plan":
-                case "build":
-                    return formatPlan(data, "build".equals(command) ? "TAI build plan" : "TAI plan");
-                case "notifications":
-                    return formatNotifications(data);
+                case "keep-warm":
+                    return formatKeepWarm(data);
+                case "cancel":
+                    return formatCancel(data);
                 case "launcher-status":
                     return formatLauncherStatus(data);
                 default:
@@ -76,6 +72,12 @@ public final class TaiCliFormatter {
         if (runtime != null) {
             appendValue(out, "Runtime", runtime.optString("runtimeName", ""));
             appendValue(out, "Loaded model", nullable(runtime, "loadedModelId", "none"));
+            appendValue(out, "Lifecycle", runtime.optString("state", ""));
+            appendValue(out, "Backend", runtime.optString("backend", ""));
+            appendValue(out, "Fallback", nullable(runtime, "backendFallbackReason", ""));
+            appendValue(out, "Active generation", runtime.optBoolean("activeGeneration", false) ? "yes" : "no");
+            appendValue(out, "Keep warm", runtime.optLong("keepWarmRemainingMs", 0L) > 0L ? formatDuration(runtime.optLong("keepWarmRemainingMs", 0L)) : "off");
+            appendValue(out, "Idle unload", runtime.optLong("idleUnloadRemainingMs", 0L) > 0L ? formatDuration(runtime.optLong("idleUnloadRemainingMs", 0L)) : "off");
             appendValue(out, "State", runtime.optString("status", ""));
         }
 
@@ -85,18 +87,15 @@ public final class TaiCliFormatter {
             if (roles != null) {
                 out.append("\nRoles\n");
                 appendValue(out, "Default assistant", roles.optString(TaiModelRegistry.ROLE_DEFAULT_ASSISTANT, ""));
-                appendValue(out, "Coding/build", roles.optString(TaiModelRegistry.ROLE_CODING_BUILD, ""));
-                appendValue(out, "Mobile actions", roles.optString(TaiModelRegistry.ROLE_MOBILE_ACTIONS, ""));
             }
             out.append("\nSettings\n");
-            appendValue(out, "Unattended mode", settings.optBoolean("unattendedMode", false) ? "on" : "off");
             appendValue(out, "Idle unload", settings.optInt("idleUnloadMinutes", 0) + " min");
             appendValue(out, "Hugging Face token", settings.optBoolean("huggingFaceTokenConfigured", false) ? "configured" : "not configured");
             JSONObject options = settings.optJSONObject("runtimeOptions");
             if (options != null) {
-                appendValue(out, "Accelerator", nullable(options, "accelerator", "Auto / model default"));
-                appendValue(out, "Max tokens", nullable(options, "maxTokens", "Auto / model default"));
-                appendValue(out, "Temperature", nullable(options, "temperature", "Auto / model default"));
+                appendValue(out, "Accelerator", nullable(options, "accelerator", "Auto / GPU preferred"));
+                appendValue(out, "Max tokens", nullable(options, "maxTokens", "Auto / Gallery default"));
+                appendValue(out, "Temperature", nullable(options, "temperature", "Auto / Gallery default"));
             }
         }
 
@@ -104,6 +103,28 @@ public final class TaiCliFormatter {
         if (limitations != null && limitations.length() > 0) {
             out.append("\nLimitations\n");
             appendBullets(out, limitations);
+        }
+        return out.toString();
+    }
+
+    @NonNull
+    private static String formatRuntime(@NonNull JSONObject data) {
+        StringBuilder out = new StringBuilder();
+        out.append("TAI runtime\n");
+        JSONObject runtime = data.optJSONObject("runtime");
+        if (runtime != null) appendRuntimeState(out, runtime);
+        JSONObject settings = data.optJSONObject("settings");
+        if (settings != null) {
+            JSONObject options = settings.optJSONObject("runtimeOptions");
+            if (options != null) {
+                out.append("\nDefaults\n");
+                appendValue(out, "Accelerator", nullable(options, "accelerator", "Auto / GPU preferred"));
+                appendValue(out, "Max tokens", nullable(options, "maxTokens", "Auto / Gallery default"));
+                appendValue(out, "TopK", nullable(options, "topK", "Auto / Gallery default"));
+                appendValue(out, "TopP", nullable(options, "topP", "Auto / Gallery default"));
+                appendValue(out, "Temperature", nullable(options, "temperature", "Auto / Gallery default"));
+                appendValue(out, "Speculative decoding", nullable(options, "speculativeDecodingEnabled", "Auto / Gallery default"));
+            }
         }
         return out.toString();
     }
@@ -119,8 +140,6 @@ public final class TaiCliFormatter {
         if (roles != null) {
             out.append("\nRoles\n");
             appendValue(out, "Default assistant", roles.optString(TaiModelRegistry.ROLE_DEFAULT_ASSISTANT, ""));
-            appendValue(out, "Coding/build", roles.optString(TaiModelRegistry.ROLE_CODING_BUILD, ""));
-            appendValue(out, "Mobile actions", roles.optString(TaiModelRegistry.ROLE_MOBILE_ACTIONS, ""));
         }
 
         JSONArray models = data.optJSONArray("models");
@@ -207,6 +226,12 @@ public final class TaiCliFormatter {
         appendValue(out, "Backend", data.optString("backend", ""));
         appendValue(out, "Fallback", nullable(data, "backendFallbackReason", ""));
         appendValue(out, "Path", data.optString("modelPath", ""));
+        JSONObject state = data.optJSONObject("state");
+        if (state != null) {
+            appendValue(out, "Lifecycle", state.optString("state", ""));
+            appendValue(out, "Keep warm", state.optLong("keepWarmRemainingMs", 0L) > 0L ? formatDuration(state.optLong("keepWarmRemainingMs", 0L)) : "off");
+            appendValue(out, "Idle unload", state.optLong("idleUnloadRemainingMs", 0L) > 0L ? formatDuration(state.optLong("idleUnloadRemainingMs", 0L)) : "off");
+        }
         return out.toString();
     }
 
@@ -220,64 +245,22 @@ public final class TaiCliFormatter {
     }
 
     @NonNull
-    private static String formatChat(@NonNull JSONObject data) {
+    private static String formatKeepWarm(@NonNull JSONObject data) {
         StringBuilder out = new StringBuilder();
-        out.append("TAI");
-        String profile = data.optString("profile", "");
-        if (!profile.isEmpty()) out.append(" [").append(profile).append("]");
-        out.append('\n');
-        appendValue(out, "Model", data.optString("model", ""));
-        appendValue(out, "Backend", data.optString("backend", ""));
-        appendValue(out, "Elapsed", formatDuration(data.optLong("elapsedMs", 0L)));
-        appendValue(out, "Fallback", nullable(data, "backendFallbackReason", ""));
-        out.append('\n');
-        String response = data.optString("response", "");
-        out.append(response.isEmpty() ? "(empty response)" : response);
-        if (!response.endsWith("\n")) out.append('\n');
+        out.append("Runtime keep-warm enabled\n");
+        appendValue(out, "Minutes", data.optInt("keepWarmMinutes", 0) + "");
+        JSONObject state = data.optJSONObject("state");
+        if (state != null) appendRuntimeState(out, state);
         return out.toString();
     }
 
     @NonNull
-    private static String formatPlan(@NonNull JSONObject data, @NonNull String title) {
+    private static String formatCancel(@NonNull JSONObject data) {
         StringBuilder out = new StringBuilder();
-        out.append(title).append('\n');
-        appendValue(out, "Task", data.optString("task", data.optString("workingDirectory", "")));
-        appendValue(out, "Summary", data.optString("summary", ""));
-        appendValue(out, "Mode", data.optString("mode", ""));
-        appendValue(out, "Auto execute", data.optBoolean("autoExecute", false) ? "yes" : "no");
-
-        JSONArray systems = data.optJSONArray("detectedBuildSystems");
-        if (systems != null && systems.length() > 0) {
-            appendValue(out, "Detected", join(systems));
-        }
-
-        JSONObject safety = data.optJSONObject("safety");
-        if (safety != null) {
-            appendValue(out, "Safety", safety.optString("level", "") + " - " + safety.optString("note", ""));
-        }
-
-        JSONArray commands = data.optJSONArray("commands");
-        if (commands != null && commands.length() > 0) {
-            out.append("\nCommands\n");
-            appendCommands(out, commands);
-        }
-
-        appendValue(out, "Memory", data.optString("memoryPressureMode", ""));
-        appendValue(out, "TODO", data.optString("todo", ""));
-        return out.toString();
-    }
-
-    @NonNull
-    private static String formatNotifications(@NonNull JSONObject data) {
-        StringBuilder out = new StringBuilder();
-        out.append("TAI notifications\n");
-        appendValue(out, "Range", data.optString("range", ""));
-        appendValue(out, "Available", data.optBoolean("available", false) ? "yes" : "no");
-        appendValue(out, "Count", data.has("notificationCount") ? String.valueOf(data.optInt("notificationCount")) : "");
-        appendValue(out, "Summary", data.optString("summary", ""));
-        appendValue(out, "Hint", data.optString("hint", ""));
-        appendValue(out, "Privacy", data.optString("privacy", ""));
-        appendValue(out, "TODO", data.optString("todo", ""));
+        out.append(data.optBoolean("cancelled", false) ? "Generation cancel requested\n" : "No active generation\n");
+        appendValue(out, "Message", data.optString("message", ""));
+        JSONObject state = data.optJSONObject("state");
+        if (state != null) appendRuntimeState(out, state);
         return out.toString();
     }
 
@@ -321,23 +304,24 @@ public final class TaiCliFormatter {
         }
     }
 
+    private static void appendRuntimeState(@NonNull StringBuilder out, @NonNull JSONObject runtime) {
+        appendValue(out, "Runtime", runtime.optString("runtimeName", ""));
+        appendValue(out, "Lifecycle", runtime.optString("state", ""));
+        appendValue(out, "Loaded model", nullable(runtime, "loadedModelId", "none"));
+        appendValue(out, "Backend", runtime.optString("backend", ""));
+        appendValue(out, "Fallback", nullable(runtime, "backendFallbackReason", ""));
+        appendValue(out, "Active generation", runtime.optBoolean("activeGeneration", false) ? "yes" : "no");
+        appendValue(out, "Keep warm", runtime.optLong("keepWarmRemainingMs", 0L) > 0L ? formatDuration(runtime.optLong("keepWarmRemainingMs", 0L)) : "off");
+        appendValue(out, "Idle unload", runtime.optLong("idleUnloadRemainingMs", 0L) > 0L ? formatDuration(runtime.optLong("idleUnloadRemainingMs", 0L)) : "off");
+        appendValue(out, "Status", runtime.optString("status", ""));
+    }
+
     private static void appendTransfer(@NonNull StringBuilder out, @NonNull JSONObject transfer) {
         appendValue(out, "Model", transfer.optString("modelId", ""));
         appendValue(out, "Status", transfer.optString("status", ""));
         appendValue(out, "Progress", progress(transfer.optLong("bytesRead", 0L), transfer.optLong("totalBytes", 0L)));
         appendValue(out, "Path", transfer.optString("path", ""));
         appendValue(out, "Error", transfer.optString("error", ""));
-    }
-
-    private static void appendCommands(@NonNull StringBuilder out, @NonNull JSONArray commands) {
-        for (int i = 0; i < commands.length(); i++) {
-            JSONObject command = commands.optJSONObject(i);
-            if (command == null) continue;
-            out.append("  ").append(i + 1).append(". ").append(command.optString("title", "Command")).append('\n');
-            out.append("     ").append(command.optString("command", "")).append('\n');
-            appendValue(out, "     Confirmation", command.optBoolean("confirmationRequired", false) ? "required" : "not required");
-            appendValue(out, "     Destructive", command.optBoolean("destructive", false) ? "yes" : "no");
-        }
     }
 
     private static void appendBullets(@NonNull StringBuilder out, @NonNull JSONArray values) {
@@ -394,10 +378,12 @@ public final class TaiCliFormatter {
     }
 
     @NonNull
-    private static String formatDuration(long elapsedMs) {
-        if (elapsedMs <= 0L) return "";
-        if (elapsedMs < 1000L) return elapsedMs + " ms";
-        return String.format(Locale.US, "%.2f s", elapsedMs / 1000d);
+    private static String formatDuration(long millis) {
+        long seconds = Math.max(0L, millis / 1000L);
+        long minutes = seconds / 60L;
+        long remainingSeconds = seconds % 60L;
+        if (minutes > 0L) return minutes + "m " + remainingSeconds + "s";
+        return remainingSeconds + "s";
     }
 
     @NonNull

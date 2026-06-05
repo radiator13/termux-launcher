@@ -6,26 +6,34 @@
             app:title="@string/termux_ai_model_privacy_notice_title"
             app:persistent="false"
             app:selectable="false"/>
-        <SwitchPreferenceCompat
-            app:key="tai_unattended_mode"
-            app:title="@string/termux_ai_unattended_mode_title"
-            app:summaryOff="@string/termux_ai_unattended_mode_off"
-            app:summaryOn="@string/termux_ai_unattended_mode_on"
-            app:defaultValue="false"/>
     </PreferenceCategory>
 
-    <PreferenceCategory
-        app:key="tai_models_category"
-        app:title="@string/termux_ai_models_header">
-        <EditTextPreference
-            app:key="tai_huggingface_token"
-            app:title="@string/termux_ai_huggingface_token_title"
-            app:dialogTitle="@string/termux_ai_huggingface_token_title"
-            app:summary="@string/termux_ai_huggingface_token_summary"/>
+    <PreferenceCategory app:title="@string/termux_ai_runtime_control_header">
         <Preference
-            app:key="tai_models_refresh"
-            app:title="@string/termux_ai_models_refresh_title"
-            app:summary="@string/termux_ai_models_refresh_summary"
+            app:key="tai_runtime_status"
+            app:title="@string/termux_ai_runtime_status_title"
+            app:summary="@string/termux_ai_runtime_status_summary"
+            app:persistent="false"
+            app:selectable="false"/>
+        <Preference
+            app:key="tai_runtime_load"
+            app:title="@string/termux_ai_runtime_load_title"
+            app:summary="@string/termux_ai_runtime_load_summary"
+            app:persistent="false"/>
+        <Preference
+            app:key="tai_runtime_keep_warm"
+            app:title="@string/termux_ai_runtime_keep_warm_title"
+            app:summary="@string/termux_ai_runtime_keep_warm_summary"
+            app:persistent="false"/>
+        <Preference
+            app:key="tai_runtime_cancel"
+            app:title="@string/termux_ai_runtime_cancel_title"
+            app:summary="@string/termux_ai_runtime_cancel_summary"
+            app:persistent="false"/>
+        <Preference
+            app:key="tai_runtime_unload"
+            app:title="@string/termux_ai_runtime_unload_title"
+            app:summary="@string/termux_ai_runtime_unload_summary"
             app:persistent="false"/>
     </PreferenceCategory>
 
@@ -37,20 +45,26 @@
             app:entryValues="@array/termux_ai_model_values"
             app:defaultValue="Gemma-4-E2B-it"
             app:useSimpleSummaryProvider="true"/>
-        <ListPreference
-            app:key="tai_role_coding_build"
-            app:title="@string/termux_ai_coding_build_model_title"
-            app:entries="@array/termux_ai_model_entries"
-            app:entryValues="@array/termux_ai_model_values"
-            app:defaultValue="Gemma-4-E4B-it"
-            app:useSimpleSummaryProvider="true"/>
-        <ListPreference
-            app:key="tai_role_mobile_actions"
-            app:title="@string/termux_ai_mobile_actions_model_title"
-            app:entries="@array/termux_ai_model_entries"
-            app:entryValues="@array/termux_ai_model_values"
-            app:defaultValue="MobileActions-270M"
-            app:useSimpleSummaryProvider="true"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="tai_models_category"
+        app:title="@string/termux_ai_models_header">
+        <EditTextPreference
+            app:key="tai_huggingface_token"
+            app:title="@string/termux_ai_huggingface_token_title"
+            app:dialogTitle="@string/termux_ai_huggingface_token_title"
+            app:summary="@string/termux_ai_huggingface_token_summary"/>
+        <Preference
+            app:key="tai_model_import"
+            app:title="@string/termux_ai_model_import_title"
+            app:summary="@string/termux_ai_model_import_summary"
+            app:persistent="false"/>
+        <Preference
+            app:key="tai_models_refresh"
+            app:title="@string/termux_ai_models_refresh_title"
+            app:summary="@string/termux_ai_models_refresh_summary"
+            app:persistent="false"/>
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/termux_ai_runtime_header">
@@ -117,22 +131,13 @@
             app:key="tai_system_prompt_general"
             app:title="@string/termux_ai_general_prompt_title"
             app:useSimpleSummaryProvider="true"/>
-        <EditTextPreference
-            app:key="tai_system_prompt_terminal"
-            app:title="@string/termux_ai_terminal_prompt_title"
-            app:useSimpleSummaryProvider="true"/>
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/termux_ai_capabilities_header">
         <Preference
-            app:key="tai_notification_privacy_notice"
-            app:title="@string/termux_ai_notification_privacy_notice_title"
-            app:persistent="false"
-            app:selectable="false"/>
-        <Preference
-            app:title="@string/termux_ai_stub_status_title"
-            app:summary="@string/termux_ai_stub_status_summary"
-            app:persistent="false"
-            app:selectable="false"/>
+            app:key="tai_endpoint_notice"
+            app:title="@string/termux_ai_endpoint_notice_title"
+            app:summary="@string/termux_ai_endpoint_notice_summary"
+            app:persistent="false"/>
     </PreferenceCategory>
 </PreferenceScreen>

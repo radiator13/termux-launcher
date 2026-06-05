@@ -14,6 +14,7 @@ public final class TaiRuntimeOptions {
     @Nullable public final String accelerator;
     @Nullable public final Boolean thinkingEnabled;
     @Nullable public final Boolean speculativeDecodingEnabled;
+    @Nullable public final Integer idleUnloadMinutes;
 
     public TaiRuntimeOptions(
         @Nullable Integer maxTokens,
@@ -22,7 +23,8 @@ public final class TaiRuntimeOptions {
         @Nullable Double temperature,
         @Nullable String accelerator,
         @Nullable Boolean thinkingEnabled,
-        @Nullable Boolean speculativeDecodingEnabled
+        @Nullable Boolean speculativeDecodingEnabled,
+        @Nullable Integer idleUnloadMinutes
     ) {
         this.maxTokens = maxTokens;
         this.topK = topK;
@@ -31,6 +33,7 @@ public final class TaiRuntimeOptions {
         this.accelerator = accelerator;
         this.thinkingEnabled = thinkingEnabled;
         this.speculativeDecodingEnabled = speculativeDecodingEnabled;
+        this.idleUnloadMinutes = idleUnloadMinutes;
     }
 
     @NonNull
@@ -43,7 +46,8 @@ public final class TaiRuntimeOptions {
         putNullable(json, "accelerator", accelerator);
         putNullable(json, "thinkingEnabled", thinkingEnabled);
         putNullable(json, "speculativeDecodingEnabled", speculativeDecodingEnabled);
-        json.put("usesModelDefaultsForNulls", true);
+        putNullable(json, "idleUnloadMinutes", idleUnloadMinutes);
+        json.put("usesGalleryGenerationDefaultsForNulls", true);
         return json;
     }
 
@@ -56,7 +60,30 @@ public final class TaiRuntimeOptions {
             temperature,
             overrideAccelerator,
             thinkingEnabled,
-            speculativeDecodingEnabled
+            speculativeDecodingEnabled,
+            idleUnloadMinutes
+        );
+    }
+
+    @NonNull
+    public TaiRuntimeOptions withGenerationOverrides(
+        @Nullable Integer overrideMaxTokens,
+        @Nullable Integer overrideTopK,
+        @Nullable Double overrideTopP,
+        @Nullable Double overrideTemperature,
+        @Nullable String overrideAccelerator,
+        @Nullable Boolean overrideThinkingEnabled,
+        @Nullable Boolean overrideSpeculativeDecodingEnabled
+    ) {
+        return new TaiRuntimeOptions(
+            overrideMaxTokens != null ? overrideMaxTokens : maxTokens,
+            overrideTopK != null ? overrideTopK : topK,
+            overrideTopP != null ? overrideTopP : topP,
+            overrideTemperature != null ? overrideTemperature : temperature,
+            overrideAccelerator != null ? overrideAccelerator : accelerator,
+            overrideThinkingEnabled != null ? overrideThinkingEnabled : thinkingEnabled,
+            overrideSpeculativeDecodingEnabled != null ? overrideSpeculativeDecodingEnabled : speculativeDecodingEnabled,
+            idleUnloadMinutes
         );
     }
 

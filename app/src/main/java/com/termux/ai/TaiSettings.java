@@ -13,10 +13,7 @@ public final class TaiSettings {
     public static final String PREFS_NAME = "termux_ai";
 
     public static final String KEY_ROLE_DEFAULT_ASSISTANT = "tai_role_default_assistant";
-    public static final String KEY_ROLE_CODING_BUILD = "tai_role_coding_build";
-    public static final String KEY_ROLE_MOBILE_ACTIONS = "tai_role_mobile_actions";
     public static final String KEY_SYSTEM_PROMPT_GENERAL = "tai_system_prompt_general";
-    public static final String KEY_SYSTEM_PROMPT_TERMINAL = "tai_system_prompt_terminal";
     public static final String KEY_MAX_TOKENS = "tai_max_tokens";
     public static final String KEY_TOP_K = "tai_top_k";
     public static final String KEY_TOP_P = "tai_top_p";
@@ -24,7 +21,6 @@ public final class TaiSettings {
     public static final String KEY_ACCELERATOR = "tai_accelerator";
     public static final String KEY_THINKING = "tai_thinking";
     public static final String KEY_SPECULATIVE_DECODING = "tai_speculative_decoding";
-    public static final String KEY_UNATTENDED_MODE = "tai_unattended_mode";
     public static final String KEY_IDLE_UNLOAD_MINUTES = "tai_idle_unload_minutes";
     public static final String KEY_HUGGINGFACE_TOKEN = "tai_huggingface_token";
 
@@ -42,16 +38,6 @@ public final class TaiSettings {
     }
 
     @NonNull
-    public String getCodingBuildModel() {
-        return preferences.getString(KEY_ROLE_CODING_BUILD, TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
-    }
-
-    @NonNull
-    public String getMobileActionsModel() {
-        return preferences.getString(KEY_ROLE_MOBILE_ACTIONS, TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
-    }
-
-    @NonNull
     public TaiRuntimeOptions getRuntimeOptions() {
         return new TaiRuntimeOptions(
             getNullableInteger(KEY_MAX_TOKENS),
@@ -60,12 +46,9 @@ public final class TaiSettings {
             getNullableDouble(KEY_TEMPERATURE),
             getAutoNullableString(KEY_ACCELERATOR),
             getNullableBoolean(KEY_THINKING),
-            getNullableBoolean(KEY_SPECULATIVE_DECODING)
+            getNullableBoolean(KEY_SPECULATIVE_DECODING),
+            getIdleUnloadMinutes()
         );
-    }
-
-    public boolean isUnattendedModeEnabled() {
-        return preferences.getBoolean(KEY_UNATTENDED_MODE, false);
     }
 
     public int getIdleUnloadMinutes() {
@@ -89,17 +72,9 @@ public final class TaiSettings {
     }
 
     @NonNull
-    public String getTerminalSystemPrompt() {
-        return preferences.getString(KEY_SYSTEM_PROMPT_TERMINAL,
-            "Return safe Termux/Linux commands. Do not invent flags. For risky commands, return a dry run and require confirmation.");
-    }
-
-    @NonNull
     public JSONObject getRoleAssignmentsJson() throws JSONException {
         JSONObject roles = new JSONObject();
         roles.put(TaiModelRegistry.ROLE_DEFAULT_ASSISTANT, getDefaultAssistantModel());
-        roles.put(TaiModelRegistry.ROLE_CODING_BUILD, getCodingBuildModel());
-        roles.put(TaiModelRegistry.ROLE_MOBILE_ACTIONS, getMobileActionsModel());
         return roles;
     }
 
@@ -108,10 +83,9 @@ public final class TaiSettings {
         JSONObject json = new JSONObject();
         json.put("roles", getRoleAssignmentsJson());
         json.put("runtimeOptions", getRuntimeOptions().toJson());
-        json.put("unattendedMode", isUnattendedModeEnabled());
         json.put("idleUnloadMinutes", getIdleUnloadMinutes());
         json.put("huggingFaceTokenConfigured", !getHuggingFaceToken().trim().isEmpty());
-        json.put("autoModelDefaultState", "nullable overrides are only passed when user configured");
+        json.put("autoGenerationDefaultState", "nullable generation overrides use Google AI Edge Gallery defaults in the LiteRT runtime");
         return json;
     }
 

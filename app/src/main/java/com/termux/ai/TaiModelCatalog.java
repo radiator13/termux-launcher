@@ -43,24 +43,13 @@ public final class TaiModelCatalog {
         entries.put(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT, new CatalogEntry(
             TaiModelRegistry.MODEL_GEMMA_4_E4B_IT,
             "Gemma 4 E4B IT",
-            "Coding, build, and reasoning",
+            "Coding and reasoning",
             "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm",
             "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm",
             "Apache-2.0",
             3_660_000_000L,
             false,
             setOf("text_chat", "image_input", "tool_use")
-        ));
-        entries.put(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M, new CatalogEntry(
-            TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M,
-            "MobileActions 270M",
-            "Mobile action routing",
-            "https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions",
-            "https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions/resolve/main/mobile_actions_q8_ekv1024.litertlm",
-            "Gemma",
-            289_000_000L,
-            true,
-            setOf("text_chat", "tool_use", "mobile_actions")
         ));
         return Collections.unmodifiableMap(entries);
     }

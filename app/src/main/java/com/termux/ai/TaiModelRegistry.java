@@ -13,11 +13,8 @@ import java.util.Map;
 public final class TaiModelRegistry {
     public static final String MODEL_GEMMA_4_E2B_IT = "Gemma-4-E2B-it";
     public static final String MODEL_GEMMA_4_E4B_IT = "Gemma-4-E4B-it";
-    public static final String MODEL_MOBILE_ACTIONS_270M = "MobileActions-270M";
 
     public static final String ROLE_DEFAULT_ASSISTANT = "defaultAssistant";
-    public static final String ROLE_CODING_BUILD = "codingBuild";
-    public static final String ROLE_MOBILE_ACTIONS = "mobileActions";
 
     private final Map<String, TaiModelSpec> builtInModels = new LinkedHashMap<>();
 

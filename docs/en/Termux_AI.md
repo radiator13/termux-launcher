@@ -1,42 +1,64 @@
 # TAI / Termux AI
 
-TAI is the native local AI assistant foundation for Termux Launcher. It is designed to run in the Android app process and expose capabilities to Termux shells through the existing authenticated `launcherctl` local bridge.
+TAI is the local on-device model endpoint for Termux Launcher. It runs inside the Android app process and exposes a small authenticated localhost API through the existing `launcherctl` bridge.
 
-This implementation is phased. It adds settings, model registry, authenticated API routes, shell helpers, safety planners, foreground model downloads, and a LiteRT-LM runtime adapter behind `TaiRuntime` so the shell/API surface stays stable as runtime features expand.
+TAI is intentionally not a shell agent. Use established shell/coding clients such as `aichat` or `tmuxai` for terminal workflows, pane context, command review, and coding UX. TAI provides the local model runtime those tools can call.
+
+## Scope
+
+TAI currently handles:
+
+- model catalog metadata
+- explicit model import/download/delete
+- model load/unload/keep-warm/cancel lifecycle control
+- OpenAI-compatible `GET /v1/models`
+- OpenAI-compatible `POST /v1/chat/completions`
+- OpenAI-compatible `POST /v1/completions`
+- streaming SSE responses for chat and completion requests
+
+TAI does not currently:
+
+- plan or execute shell commands
+- summarize notifications
+- execute Android/device actions
+- accept multimodal image/audio prompts
+- expose Gallery skills or benchmark UI
+
+Those features should be built later as explicit capability APIs or delegated to dedicated external tools instead of being hidden inside the `tai` shell helper.
 
 ## Model Roles
 
-TAI starts with these default role assignments:
+TAI keeps one default model assignment for requests that omit `model`:
 
 - `Gemma-4-E2B-it`: default fast assistant model
-- `Gemma-4-E4B-it`: coding/build/reasoning model
-- `MobileActions-270M`: mobile action/router model
 
-These are defaults only. Open Settings -> TAI / Termux AI to change role assignments.
+Open Settings -> TAI / Termux AI to change the default model and runtime overrides.
 
 TAI does not bundle model files in the APK. Downloads and imports must be explicit user actions, with license/terms awareness for gated or restricted models. Hugging Face tokens are never bundled; an optional user token can be saved in app-private settings for Hugging Face downloads.
 
 ## Runtime Defaults
 
-TAI stores user overrides separately from model metadata. Runtime tunables default to `Auto / model default`:
+TAI stores user overrides separately from model metadata. Runtime tunables default to `Auto / Gallery default`:
 
 - max tokens
 - TopK
 - TopP
 - temperature
-- accelerator: Auto / CPU / GPU
+- accelerator: Auto / GPU / CPU
 - thinking
 - speculative decoding
+- idle unload / keep-warm policy
 
-Null/Auto values are not passed as explicit tuned values to the runtime. The model/runtime/import defaults should be used unless the user overrides a setting.
+Auto accelerator loads GPU first, matching Google AI Edge Gallery's fast path, and falls back to CPU only if GPU initialization fails. Other null/Auto generation values use Gallery-style defaults in the runtime: max tokens 1024, TopK 64, TopP 0.95, and temperature 1.0.
 
-## Shell Commands
+The LiteRT-LM `Engine` remains loaded after `tai load`, and TAI reuses a `Conversation` while the model, prompt mode, system prompt, and sampling options remain compatible. One generation runs at a time. Use `tai cancel` or `POST /v1/ai/runtime/cancel` to stop an active generation.
+
+## Shell Command
 
 The launcher installs:
 
 ```sh
 tai
-@tai
 ```
 
 Useful commands:
@@ -44,92 +66,73 @@ Useful commands:
 ```sh
 tai --json status
 tai status
+tai runtime
 tai models
-tai import ~/models/gemma.task Gemma-4-E2B-it-local
-tai download Gemma-4-E2B-it https://example.invalid/path/to/model.task --accept-terms
+tai import ~/models/gemma.litertlm Gemma-4-E2B-it-local
+tai download Gemma-4-E2B-it https://example.invalid/path/to/model.litertlm --accept-terms
 tai downloads
 tai load Gemma-4-E2B-it
+tai load Gemma-4-E2B-it --gpu
 tai load Gemma-4-E2B-it --cpu
+tai keep-warm Gemma-4-E2B-it --minutes 30
+tai cancel
 tai unload
-tai ask "hello"
-tai plan "update packages"
-@tai where is the config files for neovim?
-tai notifications today
-tai build --print-command
 tai doctor
 ```
 
-The `tai` CLI prints human-readable text by default. Use `tai --json <command>` when scripts or debugging need the raw authenticated API JSON response.
-
-`@tai` is the first practical terminal helper. It prints a proposed plan through `tai plan`. True command-line replacement will need shell widgets, readline integration, fish/zsh bindings, or tmux integration.
+The `tai` CLI is a model-management helper, not the chat frontend. Use `tai --json <command>` when scripts or debugging need the raw authenticated API JSON response.
 
 ## Local API
 
 TAI uses the same bearer-token local bridge as `launcherctl`.
 
-Implemented foundation endpoints:
+Implemented endpoints:
 
 - `GET /v1/ai/status`
+- `GET /v1/ai/runtime`
+- `POST /v1/ai/runtime/load`
+- `POST /v1/ai/runtime/unload`
+- `POST /v1/ai/runtime/keep-warm`
+- `POST /v1/ai/runtime/cancel`
 - `GET /v1/ai/models`
 - `POST /v1/ai/models/import`
 - `POST /v1/ai/models/download`
+- `POST /v1/ai/models/download-catalog`
+- `GET /v1/ai/models/downloads`
+- `POST /v1/ai/models/delete`
 - `POST /v1/ai/models/load`
 - `POST /v1/ai/models/unload`
-- `POST /v1/ai/chat`
-- `POST /v1/ai/terminal/plan`
-- `POST /v1/ai/terminal/execute`
-- `POST /v1/ai/notifications/summarize`
-- `POST /v1/ai/actions/route`
-- `POST /v1/ai/actions/execute`
-- `POST /v1/ai/build/plan`
-- `POST /v1/ai/build/run`
-- `POST /v1/ai/prompt-lab/run`
+- `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/completions`
 
 Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
 
-The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. Auto currently selects CPU so routine loads remain conservative. Explicit `tai load <model> --gpu` requests LiteRT-LM GPU acceleration. The app manifest declares the native OpenCL libraries required by LiteRT-LM for Android GPU backend discovery. A future isolated GPU probe/runtime process should still be added so failed native GPU initialization cannot crash the main launcher process.
+The runtime supports non-streaming JSON responses and streaming `text/event-stream` responses. Streaming emits OpenAI-style chunks and finishes with `data: [DONE]`. Auto selects GPU first so normal loads follow Google AI Edge Gallery's fast path. Explicit `tai load <model> --cpu` forces CPU when needed. The app manifest declares the native OpenCL libraries required by LiteRT-LM for Android GPU backend discovery. A future isolated GPU probe/runtime process should still be added so failed native GPU initialization cannot crash the main launcher process.
 
-## Safety Policy
+## External Clients
 
-TAI does not silently run destructive shell commands.
+For `aichat`, `tmuxai`, or other OpenAI-compatible clients, point the base URL at the authenticated LauncherCtl endpoint and use:
 
-The terminal planner is plan-only in this foundation build. It returns structured plan JSON with commands, safety status, and confirmation flags. It flags package updates, installs, and destructive patterns for review. It avoids unattended package flags unless a future explicit mode supports them.
+```text
+/v1/chat/completions
+/v1/completions
+```
 
-Examples:
+The endpoint URL and bearer token are stored at:
 
-- `tai plan "update packages"` detects `pkg`/`apt` versus `pacman` and prints interactive update commands.
-- `@tai where is the config files for neovim?` prints read-only `find` commands for common Neovim locations.
-- `@tai find me the file fish.config` searches for both `fish.config` and the common `config.fish` name.
-
-`tai code` uses the coding/build model role. If the request looks like a terminal helper task covered by the built-in planner, it is routed to the structured terminal planner instead of asking the model for free-form prose.
-
-Risky actions such as `rm -rf`, `find ... -delete`, `dd`, `mkfs`, mass `chmod -R`, and mass `chown -R` must require explicit confirmation in future execute/agent modes. Destructive `find` tasks should show a dry run first.
-
-## Notification Privacy
-
-Notification content is sensitive. TAI only reads notification data already exposed by the launcher notification listener path, and only through the authenticated local bridge. If notification listener access is not granted, `tai notifications today` returns a setup hint instead of pretending to summarize unavailable data.
-
-Future model summaries should separate actionable notifications from promotional or low-priority items without sending notification text off-device.
-
-## Build Helper
-
-`tai build --print-command` inspects the current directory and detects common build systems such as Gradle, Make, CMake, Meson, Cargo, Go, Node, and Python. It prints candidate commands and does not install dependencies.
-
-Future monitored mode should:
-
-- ask before installing anything
-- run and monitor builds
-- diagnose errors
-- unload the model before long builds when memory pressure matters
+```sh
+~/.launcherctl/endpoint
+~/.launcherctl/token
+```
 
 ## Importing and Downloading Models
 
 TAI supports two explicit model registration paths:
 
 ```sh
-tai import /absolute/path/to/model.task MyLocalModel
-tai download MyDownloadedModel https://provider.example/model.task --accept-terms
+tai import /absolute/path/to/model.litertlm MyLocalModel
+tai download MyDownloadedModel https://provider.example/model.litertlm --accept-terms
 tai downloads
 ```
 
@@ -145,12 +148,8 @@ For gated Hugging Face models, first accept the provider terms on Hugging Face, 
 
 ## Current Limitations / TODO
 
-- Expand the LiteRT-LM runtime adapter with streaming, benchmark counters, multimodal prompts, and tool-calling integration.
+- Expand the LiteRT-LM runtime adapter with benchmark counters, multimodal prompts, and tool-calling integration.
 - Move LiteRT-LM GPU probing/loading into an isolated runtime process so native GPU failures cannot crash the main launcher process.
 - Add copy-into-private-storage import mode and UI file picker.
 - Add pause/cancel/retry controls for foreground downloads.
-- Add streaming/SSE responses.
-- Add image input and audio scribe support for capable models.
-- Implement safe Android-side flashlight/device action execution.
-- Add confirmed terminal/build agent execution modes.
-- Add prompt-lab UI for raw request/response inspection.
+- Add explicit Android capability APIs separately from the local model endpoint.

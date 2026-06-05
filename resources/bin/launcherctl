@@ -148,7 +148,6 @@ update_scripts() {
   update_one "$raw_base/kew-tmux-status" "$HOME/.local/bin/kew-tmux-status" 700 sh
   update_one "$raw_root/resources/scripts/statusbar/kew-now-playing" "$HOME/.local/bin/kew-now-playing" 700 bash
   update_one "$raw_root/resources/bin/tai" "$PREFIX/bin/tai" 700 sh
-  update_one "$raw_root/resources/bin/@tai" "$PREFIX/bin/@tai" 700 sh
   update_one "$raw_base/setup-btop-rish" "$HOME/setup-btop-rish" 700 sh
   update_one "$raw_base/setup-tmux-btop" "$HOME/setup-tmux-btop" 700 sh
   update_one "$raw_base/material-theme.tmux" "$HOME/.tmux/material-theme.tmux" 700 sh

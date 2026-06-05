@@ -3,15 +3,16 @@ package com.termux.ai;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
-
-import com.termux.launcherctl.LauncherCtlNotificationListener;
+import androidx.annotation.Nullable;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.io.File;
 import java.util.LinkedHashSet;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class TaiManager {
     private static TaiManager instance;
@@ -22,10 +23,11 @@ public final class TaiManager {
     private final TaiModelStore modelStore;
     private final TaiModelDownloader modelDownloader;
     private final TaiRuntime runtime;
-    private final TaiShellPlanner shellPlanner;
-    private final TaiNotificationSummarizer notificationSummarizer;
-    private final TaiActionRouter actionRouter;
-    private final TaiBuildAgent buildAgent;
+
+    public interface OpenAiStreamSink {
+        void onEvent(@NonNull JSONObject event) throws IOException;
+        void onDone() throws IOException;
+    }
 
     private TaiManager(@NonNull Context context) {
         appContext = context.getApplicationContext();
@@ -34,10 +36,6 @@ public final class TaiManager {
         modelStore = new TaiModelStore(appContext);
         modelDownloader = new TaiModelDownloader(appContext, modelStore);
         runtime = new LiteRtTaiRuntime(appContext);
-        shellPlanner = new TaiShellPlanner();
-        notificationSummarizer = new TaiNotificationSummarizer();
-        actionRouter = new TaiActionRouter();
-        buildAgent = new TaiBuildAgent();
     }
 
     @NonNull
@@ -56,11 +54,26 @@ public final class TaiManager {
         data.put("displayName", "Termux AI");
         data.put("runtime", runtime.getState().toJson());
         data.put("settings", settings.toJson());
-        data.put("promptProfiles", TaiPromptProfile.builtInsJson());
         data.put("appProcessRuntime", true);
         data.put("modelsBundledInApk", false);
         data.put("downloadsRequireExplicitUserAction", true);
         data.put("limitations", currentLimitations());
+        JSONArray endpoints = new JSONArray();
+        endpoints.put("/v1/models");
+        endpoints.put("/v1/chat/completions");
+        endpoints.put("/v1/completions");
+        data.put("openAiCompatibleEndpoints", endpoints);
+        return data;
+    }
+
+    @NonNull
+    public JSONObject runtimeStatus() throws JSONException {
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("runtime", runtime.getState().toJson());
+        data.put("settings", settings.toJson());
+        data.put("appProcessRuntime", true);
+        data.put("backendPolicy", "Auto loads GPU first and falls back to CPU only when GPU initialization fails.");
         return data;
     }
 
@@ -70,6 +83,7 @@ public final class TaiManager {
         data.put("storageDirectory", modelStore.getModelsDirectory().getAbsolutePath());
         data.put("downloads", modelStore.getDownloads());
         data.put("catalog", catalogJson());
+        data.put("runtime", runtime.getState().toJson());
         return data;
     }
 
@@ -178,15 +192,10 @@ public final class TaiManager {
     @NonNull
     public JSONObject loadModel(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);
-        String modelId = request.optString("model", request.optString("modelId", settings.getDefaultAssistantModel()));
-        TaiModelSpec spec = modelStore.getUserModel(modelId);
-        if (spec == null) spec = registry.getModel(modelId);
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+        TaiModelSpec spec = resolveModel(modelId);
         if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
-        TaiRuntimeOptions options = settings.getRuntimeOptions();
-        if (request.has("accelerator")) {
-            String accelerator = request.optString("accelerator", "").trim();
-            options = options.withAccelerator(accelerator.isEmpty() || "auto".equalsIgnoreCase(accelerator) ? null : accelerator);
-        }
+        TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         return runtime.load(spec, options);
     }
 
@@ -196,105 +205,21 @@ public final class TaiManager {
     }
 
     @NonNull
-    public JSONObject chat(@NonNull String body) throws JSONException {
+    public JSONObject keepWarmRuntime(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);
-        String prompt = request.optString("message", request.optString("prompt", ""));
-        if (prompt.trim().isEmpty()) return error(400, "bad_request", "Missing message");
-        String profile = normalizeProfile(request.optString("profile", TaiPromptProfile.GENERAL_CHAT));
-        if (TaiPromptProfile.TERMINAL_HELPER.equals(profile) ||
-            (TaiPromptProfile.CODING_ASSISTANT.equals(profile) && shellPlanner.hasBuiltInMatch(prompt))) {
-            JSONObject plan = shellPlanner.plan(prompt, settings.isUnattendedModeEnabled());
-            plan.put("profile", TaiPromptProfile.TERMINAL_HELPER);
-            plan.put("routedFrom", profile);
-            plan.put("modelBypassed", true);
-            return plan;
-        }
-
-        String modelId = request.optString("model", modelForProfile(profile));
-        String systemPrompt = request.optString("systemPrompt", systemPromptForProfile(profile));
-        JSONObject data = runtime.chat(modelId, systemPrompt, prompt, settings.getRuntimeOptions());
-        data.put("profile", profile);
-        if (data.optBoolean("ok", false)) {
-            JSONObject output = new JSONObject();
-            output.put("format", "text");
-            output.put("text", data.optString("response", ""));
-            data.put("output", output);
-        }
-        return data;
+        TaiRuntimeState state = runtime.getState();
+        String fallbackModel = state.loadedModelId != null ? state.loadedModelId : settings.getDefaultAssistantModel();
+        String modelId = requestedModelId(request, fallbackModel);
+        TaiModelSpec spec = resolveModel(modelId);
+        if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
+        int minutes = request.optInt("minutes", request.optInt("keepWarmMinutes", 0));
+        if (minutes <= 0) minutes = settings.getIdleUnloadMinutes() > 0 ? settings.getIdleUnloadMinutes() : 30;
+        return runtime.keepWarm(spec, runtimeOptionsFromRequest(request), minutes);
     }
 
     @NonNull
-    public JSONObject terminalPlan(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        String task = request.optString("task", request.optString("prompt", ""));
-        if (task.trim().isEmpty()) return error(400, "bad_request", "Missing terminal task");
-        return shellPlanner.plan(task, settings.isUnattendedModeEnabled());
-    }
-
-    @NonNull
-    public JSONObject terminalExecute(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        String command = request.optString("command", "");
-        JSONObject data = notImplemented("terminal_execute_requires_confirmation",
-            "TAI does not execute shell commands in this foundation build. Review the plan and run commands yourself.");
-        data.put("command", command);
-        data.put("destructive", TaiSafetyPolicy.isDestructiveCommand(command));
-        data.put("confirmationRequired", TaiSafetyPolicy.requiresConfirmation(command));
-        return data;
-    }
-
-    @NonNull
-    public JSONObject summarizeNotifications(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        String range = request.optString("range", "today");
-        JSONObject snapshot = LauncherCtlNotificationListener.getNotificationsSnapshot();
-        return notificationSummarizer.summarize(snapshot, range);
-    }
-
-    @NonNull
-    public JSONObject routeAction(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        String prompt = request.optString("request", request.optString("prompt", ""));
-        if (prompt.trim().isEmpty()) return error(400, "bad_request", "Missing action request");
-        return actionRouter.route(prompt);
-    }
-
-    @NonNull
-    public JSONObject executeAction(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        JSONObject data = notImplemented("action_execute_stub",
-            "Device action execution is not enabled in this foundation build.");
-        data.put("request", request);
-        data.put("confirmationRequired", true);
-        return data;
-    }
-
-    @NonNull
-    public JSONObject buildPlan(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        String cwd = request.optString("cwd", request.optString("workingDirectory", ""));
-        if (cwd.trim().isEmpty()) return error(400, "bad_request", "Missing working directory");
-        return buildAgent.plan(cwd, request.optString("mode", "print_command"));
-    }
-
-    @NonNull
-    public JSONObject buildRun(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        JSONObject data = notImplemented("build_run_stub",
-            "Monitored build execution is TODO. Use build/plan and run the printed command after review.");
-        data.put("request", request);
-        data.put("autoInstallDependencies", false);
-        return data;
-    }
-
-    @NonNull
-    public JSONObject promptLabRun(@NonNull String body) throws JSONException {
-        JSONObject request = parseBody(body);
-        JSONObject data = chat(body);
-        data.put("promptLab", true);
-        data.put("rawRequest", request);
-        data.put("runtimeState", runtime.getState().toJson());
-        return data;
+    public JSONObject cancelRuntime() throws JSONException {
+        return runtime.cancel();
     }
 
     @NonNull
@@ -303,26 +228,20 @@ public final class TaiManager {
         JSONArray messages = request.optJSONArray("messages");
         if (messages == null || messages.length() == 0) return error(400, "bad_request", "Missing messages");
 
-        StringBuilder prompt = new StringBuilder();
-        String systemPrompt = settings.getGeneralSystemPrompt();
-        for (int i = 0; i < messages.length(); i++) {
-            JSONObject message = messages.optJSONObject(i);
-            if (message == null) continue;
-            String role = message.optString("role", "user");
-            String content = message.optString("content", "");
-            if ("system".equals(role)) {
-                systemPrompt = content;
-            } else {
-                prompt.append(role).append(": ").append(content).append('\n');
-            }
+        PromptParts promptParts = promptPartsFromMessages(messages);
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+
+        JSONObject chat = runtime.chat(modelId,
+            promptParts.systemPrompt, promptParts.prompt, runtimeOptionsFromRequest(request));
+        if (!chat.optBoolean("ok", false)) {
+            return openAiError(chat);
         }
 
-        JSONObject chat = runtime.chat(request.optString("model", settings.getDefaultAssistantModel()),
-            systemPrompt, prompt.toString().trim(), settings.getRuntimeOptions());
         JSONObject response = new JSONObject();
-        response.put("id", "tai-stub");
+        response.put("id", "tai-" + System.currentTimeMillis());
         response.put("object", "chat.completion");
         response.put("model", chat.optString("model", settings.getDefaultAssistantModel()));
+        response.put("created", System.currentTimeMillis() / 1000L);
         JSONArray choices = new JSONArray();
         JSONObject choice = new JSONObject();
         choice.put("index", 0);
@@ -338,19 +257,254 @@ public final class TaiManager {
     }
 
     @NonNull
+    public JSONObject openAiCompletions(@NonNull String body) throws JSONException {
+        JSONObject request = parseBody(body);
+        String prompt = promptFromCompletionRequest(request);
+        if (prompt.trim().isEmpty()) return openAiError(error(400, "bad_request", "Missing prompt"));
+
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+        JSONObject completion = runtime.complete(modelId, prompt, runtimeOptionsFromRequest(request));
+        if (!completion.optBoolean("ok", false)) {
+            return openAiError(completion);
+        }
+
+        JSONObject response = new JSONObject();
+        response.put("id", "tai-cmpl-" + System.currentTimeMillis());
+        response.put("object", "text_completion");
+        response.put("model", completion.optString("model", modelId));
+        response.put("created", System.currentTimeMillis() / 1000L);
+        JSONArray choices = new JSONArray();
+        JSONObject choice = new JSONObject();
+        choice.put("text", completion.optString("response", ""));
+        choice.put("index", 0);
+        choice.put("finish_reason", "stop");
+        choices.put(choice);
+        response.put("choices", choices);
+        response.put("tai", completion);
+        return response;
+    }
+
+    public boolean isStreamRequest(@NonNull String body) {
+        try {
+            return parseBody(body).optBoolean("stream", false);
+        } catch (JSONException e) {
+            return false;
+        }
+    }
+
+    public void openAiChatCompletionsStream(@NonNull String body, @NonNull OpenAiStreamSink sink) throws JSONException, IOException {
+        JSONObject request = parseBody(body);
+        JSONArray messages = request.optJSONArray("messages");
+        if (messages == null || messages.length() == 0) {
+            emitOpenAiError(sink, error(400, "bad_request", "Missing messages"));
+            return;
+        }
+
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+        JSONObject preflight = preflightGeneration(modelId);
+        if (preflight != null) {
+            emitOpenAiError(sink, preflight);
+            return;
+        }
+
+        PromptParts promptParts = promptPartsFromMessages(messages);
+        String id = "tai-chatcmpl-" + System.currentTimeMillis();
+        long created = System.currentTimeMillis() / 1000L;
+        emitChatChunk(sink, id, created, modelId, "", "assistant", null);
+
+        AtomicReference<IOException> ioError = new AtomicReference<>();
+        JSONObject chat = runtime.chat(modelId, promptParts.systemPrompt, promptParts.prompt, runtimeOptionsFromRequest(request), new TaiGenerationCallback() {
+            @Override
+            public void onToken(@NonNull String text) {
+                if (text.isEmpty() || ioError.get() != null) return;
+                try {
+                    emitChatChunk(sink, id, created, modelId, text, null, null);
+                } catch (IOException e) {
+                    ioError.set(e);
+                    try {
+                        runtime.cancel();
+                    } catch (JSONException ignored) {
+                    }
+                } catch (JSONException e) {
+                    ioError.set(new IOException(e));
+                    try {
+                        runtime.cancel();
+                    } catch (JSONException ignored) {
+                    }
+                }
+            }
+
+            @Override
+            public void onComplete(@NonNull String fullText) {
+            }
+
+            @Override
+            public void onError(@NonNull Throwable throwable) {
+            }
+        });
+        if (ioError.get() != null) throw ioError.get();
+        if (!chat.optBoolean("ok", false)) {
+            emitOpenAiError(sink, chat);
+            return;
+        }
+        emitChatChunk(sink, id, created, modelId, "", null, "stop");
+        sink.onDone();
+    }
+
+    public void openAiCompletionsStream(@NonNull String body, @NonNull OpenAiStreamSink sink) throws JSONException, IOException {
+        JSONObject request = parseBody(body);
+        String prompt = promptFromCompletionRequest(request);
+        if (prompt.trim().isEmpty()) {
+            emitOpenAiError(sink, error(400, "bad_request", "Missing prompt"));
+            return;
+        }
+
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+        JSONObject preflight = preflightGeneration(modelId);
+        if (preflight != null) {
+            emitOpenAiError(sink, preflight);
+            return;
+        }
+
+        String id = "tai-cmpl-" + System.currentTimeMillis();
+        long created = System.currentTimeMillis() / 1000L;
+        AtomicReference<IOException> ioError = new AtomicReference<>();
+        JSONObject completion = runtime.complete(modelId, prompt, runtimeOptionsFromRequest(request), new TaiGenerationCallback() {
+            @Override
+            public void onToken(@NonNull String text) {
+                if (text.isEmpty() || ioError.get() != null) return;
+                try {
+                    emitCompletionChunk(sink, id, created, modelId, text, null);
+                } catch (IOException e) {
+                    ioError.set(e);
+                    try {
+                        runtime.cancel();
+                    } catch (JSONException ignored) {
+                    }
+                } catch (JSONException e) {
+                    ioError.set(new IOException(e));
+                    try {
+                        runtime.cancel();
+                    } catch (JSONException ignored) {
+                    }
+                }
+            }
+
+            @Override
+            public void onComplete(@NonNull String fullText) {
+            }
+
+            @Override
+            public void onError(@NonNull Throwable throwable) {
+            }
+        });
+        if (ioError.get() != null) throw ioError.get();
+        if (!completion.optBoolean("ok", false)) {
+            emitOpenAiError(sink, completion);
+            return;
+        }
+        emitCompletionChunk(sink, id, created, modelId, "", "stop");
+        sink.onDone();
+    }
+
+    @NonNull
+    public JSONObject openAiModels() throws JSONException {
+        JSONObject source = models();
+        JSONArray models = source.optJSONArray("models");
+        JSONArray data = new JSONArray();
+        if (models != null) {
+            for (int i = 0; i < models.length(); i++) {
+                JSONObject model = models.optJSONObject(i);
+                if (model == null) continue;
+                JSONObject item = new JSONObject();
+                item.put("id", model.optString("id", ""));
+                item.put("object", "model");
+                item.put("created", 0);
+                item.put("owned_by", "termux-launcher");
+                item.put("tai", model);
+                data.put(item);
+            }
+        }
+
+        JSONObject response = new JSONObject();
+        response.put("object", "list");
+        response.put("data", data);
+        response.put("tai", source);
+        return response;
+    }
+
+    @NonNull
     private JSONObject parseBody(@NonNull String body) throws JSONException {
         if (body.trim().isEmpty()) return new JSONObject();
         return new JSONObject(body);
     }
 
+    @Nullable
+    private JSONObject preflightGeneration(@NonNull String modelId) throws JSONException {
+        TaiRuntimeState state = runtime.getState();
+        if (!state.loaded || state.loadedModelId == null || !state.loadedModelId.equals(modelId)) {
+            return error(409, "model_not_loaded", "Load the downloaded model first with tai load " + modelId + " or from the TAI settings UI.");
+        }
+        if (state.activeGeneration) {
+            return error(409, "generation_active", "A LiteRT-LM generation is already running. Cancel it or wait for it to finish.");
+        }
+        return null;
+    }
+
     @NonNull
-    private JSONObject notImplemented(String code, String message) throws JSONException {
-        JSONObject data = new JSONObject();
-        data.put("ok", false);
-        data.put("error", code);
-        data.put("message", message);
-        data.put("_statusCode", 501);
-        return data;
+    private TaiRuntimeOptions runtimeOptionsFromRequest(@NonNull JSONObject request) {
+        TaiRuntimeOptions options = settings.getRuntimeOptions();
+        Integer maxTokens = integerOverride(request, "max_tokens", integerOverride(request, "max_completion_tokens", null));
+        Integer topK = integerOverride(request, "top_k", null);
+        Double topP = doubleOverride(request, "top_p", null);
+        Double temperature = doubleOverride(request, "temperature", null);
+        String accelerator = null;
+        if (request.has("accelerator") && !request.isNull("accelerator")) {
+            String value = request.optString("accelerator", "").trim();
+            accelerator = value.isEmpty() || "auto".equalsIgnoreCase(value) ? "auto" : value;
+        }
+        Boolean thinking = booleanOverride(request, "thinking");
+        Boolean speculative = booleanOverride(request, "speculative_decoding");
+        return options.withGenerationOverrides(maxTokens, topK, topP, temperature, accelerator, thinking, speculative);
+    }
+
+    @Nullable
+    private Integer integerOverride(@NonNull JSONObject request, @NonNull String key, @Nullable Integer fallback) {
+        if (!request.has(key) || request.isNull(key)) return fallback;
+        try {
+            return request.getInt(key);
+        } catch (JSONException e) {
+            return fallback;
+        }
+    }
+
+    @Nullable
+    private Double doubleOverride(@NonNull JSONObject request, @NonNull String key, @Nullable Double fallback) {
+        if (!request.has(key) || request.isNull(key)) return fallback;
+        try {
+            return request.getDouble(key);
+        } catch (JSONException e) {
+            return fallback;
+        }
+    }
+
+    @Nullable
+    private Boolean booleanOverride(@NonNull JSONObject request, @NonNull String key) {
+        if (!request.has(key) || request.isNull(key)) return null;
+        return request.optBoolean(key);
+    }
+
+    @NonNull
+    private String requestedModelId(@NonNull JSONObject request, @NonNull String fallback) {
+        String model = request.optString("model", request.optString("modelId", fallback));
+        return model == null || model.trim().isEmpty() ? fallback : model.trim();
+    }
+
+    @Nullable
+    private TaiModelSpec resolveModel(@Nullable String modelId) {
+        TaiModelSpec spec = modelStore.getUserModel(modelId);
+        if (spec == null) spec = registry.getModel(modelId);
+        return spec;
     }
 
     @NonNull
@@ -364,54 +518,139 @@ public final class TaiManager {
     }
 
     @NonNull
+    private JSONObject openAiError(@NonNull JSONObject source) throws JSONException {
+        JSONObject error = new JSONObject();
+        error.put("message", source.optString("message", "TAI request failed"));
+        error.put("type", "invalid_request_error");
+        error.put("code", source.optString("error", "tai_error"));
+
+        JSONObject response = new JSONObject();
+        response.put("error", error);
+        response.put("tai", source);
+        response.put("_statusCode", source.optInt("_statusCode", 500));
+        return response;
+    }
+
+    private void emitOpenAiError(@NonNull OpenAiStreamSink sink, @NonNull JSONObject source) throws JSONException, IOException {
+        sink.onEvent(openAiError(source));
+        sink.onDone();
+    }
+
+    private void emitChatChunk(
+        @NonNull OpenAiStreamSink sink,
+        @NonNull String id,
+        long created,
+        @NonNull String model,
+        @NonNull String content,
+        @Nullable String role,
+        @Nullable String finishReason
+    ) throws JSONException, IOException {
+        JSONObject response = new JSONObject();
+        response.put("id", id);
+        response.put("object", "chat.completion.chunk");
+        response.put("created", created);
+        response.put("model", model);
+        JSONArray choices = new JSONArray();
+        JSONObject choice = new JSONObject();
+        choice.put("index", 0);
+        JSONObject delta = new JSONObject();
+        if (role != null) delta.put("role", role);
+        if (!content.isEmpty()) delta.put("content", content);
+        choice.put("delta", delta);
+        choice.put("finish_reason", finishReason == null ? JSONObject.NULL : finishReason);
+        choices.put(choice);
+        response.put("choices", choices);
+        sink.onEvent(response);
+    }
+
+    private void emitCompletionChunk(
+        @NonNull OpenAiStreamSink sink,
+        @NonNull String id,
+        long created,
+        @NonNull String model,
+        @NonNull String text,
+        @Nullable String finishReason
+    ) throws JSONException, IOException {
+        JSONObject response = new JSONObject();
+        response.put("id", id);
+        response.put("object", "text_completion");
+        response.put("created", created);
+        response.put("model", model);
+        JSONArray choices = new JSONArray();
+        JSONObject choice = new JSONObject();
+        choice.put("text", text);
+        choice.put("index", 0);
+        choice.put("finish_reason", finishReason == null ? JSONObject.NULL : finishReason);
+        choices.put(choice);
+        response.put("choices", choices);
+        sink.onEvent(response);
+    }
+
+    @NonNull
     private JSONArray currentLimitations() {
         JSONArray limitations = new JSONArray();
         limitations.put("LiteRT-LM text inference is integrated for downloaded/imported .litertlm models on supported 64-bit ABIs.");
-        limitations.put("LiteRT-LM GPU can be requested explicitly; Auto currently selects CPU until GPU probing can be isolated safely.");
-        limitations.put("Streaming, token-by-token UI updates, and benchmark counters are TODO.");
-        limitations.put("Image input, audio scribe, streaming, and monitored build execution are TODO.");
-        limitations.put("TAI command execution is plan-only unless a future confirmed execution mode is added.");
+        limitations.put("Auto loads LiteRT-LM with GPU first, matching Google AI Edge Gallery, and falls back to CPU only when GPU initialization fails.");
+        limitations.put("Streaming text responses, cancellation, and keep-warm lifecycle controls are available through the localhost API.");
+        limitations.put("Benchmark counters and multimodal input are TODO for a later phase.");
+        limitations.put("TAI does not execute shell commands or device actions; use dedicated shell tools and future explicit Android capability APIs.");
         return limitations;
     }
 
     @NonNull
-    private String normalizeProfile(@NonNull String profile) {
-        switch (profile) {
-            case "ask":
-            case "chat":
-            case "general":
-                return TaiPromptProfile.GENERAL_CHAT;
-            case "code":
-            case "coding":
-                return TaiPromptProfile.CODING_ASSISTANT;
-            case "plan":
-            case "terminal":
-                return TaiPromptProfile.TERMINAL_HELPER;
-            default:
-                return profile.trim().isEmpty() ? TaiPromptProfile.GENERAL_CHAT : profile;
+    private PromptParts promptPartsFromMessages(@NonNull JSONArray messages) {
+        StringBuilder prompt = new StringBuilder();
+        String systemPrompt = settings.getGeneralSystemPrompt();
+        for (int i = 0; i < messages.length(); i++) {
+            JSONObject message = messages.optJSONObject(i);
+            if (message == null) continue;
+            String role = message.optString("role", "user");
+            String content = messageContentToText(message.opt("content"));
+            if ("system".equals(role)) {
+                systemPrompt = content;
+            } else {
+                prompt.append(role).append(": ").append(content).append('\n');
+            }
         }
+        return new PromptParts(systemPrompt, prompt.toString().trim());
     }
 
     @NonNull
-    private String modelForProfile(@NonNull String profile) {
-        if (TaiPromptProfile.CODING_ASSISTANT.equals(profile) || TaiPromptProfile.BUILD_AGENT.equals(profile)) {
-            return settings.getCodingBuildModel();
+    private String promptFromCompletionRequest(@NonNull JSONObject request) {
+        Object prompt = request.opt("prompt");
+        if (prompt == null || JSONObject.NULL.equals(prompt)) return "";
+        if (prompt instanceof JSONArray) {
+            JSONArray array = (JSONArray) prompt;
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < array.length(); i++) {
+                if (builder.length() > 0) builder.append('\n');
+                builder.append(String.valueOf(array.opt(i)));
+            }
+            return builder.toString();
         }
-        if (TaiPromptProfile.MOBILE_ACTION_ROUTER.equals(profile)) {
-            return settings.getMobileActionsModel();
-        }
-        return settings.getDefaultAssistantModel();
+        return String.valueOf(prompt);
     }
 
     @NonNull
-    private String systemPromptForProfile(@NonNull String profile) {
-        if (TaiPromptProfile.CODING_ASSISTANT.equals(profile)) {
-            return "You are TAI's coding and Termux build assistant. Return concise, structured Markdown with sections named Summary, Commands, Safety, and Notes when commands are relevant. Never claim you inspected local files unless tool output was provided. Prefer reviewable commands and do not suggest destructive actions without explicit confirmation.";
+    private String messageContentToText(@Nullable Object content) {
+        if (content == null || JSONObject.NULL.equals(content)) return "";
+        if (content instanceof JSONArray) {
+            JSONArray array = (JSONArray) content;
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < array.length(); i++) {
+                Object item = array.opt(i);
+                if (item instanceof JSONObject) {
+                    JSONObject object = (JSONObject) item;
+                    if ("text".equals(object.optString("type", ""))) {
+                        builder.append(object.optString("text", ""));
+                    }
+                } else if (item != null && !JSONObject.NULL.equals(item)) {
+                    builder.append(String.valueOf(item));
+                }
+            }
+            return builder.toString();
         }
-        if (TaiPromptProfile.TERMINAL_HELPER.equals(profile)) {
-            return settings.getTerminalSystemPrompt();
-        }
-        return settings.getGeneralSystemPrompt();
+        return String.valueOf(content);
     }
 
     @NonNull
@@ -452,5 +691,15 @@ public final class TaiManager {
             array.put(json);
         }
         return array;
+    }
+
+    private static final class PromptParts {
+        final String systemPrompt;
+        final String prompt;
+
+        PromptParts(@NonNull String systemPrompt, @NonNull String prompt) {
+            this.systemPrompt = systemPrompt;
+            this.prompt = prompt;
+        }
     }
 }

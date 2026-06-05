@@ -33,12 +33,10 @@
     <string-array name="termux_ai_model_entries">
         <item>Gemma-4-E2B-it</item>
         <item>Gemma-4-E4B-it</item>
-        <item>MobileActions-270M</item>
     </string-array>
     <string-array name="termux_ai_model_values">
         <item>Gemma-4-E2B-it</item>
         <item>Gemma-4-E4B-it</item>
-        <item>MobileActions-270M</item>
     </string-array>
     <string-array name="termux_ai_max_tokens_entries">
         <item>@string/termux_ai_auto_model_default</item>
@@ -95,7 +93,7 @@
         <item>1.0</item>
     </string-array>
     <string-array name="termux_ai_accelerator_entries">
-        <item>@string/termux_ai_auto_model_default</item>
+        <item>@string/termux_ai_accelerator_auto_gpu_preferred</item>
         <item>CPU</item>
         <item>GPU</item>
     </string-array>

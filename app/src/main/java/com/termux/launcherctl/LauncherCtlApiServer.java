@@ -16,6 +16,8 @@ import android.os.BatteryManager;
 import android.os.StatFs;
 import android.os.SystemClock;
 
+import androidx.annotation.NonNull;
+
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.ai.TaiCliFormatter;
 import com.termux.ai.TaiManager;
@@ -74,12 +76,11 @@ public class LauncherCtlApiServer {
     private static final String LAUNCHERCTL_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl";
     private static final String LAUNCHER_RESTART_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcher-restart";
     private static final String TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/tai";
-    private static final String AT_TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/@tai";
 
     private static final int MAX_REQUEST_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINES = 64;
-    private static final int MAX_BODY_BYTES = 16 * 1024;
+    private static final int MAX_BODY_BYTES = 256 * 1024;
     private static final int CLIENT_SOCKET_TIMEOUT_MS = 10_000;
 
     private static LauncherCtlApiServer instance;
@@ -258,6 +259,8 @@ public class LauncherCtlApiServer {
                 return jsonResponse(rotateAuthToken());
             } else if ("GET".equals(request.method) && "/v1/ai/status".equals(request.path)) {
                 return maybeTextResponse(request, "status", TaiManager.getInstance(context).status());
+            } else if ("GET".equals(request.method) && "/v1/ai/runtime".equals(request.path)) {
+                return maybeTextResponse(request, "runtime", TaiManager.getInstance(context).runtimeStatus());
             } else if ("GET".equals(request.method) && "/v1/ai/models".equals(request.path)) {
                 return maybeTextResponse(request, "models", TaiManager.getInstance(context).models());
             } else if ("POST".equals(request.method) && "/v1/ai/models/import".equals(request.path)) {
@@ -273,28 +276,30 @@ public class LauncherCtlApiServer {
                 return maybeTextResponse(request, "delete", TaiManager.getInstance(context).deleteModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
                 return maybeTextResponse(request, "load", TaiManager.getInstance(context).loadModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/runtime/load".equals(request.path)) {
+                return maybeTextResponse(request, "load", TaiManager.getInstance(context).loadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
                 return maybeTextResponse(request, "unload", TaiManager.getInstance(context).unloadModel());
-            } else if ("POST".equals(request.method) && "/v1/ai/chat".equals(request.path)) {
-                return maybeTextResponse(request, "chat", TaiManager.getInstance(context).chat(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/terminal/plan".equals(request.path)) {
-                return maybeTextResponse(request, "plan", TaiManager.getInstance(context).terminalPlan(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/terminal/execute".equals(request.path)) {
-                return maybeTextResponse(request, "plan", TaiManager.getInstance(context).terminalExecute(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/notifications/summarize".equals(request.path)) {
-                return maybeTextResponse(request, "notifications", TaiManager.getInstance(context).summarizeNotifications(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/actions/route".equals(request.path)) {
-                return maybeTextResponse(request, "action", TaiManager.getInstance(context).routeAction(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/actions/execute".equals(request.path)) {
-                return maybeTextResponse(request, "action", TaiManager.getInstance(context).executeAction(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/build/plan".equals(request.path)) {
-                return maybeTextResponse(request, "build", TaiManager.getInstance(context).buildPlan(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/build/run".equals(request.path)) {
-                return maybeTextResponse(request, "build", TaiManager.getInstance(context).buildRun(request.body));
-            } else if ("POST".equals(request.method) && "/v1/ai/prompt-lab/run".equals(request.path)) {
-                return maybeTextResponse(request, "chat", TaiManager.getInstance(context).promptLabRun(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/runtime/unload".equals(request.path)) {
+                return maybeTextResponse(request, "unload", TaiManager.getInstance(context).unloadModel());
+            } else if ("POST".equals(request.method) && "/v1/ai/runtime/keep-warm".equals(request.path)) {
+                return maybeTextResponse(request, "keep-warm", TaiManager.getInstance(context).keepWarmRuntime(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/runtime/cancel".equals(request.path)) {
+                return maybeTextResponse(request, "cancel", TaiManager.getInstance(context).cancelRuntime());
+            } else if ("GET".equals(request.method) && "/v1/models".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).openAiModels());
             } else if ("POST".equals(request.method) && "/v1/chat/completions".equals(request.path)) {
+                TaiManager manager = TaiManager.getInstance(context);
+                if (manager.isStreamRequest(request.body)) {
+                    return sseResponse(output -> writeChatCompletionStream(context, request.body, output));
+                }
                 return jsonResponse(TaiManager.getInstance(context).openAiChatCompletions(request.body));
+            } else if ("POST".equals(request.method) && "/v1/completions".equals(request.path)) {
+                TaiManager manager = TaiManager.getInstance(context);
+                if (manager.isStreamRequest(request.body)) {
+                    return sseResponse(output -> writeCompletionStream(context, request.body, output));
+                }
+                return jsonResponse(TaiManager.getInstance(context).openAiCompletions(request.body));
             }
 
             JSONObject notFound = jsonError("not_found", "Unknown endpoint");
@@ -752,7 +757,9 @@ public class LauncherCtlApiServer {
         writer.write("HTTP/1.1 " + response.statusCode + " " + statusMessage(response.statusCode) + "\r\n");
         writer.write("Content-Type: " + response.contentType + "\r\n");
         writer.write("Connection: close\r\n");
-        writer.write("Content-Length: " + bytes.length + "\r\n");
+        if (response.bodyWriter == null) {
+            writer.write("Content-Length: " + bytes.length + "\r\n");
+        }
         if (response.headers != null) {
             for (Map.Entry<String, String> entry : response.headers.entrySet()) {
                 writer.write(entry.getKey() + ": " + entry.getValue() + "\r\n");
@@ -760,6 +767,11 @@ public class LauncherCtlApiServer {
         }
         writer.write("\r\n");
         writer.flush();
+        if (response.bodyWriter != null) {
+            response.bodyWriter.write(output);
+            output.flush();
+            return;
+        }
         output.write(bytes);
         output.flush();
     }
@@ -775,6 +787,7 @@ public class LauncherCtlApiServer {
             case 404: return "Not Found";
             case 413: return "Payload Too Large";
             case 429: return "Too Many Requests";
+            case 499: return "Client Closed Request";
             default: return "Internal Server Error";
         }
     }
@@ -813,6 +826,7 @@ public class LauncherCtlApiServer {
         rateLimiters.put("POST:/v1/app/restart", new SimpleRateLimiter(5, 60_000));
         rateLimiters.put("POST:/v1/auth/rotate", new SimpleRateLimiter(5, 60_000));
         rateLimiters.put("GET:/v1/ai/status", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("GET:/v1/ai/runtime", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("GET:/v1/ai/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/ai/models/import", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/download", new SimpleRateLimiter(20, 60_000));
@@ -821,16 +835,13 @@ public class LauncherCtlApiServer {
         rateLimiters.put("POST:/v1/ai/models/delete", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/unload", new SimpleRateLimiter(60, 60_000));
-        rateLimiters.put("POST:/v1/ai/chat", new SimpleRateLimiter(60, 60_000));
-        rateLimiters.put("POST:/v1/ai/terminal/plan", new SimpleRateLimiter(120, 60_000));
-        rateLimiters.put("POST:/v1/ai/terminal/execute", new SimpleRateLimiter(20, 60_000));
-        rateLimiters.put("POST:/v1/ai/notifications/summarize", new SimpleRateLimiter(60, 60_000));
-        rateLimiters.put("POST:/v1/ai/actions/route", new SimpleRateLimiter(120, 60_000));
-        rateLimiters.put("POST:/v1/ai/actions/execute", new SimpleRateLimiter(20, 60_000));
-        rateLimiters.put("POST:/v1/ai/build/plan", new SimpleRateLimiter(60, 60_000));
-        rateLimiters.put("POST:/v1/ai/build/run", new SimpleRateLimiter(20, 60_000));
-        rateLimiters.put("POST:/v1/ai/prompt-lab/run", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/runtime/load", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/runtime/unload", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/runtime/keep-warm", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/ai/runtime/cancel", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("GET:/v1/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/chat/completions", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/completions", new SimpleRateLimiter(60, 60_000));
     }
 
     private void writeClientConfig() throws IOException {
@@ -1052,11 +1063,12 @@ public class LauncherCtlApiServer {
             "set -eu\n" +
             "print_help() {\n" +
             "  cat <<'EOF'\n" +
-            "TAI / Termux AI - local assistant bridge\n" +
+            "TAI / Termux AI - local LiteRT-LM host\n" +
             "\n" +
             "Usage:\n" +
             "  tai --json <command>\n" +
             "  tai status\n" +
+            "  tai runtime\n" +
             "  tai models\n" +
             "  tai import <path> [model-id]\n" +
             "  tai download <model-id> <https-url> --accept-terms\n" +
@@ -1064,18 +1076,14 @@ public class LauncherCtlApiServer {
             "  tai delete <model-id>\n" +
             "  tai load [model] [--auto|--cpu|--gpu]\n" +
             "  tai unload\n" +
-            "  tai ask \"question\"\n" +
-            "  tai chat [message]\n" +
-            "  tai code \"task\"\n" +
-            "  tai plan \"natural language terminal task\"\n" +
-            "  tai notifications today\n" +
-            "  tai build [--run|--print-command]\n" +
+            "  tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]\n" +
+            "  tai cancel\n" +
             "  tai doctor\n" +
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.\n" +
-            "Auto uses CPU; pass --gpu to request LiteRT-LM GPU acceleration.\n" +
-            "Terminal plans are structured and never auto-run shell commands.\n" +
+            "Auto loads GPU first, matching Google AI Edge Gallery, then falls back to CPU if needed.\n" +
+            "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
             "}\n" +
@@ -1123,6 +1131,9 @@ public class LauncherCtlApiServer {
             "  status)\n" +
             "    get_json /v1/ai/status\n" +
             "    ;;\n" +
+            "  runtime)\n" +
+            "    get_json /v1/ai/runtime\n" +
+            "    ;;\n" +
             "  models)\n" +
             "    get_json /v1/ai/models\n" +
             "    ;;\n" +
@@ -1162,33 +1173,39 @@ public class LauncherCtlApiServer {
             "    done\n" +
             "    accel_json=\"\"\n" +
             "    if [ -n \"$accelerator\" ]; then accel_json=\",\\\"accelerator\\\":\\\"$accelerator\\\"\"; fi\n" +
-            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/models/load \"{\\\"model\\\":\\\"$model_escaped\\\"$accel_json}\"; elif [ -n \"$accelerator\" ]; then post_json /v1/ai/models/load \"{\\\"accelerator\\\":\\\"$accelerator\\\"}\"; else post_json /v1/ai/models/load '{}'; fi\n" +
+            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/runtime/load \"{\\\"model\\\":\\\"$model_escaped\\\"$accel_json}\"; elif [ -n \"$accelerator\" ]; then post_json /v1/ai/runtime/load \"{\\\"accelerator\\\":\\\"$accelerator\\\"}\"; else post_json /v1/ai/runtime/load '{}'; fi\n" +
             "    ;;\n" +
             "  unload)\n" +
-            "    post_json /v1/ai/models/unload '{}'\n" +
+            "    post_json /v1/ai/runtime/unload '{}'\n" +
             "    ;;\n" +
-            "  ask|chat|code)\n" +
-            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai $cmd <message>\" >&2; exit 2; }\n" +
-            "    message=$(json_escape \"$*\")\n" +
-            "    post_json /v1/ai/chat \"{\\\"message\\\":\\\"$message\\\",\\\"profile\\\":\\\"$cmd\\\"}\"\n" +
+            "  keep-warm)\n" +
+            "    model=\"\"\n" +
+            "    minutes=\"\"\n" +
+            "    accelerator=\"\"\n" +
+            "    while [ \"$#\" -gt 0 ]; do\n" +
+            "      case \"$1\" in\n" +
+            "        --minutes) shift; [ \"$#\" -gt 0 ] || { echo \"usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]\" >&2; exit 2; }; minutes=\"$1\" ;;\n" +
+            "        --auto) accelerator=auto ;;\n" +
+            "        --cpu) accelerator=cpu ;;\n" +
+            "        --gpu) accelerator=gpu ;;\n" +
+            "        --*) echo \"usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]\" >&2; exit 2 ;;\n" +
+            "        *) [ -z \"$model\" ] || { echo \"usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]\" >&2; exit 2; }; model=\"$1\" ;;\n" +
+            "      esac\n" +
+            "      shift\n" +
+            "    done\n" +
+            "    body=\"{}\"\n" +
+            "    sep=\"\"\n" +
+            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); body=\"{\\\"model\\\":\\\"$model_escaped\\\"\"; sep=\",\"; fi\n" +
+            "    if [ -n \"$minutes\" ]; then [ \"$body\" = \"{}\" ] && { body=\"{\"; sep=\"\"; }; body=\"$body$sep\\\"minutes\\\":$minutes\"; sep=\",\"; fi\n" +
+            "    if [ -n \"$accelerator\" ]; then [ \"$body\" = \"{}\" ] && { body=\"{\"; sep=\"\"; }; body=\"$body$sep\\\"accelerator\\\":\\\"$accelerator\\\"\"; sep=\",\"; fi\n" +
+            "    [ \"$body\" = \"{}\" ] || body=\"$body}\"\n" +
+            "    post_json /v1/ai/runtime/keep-warm \"$body\"\n" +
             "    ;;\n" +
-            "  plan)\n" +
-            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai plan <task>\" >&2; exit 2; }\n" +
-            "    task=$(json_escape \"$*\")\n" +
-            "    post_json /v1/ai/terminal/plan \"{\\\"task\\\":\\\"$task\\\"}\"\n" +
-            "    ;;\n" +
-            "  notifications)\n" +
-            "    range=$(json_escape \"${1:-today}\")\n" +
-            "    post_json /v1/ai/notifications/summarize \"{\\\"range\\\":\\\"$range\\\"}\"\n" +
-            "    ;;\n" +
-            "  build)\n" +
-            "    mode=print_command\n" +
-            "    case \"${1:-}\" in --run) mode=monitor ;; --print-command|\"\") mode=print_command ;; *) echo \"usage: tai build [--run|--print-command]\" >&2; exit 2 ;; esac\n" +
-            "    cwd=$(json_escape \"$(pwd)\")\n" +
-            "    post_json /v1/ai/build/plan \"{\\\"cwd\\\":\\\"$cwd\\\",\\\"mode\\\":\\\"$mode\\\"}\"\n" +
+            "  cancel)\n" +
+            "    post_json /v1/ai/runtime/cancel '{}'\n" +
             "    ;;\n" +
             "  doctor)\n" +
-            "    get_json /v1/ai/status\n" +
+            "    get_json /v1/ai/runtime\n" +
             "    printf '\\n'\n" +
             "    get_json /v1/status\n" +
             "    ;;\n" +
@@ -1199,20 +1216,18 @@ public class LauncherCtlApiServer {
             "    ;;\n" +
             "esac\n";
 
-        String atTaiScript =
-            "#!/data/data/com.termux/files/usr/bin/sh\n" +
-            "set -eu\n" +
-            "if [ \"$#\" -eq 0 ]; then\n" +
-            "  echo \"usage: @tai <natural language terminal task>\" >&2\n" +
-            "  exit 2\n" +
-            "fi\n" +
-            "exec tai plan \"$@\"\n";
-
         try {
             writeExecutableTextFile(TAI_BIN_PATH, taiScript);
-            writeExecutableTextFile(AT_TAI_BIN_PATH, atTaiScript);
+            deleteLegacyAtTaiScript();
         } catch (Exception e) {
             Logger.logErrorExtended(LOG_TAG, "Failed to install TAI cli: " + e.getMessage());
+        }
+    }
+
+    private void deleteLegacyAtTaiScript() {
+        File file = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/@tai");
+        if (file.exists() && !file.delete()) {
+            Logger.logWarn(LOG_TAG, "Failed to remove legacy @tai helper at " + file.getAbsolutePath());
         }
     }
 
@@ -1257,6 +1272,61 @@ public class LauncherCtlApiServer {
         response.remove("_statusCode");
         return new HttpResponse(statusCode, "application/json; charset=utf-8",
             response.toString().getBytes(StandardCharsets.UTF_8), null);
+    }
+
+    private HttpResponse sseResponse(BodyWriter bodyWriter) {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache");
+        headers.put("X-Accel-Buffering", "no");
+        return new HttpResponse(200, "text/event-stream; charset=utf-8", bodyWriter, headers);
+    }
+
+    private void writeChatCompletionStream(Context context, String body, OutputStream output) throws IOException {
+        try {
+            TaiManager.getInstance(context).openAiChatCompletionsStream(body, new TaiManager.OpenAiStreamSink() {
+                @Override
+                public void onEvent(@NonNull JSONObject event) throws IOException {
+                    writeSseEvent(output, event.toString());
+                }
+
+                @Override
+                public void onDone() throws IOException {
+                    writeSseEvent(output, "[DONE]");
+                }
+            });
+        } catch (JSONException e) {
+            writeSseJsonError(output, "internal_error", e.getMessage());
+            writeSseEvent(output, "[DONE]");
+        }
+    }
+
+    private void writeCompletionStream(Context context, String body, OutputStream output) throws IOException {
+        try {
+            TaiManager.getInstance(context).openAiCompletionsStream(body, new TaiManager.OpenAiStreamSink() {
+                @Override
+                public void onEvent(@NonNull JSONObject event) throws IOException {
+                    writeSseEvent(output, event.toString());
+                }
+
+                @Override
+                public void onDone() throws IOException {
+                    writeSseEvent(output, "[DONE]");
+                }
+            });
+        } catch (JSONException e) {
+            writeSseJsonError(output, "internal_error", e.getMessage());
+            writeSseEvent(output, "[DONE]");
+        }
+    }
+
+    private void writeSseJsonError(OutputStream output, String code, String message) throws IOException {
+        JSONObject error = jsonError(code, message == null ? "" : message);
+        writeSseEvent(output, error.toString());
+    }
+
+    private void writeSseEvent(OutputStream output, String data) throws IOException {
+        output.write(("data: " + data + "\n\n").getBytes(StandardCharsets.UTF_8));
+        output.flush();
     }
 
     private HttpResponse maybeTextResponse(HttpRequest request, String command, JSONObject response) {
@@ -1877,14 +1947,28 @@ public class LauncherCtlApiServer {
         final int statusCode;
         final String contentType;
         final byte[] body;
+        final BodyWriter bodyWriter;
         final Map<String, String> headers;
 
         HttpResponse(int statusCode, String contentType, byte[] body, Map<String, String> headers) {
             this.statusCode = statusCode;
             this.contentType = contentType;
             this.body = body != null ? body : new byte[0];
+            this.bodyWriter = null;
             this.headers = headers;
         }
+
+        HttpResponse(int statusCode, String contentType, BodyWriter bodyWriter, Map<String, String> headers) {
+            this.statusCode = statusCode;
+            this.contentType = contentType;
+            this.body = new byte[0];
+            this.bodyWriter = bodyWriter;
+            this.headers = headers;
+        }
+    }
+
+    private interface BodyWriter {
+        void write(OutputStream output) throws IOException;
     }
 
     private static class HttpParseException extends Exception {

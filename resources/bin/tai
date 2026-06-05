@@ -3,11 +3,12 @@ set -eu
 
 print_help() {
   cat <<'EOF'
-TAI / Termux AI - local assistant bridge
+TAI / Termux AI - local LiteRT-LM host
 
 Usage:
   tai --json <command>
   tai status
+  tai runtime
   tai models
   tai import <path> [model-id]
   tai download <model-id> <https-url> --accept-terms
@@ -15,17 +16,14 @@ Usage:
   tai delete <model-id>
   tai load [model] [--auto|--cpu|--gpu]
   tai unload
-  tai ask "question"
-  tai chat [message]
-  tai code "task"
-  tai plan "natural language terminal task"
-  tai notifications today
-  tai build [--run|--print-command]
+  tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]
+  tai cancel
   tai doctor
 
 TAI is authenticated through ~/.launcherctl and runs in the Android app process.
 LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.
-Terminal plans are structured and never auto-run shell commands.
+Auto loads GPU first, matching Google AI Edge Gallery, then falls back to CPU if needed.
+Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.
 Use tai --json <command> for raw API JSON.
 EOF
 }
@@ -78,6 +76,9 @@ case "$cmd" in
   status)
     get_json /v1/ai/status
     ;;
+  runtime)
+    get_json /v1/ai/runtime
+    ;;
   models)
     get_json /v1/ai/models
     ;;
@@ -126,42 +127,60 @@ case "$cmd" in
     fi
     if [ -n "$model" ]; then
       model_escaped=$(json_escape "$model")
-      post_json /v1/ai/models/load "{\"model\":\"$model_escaped\"$accel_json}"
+      post_json /v1/ai/runtime/load "{\"model\":\"$model_escaped\"$accel_json}"
     elif [ -n "$accelerator" ]; then
-      post_json /v1/ai/models/load "{\"accelerator\":\"$accelerator\"}"
+      post_json /v1/ai/runtime/load "{\"accelerator\":\"$accelerator\"}"
     else
-      post_json /v1/ai/models/load '{}'
+      post_json /v1/ai/runtime/load '{}'
     fi
     ;;
   unload)
-    post_json /v1/ai/models/unload '{}'
+    post_json /v1/ai/runtime/unload '{}'
     ;;
-  ask|chat|code)
-    [ "$#" -gt 0 ] || { echo "usage: tai $cmd <message>" >&2; exit 2; }
-    message=$(json_escape "$*")
-    post_json /v1/ai/chat "{\"message\":\"$message\",\"profile\":\"$cmd\"}"
+  keep-warm)
+    model=""
+    minutes=""
+    accelerator=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --minutes)
+          shift
+          [ "$#" -gt 0 ] || { echo "usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]" >&2; exit 2; }
+          minutes="$1"
+          ;;
+        --auto) accelerator=auto ;;
+        --cpu) accelerator=cpu ;;
+        --gpu) accelerator=gpu ;;
+        --*) echo "usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]" >&2; exit 2 ;;
+        *) [ -z "$model" ] || { echo "usage: tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]" >&2; exit 2; }; model="$1" ;;
+      esac
+      shift
+    done
+    body="{}"
+    sep=""
+    if [ -n "$model" ]; then
+      model_escaped=$(json_escape "$model")
+      body="{\"model\":\"$model_escaped\""
+      sep=","
+    fi
+    if [ -n "$minutes" ]; then
+      [ "$body" = "{}" ] && { body="{"; sep=""; }
+      body="$body$sep\"minutes\":$minutes"
+      sep=","
+    fi
+    if [ -n "$accelerator" ]; then
+      [ "$body" = "{}" ] && { body="{"; sep=""; }
+      body="$body$sep\"accelerator\":\"$accelerator\""
+      sep=","
+    fi
+    [ "$body" = "{}" ] || body="$body}"
+    post_json /v1/ai/runtime/keep-warm "$body"
     ;;
-  plan)
-    [ "$#" -gt 0 ] || { echo "usage: tai plan <task>" >&2; exit 2; }
-    task=$(json_escape "$*")
-    post_json /v1/ai/terminal/plan "{\"task\":\"$task\"}"
-    ;;
-  notifications)
-    range=$(json_escape "${1:-today}")
-    post_json /v1/ai/notifications/summarize "{\"range\":\"$range\"}"
-    ;;
-  build)
-    mode=print_command
-    case "${1:-}" in
-      --run) mode=monitor ;;
-      --print-command|"") mode=print_command ;;
-      *) echo "usage: tai build [--run|--print-command]" >&2; exit 2 ;;
-    esac
-    cwd=$(json_escape "$(pwd)")
-    post_json /v1/ai/build/plan "{\"cwd\":\"$cwd\",\"mode\":\"$mode\"}"
+  cancel)
+    post_json /v1/ai/runtime/cancel '{}'
     ;;
   doctor)
-    get_json /v1/ai/status
+    get_json /v1/ai/runtime
     printf '\n'
     get_json /v1/status
     ;;
