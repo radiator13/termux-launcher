@@ -367,7 +367,7 @@ public final class TaiManager {
     private JSONArray currentLimitations() {
         JSONArray limitations = new JSONArray();
         limitations.put("LiteRT-LM text inference is integrated for downloaded/imported .litertlm models on supported 64-bit ABIs.");
-        limitations.put("LiteRT-LM GPU backend is disabled pending an isolated runtime process because native GPU engine creation crashed the app process on this device.");
+        limitations.put("LiteRT-LM GPU can be requested explicitly; Auto currently selects CPU until GPU probing can be isolated safely.");
         limitations.put("Streaming, token-by-token UI updates, and benchmark counters are TODO.");
         limitations.put("Image input, audio scribe, streaming, and monitored build execution are TODO.");
         limitations.put("TAI command execution is plan-only unless a future confirmed execution mode is added.");

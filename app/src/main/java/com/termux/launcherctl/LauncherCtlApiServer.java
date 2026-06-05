@@ -1074,7 +1074,7 @@ public class LauncherCtlApiServer {
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.\n" +
-            "GPU loading returns a safe error in this build; use Auto/CPU until GPU is isolated.\n" +
+            "Auto uses CPU; pass --gpu to request LiteRT-LM GPU acceleration.\n" +
             "Terminal plans are structured and never auto-run shell commands.\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +

@@ -88,7 +88,7 @@ Implemented foundation endpoints:
 
 Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
 
-The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. The accelerator setting is preserved in settings, but direct LiteRT-LM GPU loading is disabled in this build because native GPU engine creation crashed the Android app process on this device. Auto selects CPU. Explicit `tai load <model> --gpu` returns a visible error instead of calling the unsafe native GPU path. GPU support should be re-enabled only after probing/loading can run in an isolated runtime process.
+The runtime currently supports non-streaming text prompts. It keeps sampling settings in the Auto/model-default state unless the user explicitly configures overrides. Auto currently selects CPU so routine loads remain conservative. Explicit `tai load <model> --gpu` requests LiteRT-LM GPU acceleration. The app manifest declares the native OpenCL libraries required by LiteRT-LM for Android GPU backend discovery. A future isolated GPU probe/runtime process should still be added so failed native GPU initialization cannot crash the main launcher process.
 
 ## Safety Policy
 
@@ -146,7 +146,7 @@ For gated Hugging Face models, first accept the provider terms on Hugging Face, 
 ## Current Limitations / TODO
 
 - Expand the LiteRT-LM runtime adapter with streaming, benchmark counters, multimodal prompts, and tool-calling integration.
-- Move LiteRT-LM GPU probing/loading into an isolated runtime process before enabling GPU acceleration again.
+- Move LiteRT-LM GPU probing/loading into an isolated runtime process so native GPU failures cannot crash the main launcher process.
 - Add copy-into-private-storage import mode and UI file picker.
 - Add pause/cancel/retry controls for foreground downloads.
 - Add streaming/SSE responses.
