@@ -17,6 +17,7 @@ This wiki is only for Termux Launcher-specific usage: the launcher surface, shel
 ## Integrations
 
 - [Shell integration](Launcher_Shell_Integration)
+- [Termux Launcher AI](Termux_Launcher_AI)
 - [TAI / Termux AI](Termux_AI)
 - [Terminal Material colors](Launcher_Material_Colors)
 - [Termux extra keys](Termux_Extrakeys)
