@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.ai.TaiCliFormatter;
 import com.termux.ai.TaiManager;
+import com.termux.ai.TaiSettings;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.model.LauncherAppEntry;
@@ -44,6 +45,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -122,8 +124,9 @@ public class LauncherCtlApiServer {
         try {
             initializeRateLimiters();
             appContext = context.getApplicationContext();
-            token = generateToken();
-            serverSocket = new ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"));
+            TaiSettings settings = new TaiSettings(appContext);
+            token = settings.getOrCreateApiToken();
+            serverSocket = createLoopbackServerSocket(settings.getApiPort());
             port = serverSocket.getLocalPort();
             running = true;
             writeClientConfig();
@@ -175,6 +178,43 @@ public class LauncherCtlApiServer {
             acceptThread = null;
         }
         clientExecutor.shutdownNow();
+    }
+
+    public synchronized JSONObject applyEndpointSettings(Context context) throws JSONException {
+        Context nextContext = context.getApplicationContext();
+        running = false;
+        starting = false;
+        cleanupSocket();
+        if (acceptThread != null) {
+            acceptThread.interrupt();
+            acceptThread = null;
+        }
+        start(nextContext);
+        return buildEndpointSettings(nextContext, true);
+    }
+
+    public synchronized JSONObject rotateAuthTokenFromSettings(Context context) throws JSONException {
+        return rotateAuthToken(context.getApplicationContext(), true);
+    }
+
+    public synchronized JSONObject randomizeApiPortFromSettings(Context context) throws JSONException {
+        Context appContext = context.getApplicationContext();
+        new TaiSettings(appContext).randomizeApiPort(random);
+        return applyEndpointSettings(appContext);
+    }
+
+    public synchronized JSONObject endpointSettings(Context context) throws JSONException {
+        Context resolvedContext = appContext != null ? appContext : context.getApplicationContext();
+        if (token == null || token.isEmpty()) {
+            token = new TaiSettings(resolvedContext).getOrCreateApiToken();
+            if (running) {
+                try {
+                    writeClientConfig();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        return buildEndpointSettings(resolvedContext, true);
     }
 
     public synchronized void invalidatePackageCaches() {
@@ -256,7 +296,7 @@ public class LauncherCtlApiServer {
             } else if ("POST".equals(request.method) && "/v1/app/restart".equals(request.path)) {
                 return jsonResponse(runAppRestart(context));
             } else if ("POST".equals(request.method) && "/v1/auth/rotate".equals(request.path)) {
-                return jsonResponse(rotateAuthToken());
+                return jsonResponse(rotateAuthToken(context, false));
             } else if ("GET".equals(request.method) && "/v1/ai/status".equals(request.path)) {
                 return maybeTextResponse(request, "status", TaiManager.getInstance(context).status());
             } else if ("GET".equals(request.method) && "/v1/ai/runtime".equals(request.path)) {
@@ -361,6 +401,7 @@ public class LauncherCtlApiServer {
         data.put("notificationListenerConnected", LauncherCtlNotificationListener.isListenerConnected());
         data.put("notificationListener", buildNotificationListenerStatus());
         data.put("privilegedPolicy", describePrivilegedPolicy());
+        data.put("endpoint", buildEndpointSettings(appContext, false));
         return data;
     }
 
@@ -597,8 +638,8 @@ public class LauncherCtlApiServer {
         return data;
     }
 
-    private JSONObject rotateAuthToken() throws JSONException {
-        token = generateToken();
+    private JSONObject rotateAuthToken(Context context, boolean includeToken) throws JSONException {
+        token = new TaiSettings(context).rotateApiToken(random);
         try {
             writeClientConfig();
         } catch (IOException e) {
@@ -609,6 +650,7 @@ public class LauncherCtlApiServer {
         JSONObject data = new JSONObject();
         data.put("ok", true);
         data.put("rotated", true);
+        data.put("endpoint", buildEndpointSettings(context, includeToken));
         return data;
     }
 
@@ -803,16 +845,6 @@ public class LauncherCtlApiServer {
         return error;
     }
 
-    private String generateToken() {
-        byte[] bytes = new byte[24];
-        random.nextBytes(bytes);
-        StringBuilder tokenBuilder = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            tokenBuilder.append(String.format("%02x", b & 0xff));
-        }
-        return tokenBuilder.toString();
-    }
-
     private void initializeRateLimiters() {
         rateLimiters.clear();
         rateLimiters.put("GET:/v1/status", new SimpleRateLimiter(120, 60_000));
@@ -845,12 +877,62 @@ public class LauncherCtlApiServer {
     }
 
     private void writeClientConfig() throws IOException {
+        if (token == null || token.isEmpty()) {
+            Context context = appContext;
+            if (context != null) token = new TaiSettings(context).getOrCreateApiToken();
+            if (token == null || token.isEmpty()) token = TaiSettings.generateApiToken(random);
+        }
         File launcherctlDir = new File(LAUNCHERCTL_DIR_PATH);
         if (!launcherctlDir.exists() && !launcherctlDir.mkdirs()) {
             throw new IOException("Failed to create launcherctl dir: " + LAUNCHERCTL_DIR_PATH);
         }
         writeTextFile(TOKEN_FILE_PATH, token + "\n");
         writeTextFile(ENDPOINT_FILE_PATH, "http://127.0.0.1:" + port + "\n");
+    }
+
+    private ServerSocket createLoopbackServerSocket(int preferredPort) throws IOException {
+        IOException preferredPortFailure = null;
+        if (preferredPort > 0) {
+            try {
+                return bindLoopback(preferredPort);
+            } catch (IOException e) {
+                preferredPortFailure = e;
+                Logger.logWarn(LOG_TAG, "Preferred LauncherCtl API port " + preferredPort + " unavailable; falling back to an ephemeral port: " + e.getMessage());
+            }
+        }
+        try {
+            return bindLoopback(0);
+        } catch (IOException e) {
+            if (preferredPortFailure != null) e.addSuppressed(preferredPortFailure);
+            throw e;
+        }
+    }
+
+    private ServerSocket bindLoopback(int requestedPort) throws IOException {
+        ServerSocket socket = new ServerSocket();
+        socket.setReuseAddress(true);
+        socket.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), requestedPort), 16);
+        return socket;
+    }
+
+    private JSONObject buildEndpointSettings(Context context, boolean includeToken) throws JSONException {
+        TaiSettings settings = new TaiSettings(context);
+        JSONObject data = new JSONObject();
+        int configuredPort = settings.getApiPort();
+        int activePort = port > 0 ? port : configuredPort;
+        data.put("configuredPort", configuredPort);
+        data.put("activePort", activePort);
+        data.put("baseUrl", "http://127.0.0.1:" + activePort);
+        data.put("openAiBaseUrl", "http://127.0.0.1:" + activePort + "/v1");
+        data.put("endpointFile", ENDPOINT_FILE_PATH);
+        data.put("tokenFile", TOKEN_FILE_PATH);
+        data.put("running", running);
+        data.put("usingConfiguredPort", activePort == configuredPort);
+        data.put("tokenConfigured", TaiSettings.isValidApiToken(settings.getOrCreateApiToken()));
+        if (includeToken) {
+            data.put("token", settings.getOrCreateApiToken());
+        }
+        return data;
     }
 
     private void installLauncherCtlCliScript() {

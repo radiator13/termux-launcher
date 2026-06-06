@@ -101,6 +101,11 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         );
     }
 
+    @Override
+    public synchronized boolean isModelLoaded(@NonNull String modelId) {
+        return engine != null && loadedModelId != null && loadedModelId.equals(modelId);
+    }
+
     @NonNull
     @Override
     public JSONObject load(@NonNull TaiModelSpec modelSpec, @NonNull TaiRuntimeOptions options) throws JSONException {

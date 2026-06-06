@@ -310,10 +310,25 @@
         <string name="termux_ai_speculative_decoding_title">Speculative decoding</string>
         <string name="termux_ai_idle_unload_title">Idle unload</string>
         <string name="termux_ai_general_prompt_title">General chat system prompt</string>
+        <string name="termux_ai_api_port_title">API port</string>
+        <string name="termux_ai_api_port_summary">OpenAI base URL: %1$s</string>
+        <string name="termux_ai_api_port_saved">API port saved</string>
+        <string name="termux_ai_api_port_randomize_title">Randomize API port</string>
+        <string name="termux_ai_api_port_randomize_summary">Choose a new uncommon localhost port and restart the local API listener</string>
+        <string name="termux_ai_api_port_randomized">API port randomized</string>
+        <string name="termux_ai_api_token_title">API bearer token</string>
+        <string name="termux_ai_api_token_saved">API token saved</string>
+        <string name="termux_ai_api_token_invalid">Token must be at least 16 characters with no spaces</string>
+        <string name="termux_ai_api_token_rotate_title">Recreate API token</string>
+        <string name="termux_ai_api_token_rotate_summary">Generate a new bearer token and update ~/.launcherctl/token</string>
+        <string name="termux_ai_api_token_rotated">API token recreated</string>
+        <string name="termux_ai_endpoint_update_failed">Endpoint setting update failed</string>
         <string name="termux_ai_endpoint_notice_title">OpenAI-compatible endpoint</string>
         <string name="termux_ai_endpoint_notice_summary">External tools use ~/.launcherctl/endpoint and ~/.launcherctl/token with /v1/models, /v1/chat/completions, /v1/completions, and /v1/ai/runtime.</string>
+        <string name="termux_ai_endpoint_notice_summary_dynamic">OpenAI base URL: %1$s\nBearer token file: %2$s</string>
         <string name="termux_ai_endpoint_detail_title">Endpoint info</string>
         <string name="termux_ai_endpoint_detail_message">Base URL: ~/.launcherctl/endpoint\nBearer token: ~/.launcherctl/token\n\nSupported endpoints:\nGET /v1/models\nPOST /v1/chat/completions\nPOST /v1/completions\nGET /v1/ai/runtime\nPOST /v1/ai/runtime/load\nPOST /v1/ai/runtime/unload\nPOST /v1/ai/runtime/keep-warm\nPOST /v1/ai/runtime/cancel</string>
+        <string name="termux_ai_endpoint_detail_message_dynamic">Base URL: %1$s\nOpenAI base URL: %2$s\nBearer token: %3$s\n\nEndpoint file: %4$s\nToken file: %5$s\n\nOpenAI-compatible clients should use the OpenAI base URL and send the bearer token as their API key.</string>
 
             <string name="termux_privileged_access_overview_title">Overview</string>
             <string name="termux_privileged_backend_status_title">Backend Status</string>

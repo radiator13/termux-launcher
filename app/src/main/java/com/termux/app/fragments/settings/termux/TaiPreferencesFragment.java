@@ -28,6 +28,7 @@ import com.termux.ai.TaiModelRegistry;
 import com.termux.ai.TaiModelSpec;
 import com.termux.ai.TaiModelStore;
 import com.termux.ai.TaiSettings;
+import com.termux.launcherctl.LauncherCtlApiServer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -73,7 +74,7 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         setStaticSummary("tai_model_privacy_notice", R.string.termux_ai_model_privacy_notice_summary);
         configureRuntimeControls(context);
         configureHuggingFaceToken();
-        configureEndpointInfo();
+        configureEndpointPreferences(context);
         configureModelManager(context);
     }
 
@@ -109,6 +110,7 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
     private void refreshTaiPage(Context context) {
         configureDefaultModelSelector(context);
         updateRuntimeStatus(context);
+        refreshEndpointPreferences(context);
         populateModelRows(context);
     }
 
@@ -146,20 +148,152 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private void configureEndpointInfo() {
+    private void configureEndpointPreferences(Context context) {
+        configureApiPortPreference(context);
+        configureApiTokenPreference(context);
+        Preference randomizePort = findPreference("tai_api_port_randomize");
+        if (randomizePort != null) {
+            randomizePort.setOnPreferenceClickListener(preference -> {
+                try {
+                    LauncherCtlApiServer.getInstance().randomizeApiPortFromSettings(context);
+                    refreshEndpointPreferences(context);
+                    Toast.makeText(context, R.string.termux_ai_api_port_randomized, Toast.LENGTH_SHORT).show();
+                } catch (JSONException e) {
+                    Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+                }
+                return true;
+            });
+        }
+
+        Preference rotateToken = findPreference("tai_api_token_rotate");
+        if (rotateToken != null) {
+            rotateToken.setOnPreferenceClickListener(preference -> {
+                try {
+                    JSONObject endpoint = LauncherCtlApiServer.getInstance().rotateAuthTokenFromSettings(context)
+                        .optJSONObject("endpoint");
+                    EditTextPreference tokenPreference = findPreference(TaiSettings.KEY_API_TOKEN);
+                    if (endpoint != null && tokenPreference != null) {
+                        tokenPreference.setText(endpoint.optString("token", ""));
+                    }
+                    refreshEndpointPreferences(context);
+                    Toast.makeText(context, R.string.termux_ai_api_token_rotated, Toast.LENGTH_SHORT).show();
+                } catch (JSONException e) {
+                    Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+                }
+                return true;
+            });
+        }
+
         Preference endpoint = findPreference("tai_endpoint_notice");
         if (endpoint != null) {
             endpoint.setOnPreferenceClickListener(preference -> {
-                Context context = getContext();
-                if (context != null) {
-                    new MaterialAlertDialogBuilder(context)
+                Context currentContext = getContext();
+                if (currentContext != null) {
+                    new MaterialAlertDialogBuilder(currentContext)
                         .setTitle(R.string.termux_ai_endpoint_detail_title)
-                        .setMessage(R.string.termux_ai_endpoint_detail_message)
+                        .setMessage(buildEndpointDetailMessage(currentContext))
                         .setPositiveButton(android.R.string.ok, null)
                         .show();
                 }
                 return true;
             });
+        }
+    }
+
+    private void configureApiPortPreference(Context context) {
+        EditTextPreference port = findPreference(TaiSettings.KEY_API_PORT);
+        if (port == null) return;
+        TaiSettings settings = new TaiSettings(context);
+        port.setText(String.valueOf(settings.getApiPort()));
+        port.setOnBindEditTextListener(editText -> {
+            editText.setSingleLine(true);
+            editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+        });
+        port.setOnPreferenceChangeListener((preference, newValue) -> {
+            String rawValue = String.valueOf(newValue);
+            if (!TaiSettings.isValidApiPort(rawValue)) {
+                Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+                return false;
+            }
+            int normalized = TaiSettings.normalizeApiPort(rawValue);
+            new TaiSettings(context).setApiPort(normalized);
+            ((EditTextPreference) preference).setText(String.valueOf(normalized));
+            try {
+                LauncherCtlApiServer.getInstance().applyEndpointSettings(context);
+                refreshEndpointPreferences(context);
+                Toast.makeText(context, R.string.termux_ai_api_port_saved, Toast.LENGTH_SHORT).show();
+            } catch (JSONException e) {
+                Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+            }
+            return false;
+        });
+    }
+
+    private void configureApiTokenPreference(Context context) {
+        EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
+        if (token == null) return;
+        TaiSettings settings = new TaiSettings(context);
+        token.setText(settings.getOrCreateApiToken());
+        token.setOnBindEditTextListener(editText -> {
+            editText.setSingleLine(true);
+            editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        });
+        token.setOnPreferenceChangeListener((preference, newValue) -> {
+            String normalized = TaiSettings.normalizeApiToken(String.valueOf(newValue));
+            if (normalized.isEmpty()) {
+                Toast.makeText(context, R.string.termux_ai_api_token_invalid, Toast.LENGTH_LONG).show();
+                return false;
+            }
+            new TaiSettings(context).setApiToken(normalized);
+            ((EditTextPreference) preference).setText(normalized);
+            try {
+                LauncherCtlApiServer.getInstance().applyEndpointSettings(context);
+                refreshEndpointPreferences(context);
+                Toast.makeText(context, R.string.termux_ai_api_token_saved, Toast.LENGTH_SHORT).show();
+            } catch (JSONException e) {
+                Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+            }
+            return false;
+        });
+    }
+
+    private void refreshEndpointPreferences(Context context) {
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            EditTextPreference port = findPreference(TaiSettings.KEY_API_PORT);
+            if (port != null) {
+                port.setText(String.valueOf(endpoint.optInt("configuredPort", TaiSettings.DEFAULT_API_PORT)));
+                port.setSummary(context.getString(R.string.termux_ai_api_port_summary,
+                    endpoint.optString("openAiBaseUrl", "")));
+            }
+            EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
+            if (token != null) {
+                token.setText(endpoint.optString("token", new TaiSettings(context).getOrCreateApiToken()));
+                token.setSummary(endpoint.optString("token", ""));
+            }
+            Preference endpointNotice = findPreference("tai_endpoint_notice");
+            if (endpointNotice != null) {
+                endpointNotice.setSummary(context.getString(R.string.termux_ai_endpoint_notice_summary_dynamic,
+                    endpoint.optString("openAiBaseUrl", ""),
+                    endpoint.optString("tokenFile", "")));
+            }
+        } catch (JSONException e) {
+            Preference endpointNotice = findPreference("tai_endpoint_notice");
+            if (endpointNotice != null) endpointNotice.setSummary(R.string.termux_ai_endpoint_notice_summary);
+        }
+    }
+
+    private String buildEndpointDetailMessage(Context context) {
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            return context.getString(R.string.termux_ai_endpoint_detail_message_dynamic,
+                endpoint.optString("baseUrl", ""),
+                endpoint.optString("openAiBaseUrl", ""),
+                endpoint.optString("token", ""),
+                endpoint.optString("endpointFile", ""),
+                endpoint.optString("tokenFile", ""));
+        } catch (JSONException e) {
+            return context.getString(R.string.termux_ai_endpoint_detail_message);
         }
     }
 

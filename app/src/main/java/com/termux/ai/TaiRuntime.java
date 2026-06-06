@@ -7,6 +7,7 @@ import org.json.JSONObject;
 
 public interface TaiRuntime {
     @NonNull TaiRuntimeState getState();
+    boolean isModelLoaded(@NonNull String modelId);
     @NonNull JSONObject load(@NonNull TaiModelSpec modelSpec, @NonNull TaiRuntimeOptions options) throws JSONException;
     @NonNull JSONObject unload() throws JSONException;
     @NonNull JSONObject keepWarm(@NonNull TaiModelSpec modelSpec, @NonNull TaiRuntimeOptions options, int minutes) throws JSONException;

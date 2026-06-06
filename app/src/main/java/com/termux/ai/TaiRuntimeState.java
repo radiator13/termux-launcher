@@ -22,6 +22,7 @@ public final class TaiRuntimeState {
     public final long idleUnloadAtMs;
     public final long loadedAtMs;
     public final long lastUsedAtMs;
+    @Nullable private final JSONObject extraJson;
 
     public TaiRuntimeState(boolean loaded, @Nullable String loadedModelId, @NonNull String runtimeName, @NonNull String status) {
         this(
@@ -39,7 +40,8 @@ public final class TaiRuntimeState {
             0L,
             0L,
             0L,
-            0L
+            0L,
+            null
         );
     }
 
@@ -60,6 +62,44 @@ public final class TaiRuntimeState {
         long loadedAtMs,
         long lastUsedAtMs
     ) {
+        this(
+            loaded,
+            loadedModelId,
+            runtimeName,
+            state,
+            status,
+            backend,
+            backendFallbackReason,
+            loadedModelPath,
+            activeGeneration,
+            activeGenerationId,
+            activeGenerationStartedAtMs,
+            keepWarmUntilMs,
+            idleUnloadAtMs,
+            loadedAtMs,
+            lastUsedAtMs,
+            null
+        );
+    }
+
+    public TaiRuntimeState(
+        boolean loaded,
+        @Nullable String loadedModelId,
+        @NonNull String runtimeName,
+        @NonNull String state,
+        @NonNull String status,
+        @NonNull String backend,
+        @Nullable String backendFallbackReason,
+        @Nullable String loadedModelPath,
+        boolean activeGeneration,
+        @Nullable String activeGenerationId,
+        long activeGenerationStartedAtMs,
+        long keepWarmUntilMs,
+        long idleUnloadAtMs,
+        long loadedAtMs,
+        long lastUsedAtMs,
+        @Nullable JSONObject extraJson
+    ) {
         this.loaded = loaded;
         this.loadedModelId = loadedModelId;
         this.runtimeName = runtimeName;
@@ -75,6 +115,7 @@ public final class TaiRuntimeState {
         this.idleUnloadAtMs = idleUnloadAtMs;
         this.loadedAtMs = loadedAtMs;
         this.lastUsedAtMs = lastUsedAtMs;
+        this.extraJson = extraJson;
     }
 
     @NonNull
@@ -98,6 +139,13 @@ public final class TaiRuntimeState {
         json.put("idleUnloadRemainingMs", idleUnloadAtMs > now ? idleUnloadAtMs - now : 0L);
         json.put("loadedAtMs", loadedAtMs);
         json.put("lastUsedAtMs", lastUsedAtMs);
+        if (extraJson != null) {
+            java.util.Iterator<String> keys = extraJson.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                json.put(key, extraJson.opt(key));
+            }
+        }
         return json;
     }
 }
