@@ -5,6 +5,14 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.ai.edge.litertlm.Content;
+import com.google.ai.edge.litertlm.Contents;
+import com.google.ai.edge.litertlm.Message;
+import com.google.ai.edge.litertlm.OpenApiTool;
+import com.google.ai.edge.litertlm.ToolCall;
+import com.google.ai.edge.litertlm.ToolKt;
+import com.google.ai.edge.litertlm.ToolProvider;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -13,6 +21,9 @@ import java.io.IOException;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -250,14 +261,18 @@ public final class TaiManager {
         JSONArray messages = request.optJSONArray("messages");
         if (messages == null || messages.length() == 0) return error(400, "bad_request", "Missing messages");
 
-        PromptParts promptParts = promptPartsFromMessages(messages);
+        OpenAiChatRequest chatRequest;
+        try {
+            chatRequest = openAiChatRequest(request, messages);
+        } catch (JSONException e) {
+            return openAiError(error(400, "invalid_chat_request", e.getMessage()));
+        }
         String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         JSONObject loadError = ensureModelLoadedForGeneration(modelId, options);
         if (loadError != null) return openAiError(loadError);
 
-        JSONObject chat = runtime.chat(modelId,
-            promptParts.systemPrompt, promptParts.prompt, options);
+        JSONObject chat = runtime.chat(modelId, chatRequest.request, options);
         if (!chat.optBoolean("ok", false)) {
             return openAiError(chat);
         }
@@ -270,10 +285,14 @@ public final class TaiManager {
         JSONArray choices = new JSONArray();
         JSONObject choice = new JSONObject();
         choice.put("index", 0);
-        choice.put("finish_reason", "stop");
+        JSONArray toolCalls = chat.optJSONArray("toolCalls");
+        boolean hasToolCalls = toolCalls != null && toolCalls.length() > 0;
+        choice.put("finish_reason", hasToolCalls ? "tool_calls" : "stop");
         JSONObject message = new JSONObject();
         message.put("role", "assistant");
-        message.put("content", chat.optString("response", ""));
+        message.put("content", hasToolCalls && chat.optString("response", "").isEmpty()
+            ? JSONObject.NULL : chat.optString("response", ""));
+        if (hasToolCalls) message.put("tool_calls", toolCalls);
         choice.put("message", message);
         choices.put(choice);
         response.put("choices", choices);
@@ -329,6 +348,13 @@ public final class TaiManager {
             return;
         }
 
+        OpenAiChatRequest chatRequest;
+        try {
+            chatRequest = openAiChatRequest(request, messages);
+        } catch (JSONException e) {
+            emitOpenAiError(sink, error(400, "invalid_chat_request", e.getMessage()));
+            return;
+        }
         String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         JSONObject loadError = ensureModelLoadedForGeneration(modelId, options);
@@ -336,14 +362,13 @@ public final class TaiManager {
             emitOpenAiError(sink, loadError);
             return;
         }
-
-        PromptParts promptParts = promptPartsFromMessages(messages);
         String id = "tai-chatcmpl-" + System.currentTimeMillis();
         long created = System.currentTimeMillis() / 1000L;
         emitChatChunk(sink, id, created, modelId, "", "assistant", null);
 
         AtomicReference<IOException> ioError = new AtomicReference<>();
-        JSONObject chat = runtime.chat(modelId, promptParts.systemPrompt, promptParts.prompt, options, new TaiGenerationCallback() {
+        AtomicReference<Boolean> emittedToolCalls = new AtomicReference<>(false);
+        JSONObject chat = runtime.chat(modelId, chatRequest.request, options, new TaiGenerationCallback() {
             @Override
             public void onToken(@NonNull String text) {
                 if (text.isEmpty() || ioError.get() != null) return;
@@ -365,6 +390,21 @@ public final class TaiManager {
             }
 
             @Override
+            public void onToolCalls(@NonNull JSONArray toolCalls) {
+                if (toolCalls.length() == 0 || ioError.get() != null) return;
+                try {
+                    emitToolCallChunk(sink, id, created, modelId, toolCalls);
+                    emittedToolCalls.set(true);
+                } catch (IOException | JSONException e) {
+                    ioError.set(e instanceof IOException ? (IOException) e : new IOException(e));
+                    try {
+                        runtime.cancel();
+                    } catch (JSONException ignored) {
+                    }
+                }
+            }
+
+            @Override
             public void onComplete(@NonNull String fullText) {
             }
 
@@ -377,7 +417,12 @@ public final class TaiManager {
             emitOpenAiError(sink, chat);
             return;
         }
-        emitChatChunk(sink, id, created, modelId, "", null, "stop");
+        JSONArray toolCalls = chat.optJSONArray("toolCalls");
+        boolean hasToolCalls = toolCalls != null && toolCalls.length() > 0;
+        if (hasToolCalls && !emittedToolCalls.get()) {
+            emitToolCallChunk(sink, id, created, modelId, toolCalls);
+        }
+        emitChatChunk(sink, id, created, modelId, "", null, hasToolCalls ? "tool_calls" : "stop");
         sink.onDone();
     }
 
@@ -633,6 +678,36 @@ public final class TaiManager {
         sink.onEvent(response);
     }
 
+    private void emitToolCallChunk(
+        @NonNull OpenAiStreamSink sink,
+        @NonNull String id,
+        long created,
+        @NonNull String model,
+        @NonNull JSONArray toolCalls
+    ) throws JSONException, IOException {
+        JSONObject response = new JSONObject();
+        response.put("id", id);
+        response.put("object", "chat.completion.chunk");
+        response.put("created", created);
+        response.put("model", model);
+        JSONObject delta = new JSONObject();
+        JSONArray deltaCalls = new JSONArray();
+        for (int i = 0; i < toolCalls.length(); i++) {
+            JSONObject source = toolCalls.optJSONObject(i);
+            if (source == null) continue;
+            JSONObject call = new JSONObject(source.toString());
+            call.put("index", i);
+            deltaCalls.put(call);
+        }
+        delta.put("tool_calls", deltaCalls);
+        JSONObject choice = new JSONObject();
+        choice.put("index", 0);
+        choice.put("delta", delta);
+        choice.put("finish_reason", JSONObject.NULL);
+        response.put("choices", new JSONArray().put(choice));
+        sink.onEvent(response);
+    }
+
     @NonNull
     private JSONArray currentLimitations() {
         JSONArray limitations = new JSONArray();
@@ -640,26 +715,181 @@ public final class TaiManager {
         limitations.put("Auto follows Edge Gallery model accelerator allowlists, minimum-memory metadata, and Pixel 10 GPU exclusion; LiteRT-LM initialization remains the final backend check.");
         limitations.put("Streaming text responses, cancellation, and keep-warm lifecycle controls are available through the localhost API.");
         limitations.put("Benchmark counters and multimodal input are TODO for a later phase.");
-        limitations.put("TAI does not execute shell commands or device actions; use dedicated shell tools and future explicit Android capability APIs.");
+        limitations.put("OpenAI function tools are returned for client-side execution; TAI does not automatically execute shell commands or device actions.");
         return limitations;
     }
 
     @NonNull
-    private PromptParts promptPartsFromMessages(@NonNull JSONArray messages) {
-        StringBuilder prompt = new StringBuilder();
-        String systemPrompt = settings.getGeneralSystemPrompt();
+    private OpenAiChatRequest openAiChatRequest(@NonNull JSONObject request, @NonNull JSONArray messages) throws JSONException {
+        StringBuilder clientSystemPrompt = new StringBuilder();
+        List<Message> conversationMessages = new ArrayList<>();
+        Map<String, String> toolNamesByCallId = new LinkedHashMap<>();
         for (int i = 0; i < messages.length(); i++) {
             JSONObject message = messages.optJSONObject(i);
             if (message == null) continue;
             String role = message.optString("role", "user");
             String content = messageContentToText(message.opt("content"));
-            if ("system".equals(role)) {
-                systemPrompt = content;
+            if ("system".equals(role) || "developer".equals(role)) {
+                if (!content.isEmpty()) {
+                    if (clientSystemPrompt.length() > 0) clientSystemPrompt.append('\n');
+                    clientSystemPrompt.append(content);
+                }
+                continue;
+            }
+            if ("assistant".equals(role)) {
+                List<ToolCall> calls = toolCallsFromAssistant(message, toolNamesByCallId);
+                conversationMessages.add(Message.Companion.model(
+                    Contents.Companion.of(content), calls, Collections.emptyMap()));
+            } else if ("tool".equals(role)) {
+                String callId = message.optString("tool_call_id", "");
+                String toolName = message.optString("name", toolNamesByCallId.get(callId));
+                if (toolName == null || toolName.isEmpty()) toolName = "tool";
+                Object response = jsonCompatibleValue(message.opt("content"));
+                conversationMessages.add(Message.Companion.tool(
+                    Contents.Companion.of(new Content.ToolResponse(toolName, response))));
             } else {
-                prompt.append(role).append(": ").append(content).append('\n');
+                conversationMessages.add(Message.Companion.user(content));
             }
         }
-        return new PromptParts(systemPrompt, prompt.toString().trim());
+        if (conversationMessages.isEmpty()) {
+            throw new JSONException("Chat request has no user, assistant, or tool messages");
+        }
+
+        String systemPrompt = clientSystemPrompt.length() > 0
+            ? clientSystemPrompt.toString() : settings.getGeneralSystemPrompt();
+        JSONArray toolsJson = request.optJSONArray("tools");
+        List<ToolProvider> tools = toolProviders(toolsJson, request.opt("tool_choice"));
+        systemPrompt = applyToolChoiceInstruction(systemPrompt, request.opt("tool_choice"), toolsJson);
+
+        Message finalMessage = conversationMessages.remove(conversationMessages.size() - 1);
+        if (finalMessage.getRole() != com.google.ai.edge.litertlm.Role.USER
+            && finalMessage.getRole() != com.google.ai.edge.litertlm.Role.TOOL) {
+            throw new JSONException("The final chat message must have role user or tool");
+        }
+        return new OpenAiChatRequest(new TaiChatRequest(
+            systemPrompt, conversationMessages, finalMessage, tools, false));
+    }
+
+    @NonNull
+    static List<ToolProvider> toolProviders(@Nullable JSONArray tools, @Nullable Object toolChoice) throws JSONException {
+        if (tools == null || tools.length() == 0 || "none".equals(String.valueOf(toolChoice))) {
+            return Collections.emptyList();
+        }
+        List<ToolProvider> providers = new ArrayList<>();
+        for (int i = 0; i < tools.length(); i++) {
+            JSONObject tool = tools.optJSONObject(i);
+            if (tool == null || !"function".equals(tool.optString("type", ""))) {
+                throw new JSONException("Only OpenAI function tools are supported");
+            }
+            JSONObject function = tool.optJSONObject("function");
+            if (function == null || function.optString("name", "").isEmpty()) {
+                throw new JSONException("Each function tool requires a name");
+            }
+            JSONObject liteRtDescription = new JSONObject();
+            liteRtDescription.put("name", function.getString("name"));
+            if (function.has("description")) liteRtDescription.put("description", function.optString("description", ""));
+            if (function.has("parameters")) liteRtDescription.put("parameters", function.opt("parameters"));
+            String description = liteRtDescription.toString();
+            providers.add(ToolKt.tool(new OpenApiTool() {
+                @NonNull
+                @Override
+                public String getToolDescriptionJsonString() {
+                    return description;
+                }
+
+                @NonNull
+                @Override
+                public String execute(@NonNull String paramsJsonString) {
+                    throw new UnsupportedOperationException("TAI uses client-side tool execution.");
+                }
+            }));
+        }
+        if (providers.isEmpty()) throw new JSONException("No valid function tools were provided");
+        return providers;
+    }
+
+    @NonNull
+    static List<ToolCall> toolCallsFromAssistant(
+        @NonNull JSONObject message,
+        @NonNull Map<String, String> toolNamesByCallId
+    ) throws JSONException {
+        JSONArray calls = message.optJSONArray("tool_calls");
+        if (calls == null) return Collections.emptyList();
+        List<ToolCall> output = new ArrayList<>();
+        for (int i = 0; i < calls.length(); i++) {
+            JSONObject call = calls.optJSONObject(i);
+            JSONObject function = call == null ? null : call.optJSONObject("function");
+            if (function == null) continue;
+            String name = function.optString("name", "");
+            if (name.isEmpty()) continue;
+            String callId = call.optString("id", "");
+            if (!callId.isEmpty()) toolNamesByCallId.put(callId, name);
+            Object argumentsValue = function.opt("arguments");
+            JSONObject arguments;
+            if (argumentsValue instanceof JSONObject) {
+                arguments = (JSONObject) argumentsValue;
+            } else {
+                String argumentsText = argumentsValue == null ? "{}" : String.valueOf(argumentsValue);
+                arguments = argumentsText.trim().isEmpty() ? new JSONObject() : new JSONObject(argumentsText);
+            }
+            output.add(new ToolCall(name, jsonObjectToMap(arguments)));
+        }
+        return output;
+    }
+
+    @NonNull
+    static String applyToolChoiceInstruction(
+        @NonNull String systemPrompt,
+        @Nullable Object toolChoice,
+        @Nullable JSONArray tools
+    ) {
+        if (toolChoice == null || JSONObject.NULL.equals(toolChoice) || tools == null || tools.length() == 0) {
+            return systemPrompt;
+        }
+        if ("required".equals(String.valueOf(toolChoice))) {
+            return systemPrompt + "\nYou must call one of the provided tools for this response.";
+        }
+        if (toolChoice instanceof JSONObject) {
+            JSONObject function = ((JSONObject) toolChoice).optJSONObject("function");
+            String name = function == null ? "" : function.optString("name", "");
+            if (!name.isEmpty()) return systemPrompt + "\nYou must call the provided tool named " + name + ".";
+        }
+        return systemPrompt;
+    }
+
+    @NonNull
+    static Map<String, Object> jsonObjectToMap(@NonNull JSONObject object) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        java.util.Iterator<String> keys = object.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            map.put(key, jsonCompatibleValue(object.opt(key)));
+        }
+        return map;
+    }
+
+    @Nullable
+    static Object jsonCompatibleValue(@Nullable Object value) {
+        if (value == null || JSONObject.NULL.equals(value)) return null;
+        if (value instanceof JSONObject) return jsonObjectToMap((JSONObject) value);
+        if (value instanceof JSONArray) {
+            JSONArray array = (JSONArray) value;
+            List<Object> list = new ArrayList<>();
+            for (int i = 0; i < array.length(); i++) list.add(jsonCompatibleValue(array.opt(i)));
+            return list;
+        }
+        if (value instanceof String) {
+            String text = ((String) value).trim();
+            if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+                try {
+                    return text.startsWith("{")
+                        ? jsonObjectToMap(new JSONObject(text))
+                        : jsonCompatibleValue(new JSONArray(text));
+                } catch (JSONException ignored) {
+                }
+            }
+        }
+        return value;
     }
 
     @NonNull
@@ -756,13 +986,11 @@ public final class TaiManager {
         data.put("compatibilityWarnings", warnings);
     }
 
-    private static final class PromptParts {
-        final String systemPrompt;
-        final String prompt;
+    private static final class OpenAiChatRequest {
+        final TaiChatRequest request;
 
-        PromptParts(@NonNull String systemPrompt, @NonNull String prompt) {
-            this.systemPrompt = systemPrompt;
-            this.prompt = prompt;
+        OpenAiChatRequest(@NonNull TaiChatRequest request) {
+            this.request = request;
         }
     }
 }

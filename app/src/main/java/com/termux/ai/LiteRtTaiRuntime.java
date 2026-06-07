@@ -16,6 +16,7 @@ import com.google.ai.edge.litertlm.ExperimentalFlags;
 import com.google.ai.edge.litertlm.Message;
 import com.google.ai.edge.litertlm.MessageCallback;
 import com.google.ai.edge.litertlm.SamplerConfig;
+import com.google.ai.edge.litertlm.ToolCall;
 
 import org.json.JSONException;
 import org.json.JSONArray;
@@ -201,7 +202,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         @NonNull String userPrompt,
         @NonNull TaiRuntimeOptions options
     ) throws JSONException {
-        return generate(modelId, "chat", systemPrompt, userPrompt, options, null);
+        return generate(modelId, "chat", TaiChatRequest.simple(systemPrompt, userPrompt), options, null);
     }
 
     @NonNull
@@ -213,13 +214,34 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         @NonNull TaiRuntimeOptions options,
         @NonNull TaiGenerationCallback callback
     ) throws JSONException {
-        return generate(modelId, "chat", systemPrompt, userPrompt, options, callback);
+        return generate(modelId, "chat", TaiChatRequest.simple(systemPrompt, userPrompt), options, callback);
+    }
+
+    @NonNull
+    @Override
+    public JSONObject chat(
+        @NonNull String modelId,
+        @NonNull TaiChatRequest request,
+        @NonNull TaiRuntimeOptions options
+    ) throws JSONException {
+        return generate(modelId, "chat", request, options, null);
+    }
+
+    @NonNull
+    @Override
+    public JSONObject chat(
+        @NonNull String modelId,
+        @NonNull TaiChatRequest request,
+        @NonNull TaiRuntimeOptions options,
+        @NonNull TaiGenerationCallback callback
+    ) throws JSONException {
+        return generate(modelId, "chat", request, options, callback);
     }
 
     @NonNull
     @Override
     public JSONObject complete(@NonNull String modelId, @NonNull String prompt, @NonNull TaiRuntimeOptions options) throws JSONException {
-        return generate(modelId, "completion", "", prompt, options, null);
+        return generate(modelId, "completion", TaiChatRequest.oneShot("", prompt), options, null);
     }
 
     @NonNull
@@ -230,15 +252,14 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         @NonNull TaiRuntimeOptions options,
         @NonNull TaiGenerationCallback callback
     ) throws JSONException {
-        return generate(modelId, "completion", "", prompt, options, callback);
+        return generate(modelId, "completion", TaiChatRequest.oneShot("", prompt), options, callback);
     }
 
     @NonNull
     private JSONObject generate(
         @NonNull String modelId,
         @NonNull String mode,
-        @NonNull String systemPrompt,
-        @NonNull String prompt,
+        @NonNull TaiChatRequest request,
         @NonNull TaiRuntimeOptions options,
         @Nullable TaiGenerationCallback callback
     ) throws JSONException {
@@ -251,22 +272,24 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             if (generating) {
                 return error(409, "generation_active", "A LiteRT-LM generation is already running. Cancel it or wait for it to finish.");
             }
-            activeConversation = ensureConversationLocked(mode, systemPrompt, options);
+            activeConversation = ensureConversationLocked(mode, request, options);
             generationId = beginGenerationLocked();
             startedAt = activeGenerationStartedAtMs;
         }
 
         CountDownLatch done = new CountDownLatch(1);
         StringBuilder responseBuilder = new StringBuilder();
+        JSONArray toolCalls = new JSONArray();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
         try {
             if (callback == null) {
-                Message response = activeConversation.sendMessage(prompt, Collections.emptyMap());
+                Message response = activeConversation.sendMessage(request.message, Collections.emptyMap());
                 String responseText = textFromMessage(response);
                 responseBuilder.append(responseText);
+                appendToolCalls(toolCalls, response.getToolCalls(), generationId);
                 done.countDown();
             } else {
-                activeConversation.sendMessageAsync(prompt, new MessageCallback() {
+                activeConversation.sendMessageAsync(request.message, new MessageCallback() {
                     @Override
                     public void onMessage(@NonNull Message message) {
                         String text = textFromMessage(message);
@@ -274,6 +297,16 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                             responseBuilder.append(text);
                         }
                         callback.onToken(text);
+                        JSONArray messageToolCalls = new JSONArray();
+                        appendToolCalls(messageToolCalls, message.getToolCalls(), generationId);
+                        if (messageToolCalls.length() > 0) {
+                            synchronized (toolCalls) {
+                                for (int i = 0; i < messageToolCalls.length(); i++) {
+                                    toolCalls.put(messageToolCalls.opt(i));
+                                }
+                            }
+                            callback.onToolCalls(messageToolCalls);
+                        }
                     }
 
                     @Override
@@ -303,6 +336,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         } finally {
             synchronized (this) {
                 finishGenerationLocked(errorRef.get());
+                if (!request.reusableConversation) closeConversationLocked();
             }
         }
 
@@ -324,6 +358,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         data.put("generationId", generationId);
         data.put("mode", mode);
         data.put("response", responseBuilder.toString());
+        data.put("toolCalls", toolCalls);
         data.put("elapsedMs", System.currentTimeMillis() - startedAt);
         data.put("options", options.toJson());
         if (loadedProfile != null) {
@@ -496,16 +531,16 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     }
 
     @NonNull
-    private Conversation ensureConversationLocked(@NonNull String mode, @NonNull String systemPrompt, @NonNull TaiRuntimeOptions options) {
-        String key = mode + "|" + normalized(systemPrompt) + "|" + optionsKey(options);
-        if (conversation != null && conversation.isAlive() && key.equals(conversationKey)) {
+    private Conversation ensureConversationLocked(@NonNull String mode, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options) {
+        String key = mode + "|" + normalized(request.systemPrompt) + "|" + optionsKey(options);
+        if (request.reusableConversation && conversation != null && conversation.isAlive() && key.equals(conversationKey)) {
             return conversation;
         }
         closeConversationLocked();
-        Contents systemContents = contents(systemPrompt);
-        ConversationConfig conversationConfig = conversationConfig(systemContents, options);
+        Contents systemContents = contents(request.systemPrompt);
+        ConversationConfig conversationConfig = conversationConfig(systemContents, request, options);
         conversation = engine.createConversation(conversationConfig);
-        conversationKey = key;
+        conversationKey = request.reusableConversation ? key : "";
         return conversation;
     }
 
@@ -594,7 +629,11 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     }
 
     @NonNull
-    private ConversationConfig conversationConfig(@NonNull Contents systemPrompt, @NonNull TaiRuntimeOptions options) {
+    private ConversationConfig conversationConfig(
+        @NonNull Contents systemPrompt,
+        @NonNull TaiChatRequest request,
+        @NonNull TaiRuntimeOptions options
+    ) {
         TaiModelProfile profile = loadedProfile;
         SamplerConfig samplerConfig = new SamplerConfig(
             options.topK == null ? (profile == null ? DEFAULT_TOP_K : profile.defaultTopK) : options.topK,
@@ -602,7 +641,32 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             options.temperature == null ? (profile == null ? DEFAULT_TEMPERATURE : profile.defaultTemperature) : options.temperature,
             0
         );
-        return new ConversationConfig(systemPrompt, Collections.emptyList(), Collections.emptyList(), samplerConfig);
+        return new ConversationConfig(
+            systemPrompt,
+            request.initialMessages,
+            request.tools,
+            samplerConfig,
+            false,
+            null,
+            Collections.emptyMap()
+        );
+    }
+
+    private void appendToolCalls(@NonNull JSONArray output, @NonNull List<ToolCall> calls, @NonNull String generationId) {
+        for (int i = 0; i < calls.size(); i++) {
+            ToolCall call = calls.get(i);
+            JSONObject function = new JSONObject();
+            JSONObject item = new JSONObject();
+            try {
+                function.put("name", call.getName());
+                function.put("arguments", new JSONObject(call.getArguments()).toString());
+                item.put("id", generationId + "-call-" + (output.length() + 1));
+                item.put("type", "function");
+                item.put("function", function);
+                output.put(item);
+            } catch (JSONException ignored) {
+            }
+        }
     }
 
     @NonNull

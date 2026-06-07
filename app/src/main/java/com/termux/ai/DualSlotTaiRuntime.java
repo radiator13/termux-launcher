@@ -129,6 +129,27 @@ public final class DualSlotTaiRuntime implements TaiRuntime {
 
     @NonNull
     @Override
+    public JSONObject chat(
+        @NonNull String modelId,
+        @NonNull TaiChatRequest request,
+        @NonNull TaiRuntimeOptions options
+    ) throws JSONException {
+        return runtimeForModel(modelId).chat(modelId, request, optionsForModel(modelId, options));
+    }
+
+    @NonNull
+    @Override
+    public JSONObject chat(
+        @NonNull String modelId,
+        @NonNull TaiChatRequest request,
+        @NonNull TaiRuntimeOptions options,
+        @NonNull TaiGenerationCallback callback
+    ) throws JSONException {
+        return runtimeForModel(modelId).chat(modelId, request, optionsForModel(modelId, options), callback);
+    }
+
+    @NonNull
+    @Override
     public JSONObject complete(@NonNull String modelId, @NonNull String prompt, @NonNull TaiRuntimeOptions options) throws JSONException {
         return runtimeForModel(modelId).complete(modelId, prompt, optionsForModel(modelId, options));
     }
