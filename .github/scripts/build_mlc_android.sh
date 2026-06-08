@@ -15,6 +15,11 @@ fi
 export TVM_NDK_CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
 
 if [[ ! -f "$source_dir/build/libmlc_llm.so" ]]; then
+  tokenizer_rs="$source_dir/3rdparty/tokenizers-cpp/rust/src/lib.rs"
+  sed -i \
+    -e 's/(\*handle)\.decode_str\.len()/(\&(*handle).decode_str).len()/g' \
+    -e 's/(\*handle)\.id_to_token_result\.len()/(\&(*handle).id_to_token_result).len()/g' \
+    "$tokenizer_rs"
   export RUSTFLAGS="${RUSTFLAGS:-} -A dangerous_implicit_autorefs"
   mkdir -p "$source_dir/build"
   (cd "$source_dir/build" && printf '\nn\nn\nn\nn\nn\n' | python ../cmake/gen_cmake_config.py)
