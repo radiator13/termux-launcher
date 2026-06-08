@@ -25,6 +25,7 @@ android {
     def releaseKeyAlias = System.getenv("TERMUX_RELEASE_KEY_ALIAS")
     def releaseKeyPassword = System.getenv("TERMUX_RELEASE_KEY_PASSWORD")
     def spirvHeadersDir = System.getenv("SPIRV_HEADERS_DIR")
+    def vulkanHeadersDir = System.getenv("VULKAN_HEADERS_DIR")
     def hasReleaseSigningConfig = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
     defaultConfig {
@@ -39,6 +40,7 @@ android {
                 cppFlags "-std=c++17 -O3"
                 arguments "-DANDROID_STL=c++_shared"
                 if (spirvHeadersDir) arguments "-DSPIRV-Headers_DIR=" + spirvHeadersDir
+                if (vulkanHeadersDir) arguments "-DVULKAN_HEADERS_DIR=" + vulkanHeadersDir
             }
         }
 

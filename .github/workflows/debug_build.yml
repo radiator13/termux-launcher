@@ -38,7 +38,9 @@ jobs:
         shell: bash {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y glslc ninja-build git-lfs spirv-headers
+          sudo apt-get install -y glslc ninja-build git-lfs libvulkan-dev spirv-headers
+          mkdir -p "$RUNNER_TEMP/vulkan-headers/include"
+          cp -a /usr/include/vulkan "$RUNNER_TEMP/vulkan-headers/include/"
           git lfs install
           python -m pip install -U cmake ninja setuptools wheel
 
@@ -78,6 +80,7 @@ jobs:
           GRADLE_RETRY_SLEEP_SECONDS: "20"
           GRADLE_REFRESH_FROM_ATTEMPT: "2"
           SPIRV_HEADERS_DIR: /usr/share/cmake/SPIRV-Headers
+          VULKAN_HEADERS_DIR: ${{ runner.temp }}/vulkan-headers/include
         run: |
           exit_on_error() { echo "$1"; exit 1; }
 
