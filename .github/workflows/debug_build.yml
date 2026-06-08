@@ -26,6 +26,10 @@ jobs:
         shell: bash {0}
         run: git -C third-party/mlc-llm submodule update --init 3rdparty/tvm
 
+      - name: Apply Android native backend patches
+        shell: bash {0}
+        run: patch -d third-party/llama.cpp -p1 < .github/patches/llama-android-vulkan-loader.patch
+
       - name: Setup java 21
         uses: actions/setup-java@v5
         with:
