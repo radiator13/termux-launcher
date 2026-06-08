@@ -28,7 +28,7 @@ if [[ ! -f "$source_dir/build/libmlc_llm.so" ]]; then
     -DTOKENIZERS_CPP_RUST_FLAGS="-A dangerous_implicit_autorefs"
   cmake --build "$source_dir/build" --parallel 2
 fi
-python -m pip install -e "$source_dir/python"
+CONDA_BUILD=1 python -m pip install -e "$source_dir/python"
 export PYTHONPATH="$source_dir/python:$source_dir/3rdparty/tvm/python${PYTHONPATH:+:$PYTHONPATH}"
 export MLC_LIBRARY_PATH="$source_dir/build"
 export TVM_LIBRARY_PATH="$source_dir/build"
