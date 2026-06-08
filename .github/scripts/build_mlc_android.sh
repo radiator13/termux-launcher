@@ -15,6 +15,7 @@ fi
 export TVM_NDK_CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
 
 if [[ ! -f "$source_dir/build/libmlc_llm.so" ]]; then
+  export RUSTFLAGS="${RUSTFLAGS:-} -A dangerous_implicit_autorefs"
   mkdir -p "$source_dir/build"
   (cd "$source_dir/build" && printf '\nn\nn\nn\nn\nn\n' | python ../cmake/gen_cmake_config.py)
   cmake -S "$source_dir" -B "$source_dir/build" -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5
