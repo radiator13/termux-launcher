@@ -16,8 +16,6 @@ public final class TaiModelRegistry {
     public static final String MODEL_MOBILE_ACTIONS_270M = "MobileActions-270M";
     public static final String MODEL_QWEN_CODER_1_5B_GGUF = "Qwen2.5-Coder-1.5B-GGUF";
     public static final String MODEL_QWEN_CODER_1_5B_MLC = "Qwen2.5-Coder-1.5B-MLC";
-    public static final String MODEL_QWEN3_1_7B_MLC = "Qwen3-1.7B-MLC";
-    public static final String MODEL_MINISTRAL_3B_MLC = "Ministral-3-3B-MLC";
 
     public static final String ROLE_DEFAULT_ASSISTANT = "defaultAssistant";
 

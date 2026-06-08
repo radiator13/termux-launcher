@@ -45,6 +45,10 @@ public final class TaiManager {
 
     private TaiManager(@NonNull Context context) {
         appContext = context.getApplicationContext();
+        TaiRemoteCatalog.loadCached(appContext);
+        Thread catalogRefresh = new Thread(() -> TaiRemoteCatalog.refresh(appContext), "tai-catalog-refresh");
+        catalogRefresh.setDaemon(true);
+        catalogRefresh.start();
         settings = new TaiSettings(appContext);
         registry = new TaiModelRegistry();
         modelStore = new TaiModelStore(appContext);

@@ -8,13 +8,41 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class TaiModelCatalog {
-    private static final Map<String, CatalogEntry> ENTRIES = buildEntries();
+    private static final Map<String, CatalogEntry> BUILT_IN_ENTRIES = buildEntries();
+    private static volatile Map<String, CatalogEntry> entries = BUILT_IN_ENTRIES;
     private TaiModelCatalog() {}
 
-    @NonNull public static Map<String, CatalogEntry> entries() { return ENTRIES; }
-    @Nullable public static CatalogEntry get(@Nullable String modelId) { return modelId == null ? null : ENTRIES.get(modelId); }
+    @NonNull public static Map<String, CatalogEntry> entries() { return entries; }
+    @Nullable public static CatalogEntry get(@Nullable String modelId) { return modelId == null ? null : entries.get(modelId); }
+
+    static synchronized void applyRemotePayload(@NonNull JSONObject payload, boolean allowEqualVersion) {
+        JSONArray remoteEntries = payload.optJSONArray("entries");
+        if (remoteEntries == null) return;
+        LinkedHashMap<String, CatalogEntry> merged = new LinkedHashMap<>(BUILT_IN_ENTRIES);
+        for (int i = 0; i < remoteEntries.length(); i++) {
+            JSONObject item = remoteEntries.optJSONObject(i);
+            if (item == null) continue;
+            try {
+                LinkedHashSet<String> capabilities = new LinkedHashSet<>();
+                JSONArray values = item.optJSONArray("capabilities");
+                if (values != null) for (int j = 0; j < values.length(); j++) capabilities.add(values.getString(j));
+                CatalogEntry entry = new CatalogEntry(item.getString("modelId"), item.getString("displayName"),
+                    item.optString("roleHint", "Curated model"), item.getString("repositoryId"),
+                    item.getString("revision"), item.isNull("artifactPath") ? null : item.optString("artifactPath"),
+                    item.getString("license"), item.getLong("sizeBytes"), item.optBoolean("gated", false),
+                    item.getString("backend"), item.getString("format"), item.optString("architecture", ""),
+                    item.isNull("quantization") ? null : item.optString("quantization"), item.optInt("contextWindow", 4096),
+                    item.optInt("recommendedRamGb", 0), item.isNull("sha256") ? null : item.optString("sha256"),
+                    item.isNull("runtimeLibrary") ? null : item.optString("runtimeLibrary"), capabilities);
+                merged.put(entry.modelId, entry);
+            } catch (Exception ignored) {}
+        }
+        entries = Collections.unmodifiableMap(merged);
+    }
 
     @NonNull
     private static Map<String, CatalogEntry> buildEntries() {
@@ -48,16 +76,6 @@ public final class TaiModelCatalog {
             "mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC", "30184a4f713a9aaf6c548ace1290615d0ea041ff",
             "Apache-2.0", 880_289_173L, "qwen2", "q4f16_1", 4096, 6,
             "tai_qwen2_5_coder_1_5b_q4f16_1", setOf("text_chat", "text_completion", "code")));
-        entries.put(TaiModelRegistry.MODEL_QWEN3_1_7B_MLC, mlc(
-            TaiModelRegistry.MODEL_QWEN3_1_7B_MLC, "Qwen3 1.7B (MLC)", "GPU assistant and agent",
-            "mlc-ai/Qwen3-1.7B-q4f16_0-MLC", "89c767fed5008906842e632b88cc6d38737a1a9e",
-            "Apache-2.0", 984_156_278L, "qwen3", "q4f16_0", 4096, 6,
-            "tai_qwen3_1_7b_q4f16_0", setOf("text_chat", "text_completion", "tool_use", "llm_thinking")));
-        entries.put(TaiModelRegistry.MODEL_MINISTRAL_3B_MLC, mlc(
-            TaiModelRegistry.MODEL_MINISTRAL_3B_MLC, "Ministral 3 3B (MLC)", "High-memory agent and function calling",
-            "mlc-ai/Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC", "eebad8da4ac64947d8dc9507007fc0279bf52454",
-            "Apache-2.0", 1_518_459_151L, "ministral3", "q4f16_1", 4096, 8,
-            "tai_ministral3_3b_q4f16_1", setOf("text_chat", "text_completion", "tool_use", "code")));
         return Collections.unmodifiableMap(entries);
     }
 

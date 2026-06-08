@@ -121,8 +121,6 @@ Gemma-4-E4B-it
 MobileActions-270M
 Qwen2.5-Coder-1.5B-GGUF
 Qwen2.5-Coder-1.5B-MLC
-Qwen3-1.7B-MLC
-Ministral-3-3B-MLC
 ```
 
 `Gemma-4-E2B-it` is the fast default assistant model.

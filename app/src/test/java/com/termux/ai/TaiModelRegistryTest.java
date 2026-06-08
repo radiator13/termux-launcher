@@ -19,9 +19,7 @@ public class TaiModelRegistryTest {
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M));
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_QWEN_CODER_1_5B_GGUF));
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_QWEN_CODER_1_5B_MLC));
-        assertNotNull(registry.getModel(TaiModelRegistry.MODEL_QWEN3_1_7B_MLC));
-        assertNotNull(registry.getModel(TaiModelRegistry.MODEL_MINISTRAL_3B_MLC));
-        assertEquals(7, registry.getBuiltInModels().size());
+        assertEquals(5, registry.getBuiltInModels().size());
     }
 
     @Test
