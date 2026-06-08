@@ -14,7 +14,8 @@ if [[ -z "$ANDROID_NDK" ]]; then
 fi
 export TVM_NDK_CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
 
-if [[ ! -f "$source_dir/build/libmlc_llm.so" ]]; then
+host_marker="$source_dir/build/.tai-full-tvm"
+if [[ ! -f "$host_marker" ]]; then
   tokenizer_rs="$source_dir/3rdparty/tokenizers-cpp/rust/src/lib.rs"
   mlc_cmake="$source_dir/CMakeLists.txt"
   sed -i \
@@ -29,7 +30,13 @@ if [[ ! -f "$source_dir/build/libmlc_llm.so" ]]; then
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DTOKENIZERS_CPP_RUST_FLAGS="-A dangerous_implicit_autorefs"
   cmake --build "$source_dir/build" --parallel 2
+  touch "$host_marker"
 fi
+if [[ "${MLC_HOST_ONLY:-0}" == "1" ]]; then
+  exit 0
+fi
+python -m pip install \
+  attrs cloudpickle decorator ml_dtypes numpy packaging psutil scipy tornado typing_extensions
 CONDA_BUILD=1 python -m pip install -e "$source_dir/python"
 export PYTHONPATH="$source_dir/python:$source_dir/3rdparty/tvm/python${PYTHONPATH:+:$PYTHONPATH}"
 export MLC_LIBRARY_PATH="$source_dir/build"
