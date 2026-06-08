@@ -20,7 +20,11 @@ jobs:
       - name: Clone repository
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: true
+
+      - name: Checkout TVM Java bindings
+        shell: bash {0}
+        run: git -C third-party/mlc-llm submodule update --init 3rdparty/tvm
 
       - name: Setup java 21
         uses: actions/setup-java@v5
@@ -34,7 +38,7 @@ jobs:
         shell: bash {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y glslc ninja-build git-lfs
+          sudo apt-get install -y glslc ninja-build git-lfs spirv-headers
           git lfs install
           python -m pip install -U cmake ninja setuptools wheel
 
@@ -73,6 +77,7 @@ jobs:
           GRADLE_MAX_ATTEMPTS: "5"
           GRADLE_RETRY_SLEEP_SECONDS: "20"
           GRADLE_REFRESH_FROM_ATTEMPT: "2"
+          SPIRV_HEADERS_DIR: /usr/share/cmake/SPIRV-Headers
         run: |
           exit_on_error() { echo "$1"; exit 1; }
 

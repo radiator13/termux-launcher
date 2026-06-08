@@ -24,6 +24,7 @@ android {
     def releaseStorePassword = System.getenv("TERMUX_RELEASE_STORE_PASSWORD")
     def releaseKeyAlias = System.getenv("TERMUX_RELEASE_KEY_ALIAS")
     def releaseKeyPassword = System.getenv("TERMUX_RELEASE_KEY_PASSWORD")
+    def spirvHeadersDir = System.getenv("SPIRV_HEADERS_DIR")
     def hasReleaseSigningConfig = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
     defaultConfig {
@@ -37,6 +38,7 @@ android {
             cmake {
                 cppFlags "-std=c++17 -O3"
                 arguments "-DANDROID_STL=c++_shared"
+                if (spirvHeadersDir) arguments "-DSPIRV-Headers_DIR=" + spirvHeadersDir
             }
         }
 
