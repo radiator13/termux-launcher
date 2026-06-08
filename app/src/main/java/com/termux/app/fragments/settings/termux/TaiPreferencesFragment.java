@@ -12,6 +12,8 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.Keep;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
@@ -23,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.ai.TaiManager;
 import com.termux.ai.TaiModelCatalog;
+import com.termux.ai.TaiModelImporter;
 import com.termux.ai.TaiModelProfile;
 import com.termux.ai.TaiModelRegistry;
 import com.termux.ai.TaiModelSpec;
@@ -45,6 +48,9 @@ import java.util.concurrent.Executors;
 public class TaiPreferencesFragment extends PreferenceFragmentCompat {
     private static final String MODEL_ROW_PREFIX = "tai_model_row_";
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ActivityResultLauncher<String[]> modelPicker = registerForActivityResult(
+        new ActivityResultContracts.OpenDocument(),
+        this::onModelDocumentSelected);
     private final ExecutorService runtimeActionExecutor = Executors.newFixedThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "tai-settings-runtime");
         thread.setDaemon(true);
@@ -357,7 +363,7 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         Preference importModel = findPreference("tai_model_import");
         if (importModel != null) {
             importModel.setOnPreferenceClickListener(preference -> {
-                showImportDialog(context);
+                modelPicker.launch(new String[]{"application/octet-stream", "application/zip", "*/*"});
                 return true;
             });
         }
@@ -682,48 +688,78 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private void showImportDialog(Context context) {
+    private void onModelDocumentSelected(Uri uri) {
+        if (uri == null) return;
+        Context context = getContext();
+        if (context == null) return;
+        TaiModelImporter.DocumentMetadata metadata =
+            TaiManager.getInstance(context).modelDocumentMetadata(uri);
+        if (!TaiModelImporter.isSupportedFileName(metadata.displayName)) {
+            Toast.makeText(context, R.string.termux_ai_model_import_invalid_file, Toast.LENGTH_LONG).show();
+            return;
+        }
+        showImportDialog(context, uri, metadata);
+    }
+
+    private void showImportDialog(Context context, Uri uri, TaiModelImporter.DocumentMetadata metadata) {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         int padding = (int) (20 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(padding, 0, padding, 0);
 
-        EditText pathInput = new EditText(context);
-        pathInput.setSingleLine(true);
-        pathInput.setHint(R.string.termux_ai_model_import_path_hint);
-        pathInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        layout.addView(pathInput);
-
         EditText modelIdInput = new EditText(context);
         modelIdInput.setSingleLine(true);
         modelIdInput.setHint(R.string.termux_ai_model_import_id_hint);
         modelIdInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        modelIdInput.setText(TaiModelImporter.sanitizeModelId(
+            TaiModelImporter.stripModelExtension(metadata.displayName)));
+        modelIdInput.setSelectAllOnFocus(true);
         layout.addView(modelIdInput);
 
         new MaterialAlertDialogBuilder(context)
             .setTitle(R.string.termux_ai_model_import_title)
+            .setMessage(context.getString(R.string.termux_ai_model_import_selected,
+                metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size"))
             .setView(layout)
             .setPositiveButton(R.string.termux_ai_model_import_title, (dialog, which) ->
-                importModel(context, pathInput.getText().toString(), modelIdInput.getText().toString()))
+                importModelDocument(context, uri, modelIdInput.getText().toString()))
             .setNegativeButton(android.R.string.cancel, null)
             .show();
     }
 
-    private void importModel(Context context, String path, String modelId) {
-        try {
-            JSONObject request = new JSONObject();
-            request.put("path", path == null ? "" : path.trim());
-            if (modelId != null && !modelId.trim().isEmpty()) request.put("modelId", modelId.trim());
-            JSONObject result = TaiManager.getInstance(context).importModel(request.toString());
-            if (result.optBoolean("ok", false)) {
-                Toast.makeText(context, R.string.termux_ai_model_imported, Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(context, result.optString("message", context.getString(R.string.termux_ai_model_action_failed)), Toast.LENGTH_LONG).show();
-            }
-            refreshTaiPage(context);
-        } catch (JSONException e) {
-            Toast.makeText(context, R.string.termux_ai_model_action_failed, Toast.LENGTH_LONG).show();
+    private void importModelDocument(Context context, Uri uri, String modelId) {
+        Context appContext = context.getApplicationContext();
+        Preference importPreference = findPreference("tai_model_import");
+        if (importPreference != null) {
+            importPreference.setEnabled(false);
+            importPreference.setSummary(R.string.termux_ai_model_import_copying);
         }
+        runtimeActionExecutor.execute(() -> {
+            JSONObject result = null;
+            try {
+                result = TaiManager.getInstance(appContext).importModelDocument(uri, modelId);
+            } catch (JSONException | RuntimeException ignored) {
+            }
+            JSONObject finalResult = result;
+            handler.post(() -> {
+                Context currentContext = getContext();
+                if (currentContext == null) return;
+                Preference currentImportPreference = findPreference("tai_model_import");
+                if (currentImportPreference != null) {
+                    currentImportPreference.setEnabled(true);
+                    currentImportPreference.setSummary(R.string.termux_ai_model_import_summary);
+                }
+                if (finalResult != null && finalResult.optBoolean("ok", false)) {
+                    Toast.makeText(currentContext, R.string.termux_ai_model_imported, Toast.LENGTH_SHORT).show();
+                } else {
+                    String message = finalResult == null
+                        ? currentContext.getString(R.string.termux_ai_model_action_failed)
+                        : finalResult.optString("message", currentContext.getString(R.string.termux_ai_model_action_failed));
+                    Toast.makeText(currentContext, message, Toast.LENGTH_LONG).show();
+                }
+                refreshTaiPage(currentContext);
+            });
+        });
     }
 
     private void loadModel(Context context, String modelId) {

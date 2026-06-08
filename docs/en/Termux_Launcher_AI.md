@@ -188,7 +188,7 @@ From there you can:
 
 - choose the default assistant model
 - download catalog models
-- import a local `.litertlm` model
+- import a local `.litertlm` or `.task` model with Android's file picker; the selected file is copied into app-private model storage
 - change generation defaults such as max tokens and temperature
 - choose Auto, GPU, or CPU acceleration where supported
 - configure the API port

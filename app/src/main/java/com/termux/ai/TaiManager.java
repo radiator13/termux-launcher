@@ -1,6 +1,7 @@
 package com.termux.ai;
 
 import android.content.Context;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -153,6 +154,16 @@ public final class TaiManager {
         data.put("copiedIntoAppPrivateStorage", false);
         data.put("message", "Model path registered. Load it with TAI to run through the Android-side LiteRT-LM runtime when the device ABI and model format are supported.");
         return data;
+    }
+
+    @NonNull
+    public JSONObject importModelDocument(@NonNull Uri uri, @Nullable String modelId) throws JSONException {
+        return new TaiModelImporter(appContext, modelStore).importDocument(uri, modelId);
+    }
+
+    @NonNull
+    public TaiModelImporter.DocumentMetadata modelDocumentMetadata(@NonNull Uri uri) {
+        return new TaiModelImporter(appContext, modelStore).readMetadata(uri);
     }
 
     @NonNull

@@ -264,9 +264,11 @@
         <string name="termux_ai_huggingface_token_summary">Optional. Stored in app-private preferences and used only for Hugging Face model downloads that need authentication.</string>
         <string name="termux_ai_huggingface_token_set_summary">Token saved. It will be sent as a Bearer token only to Hugging Face download URLs.</string>
         <string name="termux_ai_model_import_title">Import local model</string>
-        <string name="termux_ai_model_import_summary">Register an existing .litertlm model path readable by the Android app process</string>
-        <string name="termux_ai_model_import_path_hint">/absolute/path/to/model.litertlm</string>
+        <string name="termux_ai_model_import_summary">Choose a .litertlm or .task file and copy it into app-private model storage</string>
         <string name="termux_ai_model_import_id_hint">Model id (optional)</string>
+        <string name="termux_ai_model_import_selected">Selected: %1$s\nSize: %2$s\n\nThe file will be copied into Termux Launcher model storage.</string>
+        <string name="termux_ai_model_import_copying">Copying selected model into app-private storage...</string>
+        <string name="termux_ai_model_import_invalid_file">Select a model file ending in .litertlm or .task</string>
         <string name="termux_ai_model_imported">Model imported</string>
         <string name="termux_ai_model_loaded">Model load requested</string>
         <string name="termux_ai_model_load_action">Load model</string>
