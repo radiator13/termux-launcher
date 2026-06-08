@@ -16,6 +16,8 @@ if(ANDROID_ABI STREQUAL "arm64-v8a")
     if(VULKAN_HEADERS_DIR)
         target_include_directories(ggml-vulkan PRIVATE ${VULKAN_HEADERS_DIR})
     endif()
+    target_compile_definitions(ggml-vulkan PRIVATE
+        vkGetPhysicalDeviceFeatures2=vkGetPhysicalDeviceFeatures2KHR)
     add_library(tai_llama SHARED tai_llama_jni.cpp)
     target_include_directories(tai_llama PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third-party/llama.cpp/include)
     target_link_libraries(tai_llama PRIVATE llama android log)
