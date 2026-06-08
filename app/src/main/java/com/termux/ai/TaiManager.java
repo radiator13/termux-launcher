@@ -49,7 +49,7 @@ public final class TaiManager {
         registry = new TaiModelRegistry();
         modelStore = new TaiModelStore(appContext);
         modelDownloader = new TaiModelDownloader(appContext, modelStore);
-        runtime = new DualSlotTaiRuntime(appContext);
+        runtime = new MultiBackendTaiRuntime(appContext);
     }
 
     @NonNull
@@ -89,7 +89,7 @@ public final class TaiManager {
         data.put("runtime", state.toJson());
         data.put("settings", settings.toJson());
         data.put("appProcessRuntime", true);
-        data.put("backendPolicy", "Auto follows the model's ordered Edge Gallery accelerator allowlist, applies device exclusions, and uses LiteRT-LM initialization as the final backend check.");
+        data.put("backendPolicy", "Model metadata selects LiteRT-LM, MLC OpenCL, or llama.cpp. Auto uses each backend's GPU-first policy and llama.cpp may fall back to CPU.");
         appendDeviceCompatibility(data, state);
         return data;
     }
@@ -207,7 +207,7 @@ public final class TaiManager {
                 return error;
             }
         }
-        return modelDownloader.startDownload(entry.modelId, entry.downloadUrl, entry.displayName, entry.license, entry.capabilities, settings.getHuggingFaceToken());
+        return modelDownloader.startCatalogDownload(entry, settings.getHuggingFaceToken());
     }
 
     @NonNull
@@ -232,11 +232,28 @@ public final class TaiManager {
     }
 
     @NonNull
+    public JSONObject cancelDownload(@NonNull String body) throws JSONException {
+        JSONObject request = parseBody(body);
+        String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", "")));
+        if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
+        TaiModelDownloadService.requestCancel(modelId);
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("modelId", modelId);
+        data.put("cancellationRequested", true);
+        return data;
+    }
+
+    @NonNull
     public JSONObject loadModel(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);
         String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiModelSpec spec = resolveModel(modelId);
         if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
+        String requestedBackend = request.optString("backend", "").trim();
+        if (!requestedBackend.isEmpty() && !requestedBackend.equalsIgnoreCase(spec.backend)) {
+            return error(409, "backend_mismatch", "Model " + modelId + " requires backend " + spec.backend + ".");
+        }
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         JSONObject result = runtime.load(spec, options);
         appendCompanionMobileActions(result, spec.id);
@@ -722,7 +739,7 @@ public final class TaiManager {
     @NonNull
     private JSONArray currentLimitations() {
         JSONArray limitations = new JSONArray();
-        limitations.put("LiteRT-LM text inference is integrated for downloaded/imported .litertlm models on supported 64-bit ABIs.");
+        limitations.put("LiteRT-LM, MLC OpenCL, and llama.cpp GGUF inference are available when included by the device ABI build.");
         limitations.put("Auto follows Edge Gallery model accelerator allowlists, minimum-memory metadata, and Pixel 10 GPU exclusion; LiteRT-LM initialization remains the final backend check.");
         limitations.put("Streaming text responses, cancellation, and keep-warm lifecycle controls are available through the localhost API.");
         limitations.put("Benchmark counters and multimodal input are TODO for a later phase.");
@@ -973,6 +990,14 @@ public final class TaiManager {
             json.put("license", entry.license);
             json.put("sizeBytes", entry.sizeBytes);
             json.put("gated", entry.gated);
+            json.put("backend", entry.backend);
+            json.put("format", entry.format);
+            json.put("architecture", entry.architecture);
+            json.put("quantization", entry.quantization == null ? JSONObject.NULL : entry.quantization);
+            json.put("contextWindow", entry.contextWindow);
+            json.put("recommendedRamGb", entry.recommendedRamGb);
+            json.put("revision", entry.revision);
+            json.put("sha256", entry.sha256 == null ? JSONObject.NULL : entry.sha256);
             TaiModelSpec catalogSpec = registry.getModel(entry.modelId);
             if (catalogSpec != null) json.put("runtimeProfile", TaiModelProfile.forModel(catalogSpec).toJson());
             JSONArray capabilities = new JSONArray();
@@ -994,6 +1019,12 @@ public final class TaiManager {
         JSONArray warnings = new JSONArray();
         String memoryWarning = device.memoryWarning(profile);
         if (memoryWarning != null) warnings.put(memoryWarning);
+        if (model.recommendedRamGb > 0 && device.memoryBytes > 0L
+            && device.memoryBytes < model.recommendedRamGb * 1024L * 1024L * 1024L) {
+            warnings.put("Device memory is below this model's recommendation of " + model.recommendedRamGb + " GiB.");
+        }
+        if (TaiModelSpec.BACKEND_LLAMA_CPP.equals(model.backend) && !device.llamaCppAvailable) warnings.put("llama.cpp is not packaged for this device ABI.");
+        if (TaiModelSpec.BACKEND_MLC.equals(model.backend) && (!device.mlcAvailable || !device.openClLikelyAvailable)) warnings.put("MLC OpenCL is not available or could not be detected on this device.");
         data.put("compatibilityWarnings", warnings);
     }
 

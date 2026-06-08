@@ -568,6 +568,9 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
     private String buildModelSummary(TaiModelCatalog.CatalogEntry entry, TaiModelSpec installed, JSONObject download) {
         StringBuilder summary = new StringBuilder();
         summary.append(entry.roleHint).append(" - ").append(formatBytes(entry.sizeBytes));
+        summary.append("\nBackend: ").append(entry.backend).append(" - ").append(entry.format);
+        if (entry.quantization != null) summary.append(" - ").append(entry.quantization);
+        if (entry.recommendedRamGb > 0) summary.append("\nRecommended memory: ").append(entry.recommendedRamGb).append(" GiB");
         TaiModelSpec catalogModel = new TaiModelRegistry().getModel(entry.modelId);
         if (catalogModel != null) {
             TaiModelProfile profile = TaiModelProfile.forModel(catalogModel);
@@ -612,6 +615,9 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
     private String buildInstalledModelSummary(TaiModelSpec model) {
         StringBuilder summary = new StringBuilder();
         summary.append(model.roleHint).append(" - ").append(model.source);
+        summary.append("\nBackend: ").append(model.backend).append(" - ").append(model.format);
+        if (model.quantization != null) summary.append(" - ").append(model.quantization);
+        if (model.recommendedRamGb > 0) summary.append("\nRecommended memory: ").append(model.recommendedRamGb).append(" GiB");
         if (model.localPath != null) {
             summary.append("\nInstalled: ").append(formatBytes(model.sizeBytes));
             summary.append("\n").append(model.localPath);
@@ -631,6 +637,15 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
     }
 
     private void showModelActions(Context context, TaiModelCatalog.CatalogEntry entry, TaiModelSpec installed, JSONObject download) {
+        if (download != null && ("queued".equals(download.optString("status")) || "running".equals(download.optString("status")))) {
+            new MaterialAlertDialogBuilder(context)
+                .setTitle(entry.displayName)
+                .setMessage(buildModelSummary(entry, installed, download))
+                .setPositiveButton(R.string.termux_ai_model_download_cancel, (dialog, which) -> cancelModelDownload(context, entry.modelId))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+            return;
+        }
         if (installed != null) {
             new MaterialAlertDialogBuilder(context)
                 .setTitle(entry.displayName)
@@ -682,6 +697,19 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
             } else {
                 Toast.makeText(context, result.optString("message", context.getString(R.string.termux_ai_model_action_failed)), Toast.LENGTH_LONG).show();
             }
+            refreshTaiPage(context);
+        } catch (JSONException e) {
+            Toast.makeText(context, R.string.termux_ai_model_action_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void cancelModelDownload(Context context, String modelId) {
+        try {
+            JSONObject result = TaiManager.getInstance(context).cancelDownload(
+                new JSONObject().put("modelId", modelId).toString());
+            Toast.makeText(context, result.optBoolean("ok", false)
+                ? R.string.termux_ai_model_download_cancelled
+                : R.string.termux_ai_model_action_failed, Toast.LENGTH_SHORT).show();
             refreshTaiPage(context);
         } catch (JSONException e) {
             Toast.makeText(context, R.string.termux_ai_model_action_failed, Toast.LENGTH_LONG).show();

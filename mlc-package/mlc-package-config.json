@@ -1,0 +1,35 @@
+{
+  "device": "android",
+  "model_list": [
+    {
+      "model": "HF://mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC",
+      "model_id": "Qwen2.5-Coder-1.5B-Instruct-MLC",
+      "model_lib": "tai_qwen2_5_coder_1_5b_q4f16_1",
+      "estimated_vram_bytes": 2800000000,
+      "overrides": {
+        "context_window_size": 4096,
+        "prefill_chunk_size": 128
+      }
+    },
+    {
+      "model": "HF://mlc-ai/Qwen3-1.7B-q4f16_0-MLC",
+      "model_id": "Qwen3-1.7B-MLC",
+      "model_lib": "tai_qwen3_1_7b_q4f16_0",
+      "estimated_vram_bytes": 3200000000,
+      "overrides": {
+        "context_window_size": 4096,
+        "prefill_chunk_size": 128
+      }
+    },
+    {
+      "model": "HF://mlc-ai/Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC",
+      "model_id": "Ministral-3-3B-Instruct-MLC",
+      "model_lib": "tai_ministral3_3b_q4f16_1",
+      "estimated_vram_bytes": 5200000000,
+      "overrides": {
+        "context_window_size": 4096,
+        "prefill_chunk_size": 128
+      }
+    }
+  ]
+}

@@ -22,6 +22,8 @@ import java.io.File;
 import java.util.LinkedHashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class TaiModelDownloadService extends Service {
     public static final String ACTION_DOWNLOAD = "com.termux.ai.action.DOWNLOAD_MODEL";
@@ -33,12 +35,27 @@ public final class TaiModelDownloadService extends Service {
     public static final String EXTRA_LICENSE = "license";
     public static final String EXTRA_CAPABILITIES = "capabilities";
     public static final String EXTRA_AUTH_TOKEN = "auth_token";
+    public static final String EXTRA_BACKEND = "backend";
+    public static final String EXTRA_FORMAT = "format";
+    public static final String EXTRA_ARCHITECTURE = "architecture";
+    public static final String EXTRA_QUANTIZATION = "quantization";
+    public static final String EXTRA_CONTEXT_WINDOW = "context_window";
+    public static final String EXTRA_RECOMMENDED_RAM_GB = "recommended_ram_gb";
+    public static final String EXTRA_SHA256 = "sha256";
+    public static final String EXTRA_RUNTIME_LIBRARY = "runtime_library";
+    public static final String EXTRA_REPOSITORY_ID = "repository_id";
+    public static final String EXTRA_REVISION = "revision";
 
     private static final String CHANNEL_ID = "termux_ai_model_downloads";
     private static final int NOTIFICATION_ID = 24100;
+    private static final Set<String> CANCELLED_MODELS = ConcurrentHashMap.newKeySet();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile int activeDownloads;
+
+    public static void requestCancel(@NonNull String modelId) { CANCELLED_MODELS.add(modelId); }
+    public static boolean isCancelled(@NonNull String modelId) { return CANCELLED_MODELS.contains(modelId); }
+    public static void clearCancellation(@NonNull String modelId) { CANCELLED_MODELS.remove(modelId); }
 
     @Nullable
     @Override
@@ -78,6 +95,7 @@ public final class TaiModelDownloadService extends Service {
         String url = intent.getStringExtra(EXTRA_URL);
         String outputPath = intent.getStringExtra(EXTRA_OUTPUT_PATH);
         if (transferId == null || modelId == null || url == null || outputPath == null) return;
+        clearCancellation(modelId);
 
         LinkedHashSet<String> capabilities = new LinkedHashSet<>();
         String[] rawCapabilities = intent.getStringArrayExtra(EXTRA_CAPABILITIES);
@@ -89,6 +107,29 @@ public final class TaiModelDownloadService extends Service {
 
         TaiModelStore store = new TaiModelStore(this);
         TaiModelDownloader downloader = new TaiModelDownloader(this, store);
+        String repositoryId = intent.getStringExtra(EXTRA_REPOSITORY_ID);
+        if (repositoryId != null && !repositoryId.trim().isEmpty()) {
+            downloader.runCatalogDownload(
+                transferId,
+                modelId,
+                repositoryId,
+                valueOrEmpty(intent.getStringExtra(EXTRA_REVISION)),
+                new File(outputPath),
+                valueOrEmpty(intent.getStringExtra(EXTRA_DISPLAY_NAME)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_LICENSE)),
+                capabilities,
+                valueOrEmpty(intent.getStringExtra(EXTRA_BACKEND)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_FORMAT)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_ARCHITECTURE)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_QUANTIZATION)),
+                intent.getIntExtra(EXTRA_CONTEXT_WINDOW, 4096),
+                intent.getIntExtra(EXTRA_RECOMMENDED_RAM_GB, 0),
+                valueOrEmpty(intent.getStringExtra(EXTRA_RUNTIME_LIBRARY)),
+                intent.getStringExtra(EXTRA_AUTH_TOKEN),
+                this::updateProgressNotification
+            );
+            return;
+        }
         downloader.runDownload(
             transferId,
             modelId,
@@ -97,6 +138,14 @@ public final class TaiModelDownloadService extends Service {
             valueOrEmpty(intent.getStringExtra(EXTRA_DISPLAY_NAME)),
             valueOrEmpty(intent.getStringExtra(EXTRA_LICENSE)),
             capabilities,
+            valueOrEmpty(intent.getStringExtra(EXTRA_BACKEND)),
+            valueOrEmpty(intent.getStringExtra(EXTRA_FORMAT)),
+            valueOrEmpty(intent.getStringExtra(EXTRA_ARCHITECTURE)),
+            valueOrEmpty(intent.getStringExtra(EXTRA_QUANTIZATION)),
+            intent.getIntExtra(EXTRA_CONTEXT_WINDOW, 4096),
+            intent.getIntExtra(EXTRA_RECOMMENDED_RAM_GB, 0),
+            valueOrEmpty(intent.getStringExtra(EXTRA_SHA256)),
+            valueOrEmpty(intent.getStringExtra(EXTRA_RUNTIME_LIBRARY)),
             intent.getStringExtra(EXTRA_AUTH_TOKEN),
             this::updateProgressNotification
         );

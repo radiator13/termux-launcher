@@ -246,7 +246,7 @@
         <string name="termux_privileged_access_preferences_summary">Shizuku backend controls</string>
 
         <string name="termux_ai_preferences_title">TAI / Termux AI</string>
-        <string name="termux_ai_preferences_summary">Local LiteRT-LM hosting, model management, runtime controls, and endpoint settings</string>
+        <string name="termux_ai_preferences_summary">Local LiteRT-LM, MLC, and GGUF hosting, model management, runtime controls, and endpoint settings</string>
         <string name="termux_ai_overview_header">Overview</string>
         <string name="termux_ai_runtime_control_header">Runtime Control</string>
         <string name="termux_ai_runtime_status_title">Runtime status</string>
@@ -258,17 +258,17 @@
         <string name="termux_ai_runtime_cancel_title">Cancel generation</string>
         <string name="termux_ai_runtime_cancel_summary">Stop the active streaming or non-streaming generation</string>
         <string name="termux_ai_runtime_unload_title">Unload model</string>
-        <string name="termux_ai_runtime_unload_summary">Release the loaded LiteRT-LM engine and conversation</string>
+        <string name="termux_ai_runtime_unload_summary">Release all loaded AI engines and model memory</string>
         <string name="termux_ai_models_header">Models</string>
         <string name="termux_ai_huggingface_token_title">Hugging Face token</string>
         <string name="termux_ai_huggingface_token_summary">Optional. Stored in app-private preferences and used only for Hugging Face model downloads that need authentication.</string>
         <string name="termux_ai_huggingface_token_set_summary">Token saved. It will be sent as a Bearer token only to Hugging Face download URLs.</string>
         <string name="termux_ai_model_import_title">Import local model</string>
-        <string name="termux_ai_model_import_summary">Choose a .litertlm or .task file and copy it into app-private model storage</string>
+        <string name="termux_ai_model_import_summary">Choose a .litertlm, .task, or .gguf file and copy it into app-private model storage</string>
         <string name="termux_ai_model_import_id_hint">Model id (optional)</string>
         <string name="termux_ai_model_import_selected">Selected: %1$s\nSize: %2$s\n\nThe file will be copied into Termux Launcher model storage.</string>
         <string name="termux_ai_model_import_copying">Copying selected model into app-private storage...</string>
-        <string name="termux_ai_model_import_invalid_file">Select a model file ending in .litertlm or .task</string>
+        <string name="termux_ai_model_import_invalid_file">Select a model file ending in .litertlm, .task, or .gguf</string>
         <string name="termux_ai_model_imported">Model imported</string>
         <string name="termux_ai_model_loaded">Model load requested</string>
         <string name="termux_ai_model_load_action">Load model</string>
@@ -289,6 +289,8 @@
         <string name="termux_ai_model_open_provider">Open provider page</string>
         <string name="termux_ai_model_missing_token">Save a Hugging Face token first, after accepting the provider terms.</string>
         <string name="termux_ai_model_download_started">Model download started</string>
+        <string name="termux_ai_model_download_cancel">Cancel download</string>
+        <string name="termux_ai_model_download_cancelled">Download cancellation requested</string>
         <string name="termux_ai_model_deleted">Model entry deleted</string>
         <string name="termux_ai_model_delete_missing">No downloaded model entry found</string>
         <string name="termux_ai_model_action_failed">TAI model action failed</string>

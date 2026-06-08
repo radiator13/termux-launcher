@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
 
       - name: Setup java 21
         uses: actions/setup-java@v5
@@ -27,6 +29,27 @@ jobs:
           java-version: '21'
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup native AI toolchains
+        shell: bash {0}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslc ninja-build git-lfs
+          git lfs install
+          python -m pip install --pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cpu mlc-ai-nightly-cpu
+
+      - name: Cache compiled MLC Android runtime
+        uses: actions/cache@v5
+        with:
+          path: mlc-package/dist
+          key: mlc-android-${{ runner.os }}-${{ hashFiles('mlc-package/mlc-package-config.json', '.git/modules/third-party/mlc-llm/HEAD') }}
+
+      - name: Build MLC Android runtime
+        shell: bash {0}
+        run: |
+          if ! test -f mlc-package/dist/lib/mlc4j/output/arm64-v8a/libtvm4j_runtime_packed.so; then
+            ./.github/scripts/build_mlc_android.sh
+          fi
 
       - name: Run unit tests
         shell: bash {0}

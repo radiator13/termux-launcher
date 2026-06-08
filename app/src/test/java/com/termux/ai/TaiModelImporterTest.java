@@ -12,7 +12,7 @@ public class TaiModelImporterTest {
     public void supportedFileNames_acceptLiteRtLmPackages() {
         assertTrue(TaiModelImporter.isSupportedFileName("model.litertlm"));
         assertTrue(TaiModelImporter.isSupportedFileName("MODEL.TASK"));
-        assertFalse(TaiModelImporter.isSupportedFileName("model.gguf"));
+        assertTrue(TaiModelImporter.isSupportedFileName("model.gguf"));
         assertFalse(TaiModelImporter.isSupportedFileName("model.zip"));
     }
 
@@ -22,5 +22,6 @@ public class TaiModelImporterTest {
             TaiModelImporter.sanitizeModelId(
                 TaiModelImporter.stripModelExtension("Gemma 4 E2B it.litertlm")));
         assertEquals("mobile_actions", TaiModelImporter.stripModelExtension("mobile_actions.task"));
+        assertEquals("qwen-coder", TaiModelImporter.stripModelExtension("qwen-coder.gguf"));
     }
 }

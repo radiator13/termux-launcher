@@ -6,7 +6,7 @@ The short version:
 
 - The AI runs on your device, inside the Termux Launcher app process.
 - It exposes an OpenAI-compatible API for tools such as `aichat`.
-- It can use Gemma assistant models for chat and a smaller MobileActions model for action-style tasks.
+- It supports LiteRT-LM models, curated MLC OpenCL models, and GGUF models through llama.cpp.
 - It does not bundle model files inside the APK. You download or import models yourself.
 - The API is protected by a bearer token stored on your device.
 
@@ -119,6 +119,10 @@ Use these model IDs exactly:
 Gemma-4-E2B-it
 Gemma-4-E4B-it
 MobileActions-270M
+Qwen2.5-Coder-1.5B-GGUF
+Qwen2.5-Coder-1.5B-MLC
+Qwen3-1.7B-MLC
+Ministral-3-3B-MLC
 ```
 
 `Gemma-4-E2B-it` is the fast default assistant model.
@@ -126,6 +130,8 @@ MobileActions-270M
 `Gemma-4-E4B-it` is the larger assistant model.
 
 `MobileActions-270M` is a smaller model intended for mobile action-style tasks. It is CPU-only.
+
+The Qwen Coder variants are intended for code and terminal tasks. The GGUF variant uses llama.cpp with Vulkan-first/CPU-fallback behavior. MLC variants use OpenCL and require an arm64 APK and compatible Adreno or Mali-class device.
 
 ## How Model Loading Works
 
@@ -156,7 +162,7 @@ tai unload
 
 Termux Launcher AI supports two runtime slots:
 
-- one assistant model slot
+- one assistant model slot selected from LiteRT-LM, MLC, or llama.cpp
 - one MobileActions model slot
 
 The assistant slot is for:
@@ -188,7 +194,7 @@ From there you can:
 
 - choose the default assistant model
 - download catalog models
-- import a local `.litertlm` or `.task` model with Android's file picker; the selected file is copied into app-private model storage
+- import a local `.litertlm`, `.task`, or `.gguf` model with Android's file picker; the selected file is copied into app-private model storage
 - change generation defaults such as max tokens and temperature
 - choose Auto, GPU, or CPU acceleration where supported
 - configure the API port
@@ -228,10 +234,11 @@ You can download supported catalog models from the settings page, or use the CLI
 tai download Gemma-4-E2B-it <model-url> --accept-terms
 ```
 
-You can import an existing local `.litertlm` file:
+You can import an existing local LiteRT-LM or GGUF file:
 
 ```sh
 tai import /absolute/path/to/model.litertlm MyModelName
+tai import /absolute/path/to/model.gguf MyGgufModel
 ```
 
 For catalog models, use the official model ID so OpenAI-compatible tools can request it directly.

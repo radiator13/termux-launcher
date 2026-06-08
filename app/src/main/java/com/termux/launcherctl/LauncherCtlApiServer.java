@@ -312,6 +312,8 @@ public class LauncherCtlApiServer {
                 return maybeTextResponse(request, "download", TaiManager.getInstance(context).downloadCatalogModel(body.optString("modelId", body.optString("model", ""))));
             } else if ("GET".equals(request.method) && "/v1/ai/models/downloads".equals(request.path)) {
                 return maybeTextResponse(request, "downloads", TaiManager.getInstance(context).downloads());
+            } else if ("POST".equals(request.method) && "/v1/ai/models/downloads/cancel".equals(request.path)) {
+                return maybeTextResponse(request, "download", TaiManager.getInstance(context).cancelDownload(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/delete".equals(request.path)) {
                 return maybeTextResponse(request, "delete", TaiManager.getInstance(context).deleteModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/load".equals(request.path)) {
@@ -863,6 +865,7 @@ public class LauncherCtlApiServer {
         rateLimiters.put("POST:/v1/ai/models/import", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/download", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/download-catalog", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/models/downloads/cancel", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("GET:/v1/ai/models/downloads", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/ai/models/delete", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));

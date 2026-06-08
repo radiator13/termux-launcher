@@ -161,6 +161,10 @@ public final class TaiCliFormatter {
                 out.append('\n');
                 appendValue(out, "    Role", model.optString("roleHint", ""));
                 appendValue(out, "    Source", model.optString("source", ""));
+                appendValue(out, "    Backend", model.optString("backend", "") + " / " + model.optString("format", ""));
+                appendValue(out, "    Quantization", nullable(model, "quantization", "not specified"));
+                appendValue(out, "    Recommended memory", model.optInt("recommendedRamGb", 0) > 0
+                    ? model.optInt("recommendedRamGb") + " GiB" : "not specified");
                 appendValue(out, "    Size", model.optLong("sizeBytes", 0L) > 0 ? formatBytes(model.optLong("sizeBytes")) : "not downloaded");
                 appendValue(out, "    Capabilities", join(model.optJSONArray("capabilities")));
                 JSONObject profile = model.optJSONObject("runtimeProfile");

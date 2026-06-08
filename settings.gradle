@@ -1,1 +1,7 @@
 include ':app', ':termux-shared', ':terminal-emulator', ':terminal-view', ':termux-am-library'
+
+def mlc4jDir = file('mlc-package/dist/lib/mlc4j')
+if (mlc4jDir.isDirectory()) {
+    include ':mlc4j'
+    project(':mlc4j').projectDir = mlc4jDir
+}

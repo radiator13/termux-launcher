@@ -3,7 +3,7 @@ set -eu
 
 print_help() {
   cat <<'EOF'
-TAI / Termux AI - local LiteRT-LM host
+TAI / Termux AI - local multi-backend model host
 
 Usage:
   tai --json <command>
@@ -13,6 +13,7 @@ Usage:
   tai import <path> [model-id]
   tai download <model-id> <https-url> --accept-terms
   tai downloads
+  tai download-cancel <model-id>
   tai delete <model-id>
   tai load [model] [--auto|--cpu|--gpu]
   tai unload
@@ -21,8 +22,8 @@ Usage:
   tai doctor
 
 TAI is authenticated through ~/.launcherctl and runs in the Android app process.
-LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.
-Auto honors model compatibility profiles, otherwise tries GPU first and falls back to CPU if needed.
+LiteRT-LM, MLC OpenCL, and llama.cpp run in the Android app process when supported by the installed APK.
+Auto honors model compatibility profiles and uses backend-specific GPU-first behavior with CPU fallback where available.
 Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.
 Use tai --json <command> for raw API JSON.
 EOF
@@ -102,6 +103,11 @@ case "$cmd" in
     ;;
   downloads)
     get_json /v1/ai/models/downloads
+    ;;
+  download-cancel)
+    [ "$#" -gt 0 ] || { echo "usage: tai download-cancel <model-id>" >&2; exit 2; }
+    model=$(json_escape "$1")
+    post_json /v1/ai/models/downloads/cancel "{\"modelId\":\"$model\"}"
     ;;
   delete)
     [ "$#" -gt 0 ] || { echo "usage: tai delete <model-id>" >&2; exit 2; }

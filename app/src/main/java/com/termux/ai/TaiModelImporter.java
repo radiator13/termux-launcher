@@ -38,7 +38,7 @@ public final class TaiModelImporter {
         DocumentMetadata metadata = readMetadata(uri);
         String fileName = sanitizeFileName(metadata.displayName);
         if (!isSupportedFileName(fileName)) {
-            return error(400, "unsupported_model_file", "Select a .litertlm or .task model file.");
+            return error(400, "unsupported_model_file", "Select a .litertlm, .task, or .gguf model file.");
         }
 
         String inferredId = stripModelExtension(fileName);
@@ -63,7 +63,7 @@ public final class TaiModelImporter {
         try {
             copyDocument(uri, temporary);
             if (!looksLikeModelFile(temporary, fileName)) {
-                throw new IllegalStateException("The selected file does not look like a readable LiteRT-LM model.");
+                throw new IllegalStateException("The selected file does not look like a readable model package.");
             }
             if (output.exists() && !output.delete()) {
                 throw new IllegalStateException("Could not replace the existing destination file.");
@@ -84,6 +84,7 @@ public final class TaiModelImporter {
                 Collections.singleton("text_chat"),
                 false
             );
+            String format = TaiModelSpec.inferFormat(output.getAbsolutePath());
             TaiModelSpec spec = new TaiModelSpec(
                 baseSpec.id,
                 baseSpec.displayName,
@@ -94,7 +95,15 @@ public final class TaiModelImporter {
                 baseSpec.sizeBytes,
                 baseSpec.capabilities,
                 false,
-                TaiModelProfile.forModel(baseSpec)
+                TaiModelProfile.forModel(baseSpec),
+                TaiModelSpec.inferBackend(output.getAbsolutePath()),
+                format,
+                null,
+                format.equals(TaiModelSpec.FORMAT_GGUF) ? "user-provided" : null,
+                4096,
+                0,
+                null,
+                null
             );
             store.upsertUserModel(spec);
 
@@ -166,6 +175,9 @@ public final class TaiModelImporter {
             byte[] buffer = new byte[256];
             int read = input.read(buffer);
             if (read <= 0) return false;
+            if (originalName.toLowerCase(Locale.ROOT).endsWith(".gguf")) {
+                return read >= 4 && buffer[0] == 'G' && buffer[1] == 'G' && buffer[2] == 'U' && buffer[3] == 'F';
+            }
             String prefix = new String(buffer, 0, read, StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT);
             return !(prefix.startsWith("<!doctype html") || prefix.startsWith("<html") || prefix.contains("<head"));
         } catch (Exception e) {
@@ -175,7 +187,7 @@ public final class TaiModelImporter {
 
     public static boolean isSupportedFileName(@NonNull String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".litertlm") || lower.endsWith(".task");
+        return lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.endsWith(".gguf");
     }
 
     @NonNull
@@ -184,6 +196,7 @@ public final class TaiModelImporter {
         String lower = value.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".litertlm")) return value.substring(0, value.length() - ".litertlm".length());
         if (lower.endsWith(".task")) return value.substring(0, value.length() - ".task".length());
+        if (lower.endsWith(".gguf")) return value.substring(0, value.length() - ".gguf".length());
         return value;
     }
 
