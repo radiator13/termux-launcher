@@ -31,7 +31,8 @@ fi
 CONDA_BUILD=1 python -m pip install -e "$source_dir/python"
 export PYTHONPATH="$source_dir/python:$source_dir/3rdparty/tvm/python${PYTHONPATH:+:$PYTHONPATH}"
 export MLC_LIBRARY_PATH="$source_dir/build"
-export TVM_LIBRARY_PATH="$source_dir/build"
+export TVM_LIBRARY_PATH="$source_dir/build/tvm"
+export LD_LIBRARY_PATH="$source_dir/build:$source_dir/build/tvm${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 cd "$package_dir"
 python -m mlc_llm package
