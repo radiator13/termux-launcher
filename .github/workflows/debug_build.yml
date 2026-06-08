@@ -36,13 +36,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y glslc ninja-build git-lfs
           git lfs install
-          python -m pip install --pre -U -f https://mlc.ai/wheels mlc-llm-nightly-cpu mlc-ai-nightly-cpu
+          python -m pip install -U cmake ninja setuptools wheel
 
       - name: Cache compiled MLC Android runtime
         uses: actions/cache@v5
         with:
-          path: mlc-package/dist
-          key: mlc-android-${{ runner.os }}-${{ hashFiles('mlc-package/mlc-package-config.json', '.git/modules/third-party/mlc-llm/HEAD') }}
+          path: |
+            mlc-package/dist
+            third-party/mlc-llm/build
+          key: mlc-android-v2-${{ runner.os }}-${{ hashFiles('mlc-package/mlc-package-config.json', '.git/modules/third-party/mlc-llm/HEAD') }}
 
       - name: Build MLC Android runtime
         shell: bash {0}
