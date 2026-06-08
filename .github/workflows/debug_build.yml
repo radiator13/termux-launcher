@@ -42,7 +42,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: mlc-package/dist
-          key: mlc-android-v4-${{ runner.os }}-${{ hashFiles('.github/scripts/prepare_mlc_android.sh', '.git/modules/third-party/mlc-llm/HEAD') }}
+          key: mlc-android-v5-${{ runner.os }}-${{ hashFiles('.github/scripts/prepare_mlc_android.sh', '.github/templates/mlc4j.build.gradle', '.git/modules/third-party/mlc-llm/HEAD') }}
 
       - name: Build MLC Android runtime
         shell: bash {0}

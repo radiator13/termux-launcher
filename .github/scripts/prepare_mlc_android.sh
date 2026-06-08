@@ -10,11 +10,17 @@ runtime_sha256="5b6b3a27cbf17372c81c8f354b46cd8858354e613d36c12179df8905a6d22cc0
 archive="${RUNNER_TEMP:-$root/.artifacts}/mlc-chat-Android-09262024.apk"
 
 mkdir -p "$(dirname "$archive")" "$root/mlc-package/dist/lib"
-curl --fail --location --retry 3 --output "$archive" "$release_url"
+if ! printf '%s  %s\n' "$release_sha256" "$archive" | sha256sum --check --status 2>/dev/null; then
+  curl --fail --location --retry 3 --output "$archive" "$release_url"
+fi
 printf '%s  %s\n' "$release_sha256" "$archive" | sha256sum --check --status
 
 rm -rf "$dist_dir"
 cp -R "$source_dir/android/mlc4j" "$dist_dir"
+cp "$root/.github/templates/mlc4j.build.gradle" "$dist_dir/build.gradle"
+rm -f "$dist_dir/src/main/java/ai/mlc/mlcllm/MLCEngine.kt" \
+  "$dist_dir/src/main/java/ai/mlc/mlcllm/OpenAIProtocol.kt"
+cp -R "$source_dir/3rdparty/tvm/jvm/core/src/main/java/org" "$dist_dir/src/main/java/"
 mkdir -p "$dist_dir/output/arm64-v8a"
 unzip -p "$archive" lib/arm64-v8a/libtvm4j_runtime_packed.so \
   > "$dist_dir/output/arm64-v8a/libtvm4j_runtime_packed.so"
