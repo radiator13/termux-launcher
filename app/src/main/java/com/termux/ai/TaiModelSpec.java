@@ -191,6 +191,8 @@ public final class TaiModelSpec {
     @NonNull
     public static String inferFormat(@Nullable String path) {
         String value = path == null ? "" : path.toLowerCase(java.util.Locale.ROOT);
+        int query = value.indexOf('?');
+        if (query >= 0) value = value.substring(0, query);
         if (value.endsWith(".gguf")) return FORMAT_GGUF;
         return FORMAT_LITERTLM;
     }

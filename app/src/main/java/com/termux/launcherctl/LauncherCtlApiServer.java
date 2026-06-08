@@ -1148,7 +1148,7 @@ public class LauncherCtlApiServer {
             "set -eu\n" +
             "print_help() {\n" +
             "  cat <<'EOF'\n" +
-            "TAI / Termux AI - local LiteRT-LM host\n" +
+            "TAI / Termux AI - local multi-backend model host\n" +
             "\n" +
             "Usage:\n" +
             "  tai --json <command>\n" +
@@ -1158,6 +1158,7 @@ public class LauncherCtlApiServer {
             "  tai import <path> [model-id]\n" +
             "  tai download <model-id> <https-url> --accept-terms\n" +
             "  tai downloads\n" +
+            "  tai download-cancel <model-id>\n" +
             "  tai delete <model-id>\n" +
             "  tai load [model] [--auto|--cpu|--gpu]\n" +
             "  tai unload\n" +
@@ -1166,8 +1167,8 @@ public class LauncherCtlApiServer {
             "  tai doctor\n" +
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
-            "LiteRT-LM runs in the Android app process when a supported .litertlm model is loaded.\n" +
-            "Auto follows model and device compatibility metadata from Google AI Edge Gallery.\n" +
+            "LiteRT-LM, MLC OpenCL, and llama.cpp run in the Android app process when supported by the installed APK.\n" +
+            "Auto uses backend-specific GPU-first behavior with CPU fallback where available.\n" +
             "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
@@ -1237,6 +1238,11 @@ public class LauncherCtlApiServer {
             "    ;;\n" +
             "  downloads)\n" +
             "    get_json /v1/ai/models/downloads\n" +
+            "    ;;\n" +
+            "  download-cancel)\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: tai download-cancel <model-id>\" >&2; exit 2; }\n" +
+            "    model=$(json_escape \"$1\")\n" +
+            "    post_json /v1/ai/models/downloads/cancel \"{\\\"modelId\\\":\\\"$model\\\"}\"\n" +
             "    ;;\n" +
             "  delete)\n" +
             "    [ \"$#\" -gt 0 ] || { echo \"usage: tai delete <model-id>\" >&2; exit 2; }\n" +

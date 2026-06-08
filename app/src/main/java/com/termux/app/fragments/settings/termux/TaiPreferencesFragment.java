@@ -572,7 +572,7 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         if (entry.quantization != null) summary.append(" - ").append(entry.quantization);
         if (entry.recommendedRamGb > 0) summary.append("\nRecommended memory: ").append(entry.recommendedRamGb).append(" GiB");
         TaiModelSpec catalogModel = new TaiModelRegistry().getModel(entry.modelId);
-        if (catalogModel != null) {
+        if (catalogModel != null && TaiModelSpec.BACKEND_LITERT_LM.equals(entry.backend)) {
             TaiModelProfile profile = TaiModelProfile.forModel(catalogModel);
             summary.append("\nAccelerators: ").append(profile.compatibleAccelerators.toString());
             if (profile.minDeviceMemoryInGb != null) {
@@ -624,6 +624,12 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         }
         summary.append("\nCapabilities: ").append(model.capabilities.toString());
         try {
+            if (!TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend)) {
+                summary.append("\nAccelerators: ").append(TaiModelSpec.BACKEND_MLC.equals(model.backend)
+                    ? "OpenCL GPU" : "Vulkan GPU, CPU fallback");
+                summary.append("\nContext: ").append(model.contextWindow).append(" tokens");
+                return summary.toString();
+            }
             TaiModelProfile profile = TaiModelProfile.forModel(model);
             summary.append("\nAccelerators: ").append(profile.compatibleAccelerators.toString());
             if (profile.minDeviceMemoryInGb != null) {
