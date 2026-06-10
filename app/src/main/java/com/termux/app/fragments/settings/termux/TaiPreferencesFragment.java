@@ -1,5 +1,7 @@
 package com.termux.app.fragments.settings.termux;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -195,9 +197,11 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
             endpoint.setOnPreferenceClickListener(preference -> {
                 Context currentContext = getContext();
                 if (currentContext != null) {
+                    String message = buildEndpointDetailMessage(currentContext);
                     new MaterialAlertDialogBuilder(currentContext)
                         .setTitle(R.string.termux_ai_endpoint_detail_title)
-                        .setMessage(buildEndpointDetailMessage(currentContext))
+                        .setMessage(message)
+                        .setNeutralButton(R.string.termux_ai_endpoint_copy_action, (dialog, which) -> copyEndpointDetails(currentContext, message))
                         .setPositiveButton(android.R.string.ok, null)
                         .show();
                 }
@@ -287,6 +291,13 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
             Preference endpointNotice = findPreference("tai_endpoint_notice");
             if (endpointNotice != null) endpointNotice.setSummary(R.string.termux_ai_endpoint_notice_summary);
         }
+    }
+
+    private void copyEndpointDetails(Context context, String message) {
+        ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null) return;
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.termux_ai_endpoint_detail_title), message));
+        Toast.makeText(context, R.string.termux_ai_endpoint_copied, Toast.LENGTH_SHORT).show();
     }
 
     private String buildEndpointDetailMessage(Context context) {

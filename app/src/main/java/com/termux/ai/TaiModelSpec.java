@@ -185,7 +185,10 @@ public final class TaiModelSpec {
 
     @NonNull
     public static String inferBackend(@Nullable String path) {
-        return FORMAT_GGUF.equals(inferFormat(path)) ? BACKEND_LLAMA_CPP : BACKEND_LITERT_LM;
+        String format = inferFormat(path);
+        if (FORMAT_GGUF.equals(format)) return BACKEND_LLAMA_CPP;
+        if (FORMAT_MLC_PACKAGE.equals(format)) return BACKEND_MLC;
+        return BACKEND_LITERT_LM;
     }
 
     @NonNull
@@ -194,6 +197,7 @@ public final class TaiModelSpec {
         int query = value.indexOf('?');
         if (query >= 0) value = value.substring(0, query);
         if (value.endsWith(".gguf")) return FORMAT_GGUF;
+        if (value.endsWith(".mlc-package")) return FORMAT_MLC_PACKAGE;
         return FORMAT_LITERTLM;
     }
 }

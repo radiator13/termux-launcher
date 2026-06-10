@@ -517,7 +517,11 @@ public final class TaiManager {
 
     @NonNull
     public JSONObject openAiModels() throws JSONException {
-        JSONObject source = models();
+        return openAiModelsFromTaiModels(models());
+    }
+
+    @NonNull
+    static JSONObject openAiModelsFromTaiModels(@NonNull JSONObject source) throws JSONException {
         JSONArray models = source.optJSONArray("models");
         Map<String, JSONObject> dedupedModels = new LinkedHashMap<>();
         if (models != null) {
@@ -536,14 +540,12 @@ public final class TaiManager {
             item.put("object", "model");
             item.put("created", 0);
             item.put("owned_by", "termux-launcher");
-            item.put("tai", model);
             data.put(item);
         }
 
         JSONObject response = new JSONObject();
         response.put("object", "list");
         response.put("data", data);
-        response.put("tai", source);
         return response;
     }
 

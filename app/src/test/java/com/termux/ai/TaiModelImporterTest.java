@@ -24,4 +24,10 @@ public class TaiModelImporterTest {
         assertEquals("mobile_actions", TaiModelImporter.stripModelExtension("mobile_actions.task"));
         assertEquals("qwen-coder", TaiModelImporter.stripModelExtension("qwen-coder.gguf"));
     }
+
+    @Test
+    public void modelSpec_infersMlcPackageFormat() {
+        assertEquals(TaiModelSpec.FORMAT_MLC_PACKAGE, TaiModelSpec.inferFormat("/models/qwen.mlc-package"));
+        assertEquals(TaiModelSpec.BACKEND_MLC, TaiModelSpec.inferBackend("/models/qwen.mlc-package"));
+    }
 }

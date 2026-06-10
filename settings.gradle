@@ -1,7 +1,10 @@
 include ':app', ':termux-shared', ':terminal-emulator', ':terminal-view', ':termux-am-library'
 
+def includeMlcValue = (gradle.startParameter.projectProperties['termux.includeMlc']
+        ?: System.getenv('TERMUX_INCLUDE_MLC') ?: '0') as String
+def includeMlc = includeMlcValue.equalsIgnoreCase('true') || includeMlcValue == '1'
 def mlc4jDir = file('mlc-package/dist/lib/mlc4j')
-if (mlc4jDir.isDirectory()) {
+if (includeMlc && mlc4jDir.isDirectory()) {
     include ':mlc4j'
     project(':mlc4j').projectDir = mlc4jDir
 }
