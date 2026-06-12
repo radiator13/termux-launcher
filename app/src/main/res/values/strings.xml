@@ -62,6 +62,7 @@
     <string name="msg_unexpected_keyboard_change_method_unavailable">Input method switching is unavailable in the embedded keyboard.</string>
     <string name="msg_unexpected_keyboard_voice_typing_unavailable">Voice typing is unavailable in the embedded keyboard.</string>
     <string name="msg_unexpected_keyboard_emoji_not_yet_supported">Emoji pane is not implemented in the embedded keyboard yet.</string>
+    <string name="paste_error_text">Clipboard is empty</string>
 
 
     <!-- Terminal Extra Keys -->

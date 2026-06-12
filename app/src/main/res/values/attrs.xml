@@ -2,6 +2,12 @@
 <resources>
     <attr name="termuxActivityDrawerBackground" format="reference" />
     <attr name="termuxActivityDrawerImageTint" format="reference" />
+    <attr name="termuxColorSurfacePanelHigh" format="reference" />
+    <attr name="termuxColorSurfacePanelHighest" format="reference" />
+    <attr name="termuxColorOutlineVariant" format="reference" />
+    <attr name="termuxColorOnSurface" format="reference" />
+    <attr name="termuxColorOnSurfaceVariant" format="reference" />
+    <attr name="termuxColorOutline" format="reference" />
 
     <declare-styleable name="RealtimeBlurView">
         <attr name="realtimeBlurRadius" format="dimension" />
