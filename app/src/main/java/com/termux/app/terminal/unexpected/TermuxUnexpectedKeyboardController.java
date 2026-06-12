@@ -78,6 +78,9 @@ public final class TermuxUnexpectedKeyboardController
             KeyboardUtils.hideSoftKeyboard(mActivity, mActivity.getTerminalView());
             KeyboardUtils.disableSoftKeyboard(mActivity, mActivity.getTerminalView());
         } else {
+            if (!mActivity.getPreferences().shouldShowTerminalToolbar()) {
+                mActivity.getPreferences().setShowTerminalToolbar(true);
+            }
             KeyboardUtils.clearDisableSoftKeyboardFlags(mActivity);
             if (mActivity.getTermuxTerminalViewClient() != null) {
                 mActivity.getTermuxTerminalViewClient().setSoftKeyboardState(false, false);

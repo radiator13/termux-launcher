@@ -251,6 +251,14 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherDisplayAppNamesEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "show_extra_keys":
+                mPreferences.setShowTerminalToolbar(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
+            case "unexpected_keyboard_enabled":
+                mPreferences.setUnexpectedKeyboardEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "app_launcher_notification_dots":
                 mPreferences.setAppLauncherNotificationDotsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -293,6 +301,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isAppLauncherCompactDockEnabled();
             case "app_launcher_display_app_names":
                 return mPreferences.isAppLauncherDisplayAppNamesEnabled();
+            case "show_extra_keys":
+                return mPreferences.shouldShowTerminalToolbar();
+            case "unexpected_keyboard_enabled":
+                return mPreferences.isUnexpectedKeyboardEnabled();
             case "app_launcher_notification_dots":
                 return mPreferences.isAppLauncherNotificationDotsEnabled();
             case "app_launcher_az_row_enabled":

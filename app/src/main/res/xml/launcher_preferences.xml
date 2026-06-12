@@ -6,6 +6,18 @@
         app:title="@string/termux_app_launcher_header">
 
         <SwitchPreferenceCompat
+            app:key="show_extra_keys"
+            app:title="@string/termux_terminal_toolbar_enabled_title"
+            app:summary="@string/termux_terminal_toolbar_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="unexpected_keyboard_enabled"
+            app:title="@string/termux_unexpected_keyboard_enabled_title"
+            app:summary="@string/termux_unexpected_keyboard_enabled_summary"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
             app:key="app_launcher_apps_row_enabled"
             app:title="@string/termux_app_launcher_apps_row_enabled_title"
             app:summary="@string/termux_app_launcher_apps_row_enabled_summary"

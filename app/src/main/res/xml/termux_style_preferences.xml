@@ -44,6 +44,18 @@
         app:key="termux_extrakeys_appsbar"
         app:title="@string/termux_extrakeys_appsbar_header">
 
+        <SwitchPreferenceCompat
+            app:key="show_extra_keys"
+            app:title="@string/termux_terminal_toolbar_enabled_title"
+            app:summary="@string/termux_terminal_toolbar_enabled_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="unexpected_keyboard_enabled"
+            app:title="@string/termux_unexpected_keyboard_enabled_title"
+            app:summary="@string/termux_unexpected_keyboard_enabled_summary"
+            android:defaultValue="false" />
+
         <androidx.preference.SeekBarPreference
             app:key="extrakeys_blur_radius"
             app:title="@string/termux_extrakeys_blur_radius_title"
