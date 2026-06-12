@@ -143,6 +143,17 @@
                             android:textColor="?attr/termuxColorOnSurface" />
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/toggle_in_app_keyboard_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="60dp"
+                            android:layout_weight="1"
+                            android:layout_gravity="center_horizontal"
+                            android:text="@string/action_toggle_in_app_keyboard"
+                            android:textAllCaps="true"
+                            android:textColor="?attr/termuxColorOnSurface" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/new_session_button"
                             style="?android:attr/buttonBarButtonStyle"
                             android:layout_width="wrap_content"
@@ -229,19 +240,31 @@
                 android:id="@+id/apps_bar_az_row"
                 android:layout_width="match_parent"
                 android:layout_height="19dp"
-                android:layout_above="@+id/terminal_toolbar_view_pager"
+                android:layout_above="@+id/accessory_primary_host"
                 android:gravity="center_vertical"
                 android:textColor="?attr/termuxColorOnSurfaceVariant"
                 android:elevation="10dp"
                 android:visibility="gone" />
 
-            <androidx.viewpager.widget.ViewPager
-                android:id="@+id/terminal_toolbar_view_pager"
-                android:visibility="gone"
+            <FrameLayout
+                android:id="@+id/accessory_primary_host"
                 android:layout_width="match_parent"
                 android:layout_height="37.5dp"
-                android:layout_alignParentBottom="true"
-                android:background="@android:color/transparent"/>
+                android:layout_alignParentBottom="true">
+
+                <androidx.viewpager.widget.ViewPager
+                    android:id="@+id/terminal_toolbar_view_pager"
+                    android:visibility="gone"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@android:color/transparent"/>
+
+                <com.termux.app.terminal.unexpected.TermuxUnexpectedKeyboardView
+                    android:id="@+id/unexpected_keyboard_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+            </FrameLayout>
 
             <com.termux.app.LauncherAzGestureFxView
                 android:id="@+id/apps_bar_az_fx_overlay"

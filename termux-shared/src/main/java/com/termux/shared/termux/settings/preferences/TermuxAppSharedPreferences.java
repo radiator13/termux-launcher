@@ -246,6 +246,15 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         }
     }
 
+    public boolean isAppLauncherTerminalSwipeEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_TERMINAL_SWIPE_ENABLED,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_TERMINAL_SWIPE_ENABLED);
+    }
+
+    public void setAppLauncherTerminalSwipeEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_TERMINAL_SWIPE_ENABLED, value, false);
+    }
+
     public boolean isAppLauncherNotificationDotsEnabled() {
         return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(
             mSharedPreferences,
@@ -414,6 +423,14 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     public void setSoftKeyboardEnabledOnlyIfNoHardware(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_SOFT_KEYBOARD_ENABLED_ONLY_IF_NO_HARDWARE, value, false);
+    }
+
+    public boolean isUnexpectedKeyboardEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_UNEXPECTED_KEYBOARD_ENABLED, TERMUX_APP.DEFAULT_VALUE_KEY_UNEXPECTED_KEYBOARD_ENABLED);
+    }
+
+    public void setUnexpectedKeyboardEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_UNEXPECTED_KEYBOARD_ENABLED, value, false);
     }
 
     public boolean isRemoveTaskOnActivityFinishEnabled() {

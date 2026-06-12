@@ -247,6 +247,9 @@ public final class TerminalView extends View {
             public boolean onFling(final MotionEvent e2, float velocityX, float velocityY) {
                 if (mEmulator == null)
                     return true;
+                if (shouldOfferHorizontalSwipe(e2, velocityX, velocityY) && mClient.onHorizontalSwipe(e2, velocityX, velocityY)) {
+                    return true;
+                }
                 // Do not start scrolling until last fling has been taken care of:
                 if (!mScroller.isFinished())
                     return true;
@@ -318,6 +321,22 @@ public final class TerminalView extends View {
         // A view is important for accessibility if it fires accessibility events
         // and if it is reported to accessibility services that query the screen.
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
+    }
+
+    private boolean shouldOfferHorizontalSwipe(MotionEvent event, float velocityX, float velocityY) {
+        if (mClient == null || event == null || event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            return false;
+        }
+        if (isSelectingText() || mGestureRecognizer.isInProgress()) {
+            return false;
+        }
+        if (mEmulator != null && mEmulator.isMouseTrackingActive()) {
+            return false;
+        }
+        float absX = Math.abs(velocityX);
+        float absY = Math.abs(velocityY);
+        float minimumVelocity = ViewConfiguration.get(getContext()).getScaledMinimumFlingVelocity() * 2f;
+        return absX >= minimumVelocity && absX > (absY * 1.45f);
     }
 
     /**

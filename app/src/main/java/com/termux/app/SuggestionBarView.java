@@ -892,6 +892,29 @@ public final class SuggestionBarView extends GridLayout {
         return true;
     }
 
+    public boolean requestVisiblePageDelta(int pageDelta, float velocityPxPerSec) {
+        if (pageDelta == 0 || pageSwitchAnimating || !TextUtils.isEmpty(lastInput.trim())) {
+            return false;
+        }
+        if (activeAzLetter != null) {
+            return requestAzPageDelta(pageDelta, velocityPxPerSec);
+        }
+        return requestPinnedPageDelta(pageDelta, velocityPxPerSec);
+    }
+
+    public boolean requestPinnedPageDelta(int pageDelta, float velocityPxPerSec) {
+        if (pageDelta == 0 || pageSwitchAnimating || !hasPinnedOverflowPages()) {
+            return false;
+        }
+        int targetPage = pinnedPageIndex + pageDelta;
+        if (targetPage < 0 || targetPage >= getPinnedPagesCount()) {
+            return false;
+        }
+        swipePagePosition = getPinnedCurrentPageIndex();
+        animatePageSwitch(pageDelta, velocityPxPerSec);
+        return true;
+    }
+
     public AzDragFocusResult resolveAzDragFocus(float rawX, float rawY) {
         boolean pageLeft = canAzPageLeft();
         boolean pageRight = canAzPageRight();

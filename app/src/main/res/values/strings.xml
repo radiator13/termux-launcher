@@ -54,9 +54,14 @@
     <string name="action_create_named_session_confirm">Create</string>
 
     <string name="action_toggle_soft_keyboard">Keyboard</string>
+    <string name="action_toggle_in_app_keyboard">In-app keys</string>
 
     <string name="msg_enabling_terminal_toolbar">Enabling Terminal Toolbar</string>
     <string name="msg_disabling_terminal_toolbar">Disabling Terminal Toolbar</string>
+    <string name="msg_unexpected_keyboard_settings_unavailable">Unexpected Keyboard settings are unavailable in the embedded keyboard.</string>
+    <string name="msg_unexpected_keyboard_change_method_unavailable">Input method switching is unavailable in the embedded keyboard.</string>
+    <string name="msg_unexpected_keyboard_voice_typing_unavailable">Voice typing is unavailable in the embedded keyboard.</string>
+    <string name="msg_unexpected_keyboard_emoji_not_yet_supported">Emoji pane is not implemented in the embedded keyboard yet.</string>
 
 
     <!-- Terminal Extra Keys -->

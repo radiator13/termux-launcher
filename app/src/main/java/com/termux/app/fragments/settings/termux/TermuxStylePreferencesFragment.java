@@ -240,6 +240,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherAppsRowEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "app_launcher_terminal_swipe_enabled":
+                mPreferences.setAppLauncherTerminalSwipeEnabled(value);
+                break;
             case "app_launcher_compact_dock":
                 mPreferences.setAppLauncherCompactDockEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -284,6 +287,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isAppLauncherBwIconsEnabled();
             case "app_launcher_apps_row_enabled":
                 return mPreferences.isAppLauncherAppsRowEnabled();
+            case "app_launcher_terminal_swipe_enabled":
+                return mPreferences.isAppLauncherTerminalSwipeEnabled();
             case "app_launcher_compact_dock":
                 return mPreferences.isAppLauncherCompactDockEnabled();
             case "app_launcher_display_app_names":

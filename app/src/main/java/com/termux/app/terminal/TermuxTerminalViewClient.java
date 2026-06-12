@@ -196,6 +196,10 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             }
         }
         if (!term.isMouseTrackingActive() && !e.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            if (mActivity.isUnexpectedKeyboardVisible()) {
+                KeyboardUtils.hideSoftKeyboard(mActivity, mActivity.getTerminalView());
+                return;
+            }
             if (!KeyboardUtils.areDisableSoftKeyboardFlagsSet(mActivity))
                 KeyboardUtils.showSoftKeyboard(mActivity, mActivity.getTerminalView());
             else
@@ -350,6 +354,11 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     @Override
     public boolean onLongPress(MotionEvent event) {
         return false;
+    }
+
+    @Override
+    public boolean onHorizontalSwipe(MotionEvent event, float velocityX, float velocityY) {
+        return mActivity.onTerminalHorizontalSwipe(event, velocityX, velocityY);
     }
 
     @Override
@@ -560,6 +569,12 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     public void setSoftKeyboardState(boolean isStartup, boolean isReloadTermuxProperties) {
+        if (mActivity.isUnexpectedKeyboardVisible()) {
+            KeyboardUtils.hideSoftKeyboard(mActivity, mActivity.getTerminalView());
+            KeyboardUtils.disableSoftKeyboard(mActivity, mActivity.getTerminalView());
+            mActivity.getTerminalView().requestFocus();
+            return;
+        }
         boolean noShowKeyboard = false;
         // Requesting terminal view focus is necessary regardless of if soft keyboard is to be
         // disabled or hidden at startup, otherwise if hardware keyboard is attached and user

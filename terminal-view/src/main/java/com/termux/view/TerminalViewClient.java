@@ -41,6 +41,10 @@ public interface TerminalViewClient {
 
     boolean onLongPress(MotionEvent event);
 
+    default boolean onHorizontalSwipe(MotionEvent event, float velocityX, float velocityY) {
+        return false;
+    }
+
     default boolean onShowContextMenu(TerminalView view) {
         return false;
     }

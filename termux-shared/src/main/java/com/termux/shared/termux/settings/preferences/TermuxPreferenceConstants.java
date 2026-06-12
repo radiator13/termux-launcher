@@ -158,6 +158,13 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_APP_LAUNCHER_APPS_ROW_ENABLED = true;
 
         /**
+         * Defines the key for enabling full-screen terminal lateral swipes for launcher navigation.
+         */
+        public static final String KEY_APP_LAUNCHER_TERMINAL_SWIPE_ENABLED = "app_launcher_terminal_swipe_enabled";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_TERMINAL_SWIPE_ENABLED = false;
+
+        /**
          * Defines the key for showing active-notification dots on apps bar icons.
          */
         public static final String KEY_APP_LAUNCHER_NOTIFICATION_DOTS = "app_launcher_notification_dots";
@@ -283,6 +290,13 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_SOFT_KEYBOARD_ENABLED_ONLY_IF_NO_HARDWARE = "soft_keyboard_enabled_only_if_no_hardware";
 
         public static final boolean DEFAULT_VALUE_KEY_SOFT_KEYBOARD_ENABLED_ONLY_IF_NO_HARDWARE = false;
+
+        /**
+         * Defines the key for whether the embedded unexpected keyboard is currently shown.
+         */
+        public static final String KEY_UNEXPECTED_KEYBOARD_ENABLED = "unexpected_keyboard_enabled";
+
+        public static final boolean DEFAULT_VALUE_KEY_UNEXPECTED_KEYBOARD_ENABLED = false;
 
         /**
          * Defines the key for whether termux will remove itself from the recent apps screen when

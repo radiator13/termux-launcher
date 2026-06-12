@@ -86,6 +86,8 @@ import com.termux.privileged.ShizukuBackend;
 import com.termux.app.terminal.AccessoryStackLayoutPolicy;
 import com.termux.app.terminal.TermuxActivityRootView;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
+import com.termux.app.terminal.unexpected.TermuxUnexpectedKeyboardController;
+import com.termux.app.terminal.unexpected.TermuxUnexpectedKeyboardView;
 import com.termux.app.terminal.io.TermuxTerminalExtraKeys;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.activity.ActivityUtils;
@@ -219,6 +221,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     TermuxTerminalExtraKeys mTermuxTerminalExtraKeys;
     TermuxTerminalExtraKeys mTermuxTerminalExtraKeys2;
+    TermuxUnexpectedKeyboardController mUnexpectedKeyboardController;
+    TermuxUnexpectedKeyboardView mUnexpectedKeyboardView;
 
     /**
      * The termux sessions list controller.
@@ -591,6 +595,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setSettingsButtonView();
         setNewSessionButtonView();
         setToggleKeyboardView();
+        setToggleInAppKeyboardView();
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
         try {
             // Start the {@link TermuxService} and make it run regardless of who is bound to it
@@ -1037,14 +1042,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private static final class AccessoryRenderState {
         final boolean toolbarShown;
+        final boolean unexpectedKeyboardShown;
         final boolean blurEnabled;
         final boolean appsRowEnabled;
         final boolean azRowEnabled;
         final float barAlpha;
         final int blurRadiusDp;
 
-        AccessoryRenderState(boolean toolbarShown, boolean blurEnabled, boolean appsRowEnabled, boolean azRowEnabled, float barAlpha, int blurRadiusDp) {
+        AccessoryRenderState(boolean toolbarShown, boolean unexpectedKeyboardShown, boolean blurEnabled, boolean appsRowEnabled, boolean azRowEnabled, float barAlpha, int blurRadiusDp) {
             this.toolbarShown = toolbarShown;
+            this.unexpectedKeyboardShown = unexpectedKeyboardShown;
             this.blurEnabled = blurEnabled;
             this.appsRowEnabled = appsRowEnabled;
             this.azRowEnabled = azRowEnabled;
@@ -1079,12 +1086,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private AccessoryRenderState buildAccessoryRenderState() {
         if (mPreferences == null) {
-            return new AccessoryRenderState(false, false, false, false, 1.0f, 0);
+            return new AccessoryRenderState(false, false, false, false, false, 1.0f, 0);
         }
         boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
+        boolean unexpectedKeyboardShown = mUnexpectedKeyboardController != null && mUnexpectedKeyboardController.isVisible();
         return new AccessoryRenderState(
-            mPreferences.shouldShowTerminalToolbar(),
+            mPreferences.shouldShowTerminalToolbar() || unexpectedKeyboardShown,
+            unexpectedKeyboardShown,
             blurRadiusDp > 0,
             appsRowEnabled,
             appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled(),
@@ -1498,7 +1507,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void applyAccessoryRenderState(@NonNull AccessoryRenderState state) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         View accessorySurfaceHost = findViewById(R.id.accessory_surface_host);
+        View accessoryPrimaryHost = findViewById(R.id.accessory_primary_host);
         View terminalToolbarViewPager = findViewById(R.id.terminal_toolbar_view_pager);
+        View unexpectedKeyboardView = findViewById(R.id.unexpected_keyboard_view);
         View appsBarViewPager = findViewById(R.id.apps_bar_viewpager);
         View indicatorBand = findViewById(R.id.apps_bar_indicator_band);
         View extraKeysBackground = findViewById(R.id.extrakeys_background);
@@ -1547,6 +1558,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (terminalToolbarViewPager != null) {
                 terminalToolbarViewPager.setVisibility(View.GONE);
             }
+            if (unexpectedKeyboardView != null) {
+                unexpectedKeyboardView.setVisibility(View.GONE);
+            }
+            if (accessoryPrimaryHost != null) {
+                accessoryPrimaryHost.setVisibility(View.GONE);
+            }
             if (azRow != null) {
                 azRow.setVisibility(View.GONE);
             }
@@ -1571,6 +1588,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
         }
+        if (accessoryPrimaryHost != null) {
+            accessoryPrimaryHost.setVisibility(View.VISIBLE);
+        }
         if (appsBarViewPager != null) {
             appsBarViewPager.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
         }
@@ -1582,7 +1602,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             indicatorBand.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
         }
         if (terminalToolbarViewPager != null) {
-            terminalToolbarViewPager.setVisibility(View.VISIBLE);
+            terminalToolbarViewPager.setVisibility(state.unexpectedKeyboardShown ? View.GONE : View.VISIBLE);
+        }
+        if (unexpectedKeyboardView != null) {
+            unexpectedKeyboardView.setVisibility(state.unexpectedKeyboardShown ? View.VISIBLE : View.GONE);
         }
         if (azRow != null) {
             azRow.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
@@ -2168,6 +2191,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         char[] chars = Character.toChars(codePoint);
         return chars.length == 1 && chars[0] == getSuggestionBarSplitChar();
+    }
+
+    @SuppressLint("RtlHardcoded")
+    public boolean onTerminalHorizontalSwipe(@NonNull MotionEvent event, float velocityX, float velocityY) {
+        if (mPreferences == null || !mPreferences.isAppLauncherTerminalSwipeEnabled()) {
+            return false;
+        }
+        if (Math.abs(velocityX) <= Math.abs(velocityY) * 1.35f) {
+            return false;
+        }
+
+        int pageDelta = velocityX < 0 ? 1 : -1;
+        if (mSuggestionBarView != null && isSuggestionBarEnabled() &&
+            mSuggestionBarView.requestVisiblePageDelta(pageDelta, Math.abs(velocityX))) {
+            return true;
+        }
+
+        DrawerLayout drawer = getDrawer();
+        if (drawer == null) {
+            return false;
+        }
+        if (velocityX > 0 && !drawer.isDrawerOpen(Gravity.LEFT)) {
+            drawer.openDrawer(Gravity.LEFT);
+            return true;
+        }
+        if (velocityX < 0 && drawer.isDrawerOpen(Gravity.LEFT)) {
+            drawer.closeDrawers();
+            return true;
+        }
+        return false;
     }
 
     public boolean shouldDelayRootMarginAdjustments() {
@@ -3103,6 +3156,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Set termux terminal view
         mTerminalView = findViewById(R.id.terminal_view);
         mTerminalView.setTerminalViewClient(mTermuxTerminalViewClient);
+        mUnexpectedKeyboardView = findViewById(R.id.unexpected_keyboard_view);
+        mUnexpectedKeyboardController = new TermuxUnexpectedKeyboardController(this);
+        mUnexpectedKeyboardController.attach(mUnexpectedKeyboardView);
         syncTerminalWallpaperRenderingMode();
         applySuggestionBarInputChar();
         if (mTermuxTerminalViewClient != null)
@@ -3149,7 +3205,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setTerminalToolbarHeight(boolean requestTerminalResize) {
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
         View accessoryStackContainer = findViewById(R.id.accessory_stack_container);
-        if (terminalToolbarViewPager == null || accessoryStackContainer == null)
+        View accessoryPrimaryHost = findViewById(R.id.accessory_primary_host);
+        if (terminalToolbarViewPager == null || accessoryStackContainer == null || accessoryPrimaryHost == null)
             return;
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
 
@@ -3166,15 +3223,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         );
         toolbarLayoutParams.height = toolbarHeightPx;
         terminalToolbarViewPager.setLayoutParams(toolbarLayoutParams);
+        int primaryHeightPx = getAccessoryPrimaryHeightPx(toolbarHeightPx);
+        updateAccessoryStackContainerHeight(accessoryPrimaryHost, primaryHeightPx);
 
         DockLayoutMetrics dockMetrics = buildDockLayoutMetrics(0);
         applyDockLayoutMetrics(dockMetrics);
-        int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
+        int combinedHeight = dockMetrics.combinedHeight(primaryHeightPx);
         boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
         if (requestTerminalResize && accessoryHeightChanged && mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);
         }
         scheduleAccessoryRenderSync("setTerminalToolbarHeight");
+    }
+
+    private int getAccessoryPrimaryHeightPx(int toolbarHeightPx) {
+        if (mUnexpectedKeyboardController == null || !mUnexpectedKeyboardController.isVisible()) {
+            return toolbarHeightPx;
+        }
+        int widthPx = getResources().getDisplayMetrics().widthPixels;
+        return Math.max(toolbarHeightPx, mUnexpectedKeyboardController.getKeyboardHeightPx(widthPx));
     }
 
     private boolean updateAccessoryStackContainerHeight(View view, int height) {
@@ -3315,6 +3382,39 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             toggleTerminalToolbar();
             return true;
         });
+    }
+
+    private void setToggleInAppKeyboardView() {
+        View toggleInAppKeyboardButton = findViewById(R.id.toggle_in_app_keyboard_button);
+        if (toggleInAppKeyboardButton == null) {
+            return;
+        }
+        toggleInAppKeyboardButton.setOnClickListener(v -> {
+            if (mUnexpectedKeyboardController != null) {
+                mUnexpectedKeyboardController.toggleVisibility();
+            }
+            getDrawer().closeDrawers();
+        });
+    }
+
+    public void onUnexpectedKeyboardVisibilityChanged(boolean visible) {
+        if (mPreferences == null || mProperties == null) {
+            return;
+        }
+        if (visible) {
+            scheduleAccessoryRenderSync("unexpected-keyboard:show");
+        } else {
+            scheduleAccessoryRenderSync("unexpected-keyboard:hide");
+        }
+        setTerminalToolbarHeight(true);
+        configureExtraKeysBackground();
+    }
+
+    public void refreshUnexpectedKeyboardLayout() {
+        if (mPreferences != null && mProperties != null && mUnexpectedKeyboardController != null && mUnexpectedKeyboardController.isVisible()) {
+            setTerminalToolbarHeight(true);
+            scheduleAccessoryRenderSync("unexpected-keyboard:layout");
+        }
     }
 
     private void registerWallpaperActivityResultLaunchers() {
@@ -3950,6 +4050,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return isImeVisible();
     }
 
+    public boolean isUnexpectedKeyboardVisible() {
+        return mUnexpectedKeyboardController != null && mUnexpectedKeyboardController.isVisible();
+    }
+
     public boolean isWallpaperPassthroughEnabled() {
         return shouldUseWallpaperPassthroughMode();
     }
@@ -3972,6 +4076,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public TermuxTerminalViewClient getTermuxTerminalViewClient() {
         return mTermuxTerminalViewClient;
+    }
+
+    public TermuxUnexpectedKeyboardController getUnexpectedKeyboardController() {
+        return mUnexpectedKeyboardController;
     }
 
     public TermuxTerminalSessionActivityClient getTermuxTerminalSessionClient() {

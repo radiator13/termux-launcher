@@ -12,6 +12,12 @@
             android:defaultValue="true" />
 
         <SwitchPreferenceCompat
+            app:key="app_launcher_terminal_swipe_enabled"
+            app:title="@string/termux_app_launcher_terminal_swipe_enabled_title"
+            app:summary="@string/termux_app_launcher_terminal_swipe_enabled_summary"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
             app:key="app_launcher_az_row_enabled"
             app:title="@string/termux_app_launcher_az_row_enabled_title"
             app:dependency="app_launcher_apps_row_enabled"

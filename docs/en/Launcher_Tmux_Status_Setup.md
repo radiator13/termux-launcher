@@ -34,12 +34,13 @@ Optional features need extra setup:
 Install the helper scripts in section 3 if you want CPU, RAM, weather, or `kew` widgets. Then add the theme plugin to `~/.tmux.conf`:
 
 ```tmux
+set -g @termux-launcher-tmux-status-position top
 set -g @plugin 'PickleHik3/termux-launcher-tmux'
 
 run '~/.tmux/plugins/tpm/tpm'
 ```
 
-Reload tmux and press `prefix + I` to install it. The plugin README includes a screenshot and the current layout details.
+Reload tmux and press `prefix + I` to install it. Set `@termux-launcher-tmux-status-position` to `bottom` if you want the plugin status bar below panes. The plugin README includes a screenshot and the current layout details.
 
 ## 2. Check LauncherCtl
 
