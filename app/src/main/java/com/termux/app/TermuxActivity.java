@@ -409,6 +409,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int mLastAccessoryBackdropBlurRadiusDp = -1;
     private boolean mLastAccessoryBackdropManagedSource;
     @NonNull private final Rect mLastAccessoryBackdropTargetRect = new Rect();
+    @Nullable private FrameLayout mDecorNavBarSurfaceOverlay;
+    @Nullable private ImageView mDecorNavBarBlurBackdrop;
+    @Nullable private View mDecorNavBarTintOverlay;
+    private boolean mDecorNavBarBackdropDirty = true;
+    private int mLastDecorNavBarBackdropBlurRadiusDp = -1;
+    private boolean mLastDecorNavBarBackdropManagedSource;
+    @NonNull private final Rect mLastDecorNavBarBackdropTargetRect = new Rect();
     @Nullable private Drawable mManagedWallpaperWindowBackground;
     private long mManagedWallpaperWindowBackgroundLastModified = -1L;
     private long mManagedWallpaperWindowBackgroundLength = -1L;
@@ -437,6 +444,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (!isAccessoryBlurHealthy(state)) {
                 mAccessoryBackdropDirty = true;
+                mDecorNavBarBackdropDirty = true;
                 scheduleAccessoryRenderSync("blur:backstop");
             }
             mAccessoryRenderHandler.postDelayed(this, ACCESSORY_BLUR_BACKSTOP_MS);
@@ -452,6 +460,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (!isAccessoryBlurHealthy(state)) {
             mAccessoryBackdropDirty = true;
+            mDecorNavBarBackdropDirty = true;
         }
         scheduleAccessoryRenderSync("blur:recovery");
     };
@@ -461,9 +470,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mImeTransitionInProgress = false;
         mAccessoryBackdropDirty = true;
+        mDecorNavBarBackdropDirty = true;
         mFadeAccessoryBlurAfterImeRestore = shouldFadeAccessoryBlurAfterImeRestore();
         prepareAccessoryBlurRestoreFade();
         updateAccessoryRenderEffectBackdrop(buildAccessoryRenderState());
+        applyDecorNavBarSurfaceState(buildAccessoryRenderState());
         startAccessoryBlurRestoreFade();
         mFadeAccessoryBlurAfterImeRestore = false;
         restartAccessoryBlurHeartbeat();
@@ -986,9 +997,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetTop = 0;
         int targetWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         int targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;
-        int bottomOverscan = viewId == R.id.accessory_surface_host
-            ? resolveAccessoryNavSurfaceOverscanPx()
-            : 0;
         ViewParent parent = view.getParent();
         if (parent instanceof View) {
             View parentView = (View) parent;
@@ -996,24 +1004,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 targetWidth = parentView.getWidth();
             }
             if (parentView.getHeight() > 0) {
-                targetHeight = parentView.getHeight() + bottomOverscan;
+                targetHeight = parentView.getHeight();
             }
         }
         if (params.leftMargin != 0 || params.topMargin != targetTop ||
-            params.rightMargin != 0 || params.bottomMargin != -bottomOverscan ||
+            params.rightMargin != 0 || params.bottomMargin != 0 ||
             params.width != targetWidth || params.height != targetHeight) {
             params.leftMargin = 0;
             params.topMargin = targetTop;
             params.rightMargin = 0;
-            params.bottomMargin = -bottomOverscan;
+            params.bottomMargin = 0;
             params.width = targetWidth;
             params.height = targetHeight;
             view.setLayoutParams(params);
         }
-    }
-
-    private int resolveAccessoryNavSurfaceOverscanPx() {
-        return !mLastImeVisible ? Math.max(0, mNavBarHeight) : 0;
     }
 
     private void configureAccessoryTopEdgeFx(boolean visible, float barAlpha) {
@@ -1149,6 +1153,235 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mLastAccessoryBackdropTargetRect.setEmpty();
     }
 
+    private boolean shouldShowDecorNavBarSurface(@NonNull AccessoryRenderState state) {
+        return state.toolbarShown
+            && mNavBarHeight > 0
+            && !mLastImeVisible
+            && !isImeVisible();
+    }
+
+    private void ensureDecorNavBarSurfaceOverlay() {
+        if (mDecorNavBarSurfaceOverlay != null) {
+            return;
+        }
+        if (getWindow() == null || !(getWindow().getDecorView() instanceof FrameLayout)) {
+            return;
+        }
+
+        FrameLayout decorRoot = (FrameLayout) getWindow().getDecorView();
+        FrameLayout surfaceOverlay = new FrameLayout(this);
+        surfaceOverlay.setVisibility(View.GONE);
+        surfaceOverlay.setClickable(false);
+        surfaceOverlay.setFocusable(false);
+        surfaceOverlay.setClipChildren(true);
+        surfaceOverlay.setClipToPadding(true);
+        surfaceOverlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            surfaceOverlay.setElevation(dpToPx(80));
+            surfaceOverlay.setTranslationZ(dpToPx(80));
+        }
+
+        ImageView blurBackdrop = new ImageView(this);
+        blurBackdrop.setScaleType(ImageView.ScaleType.FIT_XY);
+        blurBackdrop.setVisibility(View.GONE);
+        surfaceOverlay.addView(blurBackdrop, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        View tintOverlay = new View(this);
+        surfaceOverlay.addView(tintOverlay, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        FrameLayout.LayoutParams overlayParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            Gravity.BOTTOM
+        );
+        decorRoot.addView(surfaceOverlay, overlayParams);
+
+        mDecorNavBarSurfaceOverlay = surfaceOverlay;
+        mDecorNavBarBlurBackdrop = blurBackdrop;
+        mDecorNavBarTintOverlay = tintOverlay;
+        mDecorNavBarBackdropDirty = true;
+    }
+
+    private void removeDecorNavBarSurfaceOverlay() {
+        if (mDecorNavBarSurfaceOverlay == null) {
+            return;
+        }
+        clearDecorNavBarBackdrop();
+        ViewParent parent = mDecorNavBarSurfaceOverlay.getParent();
+        if (parent instanceof ViewGroup) {
+            ((ViewGroup) parent).removeView(mDecorNavBarSurfaceOverlay);
+        }
+        mDecorNavBarSurfaceOverlay = null;
+        mDecorNavBarBlurBackdrop = null;
+        mDecorNavBarTintOverlay = null;
+    }
+
+    private void hideDecorNavBarSurfaceOverlay(boolean clearBackdrop) {
+        if (mDecorNavBarSurfaceOverlay != null) {
+            mDecorNavBarSurfaceOverlay.setVisibility(View.GONE);
+        }
+        if (clearBackdrop) {
+            clearDecorNavBarBackdrop();
+        }
+    }
+
+    private void applyDecorNavBarSurfaceBounds(@NonNull FrameLayout overlay, boolean visible) {
+        ViewGroup.LayoutParams layoutParams = overlay.getLayoutParams();
+        if (!(layoutParams instanceof FrameLayout.LayoutParams)) {
+            return;
+        }
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layoutParams;
+        int targetHeight = visible ? Math.max(0, mNavBarHeight) : 0;
+        if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
+            params.height != targetHeight ||
+            params.gravity != Gravity.BOTTOM) {
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = targetHeight;
+            params.gravity = Gravity.BOTTOM;
+            overlay.setLayoutParams(params);
+            mDecorNavBarBackdropDirty = true;
+        }
+    }
+
+    private void applyDecorNavBarSurfaceState(@NonNull AccessoryRenderState state) {
+        boolean visible = shouldShowDecorNavBarSurface(state);
+        if (!visible) {
+            hideDecorNavBarSurfaceOverlay(true);
+            return;
+        }
+
+        ensureDecorNavBarSurfaceOverlay();
+        FrameLayout overlay = mDecorNavBarSurfaceOverlay;
+        if (overlay == null) {
+            return;
+        }
+
+        applyDecorNavBarSurfaceBounds(overlay, true);
+
+        if (mDecorNavBarTintOverlay != null) {
+            mDecorNavBarTintOverlay.setBackgroundColor(resolveAccessorySurfaceColor(state.barAlpha));
+            mDecorNavBarTintOverlay.setVisibility(View.VISIBLE);
+        }
+
+        if (state.blurEnabled) {
+            updateDecorNavBarBackdrop(state);
+        } else {
+            clearDecorNavBarBackdrop();
+        }
+
+        overlay.setVisibility(View.VISIBLE);
+        overlay.bringToFront();
+    }
+
+    @Nullable
+    private Rect buildDecorNavBarBackdropTargetRect() {
+        if (getWindow() == null || getWindow().getDecorView() == null || mNavBarHeight <= 0) {
+            return null;
+        }
+        View decorView = getWindow().getDecorView();
+        int decorWidth = decorView.getWidth();
+        int decorHeight = decorView.getHeight();
+        if (decorWidth <= 0 || decorHeight <= 0) {
+            return null;
+        }
+
+        decorView.getLocationOnScreen(mTmpParentLocation);
+        int navHeight = Math.min(Math.max(1, mNavBarHeight), decorHeight);
+        int bottom = mTmpParentLocation[1] + decorHeight;
+        return new Rect(
+            mTmpParentLocation[0],
+            bottom - navHeight,
+            mTmpParentLocation[0] + decorWidth,
+            bottom
+        );
+    }
+
+    private void clearDecorNavBarBackdrop() {
+        ImageView backdrop = mDecorNavBarBlurBackdrop;
+        if (backdrop != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                backdrop.setRenderEffect(null);
+            }
+            backdrop.setImageDrawable(null);
+            backdrop.setVisibility(View.GONE);
+        }
+        mDecorNavBarBackdropDirty = true;
+        mLastDecorNavBarBackdropBlurRadiusDp = -1;
+        mLastDecorNavBarBackdropManagedSource = false;
+        mLastDecorNavBarBackdropTargetRect.setEmpty();
+    }
+
+    private void updateDecorNavBarBackdrop(@NonNull AccessoryRenderState state) {
+        ImageView backdrop = mDecorNavBarBlurBackdrop;
+        FrameLayout overlay = mDecorNavBarSurfaceOverlay;
+        View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
+        if (backdrop == null || overlay == null || wallpaperFrame == null) {
+            return;
+        }
+        Rect targetRect = buildDecorNavBarBackdropTargetRect();
+        if (targetRect == null) {
+            if (backdrop.getDrawable() != null) {
+                backdrop.setVisibility(View.VISIBLE);
+            } else {
+                clearDecorNavBarBackdrop();
+            }
+            return;
+        }
+
+        boolean usingManagedWallpaperSource = shouldUseManagedWallpaperBlurSource();
+        if (!mDecorNavBarBackdropDirty &&
+            mLastDecorNavBarBackdropBlurRadiusDp == state.blurRadiusDp &&
+            mLastDecorNavBarBackdropManagedSource == usingManagedWallpaperSource &&
+            mLastDecorNavBarBackdropTargetRect.equals(targetRect) &&
+            backdrop.getDrawable() != null) {
+            backdrop.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        Bitmap wallpaperBackdrop = createWallpaperBackdropBitmapForRect(targetRect, wallpaperFrame);
+        if (wallpaperBackdrop == null) {
+            if (backdrop.getDrawable() != null) {
+                backdrop.setVisibility(View.VISIBLE);
+            } else {
+                clearDecorNavBarBackdrop();
+            }
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            float blurRadiusPx = ViewUtils.dpToPx(this, Math.max(0, state.blurRadiusDp));
+            backdrop.setImageBitmap(wallpaperBackdrop);
+            backdrop.setRenderEffect(RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+        } else {
+            Bitmap blurredBackdrop = createPreBlurredWallpaperBackdropBitmap(wallpaperBackdrop, state.blurRadiusDp);
+            if (blurredBackdrop == null) {
+                wallpaperBackdrop.recycle();
+                if (backdrop.getDrawable() != null) {
+                    backdrop.setVisibility(View.VISIBLE);
+                } else {
+                    clearDecorNavBarBackdrop();
+                }
+                return;
+            }
+            backdrop.setImageBitmap(blurredBackdrop);
+            if (blurredBackdrop != wallpaperBackdrop) {
+                wallpaperBackdrop.recycle();
+            }
+        }
+
+        backdrop.setVisibility(View.VISIBLE);
+        mDecorNavBarBackdropDirty = false;
+        mLastDecorNavBarBackdropBlurRadiusDp = state.blurRadiusDp;
+        mLastDecorNavBarBackdropManagedSource = usingManagedWallpaperSource;
+        mLastDecorNavBarBackdropTargetRect.set(targetRect);
+    }
+
     private void restartAccessoryBlurHeartbeat() {
         mAccessoryRenderHandler.removeCallbacks(mAccessoryBlurHeartbeatRunnable);
         AccessoryRenderState state = buildAccessoryRenderState();
@@ -1196,19 +1429,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         animateAccessoryBlurLayer(findViewById(R.id.extrakeys_backgroundblur));
         animateAccessoryBlurLayer(findViewById(R.id.accessory_blur_backdrop));
+        animateAccessoryBlurLayer(mDecorNavBarBlurBackdrop);
     }
 
     private boolean shouldFadeAccessoryBlurAfterImeRestore() {
         ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
-        return backdrop == null
+        boolean accessoryBackdropMissing = backdrop == null
             || backdrop.getVisibility() != View.VISIBLE
             || backdrop.getDrawable() == null
             || backdrop.getAlpha() <= 0f;
+        if (accessoryBackdropMissing) {
+            return true;
+        }
+        ImageView decorBackdrop = mDecorNavBarBlurBackdrop;
+        if (!shouldShowDecorNavBarSurface(buildAccessoryRenderState())) {
+            return false;
+        }
+        return decorBackdrop == null
+            || decorBackdrop.getVisibility() != View.VISIBLE
+            || decorBackdrop.getDrawable() == null
+            || decorBackdrop.getAlpha() <= 0f;
     }
 
     private void setAccessoryBlurLayerAlpha(float alpha) {
         setAccessoryBlurLayerAlpha(findViewById(R.id.extrakeys_backgroundblur), alpha);
         setAccessoryBlurLayerAlpha(findViewById(R.id.accessory_blur_backdrop), alpha);
+        setAccessoryBlurLayerAlpha(mDecorNavBarBlurBackdrop, alpha);
     }
 
     private void setAccessoryBlurLayerAlpha(@Nullable View view, float alpha) {
@@ -1238,9 +1484,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean useRenderEffectBlur = shouldUseAccessoryRenderEffectBlur(state);
         if (useRenderEffectBlur) {
             ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
-            return backdrop != null
+            boolean accessoryBackdropHealthy = backdrop != null
                 && backdrop.getVisibility() == View.VISIBLE
                 && backdrop.getDrawable() != null;
+            if (!accessoryBackdropHealthy) {
+                return false;
+            }
+            if (shouldShowDecorNavBarSurface(state)) {
+                return mDecorNavBarBlurBackdrop != null
+                    && mDecorNavBarBlurBackdrop.getVisibility() == View.VISIBLE
+                    && mDecorNavBarBlurBackdrop.getDrawable() != null;
+            }
+            return true;
         }
         View realtimeBlur = findViewById(R.id.extrakeys_backgroundblur);
         return realtimeBlur != null
@@ -1562,6 +1817,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 azLabelOverlay.setVisibility(View.GONE);
             }
             clearAccessoryRenderEffectBackdrop();
+            applyDecorNavBarSurfaceState(state);
             configureAccessoryTopEdgeFx(false, state.barAlpha);
             resetAzOverflowAffordanceState();
             return;
@@ -1609,6 +1865,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         configureAccessoryTopEdgeFx(true, state.barAlpha);
         updateAccessoryRenderEffectBackdrop(state);
+        applyDecorNavBarSurfaceState(state);
         updateAzOverflowAffordance();
     }
 
@@ -1764,6 +2021,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setAccessoryBlurLayerAlpha(1f);
         applySmoothDockImeOffset(0);
         clearAccessoryRenderEffectBackdrop();
+        hideDecorNavBarSurfaceOverlay(true);
         mAzGestureHandler.removeCallbacks(mPackageRefreshRunnable);
         mAzGestureHandler.removeCallbacks(mLauncherCatalogWarmRunnable);
         getDrawer().closeDrawers();
@@ -1776,6 +2034,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState)
             return;
         clearAccessoryRenderEffectBackdrop();
+        removeDecorNavBarSurfaceOverlay();
         if (mSuggestionBarView != null) {
             mSuggestionBarView.releaseResources();
         }
@@ -4093,6 +4352,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         mAccessoryBackdropDirty = true;
+        mDecorNavBarBackdropDirty = true;
         scheduleAccessoryRenderSync("window:focus");
         restartAccessoryBlurHeartbeat();
         scheduleAccessoryBlurRecovery();
@@ -4436,6 +4696,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void scheduleAccessoryRenderSync(@NonNull String reason) {
         if (reason.contains("wallpaper") || reason.contains("style") || reason.contains("blur")) {
             mAccessoryBackdropDirty = true;
+            mDecorNavBarBackdropDirty = true;
         }
         mPendingAccessoryRenderReason = reason;
         if (mAccessoryRenderSyncPending) {
