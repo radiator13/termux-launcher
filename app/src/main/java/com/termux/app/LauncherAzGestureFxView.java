@@ -97,7 +97,7 @@ public final class LauncherAzGestureFxView extends View {
         @Override
         public void run() {
             subtlePageIndicatorFadeScheduled = false;
-            animateSubtlePageIndicatorAttentionTo(0f);
+            animateSubtlePageIndicatorAttentionTo(PINNED_INDICATOR_IDLE_ATTENTION);
         }
     };
     private float edgeProximityLeft;
@@ -123,6 +123,7 @@ public final class LauncherAzGestureFxView extends View {
     private static final long FOCUS_HOLD_MS = 140L;
     private static final long PINNED_INDICATOR_IDLE_DELAY_MS = 5000L;
     private static final long PINNED_INDICATOR_FADE_DURATION_MS = 520L;
+    private static final float PINNED_INDICATOR_IDLE_ATTENTION = 0.72f;
 
     private boolean launchBloomActive;
     private float launchBloomRawX;
