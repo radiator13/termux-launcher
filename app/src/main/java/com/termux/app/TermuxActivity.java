@@ -997,6 +997,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetTop = 0;
         int targetWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         int targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;
+        int targetLeftMargin = 0;
+        int targetRightMargin = 0;
+        boolean capsuleSurface = viewId == R.id.accessory_surface_host && isValarieDockStyle();
         ViewParent parent = view.getParent();
         if (parent instanceof View) {
             View parentView = (View) parent;
@@ -1007,16 +1010,65 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 targetHeight = parentView.getHeight();
             }
         }
-        if (params.leftMargin != 0 || params.topMargin != targetTop ||
-            params.rightMargin != 0 || params.bottomMargin != 0 ||
+        if (capsuleSurface && targetWidth > 0) {
+            int horizontalMargin = resolveDockCapsuleHorizontalMarginPx();
+            targetLeftMargin = horizontalMargin;
+            targetRightMargin = horizontalMargin;
+            targetWidth = Math.max(1, targetWidth - (horizontalMargin * 2));
+        }
+        applyDockSurfaceShape(view, capsuleSurface, targetHeight);
+        if (params.leftMargin != targetLeftMargin || params.topMargin != targetTop ||
+            params.rightMargin != targetRightMargin || params.bottomMargin != 0 ||
             params.width != targetWidth || params.height != targetHeight) {
-            params.leftMargin = 0;
+            params.leftMargin = targetLeftMargin;
             params.topMargin = targetTop;
-            params.rightMargin = 0;
+            params.rightMargin = targetRightMargin;
             params.bottomMargin = 0;
             params.width = targetWidth;
             params.height = targetHeight;
             view.setLayoutParams(params);
+        }
+    }
+
+    private boolean isValarieDockStyle() {
+        return mPreferences != null
+            && TermuxPreferenceConstants.TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE.equals(
+                mPreferences.getAppLauncherDockStyle()
+            );
+    }
+
+    private boolean isCompactDockEnabled() {
+        return mPreferences != null && mPreferences.isAppLauncherCompactDockEnabled();
+    }
+
+    private int resolveDockCapsuleHorizontalMarginPx() {
+        return Math.round(dpToPx(isCompactDockEnabled() ? 8 : 12));
+    }
+
+    private int resolveDockCapsuleBottomGapPx() {
+        return Math.round(dpToPx(isCompactDockEnabled() ? 4 : 6));
+    }
+
+    private float resolveDockCapsuleCornerRadiusPx(int surfaceHeightPx) {
+        float maxRadius = dpToPx(isCompactDockEnabled() ? 24 : 30);
+        return Math.max(dpToPx(16), Math.min(maxRadius, surfaceHeightPx / 2f));
+    }
+
+    private void applyDockSurfaceShape(@NonNull View surface, boolean capsule, int surfaceHeightPx) {
+        if (!capsule) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                surface.setClipToOutline(false);
+            }
+            surface.setBackground(null);
+            return;
+        }
+
+        GradientDrawable outline = new GradientDrawable();
+        outline.setColor(Color.TRANSPARENT);
+        outline.setCornerRadius(resolveDockCapsuleCornerRadiusPx(surfaceHeightPx));
+        surface.setBackground(outline);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            surface.setClipToOutline(true);
         }
     }
 
@@ -1176,10 +1228,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         surfaceOverlay.setClipChildren(true);
         surfaceOverlay.setClipToPadding(true);
         surfaceOverlay.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            surfaceOverlay.setElevation(dpToPx(80));
-            surfaceOverlay.setTranslationZ(dpToPx(80));
-        }
 
         ImageView blurBackdrop = new ImageView(this);
         blurBackdrop.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -1238,12 +1286,23 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layoutParams;
         int targetHeight = visible ? resolveDecorNavBarSurfaceHeightPx() : 0;
+        int targetHorizontalMargin = visible && isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+        int targetBottomMargin = visible && isValarieDockStyle()
+            ? mNavBarHeight + resolveDockCapsuleBottomGapPx()
+            : 0;
+        applyDockSurfaceShape(overlay, visible && isValarieDockStyle(), targetHeight);
         if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
             params.height != targetHeight ||
-            params.gravity != Gravity.BOTTOM) {
+            params.gravity != Gravity.BOTTOM ||
+            params.leftMargin != targetHorizontalMargin ||
+            params.rightMargin != targetHorizontalMargin ||
+            params.bottomMargin != targetBottomMargin) {
             params.width = ViewGroup.LayoutParams.MATCH_PARENT;
             params.height = targetHeight;
             params.gravity = Gravity.BOTTOM;
+            params.leftMargin = targetHorizontalMargin;
+            params.rightMargin = targetHorizontalMargin;
+            params.bottomMargin = targetBottomMargin;
             overlay.setLayoutParams(params);
             mDecorNavBarBackdropDirty = true;
         }
@@ -1291,12 +1350,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         decorView.getLocationOnScreen(mTmpParentLocation);
+        int horizontalMargin = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+        int bottomMargin = isValarieDockStyle() ? mNavBarHeight + resolveDockCapsuleBottomGapPx() : 0;
         int surfaceHeight = Math.min(Math.max(1, resolveDecorNavBarSurfaceHeightPx()), decorHeight);
-        int bottom = mTmpParentLocation[1] + decorHeight;
+        int bottom = mTmpParentLocation[1] + decorHeight - bottomMargin;
         return new Rect(
-            mTmpParentLocation[0],
+            mTmpParentLocation[0] + horizontalMargin,
             bottom - surfaceHeight,
-            mTmpParentLocation[0] + decorWidth,
+            mTmpParentLocation[0] + decorWidth - horizontalMargin,
             bottom
         );
     }
@@ -1307,7 +1368,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         int dockHeight = accessoryContainer != null ? Math.max(0, accessoryContainer.getHeight()) : 0;
-        return mNavBarHeight + dockHeight;
+        return isValarieDockStyle() ? dockHeight : mNavBarHeight + dockHeight;
     }
 
     private void clearDecorNavBarBackdrop() {
@@ -3438,7 +3499,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyDockLayoutMetrics(dockMetrics);
         int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
         boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
-        if (requestTerminalResize && accessoryHeightChanged && mTerminalView != null) {
+        boolean accessoryMarginChanged = updateAccessoryStackContainerBottomMargin(
+            accessoryStackContainer,
+            resolveAccessoryStackBottomMarginPx()
+        );
+        if (requestTerminalResize && (accessoryHeightChanged || accessoryMarginChanged) && mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);
         }
         scheduleAccessoryRenderSync("setTerminalToolbarHeight");
@@ -3453,6 +3518,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         layoutParams.height = height;
         view.setLayoutParams(layoutParams);
         return true;
+    }
+
+    private boolean updateAccessoryStackContainerBottomMargin(View view, int marginBottom) {
+        ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+        if (!(layoutParams instanceof ViewGroup.MarginLayoutParams))
+            return false;
+        ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) layoutParams;
+        if (marginParams.bottomMargin == marginBottom)
+            return false;
+        marginParams.bottomMargin = marginBottom;
+        view.setLayoutParams(marginParams);
+        return true;
+    }
+
+    private int resolveAccessoryStackBottomMarginPx() {
+        if (!isValarieDockStyle() || mLastImeVisible || isImeVisible()) {
+            return 0;
+        }
+        return resolveDockCapsuleBottomGapPx();
     }
 
     // Kept for test compatibility and to preserve existing RelativeLayout params in-place.
@@ -4919,6 +5003,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mSuggestionBarView.resetTransientVisualState();
         }
         applySuggestionBarInputChar();
+        mAccessoryBackdropDirty = true;
+        mDecorNavBarBackdropDirty = true;
         applyAccessoryGeometryIfNeeded(true, "reloadActivityStyling");
         applySeamlessStatusBackgroundModeIfNeeded();
         applyTerminalSurfaceAppearance();
