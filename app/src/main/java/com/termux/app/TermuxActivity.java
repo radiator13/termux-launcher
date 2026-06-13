@@ -1042,7 +1042,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveDockCapsuleHorizontalMarginPx() {
-        return Math.round(dpToPx(isCompactDockEnabled() ? 8 : 12));
+        return Math.round(dpToPx(isCompactDockEnabled() ? 4 : 6));
+    }
+
+    private int resolveDockCapsuleContentInsetPx() {
+        return resolveDockCapsuleHorizontalMarginPx() + Math.round(dpToPx(isCompactDockEnabled() ? 6 : 8));
     }
 
     private int resolveDockCapsuleBottomGapPx() {
@@ -1287,9 +1291,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layoutParams;
         int targetHeight = visible ? resolveDecorNavBarSurfaceHeightPx() : 0;
         int targetHorizontalMargin = visible && isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
-        int targetBottomMargin = visible && isValarieDockStyle()
-            ? mNavBarHeight + resolveDockCapsuleBottomGapPx()
-            : 0;
+        int targetBottomMargin = 0;
         applyDockSurfaceShape(overlay, visible && isValarieDockStyle(), targetHeight);
         if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
             params.height != targetHeight ||
@@ -1351,7 +1353,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         decorView.getLocationOnScreen(mTmpParentLocation);
         int horizontalMargin = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
-        int bottomMargin = isValarieDockStyle() ? mNavBarHeight + resolveDockCapsuleBottomGapPx() : 0;
+        int bottomMargin = 0;
         int surfaceHeight = Math.min(Math.max(1, resolveDecorNavBarSurfaceHeightPx()), decorHeight);
         int bottom = mTmpParentLocation[1] + decorHeight - bottomMargin;
         return new Rect(
@@ -1368,7 +1370,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         int dockHeight = accessoryContainer != null ? Math.max(0, accessoryContainer.getHeight()) : 0;
-        return isValarieDockStyle() ? dockHeight : mNavBarHeight + dockHeight;
+        return isValarieDockStyle()
+            ? dockHeight + mNavBarHeight + resolveDockCapsuleBottomGapPx()
+            : mNavBarHeight + dockHeight;
     }
 
     private void clearDecorNavBarBackdrop() {
@@ -3566,6 +3570,30 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         view.setLayoutParams(marginParams);
     }
 
+    private void updateViewHorizontalMargins(int viewId, int marginHorizontal) {
+        View view = findViewById(viewId);
+        if (view == null) return;
+        ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+        if (!(layoutParams instanceof ViewGroup.MarginLayoutParams)) return;
+        ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) layoutParams;
+        if (marginParams.leftMargin == marginHorizontal && marginParams.rightMargin == marginHorizontal) return;
+        marginParams.leftMargin = marginHorizontal;
+        marginParams.rightMargin = marginHorizontal;
+        view.setLayoutParams(marginParams);
+    }
+
+    private void applyDockRowHorizontalInsets() {
+        int contentInset = isValarieDockStyle() ? resolveDockCapsuleContentInsetPx() : 0;
+        int surfaceInset = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+
+        updateViewHorizontalMargins(R.id.apps_bar_viewpager, contentInset);
+        updateViewHorizontalMargins(R.id.apps_bar_indicator_band, contentInset);
+        updateViewHorizontalMargins(R.id.apps_bar_az_row, contentInset);
+        updateViewHorizontalMargins(R.id.terminal_toolbar_view_pager, contentInset);
+        updateViewHorizontalMargins(R.id.apps_bar_az_fx_underlay, surfaceInset);
+        updateViewHorizontalMargins(R.id.apps_bar_az_fx_overlay, surfaceInset);
+    }
+
     private int getDockBaseToolbarHeightPx() {
         if (mTerminalToolbarDefaultHeight > 0) {
             return Math.round(mTerminalToolbarDefaultHeight);
@@ -3603,7 +3631,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
-        return 1.34f + (normalized * 0.64f);
+        float scale = 1.34f + (normalized * 0.64f);
+        return isValarieDockStyle() ? Math.max(1.24f, scale * 0.94f) : scale;
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
@@ -3611,6 +3640,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         updateViewHeight(R.id.apps_bar_indicator_band, metrics.indicatorBandHeightPx);
         updateViewHeight(R.id.apps_bar_az_row, metrics.azRowHeightPx);
         updateViewBottomMargin(R.id.apps_bar_viewpager, 0);
+        applyDockRowHorizontalInsets();
         if (mSuggestionBarView != null) {
             mSuggestionBarView.setDockRowHeightHintPx(metrics.appsBarHeightPx);
         }
