@@ -9,12 +9,12 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ActivityOptions;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
@@ -71,6 +71,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -2174,7 +2175,19 @@ public final class SuggestionBarView extends GridLayout {
         BottomSheetDialog dialog = new BottomSheetDialog(getContext());
         LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(32, 24, 32, 24);
+        root.setPadding(dp(20), dp(16), dp(20), dp(16));
+        root.setClipToOutline(true);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setCornerRadii(new float[] {
+            dp(28), dp(28), dp(28), dp(28),
+            dp(12), dp(12), dp(12), dp(12)
+        });
+        sheetBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0xFA));
+        sheetBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x55));
+        root.setBackground(sheetBg);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            root.setElevation(dp(16));
+        }
 
         final List<LauncherAppEntry> source = new ArrayList<>(allApps);
         final List<PinOption> options = buildPinOptions(source, pinnedItems);
@@ -2187,10 +2200,27 @@ public final class SuggestionBarView extends GridLayout {
             orderedSelected.add(clonePinnedItem(item));
         }
 
+        TextView title = new TextView(getContext());
+        title.setText("Edit pinned apps");
+        title.setTextColor(resolveLauncherTextColor());
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextSize(22f);
+        title.setIncludeFontPadding(false);
+
+        TextView subtitle = new TextView(getContext());
+        subtitle.setText("Choose apps, drag to reorder, or create a folder from the selected pins.");
+        subtitle.setTextColor(resolveLauncherSubtleTextColor());
+        subtitle.setTextSize(13f);
+        subtitle.setPadding(0, dp(6), 0, dp(16));
+
         TextView selectedTitle = new TextView(getContext());
-        selectedTitle.setText("Pinned Apps");
+        selectedTitle.setText("Pinned order");
         selectedTitle.setTextColor(resolveLauncherTextColor());
-        selectedTitle.setPadding(0, 0, 0, 8);
+        selectedTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        selectedTitle.setTextSize(13f);
+        selectedTitle.setAllCaps(true);
+        selectedTitle.setLetterSpacing(0.08f);
+        selectedTitle.setPadding(0, 0, 0, dp(8));
 
         final ListView[] listViewHolder = new ListView[1];
         final OrderedPinnedAdapter[] orderedAdapterHolder = new OrderedPinnedAdapter[1];
@@ -2208,6 +2238,13 @@ public final class SuggestionBarView extends GridLayout {
         orderedRecycler.setLayoutManager(new LinearLayoutManager(getContext()));
         orderedRecycler.setAdapter(orderedAdapter);
         orderedRecycler.setOverScrollMode(OVER_SCROLL_NEVER);
+        orderedRecycler.setClipToPadding(false);
+        orderedRecycler.setPadding(0, dp(4), 0, dp(4));
+        GradientDrawable orderedBg = new GradientDrawable();
+        orderedBg.setCornerRadius(dp(18));
+        orderedBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0xAA));
+        orderedBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x44));
+        orderedRecycler.setBackground(orderedBg);
 
         ItemTouchHelper touchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP | ItemTouchHelper.DOWN,
@@ -2245,19 +2282,77 @@ public final class SuggestionBarView extends GridLayout {
         TextView allAppsTitle = new TextView(getContext());
         allAppsTitle.setText("Apps");
         allAppsTitle.setTextColor(resolveLauncherTextColor());
-        allAppsTitle.setPadding(0, 16, 0, 8);
+        allAppsTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        allAppsTitle.setTextSize(13f);
+        allAppsTitle.setAllCaps(true);
+        allAppsTitle.setLetterSpacing(0.08f);
+        allAppsTitle.setPadding(0, dp(18), 0, dp(8));
 
         EditText searchInput = new EditText(getContext());
         searchInput.setHint("Search apps");
         searchInput.setSingleLine(true);
+        searchInput.setTextColor(resolveLauncherTextColor());
+        searchInput.setHintTextColor(resolveLauncherSubtleTextColor());
+        searchInput.setTextSize(15f);
+        searchInput.setMinHeight(dp(48));
+        searchInput.setPadding(dp(14), 0, dp(14), 0);
+        GradientDrawable searchBg = new GradientDrawable();
+        searchBg.setCornerRadius(dp(16));
+        searchBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0xC8));
+        searchBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x55));
+        searchInput.setBackground(searchBg);
 
         ListView listView = new ListView(getContext());
         listViewHolder[0] = listView;
         listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
+        listView.setDivider(null);
+        listView.setDividerHeight(0);
+        listView.setCacheColorHint(0x00000000);
+        listView.setSelector(new ColorDrawable(0x00000000));
+        listView.setClipToPadding(false);
+        listView.setPadding(0, dp(6), 0, dp(6));
+        GradientDrawable listBg = new GradientDrawable();
+        listBg.setCornerRadius(dp(18));
+        listBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0x88));
+        listBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x33));
+        listView.setBackground(listBg);
         final List<PinOption> filteredOptions = new ArrayList<>(options);
         final List<String> filteredLabels = new ArrayList<>();
         for (PinOption option : options) filteredLabels.add(option.label);
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_multiple_choice, filteredLabels);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getContext(), android.R.layout.simple_list_item_multiple_choice, filteredLabels) {
+            @NonNull
+            @Override
+            public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                if (view instanceof TextView) {
+                    TextView textView = (TextView) view;
+                    textView.setTextColor(resolveLauncherTextColor());
+                    textView.setTextSize(15f);
+                    textView.setMinHeight(dp(46));
+                    textView.setGravity(Gravity.CENTER_VERTICAL);
+                    textView.setPadding(dp(14), 0, dp(14), 0);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && textView instanceof android.widget.CheckedTextView) {
+                        int[][] states = new int[][] {
+                            new int[] {android.R.attr.state_checked},
+                            new int[] {}
+                        };
+                        int[] colors = new int[] {
+                            MaterialColors.getColor(SuggestionBarView.this, com.google.android.material.R.attr.colorPrimary,
+                                ContextCompat.getColor(getContext(), R.color.termux_accent_container)),
+                            resolveLauncherSubtleTextColor()
+                        };
+                        ((android.widget.CheckedTextView) textView).setCheckMarkTintList(new ColorStateList(states, colors));
+                    }
+                }
+                GradientDrawable rowBg = new GradientDrawable();
+                rowBg.setCornerRadius(dp(14));
+                rowBg.setColor(listView.isItemChecked(position)
+                    ? blendColors(withAlphaComponent(inheritedTintColor, 0x33), withAlphaComponent(resolveLauncherPanelColor(), 0xCC), 0.45f)
+                    : 0x00000000);
+                view.setBackground(rowBg);
+                return view;
+            }
+        };
         listView.setAdapter(adapter);
         listView.setOnTouchListener((v, event) -> {
             v.getParent().requestDisallowInterceptTouchEvent(true);
@@ -2304,6 +2399,7 @@ public final class SuggestionBarView extends GridLayout {
                 orderedAdapter.notifyDataSetChanged();
             }
             syncListChecksFiltered(listView, filteredOptions, selectedIds);
+            adapter.notifyDataSetChanged();
         });
 
         LinearLayout buttons = new LinearLayout(getContext());
@@ -2313,7 +2409,12 @@ public final class SuggestionBarView extends GridLayout {
         ImageButton folderAction = new ImageButton(getContext());
         folderAction.setImageResource(R.drawable.ic_create_new_folder_24);
         folderAction.setContentDescription("Create folder at this slot");
-        styleIconButton(folderAction, dp(4));
+        styleIconButton(folderAction, dp(6));
+        GradientDrawable folderActionBg = new GradientDrawable();
+        folderActionBg.setShape(GradientDrawable.OVAL);
+        folderActionBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0xD8));
+        folderActionBg.setStroke(dp(1), withAlphaComponent(resolveLauncherOutlineColor(), 0x55));
+        folderAction.setBackground(folderActionBg);
 
         Button cancel = new Button(getContext());
         cancel.setText("Cancel");
@@ -2363,15 +2464,23 @@ public final class SuggestionBarView extends GridLayout {
             return false;
         });
 
+        root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(subtitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(selectedTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(orderedRecycler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(180)));
+        root.addView(orderedRecycler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(160)));
         root.addView(allAppsTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(searchInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(listView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(280)));
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        searchParams.setMargins(0, 0, 0, dp(10));
+        root.addView(searchInput, searchParams);
+        root.addView(listView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(250)));
         root.addView(buttons, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         dialog.setContentView(root);
         dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0x00000000));
+            dialog.getWindow().setDimAmount(0.35f);
+        }
     }
 
     private void showFolderContentsEditor(final int folderIndex, @NonNull final PinnedFolderItem folder) {
@@ -2610,7 +2719,7 @@ public final class SuggestionBarView extends GridLayout {
             "Create folder"
         };
 
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Pinned app")
             .setItems(options, (dialog, which) -> {
                 switch (which) {
@@ -3015,7 +3124,7 @@ public final class SuggestionBarView extends GridLayout {
             "Unpin folder"
         };
 
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle(folder.title)
             .setItems(options, (dialog, which) -> {
                 switch (which) {
@@ -3041,7 +3150,7 @@ public final class SuggestionBarView extends GridLayout {
     private void showReplacePinnedApp(int index) {
         if (allApps == null || allApps.isEmpty()) reloadAllApps();
         String[] labels = appLabels(allApps);
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Replace pinned app")
             .setItems(labels, (dialog, which) -> {
                 AppRef ref = allApps.get(which).appRef;
@@ -3062,7 +3171,7 @@ public final class SuggestionBarView extends GridLayout {
         String[] names = new String[folders.size()];
         for (int i = 0; i < folders.size(); i++) names[i] = folders.get(i).title;
 
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Move to folder")
             .setItems(names, (dialog, which) -> {
                 PinnedFolderItem folder = folders.get(which);
@@ -3078,7 +3187,7 @@ public final class SuggestionBarView extends GridLayout {
     private void showCreateFolderWithSeed(int appIndex, PinnedAppItem item) {
         EditText titleInput = new EditText(getContext());
         titleInput.setHint("Folder name");
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Create folder")
             .setView(titleInput)
             .setPositiveButton("Create", (dialog, which) -> {
@@ -3110,7 +3219,7 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         String[] labels = appLabels(allApps);
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Edit folder apps")
             .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
                 checked[which] = isChecked;
@@ -3184,7 +3293,7 @@ public final class SuggestionBarView extends GridLayout {
         layout.addView(colorInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         layout.addView(buttons, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        AlertDialog dialog = new AlertDialog.Builder(getContext())
+        AlertDialog dialog = new MaterialAlertDialogBuilder(getContext())
             .setView(layout)
             .create();
 
@@ -3347,7 +3456,7 @@ public final class SuggestionBarView extends GridLayout {
         EditText titleInput = new EditText(getContext());
         titleInput.setHint("Folder name");
         titleInput.setText(TextUtils.isEmpty(folder.title) ? "Folder" : folder.title);
-        new AlertDialog.Builder(getContext())
+        new MaterialAlertDialogBuilder(getContext())
             .setTitle("Rename folder")
             .setView(titleInput)
             .setPositiveButton("Save", (dialog, which) -> {

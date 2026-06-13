@@ -13,11 +13,11 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SeekBarPreference;
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.file.FileUtils;
@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.Properties;
 
 @Keep
-public class TermuxStylePreferencesFragment extends PreferenceFragmentCompat {
+public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
 
     static final float[] APP_LAUNCHER_ICON_SCALE_PRESETS = {1.22f, 1.36f, 1.54f, 1.74f};
     static final float[] APP_LAUNCHER_BAR_HEIGHT_PRESETS = {1.45f, 1.60f, 1.88f, 2.18f};

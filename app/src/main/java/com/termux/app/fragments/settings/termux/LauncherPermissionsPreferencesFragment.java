@@ -12,10 +12,10 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.PillPreference;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
@@ -24,7 +24,7 @@ import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.termux.TermuxConstants;
 
 @Keep
-public class LauncherPermissionsPreferencesFragment extends PreferenceFragmentCompat {
+public class LauncherPermissionsPreferencesFragment extends MaterialPreferenceFragment {
 
     private static final String KEY_STORAGE = "app_launcher_storage_access";
     private static final String KEY_NOTIFICATION_ACCESS = "app_launcher_notification_access";

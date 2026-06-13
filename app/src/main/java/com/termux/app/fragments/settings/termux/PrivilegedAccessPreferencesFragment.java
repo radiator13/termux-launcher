@@ -9,10 +9,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
 import com.termux.R;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.fragments.settings.StatusCardPreference;
 import com.termux.privileged.PrivilegedBackendManager;
@@ -20,7 +20,7 @@ import com.termux.privileged.PrivilegedPolicyStore;
 import com.termux.privileged.ShizukuBackend;
 
 @Keep
-public class PrivilegedAccessPreferencesFragment extends PreferenceFragmentCompat {
+public class PrivilegedAccessPreferencesFragment extends MaterialPreferenceFragment {
 
     private static final String KEY_STATUS = "privileged_backend_status";
     private static final String KEY_REQUEST_PERMISSION = "priv_request_shizuku_permission";

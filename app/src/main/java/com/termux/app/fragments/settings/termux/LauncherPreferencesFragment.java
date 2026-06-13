@@ -12,19 +12,19 @@ import android.widget.Toast;
 import androidx.annotation.Keep;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.notifications.LauncherNotificationAccess;
 
 @Keep
-public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
+public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {

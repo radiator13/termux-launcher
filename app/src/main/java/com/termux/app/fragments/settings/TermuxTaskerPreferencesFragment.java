@@ -4,13 +4,12 @@ import android.content.Context;
 import android.os.Bundle;
 import androidx.annotation.Keep;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import com.termux.R;
 import com.termux.shared.termux.settings.preferences.TermuxTaskerAppSharedPreferences;
 
 @Keep
-public class TermuxTaskerPreferencesFragment extends PreferenceFragmentCompat {
+public class TermuxTaskerPreferencesFragment extends MaterialPreferenceFragment {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {

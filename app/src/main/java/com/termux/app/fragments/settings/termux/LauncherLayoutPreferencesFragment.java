@@ -4,13 +4,13 @@ import android.content.Context;
 import android.os.Bundle;
 
 import androidx.annotation.Keep;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
 import com.termux.R;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 
 @Keep
-public class LauncherLayoutPreferencesFragment extends PreferenceFragmentCompat {
+public class LauncherLayoutPreferencesFragment extends MaterialPreferenceFragment {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {

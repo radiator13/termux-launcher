@@ -23,17 +23,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.fragments.settings.StatusCardPreference;
 import com.termux.ai.TaiManager;
@@ -59,7 +60,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Keep
-public class TaiPreferencesFragment extends PreferenceFragmentCompat {
+public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private static final String MODEL_ROW_PREFIX = "tai_model_row_";
 
     private static final class OverrideSpec {
@@ -131,9 +132,44 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         configureRuntimeControls(context);
         configureOverrides(context);
         configureHuggingFaceToken();
-        configureGeneralPrompt();
         configureEndpointPreferences(context);
         configureModelManager(context);
+    }
+
+    @Override
+    public void onDisplayPreferenceDialog(@NonNull Preference preference) {
+        Context context = getContext();
+        String key = preference.getKey();
+        if (context != null && key != null && preference instanceof EditTextPreference) {
+            EditTextPreference editText = (EditTextPreference) preference;
+            switch (key) {
+                case TaiSettings.KEY_API_PORT:
+                    showApiPortDialog(context, editText);
+                    return;
+                case TaiSettings.KEY_API_TOKEN:
+                    showApiTokenDialog(context, editText);
+                    return;
+                case TaiSettings.KEY_SYSTEM_PROMPT_GENERAL:
+                    showGeneralPromptDialog(context, editText);
+                    return;
+                default:
+                    break;
+            }
+        }
+        // Hugging Face token and the default-assistant list fall back to the shared
+        // Material dialogs provided by MaterialPreferenceFragment.
+        super.onDisplayPreferenceDialog(preference);
+    }
+
+    private void showGeneralPromptDialog(Context context, EditTextPreference preference) {
+        EditText input = buildDialogEditText(context, preference.getText(), InputType.TYPE_CLASS_TEXT, true);
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_general_prompt_title)
+            .setView(wrapDialogView(context, null, input))
+            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
+                preference.setText(input.getText().toString()))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     @Override
@@ -302,20 +338,12 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         EditTextPreference port = findPreference(TaiSettings.KEY_API_PORT);
         if (port == null) return;
         port.setText(String.valueOf(new TaiSettings(context).getApiPort()));
-        port.setOnPreferenceClickListener(preference -> {
-            showApiPortDialog(context, port);
-            return true;
-        });
     }
 
     private void configureApiTokenPreference(Context context) {
         EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
         if (token == null) return;
         token.setText(new TaiSettings(context).getOrCreateApiToken());
-        token.setOnPreferenceClickListener(preference -> {
-            showApiTokenDialog(context, token);
-            return true;
-        });
     }
 
     private void showApiPortDialog(Context context, EditTextPreference preference) {
@@ -454,24 +482,6 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private void configureGeneralPrompt() {
-        EditTextPreference prompt = findPreference(TaiSettings.KEY_SYSTEM_PROMPT_GENERAL);
-        if (prompt == null) return;
-        prompt.setOnPreferenceClickListener(preference -> {
-            Context context = getContext();
-            if (context == null) return true;
-            EditText input = buildDialogEditText(context, prompt.getText(), InputType.TYPE_CLASS_TEXT, true);
-            new MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.termux_ai_general_prompt_title)
-                .setView(wrapDialogView(context, null, input))
-                .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
-                    prompt.setText(input.getText().toString()))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-            return true;
-        });
-    }
-
     private void configureDefaultModelSelector(Context context) {
         ListPreference preference = findPreference(TaiSettings.KEY_ROLE_DEFAULT_ASSISTANT);
         if (preference == null) return;
@@ -500,25 +510,6 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
         }
         preference.setEntries(entries.toArray(new CharSequence[0]));
         preference.setEntryValues(values.toArray(new CharSequence[0]));
-        preference.setOnPreferenceClickListener(clicked -> {
-            showDefaultAssistantDialog(context, preference);
-            return true;
-        });
-    }
-
-    private void showDefaultAssistantDialog(Context context, ListPreference preference) {
-        CharSequence[] entries = preference.getEntries();
-        CharSequence[] values = preference.getEntryValues();
-        if (entries == null || values == null || entries.length == 0) return;
-        int checked = preference.findIndexOfValue(preference.getValue());
-        new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_default_assistant_model_title)
-            .setSingleChoiceItems(entries, checked, (dialog, which) -> {
-                preference.setValue(values[which].toString());
-                dialog.dismiss();
-            })
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
     }
 
     private void updateRuntimeStatus(Context context) {
@@ -706,20 +697,6 @@ public class TaiPreferencesFragment extends PreferenceFragmentCompat {
             return value == null || value.trim().isEmpty()
                 ? getString(R.string.termux_ai_huggingface_token_summary)
                 : getString(R.string.termux_ai_huggingface_token_set_summary);
-        });
-        token.setOnPreferenceClickListener(preference -> {
-            Context context = getContext();
-            if (context == null) return true;
-            EditText input = buildDialogEditText(context, token.getText(),
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD, false);
-            new MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.termux_ai_huggingface_token_title)
-                .setView(wrapDialogView(context, null, input))
-                .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
-                    token.setText(input.getText().toString().trim()))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-            return true;
         });
     }
 
