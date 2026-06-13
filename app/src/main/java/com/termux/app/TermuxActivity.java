@@ -566,7 +566,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         content.setOnApplyWindowInsetsListener((v, insets) -> {
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
-            updateViewHeight(R.id.activity_termux_bottom_space_view, mNavBarHeight);
             applyTerminalOverlayInsets(insetsCompat);
             configureExtraKeysBackground();
             return insetsCompat.toWindowInsets();
@@ -987,6 +986,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetTop = 0;
         int targetWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         int targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;
+        int bottomOverscan = viewId == R.id.accessory_surface_host
+            ? resolveAccessoryNavSurfaceOverscanPx()
+            : 0;
         ViewParent parent = view.getParent();
         if (parent instanceof View) {
             View parentView = (View) parent;
@@ -994,18 +996,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 targetWidth = parentView.getWidth();
             }
             if (parentView.getHeight() > 0) {
-                targetHeight = parentView.getHeight();
+                targetHeight = parentView.getHeight() + bottomOverscan;
             }
         }
         if (params.leftMargin != 0 || params.topMargin != targetTop ||
-            params.rightMargin != 0 || params.width != targetWidth || params.height != targetHeight) {
+            params.rightMargin != 0 || params.bottomMargin != -bottomOverscan ||
+            params.width != targetWidth || params.height != targetHeight) {
             params.leftMargin = 0;
             params.topMargin = targetTop;
             params.rightMargin = 0;
+            params.bottomMargin = -bottomOverscan;
             params.width = targetWidth;
             params.height = targetHeight;
             view.setLayoutParams(params);
         }
+    }
+
+    private int resolveAccessoryNavSurfaceOverscanPx() {
+        return !mLastImeVisible ? Math.max(0, mNavBarHeight) : 0;
     }
 
     private void configureAccessoryTopEdgeFx(boolean visible, float barAlpha) {
@@ -1505,8 +1513,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View indicatorBand = findViewById(R.id.apps_bar_indicator_band);
         View extraKeysBackground = findViewById(R.id.extrakeys_background);
         View extraKeysBackgroundBlur = findViewById(R.id.extrakeys_backgroundblur);
-        View bottomSpaceBackground = findViewById(R.id.activity_termux_bottom_space_background);
-        View bottomSpaceBlur = findViewById(R.id.activity_termux_bottom_space_blur);
         View azRow = findViewById(R.id.apps_bar_az_row);
         View azFxUnderlay = findViewById(R.id.apps_bar_az_fx_underlay);
         View azFxOverlay = findViewById(R.id.apps_bar_az_fx_overlay);
@@ -1518,14 +1524,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             applyRealtimeBlurDownsampleFactor(extraKeysBackgroundBlur, ACCESSORY_BLUR_DOWNSAMPLE_FACTOR);
             applyRealtimeBlurOverlayColor(
                 extraKeysBackgroundBlur,
-                state.blurEnabled ? resolveAccessorySurfaceColor(state.barAlpha) : Color.TRANSPARENT
-            );
-        }
-        if (bottomSpaceBlur != null) {
-            applyRealtimeBlurRadius(bottomSpaceBlur, state.blurRadiusDp);
-            applyRealtimeBlurDownsampleFactor(bottomSpaceBlur, ACCESSORY_BLUR_DOWNSAMPLE_FACTOR);
-            applyRealtimeBlurOverlayColor(
-                bottomSpaceBlur,
                 state.blurEnabled ? resolveAccessorySurfaceColor(state.barAlpha) : Color.TRANSPARENT
             );
         }
@@ -1541,12 +1539,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (accessorySurfaceHost != null) {
                 accessorySurfaceHost.setVisibility(View.GONE);
-            }
-            if (bottomSpaceBackground != null) {
-                bottomSpaceBackground.setVisibility(View.GONE);
-            }
-            if (bottomSpaceBlur != null) {
-                bottomSpaceBlur.setVisibility(View.GONE);
             }
             if (appsBarViewPager != null) {
                 appsBarViewPager.setVisibility(View.GONE);
@@ -1611,20 +1603,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             extraKeysBackground.setVisibility(View.VISIBLE);
             extraKeysBackground.setAlpha(state.barAlpha);
         }
-        if (bottomSpaceBackground != null) {
-            bottomSpaceBackground.setVisibility(mNavBarHeight > 0 && !mLastImeVisible ? View.VISIBLE : View.GONE);
-            bottomSpaceBackground.setAlpha(state.barAlpha);
-        }
 
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(state.blurEnabled && !useRenderEffectBlur ? View.VISIBLE : View.GONE);
-        }
-        if (bottomSpaceBlur != null) {
-            bottomSpaceBlur.setVisibility(
-                mNavBarHeight > 0 && !mLastImeVisible && state.blurEnabled
-                    ? View.VISIBLE
-                    : View.GONE
-            );
         }
         configureAccessoryTopEdgeFx(true, state.barAlpha);
         updateAccessoryRenderEffectBackdrop(state);
