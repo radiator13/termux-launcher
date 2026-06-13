@@ -917,6 +917,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return (alpha << 24) | (baseColor & 0x00FFFFFF);
     }
 
+    @NonNull
+    private Drawable buildValarieAmbientVeil(float surfaceAlpha, boolean decorLayer) {
+        int surfaceColor = resolveAccessorySurfaceColor(surfaceAlpha);
+        int baseAlpha = Color.alpha(surfaceColor);
+        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.08f : 0.05f));
+        int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.22f : 0.14f));
+        int highAlpha = Math.round(baseAlpha * (decorLayer ? 0.40f : 0.24f));
+        GradientDrawable veil = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[] {
+                Color.TRANSPARENT,
+                withAlphaComponent(surfaceColor, lowAlpha),
+                withAlphaComponent(surfaceColor, midAlpha),
+                withAlphaComponent(surfaceColor, highAlpha)
+            }
+        );
+        veil.setDither(true);
+        return veil;
+    }
+
+    private void applyAccessoryAmbientVeil(@Nullable View accessoryContainer, @NonNull AccessoryRenderState state) {
+        if (accessoryContainer == null) {
+            return;
+        }
+        if (!state.toolbarShown || !isValarieDockStyle()) {
+            accessoryContainer.setBackground(null);
+            return;
+        }
+        accessoryContainer.setBackground(buildValarieAmbientVeil(state.barAlpha, false));
+    }
+
     private int getTermuxThemeColor(int attr, int fallbackRes) {
         return ThemeUtils.getSystemAttrColor(this, attr, ContextCompat.getColor(this, fallbackRes));
     }
@@ -1046,7 +1077,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveDockCapsuleContentInsetPx() {
-        return resolveDockCapsuleHorizontalMarginPx() + Math.round(dpToPx(isCompactDockEnabled() ? 6 : 8));
+        return resolveDockCapsuleHorizontalMarginPx() + Math.round(dpToPx(isCompactDockEnabled() ? 10 : 14));
+    }
+
+    private int resolveDockCapsuleExtraKeysInsetPx() {
+        return resolveDockCapsuleContentInsetPx() + Math.round(dpToPx(isCompactDockEnabled() ? 2 : 4));
+    }
+
+    private int resolveDockCapsuleAppsTopPaddingPx() {
+        return Math.round(dpToPx(isCompactDockEnabled() ? 3 : 5));
+    }
+
+    private int resolveDockCapsuleAppsBottomPaddingPx() {
+        return Math.round(dpToPx(isCompactDockEnabled() ? 0 : 1));
     }
 
     private int resolveDockCapsuleBottomGapPx() {
@@ -1070,6 +1113,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         GradientDrawable outline = new GradientDrawable();
         outline.setColor(Color.TRANSPARENT);
         outline.setCornerRadius(resolveDockCapsuleCornerRadiusPx(surfaceHeightPx));
+        outline.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(resolveAccessoryOutlineColor(), 54));
         surface.setBackground(outline);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             surface.setClipToOutline(true);
@@ -1290,9 +1334,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layoutParams;
         int targetHeight = visible ? resolveDecorNavBarSurfaceHeightPx() : 0;
-        int targetHorizontalMargin = visible && isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+        int targetHorizontalMargin = 0;
         int targetBottomMargin = 0;
-        applyDockSurfaceShape(overlay, visible && isValarieDockStyle(), targetHeight);
+        applyDockSurfaceShape(overlay, false, targetHeight);
         if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
             params.height != targetHeight ||
             params.gravity != Gravity.BOTTOM ||
@@ -1326,7 +1370,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyDecorNavBarSurfaceBounds(overlay, true);
 
         if (mDecorNavBarTintOverlay != null) {
-            mDecorNavBarTintOverlay.setBackgroundColor(resolveAccessorySurfaceColor(state.barAlpha));
+            if (isValarieDockStyle()) {
+                mDecorNavBarTintOverlay.setBackground(buildValarieAmbientVeil(state.barAlpha, true));
+            } else {
+                mDecorNavBarTintOverlay.setBackgroundColor(resolveAccessorySurfaceColor(state.barAlpha));
+            }
             mDecorNavBarTintOverlay.setVisibility(View.VISIBLE);
         }
 
@@ -1352,7 +1400,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         decorView.getLocationOnScreen(mTmpParentLocation);
-        int horizontalMargin = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+        int horizontalMargin = 0;
         int bottomMargin = 0;
         int surfaceHeight = Math.min(Math.max(1, resolveDecorNavBarSurfaceHeightPx()), decorHeight);
         int bottom = mTmpParentLocation[1] + decorHeight - bottomMargin;
@@ -1556,15 +1604,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         boolean useRenderEffectBlur = shouldUseAccessoryRenderEffectBlur(state);
         if (useRenderEffectBlur) {
-            if (shouldShowDecorNavBarSurface(state)) {
-                return mDecorNavBarBlurBackdrop != null
-                    && mDecorNavBarBlurBackdrop.getVisibility() == View.VISIBLE
-                    && mDecorNavBarBlurBackdrop.getDrawable() != null;
-            }
             ImageView backdrop = findViewById(R.id.accessory_blur_backdrop);
-            return backdrop != null
+            boolean accessoryHealthy = backdrop != null
                 && backdrop.getVisibility() == View.VISIBLE
                 && backdrop.getDrawable() != null;
+            if (shouldShowDecorNavBarSurface(state)) {
+                boolean decorHealthy = mDecorNavBarBlurBackdrop != null
+                    && mDecorNavBarBlurBackdrop.getVisibility() == View.VISIBLE
+                    && mDecorNavBarBlurBackdrop.getDrawable() != null;
+                return isValarieDockStyle() ? accessoryHealthy && decorHealthy : decorHealthy;
+            }
+            return accessoryHealthy;
         }
         View realtimeBlur = findViewById(R.id.extrakeys_backgroundblur);
         return realtimeBlur != null
@@ -1765,7 +1815,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean usingManagedWallpaperSource = shouldUseManagedWallpaperBlurSource();
         View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
         applyAccessoryLayerBounds(R.id.accessory_surface_host, null);
-        if (shouldShowDecorNavBarSurface(state)) {
+        if (shouldShowDecorNavBarSurface(state) && !isValarieDockStyle()) {
             clearAccessoryRenderEffectBackdrop();
             return;
         }
@@ -1847,6 +1897,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View azLabelOverlay = findViewById(R.id.apps_bar_az_label_overlay);
         boolean useRenderEffectBlur = shouldUseAccessoryRenderEffectBlur(state);
         boolean useDecorSurface = shouldShowDecorNavBarSurface(state);
+        applyAccessoryAmbientVeil(accessoryContainer, state);
 
         if (extraKeysBackgroundBlur != null && !useRenderEffectBlur && !useDecorSurface) {
             applyRealtimeBlurRadius(extraKeysBackgroundBlur, state.blurRadiusDp);
@@ -1930,7 +1981,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (extraKeysBackground != null) {
-            extraKeysBackground.setVisibility(useDecorSurface ? View.GONE : View.VISIBLE);
+            extraKeysBackground.setVisibility(useDecorSurface && !isValarieDockStyle() ? View.GONE : View.VISIBLE);
             extraKeysBackground.setAlpha(state.barAlpha);
         }
 
@@ -2559,7 +2610,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setSearchTolerance(mPreferences.getAppLauncherSearchTolerance());
         mSuggestionBarView.setBandW(mPreferences.isAppLauncherBwIconsEnabled());
         mSuggestionBarView.setIconScale(resolveDerivedDockIconScale());
-        mSuggestionBarView.setDockRowHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx);
+        mSuggestionBarView.setDockRowHeightHintPx(resolveDockAppsBarHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx));
         mSuggestionBarView.setAppBarOpacity(mPreferences.getAppBarOpacity());
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         mSuggestionBarView.setBlurConfig(blurRadiusDp > 0, blurRadiusDp);
@@ -3582,16 +3633,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         view.setLayoutParams(marginParams);
     }
 
+    private void updateViewPadding(int viewId, int left, int top, int right, int bottom) {
+        View view = findViewById(viewId);
+        if (view == null) return;
+        if (view.getPaddingLeft() == left && view.getPaddingTop() == top &&
+            view.getPaddingRight() == right && view.getPaddingBottom() == bottom) {
+            return;
+        }
+        view.setPadding(left, top, right, bottom);
+    }
+
     private void applyDockRowHorizontalInsets() {
         int contentInset = isValarieDockStyle() ? resolveDockCapsuleContentInsetPx() : 0;
+        int extraKeysInset = isValarieDockStyle() ? resolveDockCapsuleExtraKeysInsetPx() : 0;
         int surfaceInset = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
+        int appsTopPadding = isValarieDockStyle() ? resolveDockCapsuleAppsTopPaddingPx() : 0;
+        int appsBottomPadding = isValarieDockStyle() ? resolveDockCapsuleAppsBottomPaddingPx() : 0;
 
         updateViewHorizontalMargins(R.id.apps_bar_viewpager, contentInset);
         updateViewHorizontalMargins(R.id.apps_bar_indicator_band, contentInset);
         updateViewHorizontalMargins(R.id.apps_bar_az_row, contentInset);
-        updateViewHorizontalMargins(R.id.terminal_toolbar_view_pager, contentInset);
+        updateViewHorizontalMargins(R.id.terminal_toolbar_view_pager, extraKeysInset);
+        updateViewPadding(R.id.apps_bar_viewpager, 0, appsTopPadding, 0, appsBottomPadding);
         updateViewHorizontalMargins(R.id.apps_bar_az_fx_underlay, surfaceInset);
         updateViewHorizontalMargins(R.id.apps_bar_az_fx_overlay, surfaceInset);
+    }
+
+    private int resolveDockAppsBarHeightHintPx(int appsBarHeightPx) {
+        if (!isValarieDockStyle()) {
+            return appsBarHeightPx;
+        }
+        return Math.max(0, appsBarHeightPx - resolveDockCapsuleAppsTopPaddingPx() - resolveDockCapsuleAppsBottomPaddingPx());
     }
 
     private int getDockBaseToolbarHeightPx() {
@@ -3632,7 +3704,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
         float scale = 1.34f + (normalized * 0.64f);
-        return isValarieDockStyle() ? Math.max(1.24f, scale * 0.94f) : scale;
+        return isValarieDockStyle() ? Math.max(1.18f, scale * 0.90f) : scale;
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
@@ -3642,7 +3714,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         updateViewBottomMargin(R.id.apps_bar_viewpager, 0);
         applyDockRowHorizontalInsets();
         if (mSuggestionBarView != null) {
-            mSuggestionBarView.setDockRowHeightHintPx(metrics.appsBarHeightPx);
+            mSuggestionBarView.setDockRowHeightHintPx(resolveDockAppsBarHeightHintPx(metrics.appsBarHeightPx));
         }
     }
 
