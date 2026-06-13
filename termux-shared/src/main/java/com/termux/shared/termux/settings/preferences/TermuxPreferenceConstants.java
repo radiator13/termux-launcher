@@ -179,6 +179,17 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_APP_LAUNCHER_COMPACT_DOCK = false;
 
         /**
+         * Defines the visual surface style for the app launcher dock.
+         */
+        public static final String KEY_APP_LAUNCHER_DOCK_STYLE = "app_launcher_dock_style";
+
+        public static final String APP_LAUNCHER_DOCK_STYLE_DEFAULT = "default";
+
+        public static final String APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE = "valarie_capsule";
+
+        public static final String DEFAULT_APP_LAUNCHER_DOCK_STYLE = APP_LAUNCHER_DOCK_STYLE_DEFAULT;
+
+        /**
          * Defines the key for showing focused app names while scrubbing the dock.
          */
         public static final String KEY_APP_LAUNCHER_DISPLAY_APP_NAMES = "app_launcher_display_app_names";

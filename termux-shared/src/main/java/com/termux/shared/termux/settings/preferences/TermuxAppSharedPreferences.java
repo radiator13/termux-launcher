@@ -171,6 +171,25 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_COMPACT_DOCK, value, false);
     }
 
+    public String getAppLauncherDockStyle() {
+        String value = SharedPreferenceUtils.getString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_DOCK_STYLE,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_DOCK_STYLE,
+            true
+        );
+        return normalizeAppLauncherDockStyle(value);
+    }
+
+    public void setAppLauncherDockStyle(String value) {
+        SharedPreferenceUtils.setString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_DOCK_STYLE,
+            normalizeAppLauncherDockStyle(value),
+            false
+        );
+    }
+
     public boolean isAppLauncherDisplayAppNamesEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_DISPLAY_APP_NAMES,
             TERMUX_APP.DEFAULT_APP_LAUNCHER_DISPLAY_APP_NAMES);
@@ -329,6 +348,19 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             case TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF:
             default:
                 return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF;
+        }
+    }
+
+    public static String normalizeAppLauncherDockStyle(@Nullable String value) {
+        if (value == null) {
+            return TERMUX_APP.DEFAULT_APP_LAUNCHER_DOCK_STYLE;
+        }
+        switch (value) {
+            case TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE:
+                return TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE;
+            case TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_DEFAULT:
+            default:
+                return TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_DEFAULT;
         }
     }
 
