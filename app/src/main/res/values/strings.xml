@@ -442,6 +442,10 @@
                 <string name="termux_app_launcher_reset_usage_ranking_summary">Apps are ordered by usage frequency. Tap to reset.</string>
                 <string name="termux_app_launcher_bar_height_title">Dock size</string>
                 <string name="termux_app_launcher_bar_height_summary">Choose the overall dock size.</string>
+                <string name="termux_app_launcher_dock_style_title">Dock style</string>
+                <string name="termux_app_launcher_dock_style_summary">Choose the dock surface shape.</string>
+                <string name="termux_app_launcher_dock_style_default">Default</string>
+                <string name="termux_app_launcher_dock_style_valarie_capsule">Valarie capsule</string>
                 <string name="termux_app_launcher_compact_dock_title">Compact dock spacing</string>
                 <string name="termux_app_launcher_compact_dock_summary">Tighten vertical spacing between dock rows while keeping your selected rows and dock size.</string>
                 <string name="termux_app_launcher_display_app_names_title">Display app names</string>
