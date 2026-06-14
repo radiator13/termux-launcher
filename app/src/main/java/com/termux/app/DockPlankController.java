@@ -30,9 +30,10 @@ final class DockPlankController implements Choreographer.FrameCallback {
     private boolean mReducedMotion = false;
     private boolean mPressed = false;
     private boolean mFrameScheduled = false;
-    // When false (edge-to-edge "normal" dock), the slab does not tilt or dip — a bar pinned to the
-    // screen bottom shouldn't float-tilt. Only the light reaction (specular + rim glow) plays.
     private boolean mMotionEnabled = true;
+    // Hinge mode (edge-to-edge "normal" dock): pivot at the screen-bottom edge so the bar tips back
+    // from the bottom toward the finger, instead of the capsule's free-floating centre tilt+dip.
+    private boolean mHingeMode = false;
 
     // Spring channels: tilt about X/Y, press dip, rim glow, and the specular's horizontal position.
     private final Spring mRx = new Spring(0f, 170f, 17f);
@@ -56,7 +57,7 @@ final class DockPlankController implements Choreographer.FrameCallback {
         mReducedMotion = reduced;
     }
 
-    /** Capsule (floating) gets the full tilt/dip; the edge-to-edge dock gets light-only reaction. */
+    /** Enable/disable the slab transform (tilt). Both styles use motion; the mode differs. */
     void setMotionEnabled(boolean enabled) {
         mMotionEnabled = enabled;
         if (!enabled) {
@@ -64,6 +65,11 @@ final class DockPlankController implements Choreographer.FrameCallback {
             mRy.target = 0f;
         }
         kick();
+    }
+
+    /** Capsule = false (free-floating centre tilt + press dip); normal = true (bottom-hinged tilt). */
+    void setHingeMode(boolean hinge) {
+        mHingeMode = hinge;
     }
 
     void setEnabled(boolean enabled) {
@@ -182,10 +188,12 @@ final class DockPlankController implements Choreographer.FrameCallback {
         if (mPlank != null && mPlank.getWidth() > 0 && mPlank.getHeight() > 0) {
             if (mMotionEnabled) {
                 mPlank.setPivotX(mPlank.getWidth() * 0.5f);
-                mPlank.setPivotY(mPlank.getHeight() * 0.5f);
+                // Hinge at the bottom edge for the edge-to-edge dock; centre for the floating capsule.
+                mPlank.setPivotY(mHingeMode ? mPlank.getHeight() : mPlank.getHeight() * 0.5f);
                 mPlank.setRotationX(mRx.value);
                 mPlank.setRotationY(mRy.value);
-                float scale = 1f - mPress.value * 0.013f;
+                // The hinged bar tips only (its bottom edge stays pinned); the capsule also dips.
+                float scale = mHingeMode ? 1f : (1f - mPress.value * 0.013f);
                 mPlank.setScaleX(scale);
                 mPlank.setScaleY(scale);
             } else if (mPlank.getRotationX() != 0f || mPlank.getRotationY() != 0f

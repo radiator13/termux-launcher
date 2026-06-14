@@ -1069,8 +1069,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
             }
         }
-        // The floating capsule tilts/dips; the edge-to-edge dock only gets the light reaction.
-        mDockPlankController.setMotionEnabled(isValarieDockStyle());
+        // Capsule: free-floating centre tilt + dip. Normal: bottom-hinged tilt (pinned at the edge).
+        mDockPlankController.setMotionEnabled(true);
+        mDockPlankController.setHingeMode(!isValarieDockStyle());
         mDockPlankController.setReducedMotion(isReducedMotionEnabled());
         mDockPlankController.setEnabled(true);
     }
@@ -1507,11 +1508,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldShowDecorNavBarSurface(@NonNull AccessoryRenderState state) {
-        // Retired for both dock styles. The dock no longer paints a surface behind/under the gesture
-        // pill — that band rendered at the app-bar opacity, so the under-pill strip never matched the
-        // terminal. The under-pill area now shows the unified full-screen background dim (terminal
-        // opacity), with the dock floating above it, so the whole background reads as one surface.
-        return false;
+        // Style-dependent: the edge-to-edge "normal" dock extends its glass under the gesture pill
+        // (the decor band matches the dock surface). The floating Valarie capsule does NOT — its
+        // under-pill strip shows the unified full-screen background dim (terminal opacity) so the
+        // capsule reads as floating over the terminal surface.
+        return state.toolbarShown
+            && mNavBarHeight > 0
+            && !mLastImeVisible
+            && !isImeVisible()
+            && !isValarieDockStyle();
     }
 
     private void ensureDecorNavBarSurfaceOverlay() {
@@ -1624,11 +1629,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyDecorNavBarSurfaceBounds(overlay, true);
 
         if (mDecorNavBarTintOverlay != null) {
-            if (isValarieDockStyle()) {
-                mDecorNavBarTintOverlay.setBackground(buildValarieAmbientVeil(state.barAlpha, true));
-            } else {
-                mDecorNavBarTintOverlay.setBackgroundColor(resolveAccessorySurfaceColor(state.barAlpha));
-            }
+            // Only the normal (edge-to-edge) dock reaches here. Match the dock's own material-tinted
+            // glass surface so the under-pill strip is a seamless continuation of the dock.
+            mDecorNavBarTintOverlay.setBackground(buildDockGlassSurface());
+            mDecorNavBarTintOverlay.setAlpha(state.barAlpha);
             mDecorNavBarTintOverlay.setVisibility(View.VISIBLE);
         }
 
@@ -3963,10 +3967,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         float density = getResources().getDisplayMetrics().density;
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
+        // Size buckets rebalanced so the old "Large" is the new "Default": the preset range now runs
+        // 1.72..2.45 (default 2.18 = old large), and the height factor is tuned so default lands on
+        // the old-large row height (~1.38x) with headroom above for the new large.
+        float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
         boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
         int appsBarHeightPx = appsRowEnabled
-            ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * (1.08f + (normalizedScale * 0.30f))) + Math.max(0, additionalAppsBarHeightPx))
+            ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * (1.00f + (normalizedScale * 0.52f))) + Math.max(0, additionalAppsBarHeightPx))
             : 0;
 
         boolean azEnabled = appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled();
@@ -3984,7 +3991,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return 1.36f;
         }
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.18f - 1.45f)));
+        float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
         float scale = 1.34f + (normalized * 0.64f);
         return isValarieDockStyle() ? Math.max(1.18f, scale * 0.90f) : scale;
     }

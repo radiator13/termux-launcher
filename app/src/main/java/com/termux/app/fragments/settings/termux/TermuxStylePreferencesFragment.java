@@ -41,8 +41,10 @@ import java.util.Properties;
 @Keep
 public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
 
-    static final float[] APP_LAUNCHER_ICON_SCALE_PRESETS = {1.22f, 1.36f, 1.54f, 1.74f};
-    static final float[] APP_LAUNCHER_BAR_HEIGHT_PRESETS = {1.45f, 1.60f, 1.88f, 2.18f};
+    static final float[] APP_LAUNCHER_ICON_SCALE_PRESETS = {1.40f, 1.54f, 1.74f, 1.92f};
+    // Rebalanced so the old "Large" (2.18) is the new "Default"; smallest/small step down and a
+    // larger top bucket is added above. Paired with the height/icon formulas in TermuxActivity.
+    static final float[] APP_LAUNCHER_BAR_HEIGHT_PRESETS = {1.72f, 1.95f, 2.18f, 2.45f};
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
