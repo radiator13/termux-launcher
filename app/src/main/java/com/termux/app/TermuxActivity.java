@@ -832,9 +832,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (wallpaperMode) {
             boolean showSurface = shouldShowTerminalOverlaySurface();
             int terminalSurfaceColor = showSurface ? resolveTerminalSurfaceColor() : Color.TRANSPARENT;
+            // Unify the background: apply the terminal-opacity dim to the full-screen root so the
+            // terminal area, the space under the floating dock, and the gesture-pill strip all read
+            // as one continuous surface (the dock then floats on top of it). The bounded
+            // terminal_background overlay is retired so the dim isn't applied twice.
+            applyUnifiedBackgroundDim(terminalSurfaceColor);
             terminalSurfaceHost.setBackgroundColor(Color.TRANSPARENT);
-            terminalBodySurface.setBackgroundColor(terminalSurfaceColor);
-            terminalBodySurface.setVisibility(showSurface && Color.alpha(terminalSurfaceColor) > 0 ? View.VISIBLE : View.GONE);
+            terminalBodySurface.setBackgroundColor(Color.TRANSPARENT);
+            terminalBodySurface.setVisibility(View.GONE);
             terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
             terminalStatusSurface.setVisibility(View.GONE);
             if (terminalView != null) {
@@ -847,6 +852,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
+        // Opaque (non-wallpaper) mode keeps the bounded terminal surface; no full-screen dim needed.
+        applyUnifiedBackgroundDim(Color.TRANSPARENT);
         boolean showSurface = true;
         int terminalSurfaceColor = resolveTerminalSurfaceColor();
         terminalSurfaceHost.setBackgroundColor(Color.TRANSPARENT);
@@ -861,6 +868,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
         applyTerminalStatusBarSurfaceColor(showSurface, terminalSurfaceColor);
+    }
+
+    /**
+     * Paints the full-screen root with the terminal-opacity dim so the whole window background is a
+     * single uniform surface (terminal, the gap under the floating dock, and the gesture-pill strip
+     * all match), with the dock floating on top. Pass {@link Color#TRANSPARENT} to clear it.
+     */
+    private void applyUnifiedBackgroundDim(int color) {
+        View root = mTermuxActivityRootView != null
+            ? mTermuxActivityRootView
+            : findViewById(R.id.activity_termux_root_view);
+        if (root != null) {
+            root.setBackgroundColor(color);
+        }
     }
 
     private void applyTerminalStatusBarSurfaceColor(boolean showSurface, int terminalSurfaceColor) {
@@ -1116,13 +1137,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private Drawable buildValarieAmbientVeil(float surfaceAlpha, boolean decorLayer) {
         int surfaceColor = resolveAccessorySurfaceColor(surfaceAlpha);
         int baseAlpha = Color.alpha(surfaceColor);
-        // The decor layer fills the gap below the floating capsule and the strip under the gesture
-        // pill. It must read as a seamless continuation of the dock surface, so it ramps from clear
-        // (behind the capsule sides) up to the *full* dock surface tone at the bottom (under the
-        // pill) — anything less leaves a lighter, inconsistent pane beneath the navigation pill.
-        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.06f : 0.05f));
-        int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.50f : 0.14f));
-        int highAlpha = Math.round(baseAlpha * (decorLayer ? 1.00f : 0.24f));
+        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.08f : 0.05f));
+        int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.22f : 0.14f));
+        int highAlpha = Math.round(baseAlpha * (decorLayer ? 0.40f : 0.24f));
         GradientDrawable veil = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
@@ -1453,10 +1470,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldShowDecorNavBarSurface(@NonNull AccessoryRenderState state) {
+        // The Valarie capsule floats: it must not have a full-width band behind/under it. That band
+        // doesn't tilt with the plank (so it reads as a static "frame" behind the dock during the
+        // physics) and its square, full-width edges clash with the floating rounded capsule. The
+        // under-pill area instead shows the unified full-screen background. Only the edge-to-edge
+        // "normal" style keeps the decor surface so its glass can flow under the gesture pill.
         return state.toolbarShown
             && mNavBarHeight > 0
             && !mLastImeVisible
-            && !isImeVisible();
+            && !isImeVisible()
+            && !isValarieDockStyle();
     }
 
     private void ensureDecorNavBarSurfaceOverlay() {
