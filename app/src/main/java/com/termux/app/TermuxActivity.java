@@ -898,6 +898,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (getWindow() != null) {
             getWindow().setStatusBarColor(targetColor);
+            if (shouldUseWallpaperPassthroughMode()) {
+                // Keep the gesture-pill strip showing only the unified root dim. Re-assert a fully
+                // transparent navigation bar with contrast enforcement off so the OS doesn't paint a
+                // darker contrast scrim behind the pill that would make the nav area read darker than
+                // the terminal. (This removes a scrim; it never adds a layer over the content.)
+                getWindow().setNavigationBarColor(Color.TRANSPARENT);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    getWindow().setNavigationBarContrastEnforced(false);
+                }
+            }
         }
     }
 
@@ -1379,7 +1389,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             divider.setVisibility(View.GONE);
             return;
         }
-        divider.setBackgroundColor(withAlphaComponent(resolveAccessoryOutlineColor(), 175));
+        divider.setBackgroundColor(withAlphaComponent(resolveAccessoryOutlineColor(), 70));
         divider.setVisibility(View.VISIBLE);
     }
 
@@ -3842,7 +3852,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveAccessoryStackBottomMarginPx() {
-        if (!isValarieDockStyle() || mLastImeVisible || isImeVisible()) {
+        // The capsule floats, so it keeps its bottom gap even when the keyboard is up — otherwise it
+        // sits flush against the keyboard. Non-capsule styles stay flush.
+        if (!isValarieDockStyle()) {
             return 0;
         }
         return resolveDockCapsuleBottomGapPx();
