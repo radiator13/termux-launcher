@@ -885,10 +885,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void applyTerminalStatusBarSurfaceColor(boolean showSurface, int terminalSurfaceColor) {
-        int targetColor = shouldEnableSeamlessStatusBackground() ? terminalSurfaceColor
-            : (!shouldUseWallpaperPassthroughMode()
-                ? getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base)
-                : Color.TRANSPARENT);
+        int targetColor;
+        if (shouldUseWallpaperPassthroughMode()) {
+            // The full-screen root dim already covers the status-bar region uniformly. A seamless
+            // status scrim here would dim it a second time, making the notification area read darker
+            // than the terminal — so keep the system status bar transparent in wallpaper mode.
+            targetColor = Color.TRANSPARENT;
+        } else if (shouldEnableSeamlessStatusBackground()) {
+            targetColor = terminalSurfaceColor;
+        } else {
+            targetColor = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfaceBase, R.color.termux_surface_base);
+        }
         if (getWindow() != null) {
             getWindow().setStatusBarColor(targetColor);
         }
@@ -1045,7 +1052,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int surfaceHeightPx = surfaceHost != null ? surfaceHost.getHeight() : 0;
             float radius = isValarieDockStyle() ? resolveDockCapsuleCornerRadiusPx(surfaceHeightPx) : 0f;
             glow.setBackground(buildDockEdgeGlowDrawable(accent, radius));
+            // Feather the thin rim into a soft glow instead of a hard outline (API 31+).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                float blur = getResources().getDisplayMetrics().density * 6f;
+                glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
+            }
         }
+        // The floating capsule tilts/dips; the edge-to-edge dock only gets the light reaction.
+        mDockPlankController.setMotionEnabled(isValarieDockStyle());
         mDockPlankController.setReducedMotion(isReducedMotionEnabled());
         mDockPlankController.setEnabled(true);
     }
@@ -1067,23 +1081,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return specular;
     }
 
-    /** Accent rim that lights up the dock edge on contact: a bright ring plus a softer inner bloom. */
+    /**
+     * Accent rim that lights up the dock edge on contact. A single thin ring hugging the very edge;
+     * a RenderEffect blur (applied to the host view) feathers it into a soft glow rather than the
+     * hard, inset outline it would otherwise read as.
+     */
     @NonNull
     private Drawable buildDockEdgeGlowDrawable(int accent, float radius) {
         GradientDrawable ring = new GradientDrawable();
         ring.setColor(Color.TRANSPARENT);
-        ring.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(accent, 140));
-        GradientDrawable bloom = new GradientDrawable();
-        bloom.setColor(Color.TRANSPARENT);
-        bloom.setStroke(Math.max(1, Math.round(dpToPx(3))), withAlphaComponent(accent, 60));
+        int strokePx = Math.max(1, Math.round(getResources().getDisplayMetrics().density * 1.5f));
+        ring.setStroke(strokePx, withAlphaComponent(accent, 105));
         if (radius > 0f) {
             ring.setCornerRadius(radius);
-            bloom.setCornerRadius(radius);
         }
-        LayerDrawable rim = new LayerDrawable(new Drawable[] { bloom, ring });
-        int inset = Math.round(dpToPx(2));
-        rim.setLayerInset(0, inset, inset, inset, inset);
-        return rim;
+        return ring;
     }
 
     private boolean isReducedMotionEnabled() {

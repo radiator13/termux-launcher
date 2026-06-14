@@ -18,7 +18,7 @@ import android.view.View;
  */
 final class DockPlankController implements Choreographer.FrameCallback {
 
-    private static final float MAX_TILT_DEG = 5f;
+    private static final float MAX_TILT_DEG = 4f;
     private static final float DT = 1f / 60f;
     private static final float SETTLE_EPSILON = 4e-4f;
 
@@ -30,6 +30,9 @@ final class DockPlankController implements Choreographer.FrameCallback {
     private boolean mReducedMotion = false;
     private boolean mPressed = false;
     private boolean mFrameScheduled = false;
+    // When false (edge-to-edge "normal" dock), the slab does not tilt or dip — a bar pinned to the
+    // screen bottom shouldn't float-tilt. Only the light reaction (specular + rim glow) plays.
+    private boolean mMotionEnabled = true;
 
     // Spring channels: tilt about X/Y, press dip, rim glow, and the specular's horizontal position.
     private final Spring mRx = new Spring(0f, 170f, 17f);
@@ -50,6 +53,16 @@ final class DockPlankController implements Choreographer.FrameCallback {
 
     void setReducedMotion(boolean reduced) {
         mReducedMotion = reduced;
+    }
+
+    /** Capsule (floating) gets the full tilt/dip; the edge-to-edge dock gets light-only reaction. */
+    void setMotionEnabled(boolean enabled) {
+        mMotionEnabled = enabled;
+        if (!enabled) {
+            mRx.target = 0f;
+            mRy.target = 0f;
+        }
+        kick();
     }
 
     void setEnabled(boolean enabled) {
@@ -120,9 +133,15 @@ final class DockPlankController implements Choreographer.FrameCallback {
     private void aim(float nx, float ny) {
         nx = clamp01(nx);
         ny = clamp01(ny);
-        mRy.target = (nx - 0.5f) * 2f * MAX_TILT_DEG;
-        mRx.target = -(ny - 0.5f) * 2f * MAX_TILT_DEG;
+        // The specular always tracks the finger; the slab only tilts when motion is enabled.
         mLightX.target = nx;
+        if (mMotionEnabled) {
+            mRy.target = (nx - 0.5f) * 2f * MAX_TILT_DEG;
+            mRx.target = -(ny - 0.5f) * 2f * MAX_TILT_DEG;
+        } else {
+            mRy.target = 0f;
+            mRx.target = 0f;
+        }
     }
 
     private void kick() {
@@ -157,13 +176,21 @@ final class DockPlankController implements Choreographer.FrameCallback {
 
     private void applyToViews() {
         if (mPlank != null && mPlank.getWidth() > 0 && mPlank.getHeight() > 0) {
-            mPlank.setPivotX(mPlank.getWidth() * 0.5f);
-            mPlank.setPivotY(mPlank.getHeight() * 0.5f);
-            mPlank.setRotationX(mRx.value);
-            mPlank.setRotationY(mRy.value);
-            float scale = 1f - mPress.value * 0.013f;
-            mPlank.setScaleX(scale);
-            mPlank.setScaleY(scale);
+            if (mMotionEnabled) {
+                mPlank.setPivotX(mPlank.getWidth() * 0.5f);
+                mPlank.setPivotY(mPlank.getHeight() * 0.5f);
+                mPlank.setRotationX(mRx.value);
+                mPlank.setRotationY(mRy.value);
+                float scale = 1f - mPress.value * 0.013f;
+                mPlank.setScaleX(scale);
+                mPlank.setScaleY(scale);
+            } else if (mPlank.getRotationX() != 0f || mPlank.getRotationY() != 0f
+                || mPlank.getScaleX() != 1f) {
+                mPlank.setRotationX(0f);
+                mPlank.setRotationY(0f);
+                mPlank.setScaleX(1f);
+                mPlank.setScaleY(1f);
+            }
         }
         if (mGlow != null) {
             mGlow.setAlpha(clamp01(mGlowLevel.value));
