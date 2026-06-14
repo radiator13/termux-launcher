@@ -31,6 +31,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -41,10 +42,12 @@ import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -289,6 +292,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public boolean isToolbarHidden = false;
 
     private int mNavBarHeight;
+
+    /** Reactive glass-plank physics for the dock (tilt, specular, accent rim glow). */
+    @Nullable private DockPlankController mDockPlankController;
+    private boolean mDockPlankTouchInside = false;
+    private float mDockPlankLeft = 0f;
+    private float mDockPlankTop = 0f;
+    private float mDockPlankWidth = 0f;
+    private float mDockPlankHeight = 0f;
+    private final int[] mDockPlankLocation = new int[2];
 
     private float mTerminalToolbarDefaultHeight;
     private final Handler mAzGestureHandler = new Handler(Looper.getMainLooper());
@@ -695,6 +707,66 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        feedDockPlank(ev);
+        return super.dispatchTouchEvent(ev);
+    }
+
+    /**
+     * Observes (never consumes) touches over the dock to drive the reactive glass-plank physics:
+     * the plank tilts toward the finger, dips on press, and the specular/rim glow track contact.
+     * Bounds are captured once on ACTION_DOWN so the per-frame tilt transform can't feed back into
+     * the hit-test, and reused for the rest of the gesture.
+     */
+    private void feedDockPlank(MotionEvent ev) {
+        DockPlankController controller = mDockPlankController;
+        if (controller == null) {
+            return;
+        }
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN: {
+                View plank = findViewById(R.id.accessory_stack_container);
+                mDockPlankTouchInside = false;
+                if (plank == null || plank.getVisibility() != View.VISIBLE
+                    || plank.getWidth() <= 0 || plank.getHeight() <= 0) {
+                    break;
+                }
+                plank.getLocationOnScreen(mDockPlankLocation);
+                mDockPlankLeft = mDockPlankLocation[0];
+                mDockPlankTop = mDockPlankLocation[1];
+                mDockPlankWidth = plank.getWidth();
+                mDockPlankHeight = plank.getHeight();
+                float x = ev.getRawX();
+                float y = ev.getRawY();
+                if (x >= mDockPlankLeft && x <= mDockPlankLeft + mDockPlankWidth
+                    && y >= mDockPlankTop && y <= mDockPlankTop + mDockPlankHeight) {
+                    mDockPlankTouchInside = true;
+                    controller.onPointerDown(
+                        (x - mDockPlankLeft) / mDockPlankWidth,
+                        (y - mDockPlankTop) / mDockPlankHeight);
+                }
+                break;
+            }
+            case MotionEvent.ACTION_MOVE:
+                if (mDockPlankTouchInside && mDockPlankWidth > 0f && mDockPlankHeight > 0f) {
+                    controller.onPointerMove(
+                        (ev.getRawX() - mDockPlankLeft) / mDockPlankWidth,
+                        (ev.getRawY() - mDockPlankTop) / mDockPlankHeight);
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (mDockPlankTouchInside) {
+                    controller.onPointerUp();
+                    mDockPlankTouchInside = false;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         Logger.logVerbose(LOG_TAG, "onResume");
@@ -880,6 +952,129 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOutlineVariant, R.color.termux_outline_variant);
     }
 
+    /** Wallpaper-derived accent (Monet primary) used across the dock's reactive glass treatment. */
+    private int resolveDockAccentColor() {
+        return MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimary,
+            ContextCompat.getColor(this, R.color.termux_primary));
+    }
+
+    /** Warm wallpaper-derived tertiary (the ochre in the prototype) used for the glass wash. */
+    private int resolveDockTertiaryColor() {
+        return MaterialColors.getColor(this, com.google.android.material.R.attr.colorTertiary,
+            resolveDockAccentColor());
+    }
+
+    /**
+     * Builds the Material-tinted glass surface: an opaque neutral base with a diagonal
+     * accent -> tertiary -> clear wash layered on top, so the wallpaper-derived color lives
+     * inside the dock surface rather than reading as a flat grey panel. The host clips this to
+     * the dock's rounded outline, so no corner radius is needed here. The view's own alpha
+     * carries the configured surface opacity.
+     */
+    @NonNull
+    private Drawable buildDockGlassSurface() {
+        int base = resolveAccessoryGlassBaseColor();
+        int accent = resolveDockAccentColor();
+        int tertiary = resolveDockTertiaryColor();
+        GradientDrawable baseLayer = new GradientDrawable();
+        baseLayer.setColor(0xFF000000 | (base & 0x00FFFFFF));
+        // 41/255 ~= 0.16 accent, 13/255 ~= 0.05 tertiary, fading to clear (matches the prototype wash).
+        GradientDrawable tintLayer = new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[] {
+                withAlphaComponent(accent, 41),
+                withAlphaComponent(tertiary, 13),
+                withAlphaComponent(base, 0)
+            }
+        );
+        tintLayer.setDither(true);
+        return new LayerDrawable(new Drawable[] { baseLayer, tintLayer });
+    }
+
+    /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
+    private void setupDockPlankFx() {
+        View plank = findViewById(R.id.accessory_stack_container);
+        if (plank == null) {
+            return;
+        }
+        if (mDockPlankController == null) {
+            View specular = findViewById(R.id.accessory_specular_fx);
+            View glow = findViewById(R.id.accessory_edge_glow_fx);
+            mDockPlankController = new DockPlankController(plank, specular, glow);
+        }
+        mDockPlankController.setReducedMotion(isReducedMotionEnabled());
+    }
+
+    /** Refreshes the plank FX drawables (accent/shape may change) and enables it for a shown dock. */
+    private void refreshDockPlankFx() {
+        if (mDockPlankController == null) {
+            setupDockPlankFx();
+        }
+        if (mDockPlankController == null) {
+            return;
+        }
+        int accent = resolveDockAccentColor();
+        View specular = findViewById(R.id.accessory_specular_fx);
+        if (specular != null) {
+            specular.setBackground(buildDockSpecularDrawable(accent));
+        }
+        View glow = findViewById(R.id.accessory_edge_glow_fx);
+        if (glow != null) {
+            View surfaceHost = findViewById(R.id.accessory_surface_host);
+            int surfaceHeightPx = surfaceHost != null ? surfaceHost.getHeight() : 0;
+            float radius = isValarieDockStyle() ? resolveDockCapsuleCornerRadiusPx(surfaceHeightPx) : 0f;
+            glow.setBackground(buildDockEdgeGlowDrawable(accent, radius));
+        }
+        mDockPlankController.setReducedMotion(isReducedMotionEnabled());
+        mDockPlankController.setEnabled(true);
+    }
+
+    /** Soft accent-tinted radial specular that rides the touch point across the glass. */
+    @NonNull
+    private Drawable buildDockSpecularDrawable(int accent) {
+        GradientDrawable specular = new GradientDrawable();
+        specular.setShape(GradientDrawable.RECTANGLE);
+        specular.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        specular.setGradientCenter(0.5f, 0f);
+        specular.setGradientRadius(dpToPx(110));
+        specular.setColors(new int[] {
+            withAlphaComponent(accent, 150),
+            withAlphaComponent(Color.WHITE, 46),
+            withAlphaComponent(accent, 0)
+        });
+        specular.setDither(true);
+        return specular;
+    }
+
+    /** Accent rim that lights up the dock edge on contact: a bright ring plus a softer inner bloom. */
+    @NonNull
+    private Drawable buildDockEdgeGlowDrawable(int accent, float radius) {
+        GradientDrawable ring = new GradientDrawable();
+        ring.setColor(Color.TRANSPARENT);
+        ring.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(accent, 140));
+        GradientDrawable bloom = new GradientDrawable();
+        bloom.setColor(Color.TRANSPARENT);
+        bloom.setStroke(Math.max(1, Math.round(dpToPx(3))), withAlphaComponent(accent, 60));
+        if (radius > 0f) {
+            ring.setCornerRadius(radius);
+            bloom.setCornerRadius(radius);
+        }
+        LayerDrawable rim = new LayerDrawable(new Drawable[] { bloom, ring });
+        int inset = Math.round(dpToPx(2));
+        rim.setLayerInset(0, inset, inset, inset, inset);
+        return rim;
+    }
+
+    private boolean isReducedMotionEnabled() {
+        try {
+            float scale = Settings.Global.getFloat(
+                getContentResolver(), Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
+            return scale == 0f;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private void applyGlassSurfaceColor(int viewId, int surfaceColor) {
         View surface = findViewById(viewId);
         if (surface != null) {
@@ -921,9 +1116,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private Drawable buildValarieAmbientVeil(float surfaceAlpha, boolean decorLayer) {
         int surfaceColor = resolveAccessorySurfaceColor(surfaceAlpha);
         int baseAlpha = Color.alpha(surfaceColor);
-        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.08f : 0.05f));
-        int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.22f : 0.14f));
-        int highAlpha = Math.round(baseAlpha * (decorLayer ? 0.40f : 0.24f));
+        // The decor layer fills the gap below the floating capsule and the strip under the gesture
+        // pill. It must read as a seamless continuation of the dock surface, so it ramps from clear
+        // (behind the capsule sides) up to the *full* dock surface tone at the bottom (under the
+        // pill) — anything less leaves a lighter, inconsistent pane beneath the navigation pill.
+        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.06f : 0.05f));
+        int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.50f : 0.14f));
+        int highAlpha = Math.round(baseAlpha * (decorLayer ? 1.00f : 0.24f));
         GradientDrawable veil = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
@@ -1945,6 +2144,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             applyDecorNavBarSurfaceState(state);
             configureAccessoryTopEdgeFx(false, state.barAlpha);
             resetAzOverflowAffordanceState();
+            if (mDockPlankController != null) {
+                mDockPlankController.setEnabled(false);
+            }
             return;
         }
 
@@ -1982,8 +2184,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (extraKeysBackground != null) {
             extraKeysBackground.setVisibility(useDecorSurface && !isValarieDockStyle() ? View.GONE : View.VISIBLE);
+            extraKeysBackground.setBackground(buildDockGlassSurface());
             extraKeysBackground.setAlpha(state.barAlpha);
         }
+        refreshDockPlankFx();
 
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(
@@ -2122,6 +2326,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState)
             return;
         mIsVisible = false;
+        if (mDockPlankController != null) {
+            mDockPlankController.reset();
+        }
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onStop();
         if (mTermuxTerminalViewClient != null)
@@ -2385,6 +2592,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherAzGestureFxLabelOverlayView != null) {
             mLauncherAzGestureFxLabelOverlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.OVERLAY);
         }
+        setupDockPlankFx();
         if (appsBarContainer == null) {
             return;
         }

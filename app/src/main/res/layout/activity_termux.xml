@@ -206,6 +206,19 @@
                     android:layout_height="match_parent"
                     android:visibility="gone"
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
+
+                <View
+                    android:id="@+id/accessory_edge_glow_fx"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+
+                <View
+                    android:id="@+id/accessory_specular_fx"
+                    android:layout_width="280dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="top|center_horizontal"
+                    android:visibility="gone" />
             </FrameLayout>
 
             <com.termux.app.LauncherAzGestureFxView
