@@ -50,6 +50,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
@@ -3925,13 +3926,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         updateViewHorizontalMargins(R.id.apps_bar_az_fx_underlay, surfaceInset);
         updateViewHorizontalMargins(R.id.apps_bar_az_fx_overlay, surfaceInset);
 
-        // Keep the extra-keys ViewPager clipping its own pages. In capsule mode the pager is inset
-        // from the dock edges, which would otherwise let the adjacent (text-input) page peek into
-        // the visible page through the parent's non-clipping container.
+        // Keep the extra-keys ViewPager from leaking its adjacent (text-input) page. In capsule mode
+        // the pager is inset from the dock edges, so the off-screen page's edge (the "❮" button)
+        // peeked into the visible page. clipChildren alone doesn't clip a ViewPager's off-screen
+        // pages, so hard-clip the pager to its own rectangular bounds via clipToOutline.
         View toolbarPager = findViewById(R.id.terminal_toolbar_view_pager);
         if (toolbarPager instanceof ViewGroup) {
             ((ViewGroup) toolbarPager).setClipChildren(true);
             ((ViewGroup) toolbarPager).setClipToPadding(true);
+        }
+        if (toolbarPager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            toolbarPager.setOutlineProvider(ViewOutlineProvider.BOUNDS);
+            toolbarPager.setClipToOutline(true);
         }
     }
 
