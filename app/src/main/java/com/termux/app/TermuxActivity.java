@@ -1161,16 +1161,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private Drawable buildValarieAmbientVeil(float surfaceAlpha, boolean decorLayer) {
         int surfaceColor = resolveAccessorySurfaceColor(surfaceAlpha);
         int baseAlpha = Color.alpha(surfaceColor);
-        int lowAlpha = Math.round(baseAlpha * (decorLayer ? 0.08f : 0.05f));
         int midAlpha = Math.round(baseAlpha * (decorLayer ? 0.22f : 0.14f));
         int highAlpha = Math.round(baseAlpha * (decorLayer ? 0.40f : 0.24f));
+        // Soft veil that fades back to transparent at the BOTTOM as well as the top, so the floating
+        // dock blends smoothly into the same terminal/background dim above and below — no hard
+        // darker-band seam at the dock's bottom edge against the under-dock gap and gesture strip.
         GradientDrawable veil = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
                 Color.TRANSPARENT,
-                withAlphaComponent(surfaceColor, lowAlpha),
                 withAlphaComponent(surfaceColor, midAlpha),
-                withAlphaComponent(surfaceColor, highAlpha)
+                withAlphaComponent(surfaceColor, highAlpha),
+                Color.TRANSPARENT
             }
         );
         veil.setDither(true);
