@@ -71,12 +71,12 @@ public final class AzScrubRowView extends AppCompatTextView {
     private final Paint letterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint railFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint railStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint railConcavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF railRect = new RectF();
     private final Rect glyphRect = new Rect();
-    @Nullable private LinearGradient concaveShader;
-    private float concaveShaderTop = Float.NaN;
-    private float concaveShaderBottom = Float.NaN;
+    @Nullable private LinearGradient glassFillShader;
+    @Nullable private LinearGradient glassRimShader;
+    private float glassShaderTop = Float.NaN;
+    private float glassShaderBottom = Float.NaN;
     private float activeTouchX = -1f;
     private float waveStrength = 0f;
     private int accentColor = Color.WHITE;
@@ -120,7 +120,6 @@ public final class AzScrubRowView extends AppCompatTextView {
         letterPaint.setColor(getCurrentTextColor());
         railFillPaint.setStyle(Paint.Style.FILL);
         railStrokePaint.setStyle(Paint.Style.STROKE);
-        railConcavePaint.setStyle(Paint.Style.FILL);
         ViewConfiguration viewConfiguration = ViewConfiguration.get(getContext());
         doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout();
         doubleTapSlopPx = viewConfiguration.getScaledDoubleTapSlop();
@@ -182,35 +181,51 @@ public final class AzScrubRowView extends AppCompatTextView {
         float radius = capsuleDock ? (railHeight * 0.5f) : dpf(9f);
         railRect.set(sidePad, railTop, width - sidePad, railBottom);
 
-        // Very subtle dark tint at rest, a touch deeper while scrubbing.
-        railFillPaint.setShader(null);
-        railFillPaint.setColor(withAlpha(0xFF000000, Math.round(lerp(20f, 52f, interact))));
-        canvas.drawRoundRect(railRect, radius, radius, railFillPaint);
-        railStrokePaint.setStrokeWidth(Math.max(1f, dpf(1f)));
-        railStrokePaint.setColor(withAlpha(0xFF000000, Math.round(lerp(24f, 48f, interact))));
-        canvas.drawRoundRect(railRect, radius, radius, railStrokePaint);
+        ensureGlassShaders(railTop, railBottom);
 
-        // Concave recess while interacting: a top-shadow -> bottom-highlight vertical gradient makes
-        // the track look scooped in. Scaled by interaction via the paint's alpha.
+        // Frosted glass pane: a faint light fill that's a touch brighter along the top (lit from
+        // above) and lets the dock blur show through — subtle at rest, a little more present while
+        // scrubbing. Reads as a real pane of glass rather than a flat tint.
+        railFillPaint.setShader(glassFillShader);
+        railFillPaint.setAlpha(Math.round(lerp(150f, 220f, interact)));
+        canvas.drawRoundRect(railRect, radius, radius, railFillPaint);
+        railFillPaint.setShader(null);
+        railFillPaint.setAlpha(255);
+
+        // A whisper of accent warmth refracting through the glass while scrubbing (kept very low so
+        // it stays glassy, not a solid fill).
         if (interact > 0.02f) {
-            ensureConcaveShader(railTop, railBottom);
-            railConcavePaint.setShader(concaveShader);
-            railConcavePaint.setAlpha(Math.round(150f * interact));
-            canvas.drawRoundRect(railRect, radius, radius, railConcavePaint);
-            railConcavePaint.setShader(null);
+            railFillPaint.setColor(withAlpha(accentColor, Math.round(22f * interact)));
+            canvas.drawRoundRect(railRect, radius, radius, railFillPaint);
         }
+
+        // Rim light: a crisp highlight along the top edge of the glass that fades toward the bottom,
+        // the way light catches the lip of a real glass surface.
+        railStrokePaint.setShader(glassRimShader);
+        railStrokePaint.setStrokeWidth(Math.max(1f, dpf(1f)));
+        railStrokePaint.setAlpha(Math.round(lerp(140f, 210f, interact)));
+        canvas.drawRoundRect(railRect, radius, radius, railStrokePaint);
+        railStrokePaint.setShader(null);
+        railStrokePaint.setAlpha(255);
     }
 
-    private void ensureConcaveShader(float top, float bottom) {
-        if (concaveShader != null && concaveShaderTop == top && concaveShaderBottom == bottom) {
+    private void ensureGlassShaders(float top, float bottom) {
+        if (glassFillShader != null && glassShaderTop == top && glassShaderBottom == bottom) {
             return;
         }
-        concaveShaderTop = top;
-        concaveShaderBottom = bottom;
-        concaveShader = new LinearGradient(
+        glassShaderTop = top;
+        glassShaderBottom = bottom;
+        // Frost: brightest at the very top, settling to a faint sheen lower down.
+        glassFillShader = new LinearGradient(
             0f, top, 0f, bottom,
-            new int[] { withAlpha(0xFF000000, 160), withAlpha(0xFF000000, 0), withAlpha(0xFFFFFFFF, 38) },
-            new float[] { 0f, 0.62f, 1f },
+            new int[] { withAlpha(0xFFFFFFFF, 36), withAlpha(0xFFFFFFFF, 15), withAlpha(0xFFFFFFFF, 8) },
+            new float[] { 0f, 0.55f, 1f },
+            Shader.TileMode.CLAMP);
+        // Rim: bright top lip fading to a faint bottom edge.
+        glassRimShader = new LinearGradient(
+            0f, top, 0f, bottom,
+            new int[] { withAlpha(0xFFFFFFFF, 102), withAlpha(0xFFFFFFFF, 40), withAlpha(0xFFFFFFFF, 22) },
+            new float[] { 0f, 0.5f, 1f },
             Shader.TileMode.CLAMP);
     }
 
