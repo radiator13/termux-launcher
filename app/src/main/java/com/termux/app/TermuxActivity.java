@@ -2628,6 +2628,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        // The wallpaper theme sets windowTranslucentNavigation=true, which makes the system draw a
+        // dark translucent scrim behind the gesture pill that ignores setNavigationBarColor — this
+        // was the persistent dark band under the pill. Clear it so our transparent nav bar (and the
+        // unified background dim / dock surface beneath it) is what actually shows.
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
