@@ -162,15 +162,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setFloat(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_BAR_HEIGHT, value, false);
     }
 
-    public boolean isAppLauncherCompactDockEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_COMPACT_DOCK,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_COMPACT_DOCK);
-    }
-
-    public void setAppLauncherCompactDockEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_COMPACT_DOCK, value, false);
-    }
-
     public String getAppLauncherDockStyle() {
         String value = SharedPreferenceUtils.getString(
             mSharedPreferences,

@@ -33,22 +33,19 @@ public class AccessoryStackLayoutPolicyTest {
     }
 
     @Test
-    public void pageIndicatorBandHeight_usesThinStripInCompactMode() {
-        assertEquals(27, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(true, false, 3f));
-        assertEquals(6, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(true, true, 3f));
-        assertEquals(0, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(false, true, 3f));
+    public void pageIndicatorBandHeight_usesFixedStrip() {
+        assertEquals(27, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(true, 3f));
+        assertEquals(0, AccessoryStackLayoutPolicy.computePageIndicatorBandHeightPx(false, 3f));
     }
 
     @Test
-    public void azRowHeight_tightensInCompactMode() {
-        assertEquals(57, AccessoryStackLayoutPolicy.computeAzRowHeightPx(true, false, 3f));
-        assertEquals(42, AccessoryStackLayoutPolicy.computeAzRowHeightPx(true, true, 3f));
-        assertEquals(0, AccessoryStackLayoutPolicy.computeAzRowHeightPx(false, true, 3f));
+    public void azRowHeight_usesFixedHeight() {
+        assertEquals(57, AccessoryStackLayoutPolicy.computeAzRowHeightPx(true, 3f));
+        assertEquals(0, AccessoryStackLayoutPolicy.computeAzRowHeightPx(false, 3f));
     }
 
     @Test
-    public void terminalToolbarHeight_reducesForCompactDock() {
-        assertEquals(228, AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(38, 2, 3f, false));
-        assertEquals(178, AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(38, 2, 3f, true));
+    public void terminalToolbarHeight_scalesWithRowsAndScale() {
+        assertEquals(228, AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(38, 2, 3f));
     }
 }

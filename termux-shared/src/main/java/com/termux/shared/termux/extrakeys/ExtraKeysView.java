@@ -229,11 +229,6 @@ public final class ExtraKeysView extends GridLayout {
     protected boolean mButtonTextAllCaps = true;
 
     /**
-     * Tightens button internals for compact dock layouts without changing the key matrix.
-     */
-    protected boolean mCompactDockSpacingEnabled = false;
-
-    /**
      * Defines the duration in milliseconds before a press turns into a long press. The default
      * duration used is the one returned by a call to {@link ViewConfiguration#getLongPressTimeout()}
      * which will return the system defined duration which can be changed in accessibility settings.
@@ -290,10 +285,6 @@ public final class ExtraKeysView extends GridLayout {
      */
     public void setExtraKeysViewClient(IExtraKeysView extraKeysViewClient) {
         mExtraKeysViewClient = extraKeysViewClient;
-    }
-
-    public void setCompactDockSpacingEnabled(boolean enabled) {
-        mCompactDockSpacingEnabled = enabled;
     }
 
     /**
@@ -513,7 +504,6 @@ public final class ExtraKeysView extends GridLayout {
                 button.setTextColor(mButtonTextColor);
                 button.setAllCaps(mButtonTextAllCaps);
                 button.setPadding(0, 0, 0, 0);
-                applyDockSpacingToButton(button);
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
@@ -712,7 +702,6 @@ public final class ExtraKeysView extends GridLayout {
         button.setText(extraButton.getDisplay());
         button.setAllCaps(mButtonTextAllCaps);
         button.setPadding(0, 0, 0, 0);
-        applyDockSpacingToButton(button);
         button.setWidth(width);
         button.setHeight(height);
         setPopupButtonVisualState(button);
@@ -756,17 +745,6 @@ public final class ExtraKeysView extends GridLayout {
         mPopupWindow.setContentView(null);
         mPopupWindow.dismiss();
         mPopupWindow = null;
-    }
-
-    private void applyDockSpacingToButton(@NonNull MaterialButton button) {
-        if (!mCompactDockSpacingEnabled)
-            return;
-        button.setMinHeight(0);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        button.setMinimumHeight(0);
-        button.setInsetTop(0);
-        button.setInsetBottom(0);
     }
 
     /**

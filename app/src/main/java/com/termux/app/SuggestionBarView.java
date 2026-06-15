@@ -73,6 +73,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -3639,7 +3640,14 @@ public final class SuggestionBarView extends GridLayout {
         header.setTextColor(resolveLauncherTextColor());
         header.setTextSize(12f);
         header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setPadding(dp(8), dp(4), dp(8), dp(6));
+        header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(8), dp(6), dp(8), dp(7));
+        Drawable headerIcon = resolveMenuHeaderIcon(context.entry);
+        if (headerIcon != null) {
+            headerIcon.setBounds(0, 0, dp(22), dp(22));
+            header.setCompoundDrawablesRelative(headerIcon, null, null, null);
+            header.setCompoundDrawablePadding(dp(10));
+        }
         shell.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         int tintBase = context.sourceFolder != null && context.sourceFolder.tintOverrideEnabled
@@ -3647,7 +3655,7 @@ public final class SuggestionBarView extends GridLayout {
             : (inheritedTintColor & 0x00FFFFFF);
         activeMenuTintBase = tintBase;
 
-        TextView uninstallRow = addPopupActionRow(shell, "Uninstall", tintBase, () -> {
+        TextView uninstallRow = addPopupActionRow(shell, "Uninstall", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
             dismissAppContextPopup();
             requestUninstall(context.entry);
         });
@@ -3656,7 +3664,7 @@ public final class SuggestionBarView extends GridLayout {
             requestUninstall(context.entry);
         }, false));
 
-        TextView appInfoRow = addPopupActionRow(shell, "App info", tintBase, () -> {
+        TextView appInfoRow = addPopupActionRow(shell, "App info", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
             dismissAppContextPopup();
             openAppInfo(context.entry);
         });
@@ -3666,7 +3674,7 @@ public final class SuggestionBarView extends GridLayout {
         }, false));
 
         if (folderSource) {
-            TextView changeIconRow = addPopupActionRow(shell, "Change icon", tintBase, () -> {
+            TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 changeFolderAppIcon(context);
             });
@@ -3675,7 +3683,7 @@ public final class SuggestionBarView extends GridLayout {
                 changeFolderAppIcon(context);
             }, false));
 
-            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", tintBase, () -> {
+            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
                 dismissAppContextPopup();
                 resetFolderAppIcon(context);
             });
@@ -3684,7 +3692,7 @@ public final class SuggestionBarView extends GridLayout {
                 resetFolderAppIcon(context);
             }, false));
 
-            TextView moveToDockRow = addPopupActionRow(shell, "Move to dock", tintBase, () -> {
+            TextView moveToDockRow = addPopupActionRow(shell, "Move to dock", R.drawable.ic_dock_menu_move, false, tintBase, () -> {
                 dismissAppContextPopup();
                 moveContextEntryToDock(context);
             });
@@ -3693,7 +3701,7 @@ public final class SuggestionBarView extends GridLayout {
                 moveContextEntryToDock(context);
             }, false));
 
-            TextView deleteRow = addPopupActionRow(shell, "Delete", tintBase, () -> {
+            TextView deleteRow = addPopupActionRow(shell, "Delete", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
                 dismissAppContextPopup();
                 removeFromContextSource(context);
             });
@@ -3703,7 +3711,7 @@ public final class SuggestionBarView extends GridLayout {
             }, false));
         } else if (topPinned) {
             final int targetPinnedIndex = topPinnedIndex;
-            TextView changeIconRow = addPopupActionRow(shell, "Change icon", tintBase, () -> {
+            TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
                 if (pinnedApp != null) {
@@ -3718,7 +3726,7 @@ public final class SuggestionBarView extends GridLayout {
                 }
             }, false));
 
-            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", tintBase, () -> {
+            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
                 dismissAppContextPopup();
                 PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
                 if (pinnedApp != null) {
@@ -3733,7 +3741,7 @@ public final class SuggestionBarView extends GridLayout {
                 }
             }, false));
 
-            TextView unpinRow = addPopupActionRow(shell, "Unpin", tintBase, () -> {
+            TextView unpinRow = addPopupActionRow(shell, "Unpin", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
                 dismissAppContextPopup();
                 removePinnedAt(targetPinnedIndex);
             });
@@ -3742,7 +3750,7 @@ public final class SuggestionBarView extends GridLayout {
                 removePinnedAt(targetPinnedIndex);
             }, false));
         } else {
-            TextView pinRow = addPopupActionRow(shell, "Pin", tintBase, () -> {
+            TextView pinRow = addPopupActionRow(shell, "Pin", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
                 dismissAppContextPopup();
                 pinEntryToTopLevel(context.entry);
             });
@@ -3753,7 +3761,8 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         if (hasShortcuts) {
-            TextView shortcutsRow = addPopupActionRow(shell, "Shortcuts", tintBase, () -> {
+            addPopupMenuDivider(shell);
+            TextView shortcutsRow = addPopupActionRow(shell, "Shortcuts", R.drawable.ic_dock_menu_shortcuts, true, tintBase, () -> {
                 if (shortcutsPopupWindow != null && shortcutsPopupWindow.isShowing()) {
                     dismissShortcutsPopup();
                     clearMenuHighlight();
@@ -4099,6 +4108,10 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private TextView addPopupActionRow(@NonNull LinearLayout shell, @NonNull String title, int tintBase, @NonNull Runnable action) {
+        return addPopupActionRow(shell, title, 0, false, tintBase, action);
+    }
+
+    private TextView addPopupActionRow(@NonNull LinearLayout shell, @NonNull String title, int iconRes, boolean chevron, int tintBase, @NonNull Runnable action) {
         TextView actionRow = new TextView(getContext());
         actionRow.setText(title);
         actionRow.setTextColor(resolveLauncherTextColor());
@@ -4106,10 +4119,54 @@ public final class SuggestionBarView extends GridLayout {
         actionRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         actionRow.setPadding(dp(8), dp(7), dp(8), dp(7));
         actionRow.setClickable(true);
+        if (iconRes != 0 || chevron) {
+            Drawable leading = iconRes != 0 ? loadMenuIcon(iconRes, dp(16), resolveLauncherTextColor()) : null;
+            Drawable trailing = chevron
+                ? loadMenuIcon(R.drawable.ic_dock_menu_chevron, dp(13),
+                    (resolveLauncherTextColor() & 0x00FFFFFF) | (0x9E << 24))
+                : null;
+            actionRow.setCompoundDrawablesRelative(leading, null, trailing, null);
+            actionRow.setCompoundDrawablePadding(dp(10));
+        }
         stylePopupRow(actionRow, false, tintBase);
         actionRow.setOnClickListener(v -> runPopupActionWithFeedback(actionRow, action));
         shell.addView(actionRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return actionRow;
+    }
+
+    /** Loads a menu glyph, tints it to {@code color} (alpha respected) and bounds it to {@code sizePx}. */
+    @Nullable
+    private Drawable loadMenuIcon(int res, int sizePx, int color) {
+        Drawable base = ContextCompat.getDrawable(getContext(), res);
+        if (base == null) {
+            return null;
+        }
+        Drawable d = DrawableCompat.wrap(base.mutate());
+        DrawableCompat.setTint(d, color);
+        d.setBounds(0, 0, sizePx, sizePx);
+        return d;
+    }
+
+    /** Hairline group separator between the OS-actions group and the app-shortcuts group. */
+    private void addPopupMenuDivider(@NonNull LinearLayout shell) {
+        View divider = new View(getContext());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        lp.setMargins(dp(8), dp(5), dp(8), dp(4));
+        divider.setLayoutParams(lp);
+        divider.setBackgroundColor((resolveLauncherTextColor() & 0x00FFFFFF) | (0x24 << 24));
+        shell.addView(divider);
+    }
+
+    /** A fresh copy of the app icon for the menu header so we don't disturb the row icon's bounds. */
+    @Nullable
+    private Drawable resolveMenuHeaderIcon(@NonNull LauncherAppEntry entry) {
+        Drawable base = entry.icon;
+        if (base == null) {
+            return null;
+        }
+        Drawable.ConstantState state = base.getConstantState();
+        return state != null ? state.newDrawable().mutate() : base;
     }
 
     private void runPopupActionWithFeedback(@NonNull TextView actionRow, @NonNull Runnable action) {
@@ -4409,7 +4466,7 @@ public final class SuggestionBarView extends GridLayout {
 
         FrameLayout popupRoot = new FrameLayout(getContext());
         GradientDrawable panelBg = new GradientDrawable();
-        panelBg.setCornerRadius(dp(12));
+        panelBg.setCornerRadius(dp(14));
         int alpha = clamp(appBarOpacity, 0, 100);
         int overlayColor = (((int) (255f * (alpha / 100f))) << 24) | (tintBase & 0x00FFFFFF);
         panelBg.setColor(overlayColor);
@@ -4448,7 +4505,19 @@ public final class SuggestionBarView extends GridLayout {
         if (anchor != null) {
             int[] location = new int[2];
             anchor.getLocationOnScreen(location);
-            int x = location[0] + (anchor.getWidth() / 2) - (popupWidth / 2);
+            int anchorCenterX = location[0] + (anchor.getWidth() / 2);
+            // Smart anchoring: align the menu to the icon's position — a left-edge icon left-aligns
+            // (menu opens toward the right), a right-edge icon right-aligns (opens toward the left),
+            // a mid-dock icon centers over the icon. The menu always opens upward.
+            int third = screenW / 3;
+            int x;
+            if (anchorCenterX <= third) {
+                x = location[0];
+            } else if (anchorCenterX >= (screenW - third)) {
+                x = location[0] + anchor.getWidth() - popupWidth;
+            } else {
+                x = anchorCenterX - (popupWidth / 2);
+            }
             int y = location[1] - popupHeight - gap;
             x = clamp(x, 0, Math.max(0, screenW - popupWidth));
             y = clamp(y, 0, Math.max(0, screenH - popupHeight));

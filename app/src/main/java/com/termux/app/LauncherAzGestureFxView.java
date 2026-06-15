@@ -88,8 +88,6 @@ public final class LauncherAzGestureFxView extends View {
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
     private boolean interactionUseSubtlePageIndicators;
-    private boolean compactDockSpacingEnabled;
-    private boolean drawingCompactPageIndicator;
     private float subtlePageIndicatorAttention = 1f;
     private boolean subtlePageIndicatorFadeScheduled;
     @Nullable private ValueAnimator subtlePageIndicatorAttentionAnimator;
@@ -342,14 +340,6 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
-    public void setCompactDockSpacingEnabled(boolean enabled) {
-        if (compactDockSpacingEnabled == enabled) {
-            return;
-        }
-        compactDockSpacingEnabled = enabled;
-        invalidate();
-    }
-
     public void setDarkThemeActive(boolean active) {
         if (darkThemeActive == active) {
             return;
@@ -448,7 +438,9 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f && focusedAppPreviewProgress <= 0.01f) {
+        boolean drawFocusRing = hasFocus && !focusRawRect.isEmpty();
+        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f
+            && focusedAppPreviewProgress <= 0.01f && !drawFocusRing) {
             return;
         }
         if (edgeDwellProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
@@ -462,9 +454,30 @@ public final class LauncherAzGestureFxView extends View {
                 drawInteractionPageIndicators(canvas);
             }
         }
+        if (drawFocusRing && renderLayer == RenderLayer.OVERLAY) {
+            drawFocusedIconRing(canvas);
+        }
         if (focusedAppPreviewProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
             drawFocusedAppPreviewIcon(canvas);
         }
+    }
+
+    /**
+     * 2dp accent ring hugging the app icon currently under the finger while scrubbing the icon
+     * row — the design's "active app" marker (focused-during-scrub only). Snaps to each icon as
+     * the focus moves; the apps are circular, so a circular ring 3dp outside the icon reads clean.
+     */
+    private void drawFocusedIconRing(Canvas canvas) {
+        float left = focusRawRect.left - locationOnScreen[0];
+        float top = focusRawRect.top - locationOnScreen[1];
+        float right = focusRawRect.right - locationOnScreen[0];
+        float bottom = focusRawRect.bottom - locationOnScreen[1];
+        float cx = (left + right) * 0.5f;
+        float cy = (top + bottom) * 0.5f;
+        float radius = (Math.min(right - left, bottom - top) * 0.5f) + dp(3f);
+        glassStrokePaint.setStrokeWidth(dp(2f));
+        glassStrokePaint.setColor(withAlpha(boostColor(edgeTintColor, 1.22f, 1.10f), 235));
+        canvas.drawCircle(cx, cy, radius, glassStrokePaint);
     }
 
     private void drawFocusedAppPreviewIcon(Canvas canvas) {
@@ -835,138 +848,67 @@ public final class LauncherAzGestureFxView extends View {
         }
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
-        boolean compactInteraction = compactDockSpacingEnabled;
-        if (compactInteraction && subtle && attention < 0.08f) {
-            drawCompactIdlePageDots(canvas, interactionPageIndicatorPosition, interactionPageCount);
-            return;
-        }
-        if (compactInteraction) {
-            drawCompactActivePageIndicator(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
-            return;
-        }
-        drawPageIndicatorStrip(
-            canvas,
-            interactionPageIndicatorPosition,
-            interactionPageCount,
-            subtle
-                ? clamp(getWidth() * lerp(0.16f, 0.22f, attention), dp(48f), dp(118f))
-                : clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            subtle ? dp(lerp(4.6f, 6f, attention)) : dp(8.5f),
-            subtle ? dp(lerp(5.8f, 7f, attention)) : dp(10f),
-            subtle
-                ? withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, attention)))
-                : withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
-            subtle
-                ? withAlpha(boostColor(edgeTintColor, 1.20f, 1.08f), Math.round(lerp(104f, 196f, attention)))
-                : withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
-            !subtle
-        );
+        drawPageEdgeSegments(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
     }
 
-    private void drawCompactActivePageIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention) {
-        float clampedAttention = clamp01(attention);
-        drawingCompactPageIndicator = true;
-        try {
-            drawPageIndicatorStrip(
-                canvas,
-                activePagePosition,
-                totalPages,
-                clamp(getWidth() * lerp(0.08f, 0.13f, clampedAttention), dp(26f), dp(70f)),
-                dp(lerp(1.2f, 1.7f, clampedAttention)),
-                dp(lerp(3.2f, 4.2f, clampedAttention)),
-                withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, clampedAttention))),
-                withAlpha(boostColor(edgeTintColor, 1.20f, 1.08f), Math.round(lerp(104f, 196f, clampedAttention))),
-                false
-            );
-        } finally {
-            drawingCompactPageIndicator = false;
-        }
-    }
-
-    private void drawPageIndicatorStrip(
-        Canvas canvas,
-        float activePagePosition,
-        int totalPages,
-        float totalWidth,
-        float lineHeight,
-        float segmentGap,
-        int backgroundLineColor,
-        int activeLineColor,
-        boolean insetActive
-    ) {
+    /**
+     * Page-as-edge indicator: tab-style segments that hang from the dock surface's top edge
+     * (one per page, ~40x3dp, 4dp gap, centered). The active page reads as an accent fill;
+     * inactive pages read as a faint fill with a hairline outline. Replaces the old indicator
+     * that sat in the gap between the apps row and the A-Z row.
+     */
+    private void drawPageEdgeSegments(Canvas canvas, float activePagePosition, int totalPages, float attention) {
         if (totalPages <= 1) {
             return;
         }
-        float cy = resolvePageIndicatorCenterY();
-        float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
-        float dotSize = lineHeight;
-        float activeWidth = insetActive ? dp(38f) : (compactDockSpacingEnabled ? dp(12f) : dp(26f));
-        float desiredWidth = activeWidth
-            + (dotSize * Math.max(0, totalPages - 1))
-            + (segmentGap * Math.max(0, totalPages - 1));
-        if (desiredWidth > totalWidth) {
-            float scale = totalWidth / Math.max(1f, desiredWidth);
-            float minDotSize = compactDockSpacingEnabled ? dp(1.1f) : dp(4.5f);
-            float minActiveWidth = compactDockSpacingEnabled ? dp(8f) : dp(20f);
-            float minSegmentGap = compactDockSpacingEnabled ? dp(2.5f) : dp(4f);
-            dotSize = Math.max(minDotSize, dotSize * scale);
-            activeWidth = Math.max(minActiveWidth, activeWidth * scale);
-            segmentGap = Math.max(minSegmentGap, segmentGap * scale);
-            desiredWidth = activeWidth
-                + (dotSize * Math.max(0, totalPages - 1))
-                + (segmentGap * Math.max(0, totalPages - 1));
+        float clampedAttention = clamp01(attention);
+
+        float segHeight = dp(3f);
+        float segWidth = dp(40f);
+        float segGap = dp(4f);
+        float radius = dp(1.5f);
+        float available = Math.max(dp(40f), getWidth() - dp(24f));
+        float desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
+        if (desiredWidth > available) {
+            float scale = available / Math.max(1f, desiredWidth);
+            segWidth = Math.max(dp(14f), segWidth * scale);
+            segGap = Math.max(dp(3f), segGap * scale);
+            desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
         }
 
+        // Anchor to the dock surface top edge (top of the apps row); the segments hang just
+        // inside the top border. Kept >= 0 so they are not clipped by the view bounds.
+        float topEdgeY = appsRowRawBounds.top - locationOnScreen[1];
+        float top = Math.max(0f, topEdgeY);
+        float bottom = top + segHeight;
         float left = (getWidth() - desiredWidth) * 0.5f;
+        float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
+
+        int accentColor = boostColor(edgeTintColor, 1.24f, 1.10f);
+        int inactiveFill = boostColor(glassTintColor, 1.10f, 1.02f);
+        int activeAlpha = Math.round(lerp(150f, 236f, clampedAttention));
+        int inactiveAlpha = Math.round(lerp(40f, 96f, clampedAttention));
+        int strokeAlpha = Math.round(lerp(30f, 72f, clampedAttention));
+        int strokeColor = boostColor(edgeTintColor, 1.05f, 1.0f);
+
         for (int i = 0; i < totalPages; i++) {
             float activeAmount = 1f - clamp(Math.abs(i - clampedPosition), 0f, 1f);
-            float width = lerp(dotSize, activeWidth, activeAmount);
-            float radius = dotSize * 0.5f;
-            tmpRect.set(left, cy - radius, left + width, cy + radius);
-            pageIndicatorPaint.setColor(lerpColor(backgroundLineColor, activeLineColor, activeAmount));
+            tmpRect.set(left, top, left + segWidth, bottom);
+            pageIndicatorPaint.setStyle(Paint.Style.FILL);
+            pageIndicatorPaint.setColor(lerpColor(
+                withAlpha(inactiveFill, inactiveAlpha),
+                withAlpha(accentColor, activeAlpha),
+                activeAmount));
             canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            left += width + segmentGap;
+            if (activeAmount < 0.5f) {
+                pageIndicatorPaint.setStyle(Paint.Style.STROKE);
+                pageIndicatorPaint.setStrokeWidth(Math.max(1f, dp(0.75f)));
+                pageIndicatorPaint.setColor(withAlpha(strokeColor, Math.round(strokeAlpha * (1f - (activeAmount * 2f)))));
+                canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
+            }
+            left += segWidth + segGap;
         }
-    }
-
-    private void drawCompactIdlePageDots(Canvas canvas, float activePagePosition, int totalPages) {
-        if (totalPages <= 1) {
-            return;
-        }
-        drawingCompactPageIndicator = true;
-        try {
-            drawCompactIdlePageDotsInternal(
-                canvas,
-                activePagePosition,
-                totalPages,
-                withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), 66),
-                withAlpha(boostColor(edgeTintColor, 1.24f, 1.10f), 150)
-            );
-        } finally {
-            drawingCompactPageIndicator = false;
-        }
-    }
-
-    private void drawCompactIdlePageDotsInternal(
-        Canvas canvas,
-        float activePagePosition,
-        int totalPages,
-        int inactiveColor,
-        int activeColor
-    ) {
-        float cy = resolvePageIndicatorCenterY();
-        float dotSize = dp(2.2f);
-        float gap = dp(4.2f);
-        float desiredWidth = (dotSize * totalPages) + (gap * Math.max(0, totalPages - 1));
-        float left = (getWidth() - desiredWidth) * 0.5f;
-        float activePosition = clamp(activePagePosition, 0f, totalPages - 1f);
-        for (int i = 0; i < totalPages; i++) {
-            float activeAmount = 1f - clamp(Math.abs(i - activePosition), 0f, 1f);
-            float radius = lerp(dotSize * 0.42f, dotSize * 0.58f, activeAmount);
-            pageIndicatorPaint.setColor(lerpColor(inactiveColor, activeColor, activeAmount));
-            canvas.drawCircle(left + (dotSize * 0.5f), cy, radius, pageIndicatorPaint);
-            left += dotSize + gap;
-        }
+        pageIndicatorPaint.setStyle(Paint.Style.FILL);
     }
 
     private void animateInteractionPageIndicatorTo(int pageIndex, boolean animate) {
@@ -1101,36 +1043,6 @@ public final class LauncherAzGestureFxView extends View {
             interactionPageIndicatorAnimator.cancel();
             interactionPageIndicatorAnimator = null;
         }
-    }
-
-    private float resolvePageIndicatorCenterY() {
-        if (compactDockSpacingEnabled && drawingCompactPageIndicator
-            && !appsRowRawBounds.isEmpty() && !azRowRawBounds.isEmpty()) {
-            float appTop = appsRowRawBounds.top - locationOnScreen[1];
-            float appBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-            float appHeight = Math.max(1f, appBottom - appTop);
-            float appCenter = (appTop + appBottom) * 0.5f;
-            float iconBottomEstimate = appCenter + Math.min(appHeight * 0.36f, (appHeight * 0.5f) - dp(6f));
-            float visualGapTop = Math.min(appBottom - dp(5.5f), iconBottomEstimate);
-            float visualGapBottom = (azRowRawBounds.top - locationOnScreen[1]) + dp(0.6f);
-            if (visualGapTop >= visualGapBottom) {
-                visualGapTop = visualGapBottom - dp(4f);
-            }
-            return (visualGapTop + visualGapBottom) * 0.5f;
-        }
-        if (!indicatorBandRawBounds.isEmpty()) {
-            return ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
-        }
-        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        if (azRowRawBounds.isEmpty()) {
-            return rowBottom + dp(4.5f);
-        }
-        float azTop = azRowRawBounds.top - locationOnScreen[1];
-        float gapTop = rowBottom + dp(4f);
-        float gapBottom = azTop - dp(8f);
-        return gapTop <= gapBottom
-            ? clamp((gapTop + gapBottom) * 0.5f, gapTop, gapBottom)
-            : rowBottom + dp(4.5f);
     }
 
     private void drawLaunchGlassBloom(Canvas canvas) {

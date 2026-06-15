@@ -244,10 +244,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherAppsRowEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
-            case "app_launcher_compact_dock":
-                mPreferences.setAppLauncherCompactDockEnabled(value);
-                scheduleTermuxActivityStylingSync(false);
-                break;
             case "app_launcher_display_app_names":
                 mPreferences.setAppLauncherDisplayAppNamesEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -288,8 +284,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isAppLauncherBwIconsEnabled();
             case "app_launcher_apps_row_enabled":
                 return mPreferences.isAppLauncherAppsRowEnabled();
-            case "app_launcher_compact_dock":
-                return mPreferences.isAppLauncherCompactDockEnabled();
             case "app_launcher_display_app_names":
                 return mPreferences.isAppLauncherDisplayAppNamesEnabled();
             case "app_launcher_notification_dots":
