@@ -863,32 +863,37 @@ public final class LauncherAzGestureFxView extends View {
         }
         float clampedAttention = clamp01(attention);
 
-        float segHeight = dp(3f);
-        float segWidth = dp(40f);
+        // Thin, short segments that sit right at the very top edge of the dock.
+        float segHeight = dp(2f);
+        float segWidth = dp(22f);
         float segGap = dp(4f);
-        float radius = dp(1.5f);
+        float radius = dp(1f);
         float available = Math.max(dp(40f), getWidth() - dp(24f));
         float desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
         if (desiredWidth > available) {
             float scale = available / Math.max(1f, desiredWidth);
-            segWidth = Math.max(dp(14f), segWidth * scale);
-            segGap = Math.max(dp(3f), segGap * scale);
+            segWidth = Math.max(dp(10f), segWidth * scale);
+            segGap = Math.max(dp(2.5f), segGap * scale);
             desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
         }
 
-        // Anchor to the dock surface top edge (top of the apps row); the segments hang just
-        // inside the top border. Kept >= 0 so they are not clipped by the view bounds.
+        // Anchor to the very top edge of the dock surface (top of the apps row). Kept >= 0 so
+        // the segments are not clipped by the view bounds.
         float topEdgeY = appsRowRawBounds.top - locationOnScreen[1];
         float top = Math.max(0f, topEdgeY);
         float bottom = top + segHeight;
         float left = (getWidth() - desiredWidth) * 0.5f;
         float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
 
+        // Toned down at rest; brightens only while the apps bar is being interacted with, then
+        // eases back after the idle timeout (attention fades to PINNED_INDICATOR_IDLE_ATTENTION).
+        float bright = clamp01((clampedAttention - PINNED_INDICATOR_IDLE_ATTENTION)
+            / Math.max(0.001f, 1f - PINNED_INDICATOR_IDLE_ATTENTION));
         int accentColor = boostColor(edgeTintColor, 1.24f, 1.10f);
         int inactiveFill = boostColor(glassTintColor, 1.10f, 1.02f);
-        int activeAlpha = Math.round(lerp(150f, 236f, clampedAttention));
-        int inactiveAlpha = Math.round(lerp(40f, 96f, clampedAttention));
-        int strokeAlpha = Math.round(lerp(30f, 72f, clampedAttention));
+        int activeAlpha = Math.round(lerp(92f, 238f, bright));
+        int inactiveAlpha = Math.round(lerp(26f, 82f, bright));
+        int strokeAlpha = Math.round(lerp(16f, 58f, bright));
         int strokeColor = boostColor(edgeTintColor, 1.05f, 1.0f);
 
         for (int i = 0; i < totalPages; i++) {

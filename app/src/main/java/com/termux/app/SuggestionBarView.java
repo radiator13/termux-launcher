@@ -3576,6 +3576,18 @@ public final class SuggestionBarView extends GridLayout {
                         return true;
                     }
 
+                    // Drag-back-to-cancel: once the finger has slid up off the icon onto the menu,
+                    // sliding back down onto the originating icon closes the menu without acting.
+                    boolean overAnchor = isRawInsideView(pressTarget, rawX, rawY);
+                    if (!overAnchor) {
+                        state.leftAnchor = true;
+                    } else if (state.leftAnchor) {
+                        clearMenuHighlight();
+                        dismissAppContextPopup();
+                        activeLongPressPickupState = null;
+                        return true;
+                    }
+
                     boolean highlighted = updateMenuHighlightForRaw(rawX, rawY, true, state.selectionArmed);
                     if (highlighted) {
                         state.selectionArmed = true;
@@ -3674,6 +3686,9 @@ public final class SuggestionBarView extends GridLayout {
         }, false));
 
         if (folderSource) {
+            PinnedAppItem folderApp = findFolderApp(context.sourceFolder, context.folderEntryRef);
+            boolean folderHasCustomIcon = folderApp != null
+                && folderApp.iconOverride != null && folderApp.iconOverride.isValid();
             TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 changeFolderAppIcon(context);
@@ -3683,14 +3698,16 @@ public final class SuggestionBarView extends GridLayout {
                 changeFolderAppIcon(context);
             }, false));
 
-            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
-                dismissAppContextPopup();
-                resetFolderAppIcon(context);
-            });
-            appContextRows.add(new MenuActionRow(resetIconRow, () -> {
-                dismissAppContextPopup();
-                resetFolderAppIcon(context);
-            }, false));
+            if (folderHasCustomIcon) {
+                TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
+                    dismissAppContextPopup();
+                    resetFolderAppIcon(context);
+                });
+                appContextRows.add(new MenuActionRow(resetIconRow, () -> {
+                    dismissAppContextPopup();
+                    resetFolderAppIcon(context);
+                }, false));
+            }
 
             TextView moveToDockRow = addPopupActionRow(shell, "Move to dock", R.drawable.ic_dock_menu_move, false, tintBase, () -> {
                 dismissAppContextPopup();
@@ -3711,6 +3728,9 @@ public final class SuggestionBarView extends GridLayout {
             }, false));
         } else if (topPinned) {
             final int targetPinnedIndex = topPinnedIndex;
+            PinnedAppItem topPinnedApp = pinnedAppAt(targetPinnedIndex);
+            boolean pinnedHasCustomIcon = topPinnedApp != null
+                && topPinnedApp.iconOverride != null && topPinnedApp.iconOverride.isValid();
             TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
@@ -3726,20 +3746,22 @@ public final class SuggestionBarView extends GridLayout {
                 }
             }, false));
 
-            TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
-                dismissAppContextPopup();
-                PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
-                if (pinnedApp != null) {
-                    resetPinnedIcon(targetPinnedIndex, pinnedApp);
-                }
-            });
-            appContextRows.add(new MenuActionRow(resetIconRow, () -> {
-                dismissAppContextPopup();
-                PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
-                if (pinnedApp != null) {
-                    resetPinnedIcon(targetPinnedIndex, pinnedApp);
-                }
-            }, false));
+            if (pinnedHasCustomIcon) {
+                TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
+                    dismissAppContextPopup();
+                    PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
+                    if (pinnedApp != null) {
+                        resetPinnedIcon(targetPinnedIndex, pinnedApp);
+                    }
+                });
+                appContextRows.add(new MenuActionRow(resetIconRow, () -> {
+                    dismissAppContextPopup();
+                    PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
+                    if (pinnedApp != null) {
+                        resetPinnedIcon(targetPinnedIndex, pinnedApp);
+                    }
+                }, false));
+            }
 
             TextView unpinRow = addPopupActionRow(shell, "Unpin", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
                 dismissAppContextPopup();
@@ -4866,6 +4888,7 @@ public final class SuggestionBarView extends GridLayout {
         long menuShownAtMs = 0L;
         boolean definitiveYMovement = false;
         boolean selectionArmed = false;
+        boolean leftAnchor = false;
 
         LongPressPickupState(@NonNull View sourceView, int pinnedIndex, float downRawX, float downRawY) {
             this.sourceView = sourceView;

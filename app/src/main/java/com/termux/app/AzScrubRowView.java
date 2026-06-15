@@ -67,6 +67,9 @@ public final class AzScrubRowView extends AppCompatTextView {
     @Nullable private ScrubCallback callback;
     private int currentSelectionIndex = 0;
     private final Paint letterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint railFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint railStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF railRect = new RectF();
     private final Rect glyphRect = new Rect();
     private float activeTouchX = -1f;
     private float waveStrength = 0f;
@@ -108,6 +111,8 @@ public final class AzScrubRowView extends AppCompatTextView {
         letterPaint.setTextAlign(Paint.Align.CENTER);
         letterPaint.setTextSize(getTextSize());
         letterPaint.setColor(getCurrentTextColor());
+        railFillPaint.setStyle(Paint.Style.FILL);
+        railStrokePaint.setStyle(Paint.Style.STROKE);
         ViewConfiguration viewConfiguration = ViewConfiguration.get(getContext());
         doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout();
         doubleTapSlopPx = viewConfiguration.getScaledDoubleTapSlop();
@@ -117,12 +122,56 @@ public final class AzScrubRowView extends AppCompatTextView {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    /**
+     * Subtle recessed "rail" (a small pane of glass) behind the A–Z letters, per the wireframe's
+     * recessed scrub track. Toned down at rest, it brightens with the scrub wave so it animates in
+     * step with the rest of the dock; the lifted-letter magnifier is drawn separately and unchanged.
+     */
+    private void drawScrubRail(Canvas canvas, float width, float height) {
+        float interact = clamp01(waveStrength);
+        float railTop = getPaddingTop() + dp(1);
+        float railBottom = height - getPaddingBottom() - dp(1);
+        if (railBottom - railTop < dp(6)) {
+            float cy = height * 0.5f;
+            railTop = cy - dp(6);
+            railBottom = cy + dp(6);
+        }
+        float inset = dp(2);
+        railRect.set(inset, railTop, width - inset, railBottom);
+        float radius = (railBottom - railTop) * 0.5f;
+        int tint = lerpColor(getCurrentTextColor(), accentColor, interact * 0.7f);
+        railFillPaint.setColor(withAlpha(tint, Math.round(lerp(14f, 32f, interact))));
+        canvas.drawRoundRect(railRect, radius, radius, railFillPaint);
+        railStrokePaint.setStrokeWidth(Math.max(1f, dp(1) * 0.9f));
+        railStrokePaint.setColor(withAlpha(tint, Math.round(lerp(24f, 58f, interact))));
+        canvas.drawRoundRect(railRect, radius, radius, railStrokePaint);
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + ((b - a) * t);
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (Math.max(0, Math.min(255, alpha)) << 24);
+    }
+
+    private static int lerpColor(int from, int to, float t) {
+        float k = clamp01(t);
+        int a = Math.round(((from >>> 24) & 0xFF) + ((((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * k));
+        int r = Math.round(((from >> 16) & 0xFF) + ((((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * k));
+        int g = Math.round(((from >> 8) & 0xFF) + ((((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * k));
+        int b = Math.round((from & 0xFF) + (((to & 0xFF) - (from & 0xFF)) * k));
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float width = getWidth();
         float height = getHeight();
         if (width <= 0 || height <= 0) return;
+
+        drawScrubRail(canvas, width, height);
 
         int baseColor = getCurrentTextColor();
         int focusColor = resolveFocusLetterColor();

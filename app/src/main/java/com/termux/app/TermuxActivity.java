@@ -2258,7 +2258,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             );
         }
         configureAccessoryTopEdgeFx(true, state.barAlpha);
-        configureExtraKeysDivider(state.appsRowEnabled);
+        // The A–Z row now sits on its own subtle glass rail, so the hairline separator above the
+        // extra-keys row is redundant — keep it hidden.
+        configureExtraKeysDivider(false);
         applyDecorNavBarSurfaceState(state);
         updateAccessoryRenderEffectBackdrop(state);
         updateAzOverflowAffordance();
@@ -3923,8 +3925,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int surfaceInset = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
         int appsTopPadding = isValarieDockStyle() ? resolveDockCapsuleAppsTopPaddingPx() : 0;
         int appsBottomPadding = isValarieDockStyle() ? resolveDockCapsuleAppsBottomPaddingPx() : 0;
+        // The apps row reads with more side padding than the A–Z row because its icons are
+        // space-between (half a slot of empty space at each edge). Trim the apps-row inset ~18%
+        // so the icons sit closer to the edges and line up better with the A–Z row's letter span.
+        int appsContentInset = Math.round(contentInset * 0.82f);
 
-        updateViewHorizontalMargins(R.id.apps_bar_viewpager, contentInset);
+        updateViewHorizontalMargins(R.id.apps_bar_viewpager, appsContentInset);
         updateViewHorizontalMargins(R.id.apps_bar_indicator_band, contentInset);
         updateViewHorizontalMargins(R.id.apps_bar_az_row, contentInset);
         updateViewHorizontalMargins(R.id.terminal_toolbar_view_pager, extraKeysInset);
