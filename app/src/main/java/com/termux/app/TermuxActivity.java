@@ -2957,11 +2957,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzScrubRowView.setInteractionAccentColor(base);
         mAzScrubRowView.setInteractionMode(AzScrubRowView.InteractionMode.WAVE_TRACK);
         mAzScrubRowView.setLockedInlineLetter(null);
+        mAzScrubRowView.setCapsuleDockStyle(isValarieDockStyle());
         int orbColor = brightMonetShade(base);
         int edgeColor = edgeMonetVariant(base);
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setColors(orbColor, edgeColor);
             mLauncherAzGestureFxUnderlayView.setDarkThemeActive(isNightThemeActive());
+            mLauncherAzGestureFxUnderlayView.setCapsuleDockStyle(isValarieDockStyle());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxUnderlayView.setElevation(0f);
                 mLauncherAzGestureFxUnderlayView.setTranslationZ(-dpToPx(8));
@@ -2970,6 +2972,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setColors(orbColor, edgeColor);
             mLauncherAzGestureFxOverlayView.setDarkThemeActive(isNightThemeActive());
+            mLauncherAzGestureFxOverlayView.setCapsuleDockStyle(isValarieDockStyle());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mLauncherAzGestureFxOverlayView.setElevation(dpToPx(30));
                 mLauncherAzGestureFxOverlayView.setTranslationZ(dpToPx(30));

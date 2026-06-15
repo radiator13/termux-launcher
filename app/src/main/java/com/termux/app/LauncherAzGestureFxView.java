@@ -114,6 +114,7 @@ public final class LauncherAzGestureFxView extends View {
     private boolean focusedAppPreviewLabelEnabled;
     @Nullable private String focusedAppPreviewLabel;
     private boolean darkThemeActive = true;
+    private boolean capsuleDockStyle;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
 
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
@@ -345,6 +346,14 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
         darkThemeActive = active;
+        invalidate();
+    }
+
+    public void setCapsuleDockStyle(boolean capsule) {
+        if (capsuleDockStyle == capsule) {
+            return;
+        }
+        capsuleDockStyle = capsule;
         invalidate();
     }
 
@@ -848,7 +857,56 @@ public final class LauncherAzGestureFxView extends View {
         }
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
-        drawPageEdgeSegments(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
+        if (capsuleDockStyle) {
+            // The capsule's top edge is rounded and sits above the apps row, so hard tab segments
+            // float awkwardly inside it. Instead show a soft tube glow riding the very top edge,
+            // reading as part of the dock's own glow/sheen.
+            drawCapsulePageTubeGlow(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
+        } else {
+            drawPageEdgeSegments(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
+        }
+    }
+
+    /**
+     * Capsule page indicator: a subtle horizontal "tube" of glow pinned to the very top edge of the
+     * floating dock, with a brighter node that slides to the active page. Uses the dock's glow tints
+     * so it animates as part of the overall capsule glow. Toned down at rest, brighter on interaction.
+     */
+    private void drawCapsulePageTubeGlow(Canvas canvas, float activePagePosition, int totalPages, float attention) {
+        if (totalPages <= 1) {
+            return;
+        }
+        float bright = clamp01((clamp01(attention) - PINNED_INDICATOR_IDLE_ATTENTION)
+            / Math.max(0.001f, 1f - PINNED_INDICATOR_IDLE_ATTENTION));
+        float tubeW = clamp(getWidth() * 0.20f, dp(44f), dp(120f));
+        float cx = getWidth() * 0.5f;
+        float left = cx - (tubeW * 0.5f);
+        float right = cx + (tubeW * 0.5f);
+        float cy = dp(4f);
+        float coreR = dp(1.25f);
+        int glow = boostColor(overflowGlowTintColor, 1.10f, 1.05f);
+
+        // Faint continuous tube.
+        pageIndicatorPaint.setStyle(Paint.Style.FILL);
+        pageIndicatorPaint.setColor(withAlpha(glow, Math.round(lerp(22f, 60f, bright))));
+        tmpRect.set(left, cy - coreR, right, cy + coreR);
+        canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
+
+        // Bright node that slides to the active page, with a soft halo.
+        float frac = clamp(activePagePosition, 0f, totalPages - 1f) / (totalPages - 1f);
+        float nodeW = clamp(tubeW / totalPages, dp(14f), tubeW);
+        float nodeCx = lerp(left + (nodeW * 0.5f), right - (nodeW * 0.5f), frac);
+        for (int i = 2; i >= 0; i--) {
+            float grow = dp(i * 1.5f);
+            int alpha = i == 0
+                ? Math.round(lerp(150f, 240f, bright))
+                : Math.round(lerp(20f, 70f, bright) / i);
+            pageIndicatorPaint.setColor(withAlpha(glow, alpha));
+            tmpRect.set(nodeCx - (nodeW * 0.5f) - grow, cy - coreR - grow,
+                nodeCx + (nodeW * 0.5f) + grow, cy + coreR + grow);
+            float r = coreR + grow;
+            canvas.drawRoundRect(tmpRect, r, r, pageIndicatorPaint);
+        }
     }
 
     /**

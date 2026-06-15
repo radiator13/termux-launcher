@@ -85,6 +85,7 @@ public final class AzScrubRowView extends AppCompatTextView {
     private int activeLetterIndex = -1;
     private static final float LETTER_SLOT_HYSTERESIS_RATIO = 0.22f;
     private boolean interactionRenderActive;
+    private boolean capsuleDock;
 
     public AzScrubRowView(Context context) {
         super(context);
@@ -136,19 +137,29 @@ public final class AzScrubRowView extends AppCompatTextView {
             railTop = cy - dp(6);
             railBottom = cy + dp(6);
         }
-        float inset = dp(2);
-        railRect.set(inset, railTop, width - inset, railBottom);
-        float radius = (railBottom - railTop) * 0.5f;
-        int tint = lerpColor(getCurrentTextColor(), accentColor, interact * 0.7f);
-        railFillPaint.setColor(withAlpha(tint, Math.round(lerp(14f, 32f, interact))));
+        float railHeight = railBottom - railTop;
+        // Capsule dock: wrap within the pill with extra side padding and fully rounded ends.
+        // Default (edge-to-edge) dock: a rounded rectangle that reads as an inset track.
+        float sidePad = capsuleDock ? dp(6) : dp(8);
+        float radius = capsuleDock ? (railHeight * 0.5f) : dp(7);
+        railRect.set(sidePad, railTop, width - sidePad, railBottom);
+
+        // Darker glass on interaction: at rest a faint light frosting; while scrubbing it deepens
+        // toward a dark recess so the track reads as "pushed in".
+        int base = getCurrentTextColor();
+        railFillPaint.setColor(lerpColor(withAlpha(base, 16), withAlpha(0xFF000000, 72), interact));
         canvas.drawRoundRect(railRect, radius, radius, railFillPaint);
         railStrokePaint.setStrokeWidth(Math.max(1f, dp(1) * 0.9f));
-        railStrokePaint.setColor(withAlpha(tint, Math.round(lerp(24f, 58f, interact))));
+        railStrokePaint.setColor(lerpColor(withAlpha(base, 28), withAlpha(0xFF000000, 96), interact));
         canvas.drawRoundRect(railRect, radius, radius, railStrokePaint);
     }
 
-    private static float lerp(float a, float b, float t) {
-        return a + ((b - a) * t);
+    public void setCapsuleDockStyle(boolean capsule) {
+        if (capsuleDock == capsule) {
+            return;
+        }
+        capsuleDock = capsule;
+        invalidate();
     }
 
     private static int withAlpha(int color, int alpha) {
