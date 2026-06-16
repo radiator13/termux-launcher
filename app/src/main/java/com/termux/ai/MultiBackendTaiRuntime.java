@@ -9,27 +9,33 @@ import org.json.JSONObject;
 
 public final class MultiBackendTaiRuntime implements TaiRuntime {
     private final DualSlotTaiRuntime liteRt;
+    private final MlcTaiRuntime mlc;
     private TaiRuntime activeAssistant;
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
         liteRt = new DualSlotTaiRuntime(context);
+        mlc = new MlcTaiRuntime();
         activeAssistant = liteRt;
     }
 
     @NonNull @Override public synchronized TaiRuntimeState getState() {
         TaiRuntimeState assistant = activeAssistant.getState();
         TaiRuntimeState liteState = liteRt.getState();
-        if (activeAssistant == liteRt || !liteState.loaded || liteState.loadedModelId == null
-            || !liteState.loadedModelId.contains(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M)) return assistant;
+        TaiRuntimeState mlcState = mlc.getState();
+        boolean includeLiteRtCompanion = activeAssistant != liteRt && liteState.loaded && liteState.loadedModelId != null
+            && liteState.loadedModelId.contains(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
+        boolean includeMlc = activeAssistant != mlc && (mlcState.loaded || mlcState.activeGeneration || !"unloaded".equals(mlcState.state));
+        if (!includeLiteRtCompanion && !includeMlc) return assistant;
         JSONObject extra = new JSONObject();
         try {
             extra.put("assistant", assistant.toJson());
-            extra.put("mobileActions", liteState.toJson());
+            if (includeLiteRtCompanion) extra.put("mobileActions", liteState.toJson());
+            if (includeMlc) extra.put("mlc", mlcState.toJson());
         } catch (JSONException ignored) {}
-        return new TaiRuntimeState(assistant.loaded || liteState.loaded, assistant.loadedModelId,
+        return new TaiRuntimeState(assistant.loaded || liteState.loaded || mlcState.loaded, assistant.loadedModelId,
             "tai-multi-backend", assistant.state, assistant.status, assistant.backend,
             assistant.backendFallbackReason, assistant.loadedModelPath,
-            assistant.activeGeneration || liteState.activeGeneration, assistant.activeGenerationId,
+            assistant.activeGeneration || liteState.activeGeneration || mlcState.activeGeneration, assistant.activeGenerationId,
             assistant.activeGenerationStartedAtMs, assistant.keepWarmUntilMs, assistant.idleUnloadAtMs,
             assistant.loadedAtMs, assistant.lastUsedAtMs, extra);
     }
@@ -85,10 +91,15 @@ public final class MultiBackendTaiRuntime implements TaiRuntime {
 
     private synchronized TaiRuntime runtimeForId(String id) {
         if (isMobileActions(id)) return liteRt;
+        TaiRuntimeState mlcState = mlc.getState();
+        if (mlcState.loadedModelId != null && mlcState.loadedModelId.equals(id)) return mlc;
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(id);
+        if (entry != null && TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend)) return mlc;
         return activeAssistant;
     }
 
     private TaiRuntime runtimeForModel(TaiModelSpec model) {
+        if (TaiModelSpec.BACKEND_MLC_LLM.equals(model.backend)) return mlc;
         return liteRt;
     }
 

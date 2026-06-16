@@ -10,3 +10,9 @@
 - `LauncherCtlApiServer` keeps bearer-token auth shared across both modes, binds localhost mode to `127.0.0.1`, binds LAN mode to `0.0.0.0`, and emits no CORS headers.
 - Endpoint/settings JSON exposes `bindMode`; LAN warning text is present only when `bindMode` is `lan`.
 - Local Java LSP diagnostics were unavailable because `jdtls` is not installed in this environment; use Gradle unit tests and GitHub Actions `Build nightly` as the verification gate for this task.
+
+## Wave 2 Task 2 - LiteRT/MLC runtime routing
+
+- `MultiBackendTaiRuntime` remains the only backend switch point: `BACKEND_MLC_LLM` routes to `MlcTaiRuntime`, everything else routes to `DualSlotTaiRuntime`, and `MobileActions-270M` still short-circuits to LiteRT.
+- The active-generation guard still runs before switching assistant backends and returns 409 `generation_active` without unloading the current runtime.
+- `MlcTaiRuntime` is intentionally a no-inference stub for Task 2: load returns 501 `mlc_runtime_unavailable`, generation APIs return 501 `unsupported_operation`, and Task 3 should replace only this adapter internals with real bundled-artifact loading.
