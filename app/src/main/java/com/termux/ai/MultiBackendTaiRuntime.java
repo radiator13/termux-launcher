@@ -14,7 +14,7 @@ public final class MultiBackendTaiRuntime implements TaiRuntime {
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
         liteRt = new DualSlotTaiRuntime(context);
-        mlc = new MlcTaiRuntime();
+        mlc = new MlcTaiRuntime(context);
         activeAssistant = liteRt;
     }
 
