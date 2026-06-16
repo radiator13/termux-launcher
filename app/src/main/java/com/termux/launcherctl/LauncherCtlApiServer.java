@@ -46,8 +46,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayDeque;
@@ -56,6 +58,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -78,6 +81,7 @@ public class LauncherCtlApiServer {
     private static final String LAUNCHERCTL_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl";
     private static final String LAUNCHER_RESTART_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcher-restart";
     private static final String TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/tai";
+    static final String LAN_WARNING = "LAN exposure allows any device on your network to reach this endpoint when the token is known.";
 
     private static final int MAX_REQUEST_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINE_BYTES = 4096;
@@ -126,7 +130,8 @@ public class LauncherCtlApiServer {
             appContext = context.getApplicationContext();
             TaiSettings settings = new TaiSettings(appContext);
             token = settings.getOrCreateApiToken();
-            serverSocket = createLoopbackServerSocket(settings.getApiPort());
+            String bindMode = settings.getApiBindMode();
+            serverSocket = createLoopbackServerSocket(settings.getApiPort(), bindMode);
             port = serverSocket.getLocalPort();
             running = true;
             writeClientConfig();
@@ -134,7 +139,7 @@ public class LauncherCtlApiServer {
             installLauncherRestartScript();
             installTaiCliScripts();
             startAcceptLoop(context.getApplicationContext());
-            Logger.logInfo(LOG_TAG, "LauncherCtl API listening on 127.0.0.1:" + port);
+            Logger.logInfo(LOG_TAG, "LauncherCtl API listening on " + bindAddressForMode(bindMode) + ":" + port);
         } catch (Exception e) {
             running = false;
             Logger.logErrorExtended(LOG_TAG, "Failed to start LauncherCtl API server: " + e.getMessage());
@@ -258,7 +263,7 @@ public class LauncherCtlApiServer {
             }
 
             if (!isAuthorized(request.headers)) {
-                writeJsonResponse(output, 401, jsonError("unauthorized", "Missing or invalid token").toString());
+                writeResponse(output, unauthorizedResponse());
                 return;
             }
 
@@ -680,12 +685,17 @@ public class LauncherCtlApiServer {
     }
 
     private boolean isAuthorized(Map<String, String> headers) {
-        if (token == null || token.isEmpty()) return false;
+        return isAuthorized(token, headers);
+    }
+
+    static boolean isAuthorized(String expectedToken, Map<String, String> headers) {
+        if (expectedToken == null || expectedToken.isEmpty()) return false;
+        if (headers == null) return false;
         String value = headers.get("authorization");
         if (value == null) return false;
         String prefix = "Bearer ";
         if (!value.startsWith(prefix)) return false;
-        return secureEquals(token, value.substring(prefix.length()).trim());
+        return secureEquals(expectedToken, value.substring(prefix.length()).trim());
     }
 
     private boolean allowRequest(HttpRequest request) {
@@ -795,7 +805,7 @@ public class LauncherCtlApiServer {
         writeResponse(output, new HttpResponse(statusCode, "application/json; charset=utf-8", bytes, null));
     }
 
-    private void writeResponse(OutputStream output, HttpResponse response) throws IOException {
+    static void writeResponse(OutputStream output, HttpResponse response) throws IOException {
         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
         byte[] bytes = response.body;
         writer.write("HTTP/1.1 " + response.statusCode + " " + statusMessage(response.statusCode) + "\r\n");
@@ -820,7 +830,7 @@ public class LauncherCtlApiServer {
         output.flush();
     }
 
-    private String statusMessage(int code) {
+    private static String statusMessage(int code) {
         switch (code) {
             case 200: return "OK";
             case 409: return "Conflict";
@@ -845,6 +855,17 @@ public class LauncherCtlApiServer {
         } catch (JSONException ignored) {
         }
         return error;
+    }
+
+    static HttpResponse unauthorizedResponse() {
+        JSONObject error = new JSONObject();
+        try {
+            error.put("ok", false);
+            error.put("error", "unauthorized");
+            error.put("message", "Missing or invalid token");
+        } catch (JSONException ignored) {
+        }
+        return new HttpResponse(401, "application/json; charset=utf-8", error.toString().getBytes(StandardCharsets.UTF_8), null);
     }
 
     private void initializeRateLimiters() {
@@ -890,32 +911,42 @@ public class LauncherCtlApiServer {
             throw new IOException("Failed to create launcherctl dir: " + LAUNCHERCTL_DIR_PATH);
         }
         writeTextFile(TOKEN_FILE_PATH, token + "\n");
-        writeTextFile(ENDPOINT_FILE_PATH, "http://127.0.0.1:" + port + "\n");
+        TaiSettings settings = appContext != null ? new TaiSettings(appContext) : null;
+        StringBuilder endpoint = new StringBuilder();
+        endpoint.append(localhostBaseUrl(port)).append("\n");
+        if (settings != null && TaiSettings.BIND_MODE_LAN.equals(settings.getApiBindMode())) {
+            endpoint.append(lanBaseUrl(port)).append("\n");
+        }
+        writeTextFile(ENDPOINT_FILE_PATH, endpoint.toString());
     }
 
-    private ServerSocket createLoopbackServerSocket(int preferredPort) throws IOException {
+    static ServerSocket createLoopbackServerSocket(int preferredPort, String bindMode) throws IOException {
         IOException preferredPortFailure = null;
         if (preferredPort > 0) {
             try {
-                return bindLoopback(preferredPort);
+                return bindApiAddress(preferredPort, bindMode);
             } catch (IOException e) {
                 preferredPortFailure = e;
                 Logger.logWarn(LOG_TAG, "Preferred LauncherCtl API port " + preferredPort + " unavailable; falling back to an ephemeral port: " + e.getMessage());
             }
         }
         try {
-            return bindLoopback(0);
+            return bindApiAddress(0, bindMode);
         } catch (IOException e) {
             if (preferredPortFailure != null) e.addSuppressed(preferredPortFailure);
             throw e;
         }
     }
 
-    private ServerSocket bindLoopback(int requestedPort) throws IOException {
+    private static ServerSocket bindApiAddress(int requestedPort, String bindMode) throws IOException {
         ServerSocket socket = new ServerSocket();
         socket.setReuseAddress(true);
-        socket.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), requestedPort), 16);
+        socket.bind(new InetSocketAddress(InetAddress.getByName(bindAddressForMode(bindMode)), requestedPort), 16);
         return socket;
+    }
+
+    static String bindAddressForMode(String bindMode) {
+        return TaiSettings.BIND_MODE_LAN.equals(TaiSettings.normalizeApiBindMode(bindMode)) ? "0.0.0.0" : "127.0.0.1";
     }
 
     private JSONObject buildEndpointSettings(Context context, boolean includeToken) throws JSONException {
@@ -923,10 +954,18 @@ public class LauncherCtlApiServer {
         JSONObject data = new JSONObject();
         int configuredPort = settings.getApiPort();
         int activePort = port > 0 ? port : configuredPort;
+        String bindMode = settings.getApiBindMode();
+        String baseUrl = localhostBaseUrl(activePort);
         data.put("configuredPort", configuredPort);
         data.put("activePort", activePort);
-        data.put("baseUrl", "http://127.0.0.1:" + activePort);
-        data.put("openAiBaseUrl", "http://127.0.0.1:" + activePort + "/v1");
+        data.put("bindMode", bindMode);
+        data.put("baseUrl", baseUrl);
+        data.put("openAiBaseUrl", baseUrl + "/v1");
+        data.put("tokenRequired", true);
+        if (TaiSettings.BIND_MODE_LAN.equals(bindMode)) {
+            data.put("baseUrlLan", lanBaseUrl(activePort));
+            data.put("lanWarning", LAN_WARNING);
+        }
         data.put("endpointFile", ENDPOINT_FILE_PATH);
         data.put("tokenFile", TOKEN_FILE_PATH);
         data.put("running", running);
@@ -936,6 +975,35 @@ public class LauncherCtlApiServer {
             data.put("token", settings.getOrCreateApiToken());
         }
         return data;
+    }
+
+    static String localhostBaseUrl(int activePort) {
+        return "http://127.0.0.1:" + activePort;
+    }
+
+    static String lanBaseUrl(int activePort) {
+        return "http://" + lanAddressHost() + ":" + activePort;
+    }
+
+    private static String lanAddressHost() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                if (!networkInterface.isUp() || networkInterface.isLoopback()) continue;
+                Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress address = addresses.nextElement();
+                    if (address.isLoopbackAddress() || address.isAnyLocalAddress()) continue;
+                    String host = address.getHostAddress();
+                    if (host != null && host.indexOf(':') < 0) {
+                        return host;
+                    }
+                }
+            }
+        } catch (SocketException ignored) {
+        }
+        return "0.0.0.0";
     }
 
     private void installLauncherCtlCliScript() {
@@ -978,7 +1046,7 @@ public class LauncherCtlApiServer {
             "  exit 1\n" +
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
-            "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
+            "BASE=$(sed -n '1p' \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 10\"\n" +
             "shift || true\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
@@ -1181,7 +1249,7 @@ public class LauncherCtlApiServer {
             "  exit 1\n" +
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
-            "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
+            "BASE=$(sed -n '1p' \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"--fail-with-body -sS --connect-timeout 2 --max-time 180\"\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
             "post_json() {\n" +
@@ -1875,7 +1943,7 @@ public class LauncherCtlApiServer {
         }
     }
 
-    private boolean secureEquals(String expected, String actual) {
+    private static boolean secureEquals(String expected, String actual) {
         byte[] e = expected.getBytes(StandardCharsets.UTF_8);
         byte[] a = actual.getBytes(StandardCharsets.UTF_8);
         if (e.length != a.length) return false;
@@ -2034,7 +2102,7 @@ public class LauncherCtlApiServer {
         String body;
     }
 
-    private static class HttpResponse {
+    static class HttpResponse {
         final int statusCode;
         final String contentType;
         final byte[] body;

@@ -33,6 +33,10 @@ public final class TaiSettings {
     public static final String KEY_HUGGINGFACE_TOKEN = "tai_huggingface_token";
     public static final String KEY_API_PORT = "tai_api_port";
     public static final String KEY_API_TOKEN = "tai_api_token";
+    public static final String KEY_API_BIND_MODE = "tai_api_bind_mode";
+
+    public static final String BIND_MODE_LOCALHOST = "localhost";
+    public static final String BIND_MODE_LAN = "lan";
 
     private static final String AUTO = "auto";
 
@@ -85,6 +89,15 @@ public final class TaiSettings {
     public int getApiPort() {
         String value = preferences.getString(KEY_API_PORT, String.valueOf(DEFAULT_API_PORT));
         return normalizeApiPort(value);
+    }
+
+    @NonNull
+    public String getApiBindMode() {
+        return normalizeApiBindMode(preferences.getString(KEY_API_BIND_MODE, BIND_MODE_LOCALHOST));
+    }
+
+    public void setApiBindMode(@Nullable String bindMode) {
+        preferences.edit().putString(KEY_API_BIND_MODE, normalizeApiBindMode(bindMode)).apply();
     }
 
     public void setApiPort(int port) {
@@ -170,6 +183,14 @@ public final class TaiSettings {
     }
 
     @NonNull
+    public static String normalizeApiBindMode(@Nullable String bindMode) {
+        if (bindMode == null) return BIND_MODE_LOCALHOST;
+        String value = bindMode.trim().toLowerCase();
+        if (BIND_MODE_LAN.equals(value)) return BIND_MODE_LAN;
+        return BIND_MODE_LOCALHOST;
+    }
+
+    @NonNull
     public String getGeneralSystemPrompt() {
         return preferences.getString(KEY_SYSTEM_PROMPT_GENERAL,
             "You are TAI, Termux AI, a local assistant integrated with Termux Launcher. Prefer safe, reviewable actions.");
@@ -190,6 +211,11 @@ public final class TaiSettings {
         json.put("idleUnloadMinutes", getIdleUnloadMinutes());
         json.put("huggingFaceTokenConfigured", !getHuggingFaceToken().trim().isEmpty());
         json.put("apiPort", getApiPort());
+        String bindMode = getApiBindMode();
+        json.put("bindMode", bindMode);
+        if (BIND_MODE_LAN.equals(bindMode)) {
+            json.put("lanWarning", "LAN exposure allows any device on your network to reach this endpoint when the token is known.");
+        }
         json.put("apiTokenConfigured", isValidApiToken(preferences.getString(KEY_API_TOKEN, "")));
         json.put("openAiBaseUrl", "http://127.0.0.1:" + getApiPort() + "/v1");
         json.put("autoGenerationDefaultState", "nullable generation overrides use Google AI Edge Gallery defaults in the LiteRT runtime");
