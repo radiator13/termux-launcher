@@ -169,12 +169,11 @@ public final class AzScrubRowView extends AppCompatTextView {
             railTop = cy - dp(6);
             railBottom = cy + dp(6);
         }
-        float railHeight = railBottom - railTop;
         // The rail wraps fully around the letters: it sits just inside the view edge while the
-        // letters are inset further (letterInsetPx), so even ☆/# have clear margin from the
-        // rounded ends. Capsule: fully-rounded pill ends; Default: a softer rounded rectangle.
+        // letters are inset further (letterInsetPx), so even ☆/# have clear margin from the ends.
         float sidePad = dpf(3f);
-        float radius = capsuleDock ? (railHeight * 0.5f) : dpf(9f);
+        // Rounded rectangle (not a pill) for both dock styles.
+        float radius = dpf(6f);
         railRect.set(sidePad, railTop, width - sidePad, railBottom);
 
         // Flat material track: a uniform muted surface tint with a thin outline — no gloss or
@@ -188,10 +187,10 @@ public final class AzScrubRowView extends AppCompatTextView {
         canvas.drawRoundRect(railRect, radius, radius, railStrokePaint);
     }
 
-    /** Muted Material surface for the flat A–Z track fill. */
+    /** Muted Material surface for the flat A–Z track fill — close to the background tone. */
     private int resolveRailSurfaceColor() {
         return MaterialColors.getColor(this,
-            com.google.android.material.R.attr.colorSurfaceVariant, 0xFF2A2E33);
+            com.google.android.material.R.attr.colorSurfaceContainerHigh, 0xFF2B2930);
     }
 
     /** Muted Material outline for the flat A–Z track border. */
