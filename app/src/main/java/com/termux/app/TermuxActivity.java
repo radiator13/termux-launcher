@@ -3987,15 +3987,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the old-large row height (~1.38x) with headroom above for the new large.
         float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
         boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
+        // The floating capsule needs its own (larger) size curve: the old capsule "large" was barely
+        // usable, so it becomes the new "default" and the presets fan out around it with meaningful
+        // steps below and headroom above. The default (edge-to-edge) dock keeps its established curve.
+        float heightFactor = isValarieDockStyle()
+            ? (0.99f + (normalizedScale * 0.59f))
+            : (1.00f + (normalizedScale * 0.52f));
         int appsBarHeightPx = appsRowEnabled
-            ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * (1.00f + (normalizedScale * 0.52f))) + Math.max(0, additionalAppsBarHeightPx))
+            ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * heightFactor) + Math.max(0, additionalAppsBarHeightPx))
             : 0;
-        // The floating capsule reads smaller than the edge-to-edge dock at the same scale, so trim
-        // its apps row ~10% — this sizes the capsule's icons down proportionally so they sit with
-        // breathing room inside the pill. The default (normal) dock keeps the full size.
-        if (appsRowEnabled && isValarieDockStyle()) {
-            appsBarHeightPx = Math.round(appsBarHeightPx * 0.90f);
-        }
 
         boolean azEnabled = appsRowEnabled && mPreferences.isAppLauncherAzRowEnabled();
         int azRowHeightPx = AccessoryStackLayoutPolicy.computeAzRowHeightPx(azEnabled, density);
@@ -4012,8 +4012,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
-        float scale = 1.34f + (normalized * 0.64f);
-        return isValarieDockStyle() ? Math.max(1.18f, scale * 0.90f) : scale;
+        if (isValarieDockStyle()) {
+            // Capsule rides its own (larger) icon curve so its presets span a usable range: the old
+            // capsule "large" (~1.78) is now the "default", with real steps below and headroom above.
+            return 1.31f + (normalized * 0.71f);
+        }
+        return 1.34f + (normalized * 0.64f);
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
