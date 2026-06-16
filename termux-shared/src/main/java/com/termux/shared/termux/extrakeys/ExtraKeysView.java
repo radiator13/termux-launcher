@@ -2,7 +2,9 @@ package com.termux.shared.termux.extrakeys;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.os.Build;
@@ -21,6 +23,7 @@ import java.util.HashMap;
 import java.util.stream.Collectors;
 import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -745,8 +748,8 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     void showPopup(View view, ExtraKeyButton extraButton) {
-        int width = view.getMeasuredWidth();
-        int height = view.getMeasuredHeight();
+        int width = Math.max(1, view.getMeasuredWidth());
+        int height = Math.max(1, view.getMeasuredHeight());
         MaterialButton button;
         if (isSpecialButton(extraButton)) {
             button = createSpecialButton(extraButton.getKey(), false);
@@ -759,16 +762,43 @@ public final class ExtraKeysView extends GridLayout {
         button.setText(extraButton.getDisplay());
         button.setAllCaps(mButtonTextAllCaps);
         button.setPadding(0, 0, 0, 0);
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setMinimumWidth(width);
+        button.setMinimumHeight(height);
         button.setWidth(width);
         button.setHeight(height);
         setPopupButtonVisualState(button);
-        mPopupWindow = new PopupWindow(this);
-        mPopupWindow.setWidth(LayoutParams.WRAP_CONTENT);
-        mPopupWindow.setHeight(LayoutParams.WRAP_CONTENT);
-        mPopupWindow.setContentView(button);
+
+        int widthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST);
+        int heightSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST);
+        button.measure(widthSpec, heightSpec);
+        int popupWidth = Math.max(width, button.getMeasuredWidth());
+        int popupHeight = Math.max(height, button.getMeasuredHeight());
+
+        mPopupWindow = new PopupWindow(button, popupWidth, popupHeight, false);
         mPopupWindow.setOutsideTouchable(true);
         mPopupWindow.setFocusable(false);
-        mPopupWindow.showAsDropDown(view, 0, -2 * height);
+        mPopupWindow.setClippingEnabled(true);
+        mPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            mPopupWindow.setElevation(dpToPx(6f));
+        }
+        int[] viewLocation = new int[2];
+        int[] rootLocation = new int[2];
+        view.getLocationOnScreen(viewLocation);
+        View root = getRootView();
+        if (root == null) {
+            root = view;
+        }
+        root.getLocationOnScreen(rootLocation);
+        int viewLeftInRoot = viewLocation[0] - rootLocation[0];
+        int desiredLeft = viewLeftInRoot + ((width - popupWidth) / 2);
+        int maxLeft = Math.max(0, root.getWidth() - popupWidth);
+        int clampedLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
+        int xOffset = clampedLeft - viewLeftInRoot;
+        int yOffset = -height - popupHeight - Math.round(dpToPx(4f));
+        mPopupWindow.showAsDropDown(view, xOffset, yOffset, Gravity.NO_GRAVITY);
     }
 
     private void setButtonPressedVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
@@ -857,7 +887,21 @@ public final class ExtraKeysView extends GridLayout {
 
     private void setPopupButtonVisualState(@NonNull MaterialButton button) {
         button.setTextColor(mButtonActiveTextColor);
-        button.setBackgroundColor(mButtonActiveBackgroundColor);
+        button.setBackground(buildPopupKeyBackground());
+    }
+
+    @NonNull
+    private Drawable buildPopupKeyBackground() {
+        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        int fill = ((mButtonActiveBackgroundColor >>> 24) < 24)
+            ? withAlpha(tint, mKeyPressFeedbackBlurAvailable ? 96 : 124)
+            : mButtonActiveBackgroundColor;
+        GradientDrawable key = new GradientDrawable();
+        key.setShape(GradientDrawable.RECTANGLE);
+        key.setCornerRadius(dpToPx(12f));
+        key.setColor(fill);
+        key.setStroke(Math.max(1, Math.round(dpToPx(1.2f))), withAlpha(tint, 210));
+        return key;
     }
 
     public void dismissPopup() {

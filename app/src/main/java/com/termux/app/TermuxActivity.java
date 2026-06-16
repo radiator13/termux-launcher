@@ -1328,6 +1328,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return Math.round(dpToPx(1));
     }
 
+    private int resolveDefaultDockAppsTopPaddingPx() {
+        // The default dock draws its minimal page ticks in the top glass band. Reserve that band
+        // before laying out icons so the ticks never sit on top of the first row of app icons.
+        return Math.round(dpToPx(8));
+    }
+
     private int resolveDockCapsuleBottomGapPx() {
         return Math.round(dpToPx(6));
     }
@@ -3922,7 +3928,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int contentInset = isValarieDockStyle() ? resolveDockCapsuleContentInsetPx() : 0;
         int extraKeysInset = isValarieDockStyle() ? resolveDockCapsuleExtraKeysInsetPx() : 0;
         int surfaceInset = isValarieDockStyle() ? resolveDockCapsuleHorizontalMarginPx() : 0;
-        int appsTopPadding = isValarieDockStyle() ? resolveDockCapsuleAppsTopPaddingPx() : 0;
+        int appsTopPadding = isValarieDockStyle() ? resolveDockCapsuleAppsTopPaddingPx() : resolveDefaultDockAppsTopPaddingPx();
         int appsBottomPadding = isValarieDockStyle() ? resolveDockCapsuleAppsBottomPaddingPx() : 0;
         // The apps row reads with more side padding than the A–Z row because its icons are
         // space-between (half a slot of empty space at each edge). Trim the apps-row inset ~18%
@@ -3954,10 +3960,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private int resolveDockAppsBarHeightHintPx(int appsBarHeightPx) {
-        if (!isValarieDockStyle()) {
-            return appsBarHeightPx;
-        }
-        return Math.max(0, appsBarHeightPx - resolveDockCapsuleAppsTopPaddingPx() - resolveDockCapsuleAppsBottomPaddingPx());
+        int appsTopPadding = isValarieDockStyle() ? resolveDockCapsuleAppsTopPaddingPx() : resolveDefaultDockAppsTopPaddingPx();
+        int appsBottomPadding = isValarieDockStyle() ? resolveDockCapsuleAppsBottomPaddingPx() : 0;
+        return Math.max(0, appsBarHeightPx - appsTopPadding - appsBottomPadding);
     }
 
     private int getDockBaseToolbarHeightPx() {
