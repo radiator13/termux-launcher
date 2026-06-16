@@ -1076,9 +1076,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
             }
         }
-        // Capsule: free-floating centre tilt + dip. Normal: bottom-hinged tilt (pinned at the edge).
-        mDockPlankController.setMotionEnabled(true);
-        mDockPlankController.setHingeMode(!isValarieDockStyle());
+        // Capsule keeps the free-floating tilt + dip. The edge-to-edge default dock keeps the
+        // touch-tracked specular/glow only; rotating a full-width slab exposes clipped side gaps.
+        boolean capsuleDock = isValarieDockStyle();
+        mDockPlankController.setMotionEnabled(capsuleDock);
+        mDockPlankController.setHingeMode(!capsuleDock);
         mDockPlankController.setReducedMotion(isReducedMotionEnabled());
         mDockPlankController.setEnabled(true);
     }
@@ -4008,7 +4010,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // capsule "large" (~1.78) is now the "default", with real steps below and headroom above.
             return 1.31f + (normalized * 0.71f);
         }
-        return 1.34f + (normalized * 0.64f);
+        // The default edge-to-edge dock has a page-indicator band directly below the icons and a
+        // 1.08x press lift. Keep every preset smaller so icons stay optically centered with headroom
+        // during touch feedback instead of crowding the indicator.
+        return 1.08f + (normalized * 0.42f);
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {

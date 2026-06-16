@@ -25,6 +25,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.GridLayout;
@@ -535,32 +536,43 @@ public final class ExtraKeysView extends GridLayout {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
                 });
+                final float popupSwipeThresholdPx = Math.max(
+                    ViewConfiguration.get(getContext()).getScaledTouchSlop(),
+                    getResources().getDisplayMetrics().density * 8f
+                );
+                final float[] popupSwipeDownRawY = new float[1];
                 button.setOnTouchListener((view, event) -> {
                     switch(event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
+                            popupSwipeDownRawY[0] = event.getRawY();
+                            requestParentDisallowIntercept(view, true);
                             setButtonPressedVisualState(button, buttonInfo, true);
                             // Start long press scheduled executors which will be stopped in next MotionEvent
                             startScheduledExecutors(view, buttonInfo, button);
                             return true;
                         case MotionEvent.ACTION_MOVE:
+                            requestParentDisallowIntercept(view, true);
                             if (buttonInfo.getPopup() != null) {
+                                float upwardTravelPx = popupSwipeDownRawY[0] - event.getRawY();
                                 // Show popup on swipe up
-                                if (mPopupWindow == null && event.getY() < 0) {
+                                if (mPopupWindow == null && (event.getY() < 0 || upwardTravelPx >= popupSwipeThresholdPx)) {
                                     stopScheduledExecutors();
                                     setButtonPressedVisualState(button, buttonInfo, false);
                                     showPopup(view, buttonInfo.getPopup());
                                 }
-                                if (mPopupWindow != null && event.getY() > 0) {
+                                if (mPopupWindow != null && event.getY() > 0 && upwardTravelPx < (popupSwipeThresholdPx * 0.35f)) {
                                     setButtonPressedVisualState(button, buttonInfo, true);
                                     dismissPopup();
                                 }
                             }
                             return true;
                         case MotionEvent.ACTION_CANCEL:
+                            requestParentDisallowIntercept(view, false);
                             setButtonPressedVisualState(button, buttonInfo, false);
                             stopScheduledExecutors();
                             return true;
                         case MotionEvent.ACTION_UP:
+                            requestParentDisallowIntercept(view, false);
                             setButtonPressedVisualState(button, buttonInfo, false);
                             stopScheduledExecutors();
                             // If ACTION_UP up was not from a repetitive key or was with a key with a popup button
@@ -593,6 +605,14 @@ public final class ExtraKeysView extends GridLayout {
                 button.setLayoutParams(param);
                 addView(button);
             }
+        }
+    }
+
+    private static void requestParentDisallowIntercept(View view, boolean disallowIntercept) {
+        ViewParent parent = view == null ? null : view.getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(disallowIntercept);
+            parent = parent.getParent();
         }
     }
 
