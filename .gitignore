@@ -65,3 +65,9 @@ reference-repos/
 
 # Design handoff bundle (reference only, not part of the app source)
 /TL-handoff/
+
+# Local agent / session scratch (do not commit)
+.codex-remote-attachments/
+.omo/
+*.mp4
+WhatsApp Video*
