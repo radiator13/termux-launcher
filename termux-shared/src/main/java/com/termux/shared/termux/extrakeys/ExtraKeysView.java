@@ -761,6 +761,9 @@ public final class ExtraKeysView extends GridLayout {
         }
         button.setText(extraButton.getDisplay());
         button.setAllCaps(mButtonTextAllCaps);
+        button.setGravity(Gravity.CENTER);
+        button.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        button.setIncludeFontPadding(false);
         button.setPadding(0, 0, 0, 0);
         button.setMinWidth(0);
         button.setMinHeight(0);
@@ -770,11 +773,11 @@ public final class ExtraKeysView extends GridLayout {
         button.setHeight(height);
         setPopupButtonVisualState(button);
 
-        int widthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST);
-        int heightSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST);
+        int widthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY);
+        int heightSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY);
         button.measure(widthSpec, heightSpec);
-        int popupWidth = Math.max(width, button.getMeasuredWidth());
-        int popupHeight = Math.max(height, button.getMeasuredHeight());
+        int popupWidth = width;
+        int popupHeight = height;
 
         mPopupWindow = new PopupWindow(button, popupWidth, popupHeight, false);
         mPopupWindow.setOutsideTouchable(true);
@@ -785,20 +788,20 @@ public final class ExtraKeysView extends GridLayout {
             mPopupWindow.setElevation(dpToPx(6f));
         }
         int[] viewLocation = new int[2];
-        int[] rootLocation = new int[2];
         view.getLocationOnScreen(viewLocation);
         View root = getRootView();
         if (root == null) {
             root = view;
         }
-        root.getLocationOnScreen(rootLocation);
-        int viewLeftInRoot = viewLocation[0] - rootLocation[0];
-        int desiredLeft = viewLeftInRoot + ((width - popupWidth) / 2);
-        int maxLeft = Math.max(0, root.getWidth() - popupWidth);
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+        int desiredLeft = viewLocation[0] + Math.round((width - popupWidth) / 2f);
+        int desiredTop = viewLocation[1] - popupHeight - Math.round(dpToPx(5f));
+        int maxLeft = Math.max(0, screenWidth - popupWidth);
+        int maxTop = Math.max(0, screenHeight - popupHeight);
         int clampedLeft = Math.max(0, Math.min(maxLeft, desiredLeft));
-        int xOffset = clampedLeft - viewLeftInRoot;
-        int yOffset = -height - popupHeight - Math.round(dpToPx(4f));
-        mPopupWindow.showAsDropDown(view, xOffset, yOffset, Gravity.NO_GRAVITY);
+        int clampedTop = Math.max(0, Math.min(maxTop, desiredTop));
+        mPopupWindow.showAtLocation(root, Gravity.NO_GRAVITY, clampedLeft, clampedTop);
     }
 
     private void setButtonPressedVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
@@ -886,21 +889,18 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     private void setPopupButtonVisualState(@NonNull MaterialButton button) {
-        button.setTextColor(mButtonActiveTextColor);
+        button.setTextColor(Color.WHITE);
         button.setBackground(buildPopupKeyBackground());
     }
 
     @NonNull
     private Drawable buildPopupKeyBackground() {
         int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
-        int fill = ((mButtonActiveBackgroundColor >>> 24) < 24)
-            ? withAlpha(tint, mKeyPressFeedbackBlurAvailable ? 96 : 124)
-            : mButtonActiveBackgroundColor;
         GradientDrawable key = new GradientDrawable();
         key.setShape(GradientDrawable.RECTANGLE);
         key.setCornerRadius(dpToPx(12f));
-        key.setColor(fill);
-        key.setStroke(Math.max(1, Math.round(dpToPx(1.2f))), withAlpha(tint, 210));
+        key.setColor(withAlpha(Color.rgb(14, 24, 30), mKeyPressFeedbackBlurAvailable ? 232 : 242));
+        key.setStroke(Math.max(1, Math.round(dpToPx(1.4f))), withAlpha(tint, 232));
         return key;
     }
 

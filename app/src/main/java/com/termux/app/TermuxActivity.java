@@ -398,6 +398,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final long EMPTY_SESSION_RECOVERY_DEBOUNCE_MS = 1500L;
     private static final long ACCESSORY_BLUR_RECOVERY_RETRY_MS = 120L;
     private static final boolean ACCESSORY_RENDER_TRACE = false;
+    private static final float DEFAULT_DOCK_SIZE_PRESET_SHIFT = 0.27f;
+    private static final float DEFAULT_DOCK_SIZE_MAX_PROGRESS = 1.18f;
     private static volatile boolean sPendingStyleReloadRecreateActivity = true;
 
     private boolean mSeamlessStatusBackgroundActive;
@@ -1331,7 +1333,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int resolveDefaultDockAppsTopPaddingPx() {
         // The default dock draws its minimal page ticks in the top glass band. Reserve that band
         // before laying out icons so the ticks never sit on top of the first row of app icons.
-        return Math.round(dpToPx(8));
+        return Math.round(dpToPx(10));
     }
 
     private int resolveDockCapsuleBottomGapPx() {
@@ -3980,17 +3982,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         float density = getResources().getDisplayMetrics().density;
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        // Size buckets rebalanced so the old "Large" is the new "Default": the preset range now runs
-        // 1.72..2.45 (default 2.18 = old large), and the height factor is tuned so default lands on
-        // the old-large row height (~1.38x) with headroom above for the new large.
-        float normalizedScale = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
+        float normalizedScale = resolveDockSizeProgress(barHeightScale);
+        float defaultDockProgress = resolveDefaultDockSizeProgress(barHeightScale);
         boolean appsRowEnabled = mPreferences.isAppLauncherAppsRowEnabled();
         // The floating capsule needs its own (larger) size curve: the old capsule "large" was barely
         // usable, so it becomes the new "default" and the presets fan out around it with meaningful
-        // steps below and headroom above. The default (edge-to-edge) dock keeps its established curve.
+        // steps below and headroom above. The default dock shifts its render curve so the current
+        // Large size becomes the visual Default without changing the shared preference buckets.
         float heightFactor = isValarieDockStyle()
             ? (0.99f + (normalizedScale * 0.59f))
-            : (1.00f + (normalizedScale * 0.52f));
+            : (1.00f + (defaultDockProgress * 0.52f));
         int appsBarHeightPx = appsRowEnabled
             ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * heightFactor) + Math.max(0, additionalAppsBarHeightPx))
             : 0;
@@ -4004,21 +4005,31 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return new DockLayoutMetrics(appsBarHeightPx, indicatorBandHeightPx, azRowHeightPx, interRowGapPx);
     }
 
+    private float resolveDockSizeProgress(float barHeightScale) {
+        return Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
+    }
+
+    private float resolveDefaultDockSizeProgress(float barHeightScale) {
+        float progress = resolveDockSizeProgress(barHeightScale) + DEFAULT_DOCK_SIZE_PRESET_SHIFT;
+        return Math.max(0f, Math.min(DEFAULT_DOCK_SIZE_MAX_PROGRESS, progress));
+    }
+
     private float resolveDerivedDockIconScale() {
         if (mPreferences == null) {
             return 1.36f;
         }
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
-        float normalized = Math.max(0f, Math.min(1f, (barHeightScale - 1.45f) / (2.45f - 1.45f)));
+        float normalized = resolveDockSizeProgress(barHeightScale);
         if (isValarieDockStyle()) {
             // Capsule rides its own (larger) icon curve so its presets span a usable range: the old
             // capsule "large" (~1.78) is now the "default", with real steps below and headroom above.
             return 1.31f + (normalized * 0.71f);
         }
         // The default edge-to-edge dock has a page-indicator band directly below the icons and a
-        // 1.08x press lift. Keep every preset smaller so icons stay optically centered with headroom
-        // during touch feedback instead of crowding the indicator.
-        return 1.08f + (normalized * 0.42f);
+        // 1.08x press lift. Shift only this style so the current Large icon size becomes Default,
+        // then give Large a small amount of new headroom above it.
+        float defaultDockProgress = resolveDefaultDockSizeProgress(barHeightScale);
+        return 1.08f + (defaultDockProgress * 0.42f);
     }
 
     private void applyDockLayoutMetrics(@NonNull DockLayoutMetrics metrics) {
