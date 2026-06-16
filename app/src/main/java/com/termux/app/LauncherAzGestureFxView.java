@@ -882,30 +882,32 @@ public final class LauncherAzGestureFxView extends View {
         float cx = getWidth() * 0.5f;
         float left = cx - (tubeW * 0.5f);
         float right = cx + (tubeW * 0.5f);
-        float coreR = dp(1.25f);
+        float coreR = dp(1.1f);
         // Ride the very top rim of the dock: the tube's top edge sits flush with the capsule's top
         // edge (top = cy - coreR = 0) instead of floating a few dp below it.
         float cy = coreR;
-        // Harmonize with the dock — pull the tube toward the glass tint (softer than the raw
+        // Harmonize with the dock — pull the tube well toward the glass tint (softer than the raw
         // overflow-glow cyan) so it reads as part of the capsule's own rim sheen rather than a
         // separate bright bar.
-        int glow = lerpColor(boostColor(overflowGlowTintColor, 1.02f, 0.94f), glassTintColor, 0.55f);
+        int glow = lerpColor(boostColor(overflowGlowTintColor, 1.0f, 0.88f), glassTintColor, 0.62f);
 
-        // Faint continuous tube.
+        // Faint continuous tube — kept dim so the indicator reads as a diffuse bloom, not a lit tube.
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        pageIndicatorPaint.setColor(withAlpha(glow, Math.round(lerp(10f, 42f, bright))));
+        pageIndicatorPaint.setColor(withAlpha(glow, Math.round(lerp(7f, 30f, bright))));
         tmpRect.set(left, cy - coreR, right, cy + coreR);
         canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
 
-        // Bright node that slides to the active page, with a soft halo.
+        // Soft node that slides to the active page: a wide, gently-falling bloom (many low-alpha
+        // rings) instead of a hard bright core, so it diffuses into the dock rather than reading as
+        // a solid tube light.
         float frac = clamp(activePagePosition, 0f, totalPages - 1f) / (totalPages - 1f);
         float nodeW = clamp(tubeW / totalPages, dp(14f), tubeW);
         float nodeCx = lerp(left + (nodeW * 0.5f), right - (nodeW * 0.5f), frac);
-        for (int i = 2; i >= 0; i--) {
-            float grow = dp(i * 1.5f);
+        for (int i = 5; i >= 0; i--) {
+            float grow = dp(i * 2.7f);
             int alpha = i == 0
-                ? Math.round(lerp(52f, 196f, bright))
-                : Math.round(lerp(12f, 56f, bright) / i);
+                ? Math.round(lerp(34f, 132f, bright))
+                : Math.round(lerp(7f, 40f, bright) / (1f + (i * 0.85f)));
             pageIndicatorPaint.setColor(withAlpha(glow, alpha));
             tmpRect.set(nodeCx - (nodeW * 0.5f) - grow, cy - coreR - grow,
                 nodeCx + (nodeW * 0.5f) + grow, cy + coreR + grow);

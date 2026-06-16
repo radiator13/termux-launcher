@@ -204,7 +204,11 @@ final class DockPlankController implements Choreographer.FrameCallback {
                 mPlank.setScaleY(1f);
             }
         }
-        if (mGlow != null) {
+        if (mGlow instanceof DockEdgeGlowView) {
+            // Drive the reactive rim: overall strength from the glow spring, and the live tilt so the
+            // hot lobe sweeps around the perimeter as the plank tips (physical glass-edge light).
+            ((DockEdgeGlowView) mGlow).setGlowState(clamp01(mGlowLevel.value), mRx.value, mRy.value);
+        } else if (mGlow != null) {
             mGlow.setAlpha(clamp01(mGlowLevel.value));
         }
         if (mSpecular != null) {

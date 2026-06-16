@@ -207,7 +207,7 @@
                     android:visibility="gone"
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
 
-                <View
+                <com.termux.app.DockEdgeGlowView
                     android:id="@+id/accessory_edge_glow_fx"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"

@@ -1058,14 +1058,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             specular.setBackground(buildDockSpecularDrawable(accent));
         }
         View glow = findViewById(R.id.accessory_edge_glow_fx);
-        if (glow != null) {
+        if (glow instanceof DockEdgeGlowView) {
             View surfaceHost = findViewById(R.id.accessory_surface_host);
             int surfaceHeightPx = surfaceHost != null ? surfaceHost.getHeight() : 0;
             float radius = isValarieDockStyle() ? resolveDockCapsuleCornerRadiusPx(surfaceHeightPx) : 0f;
-            glow.setBackground(buildDockEdgeGlowDrawable(accent, radius));
-            // Feather the thin rim into a soft glow instead of a hard outline (API 31+).
+            DockEdgeGlowView glowView = (DockEdgeGlowView) glow;
+            glowView.setAccentColor(accent);
+            glowView.setCornerRadiusPx(radius);
+            // Feather the rim into a soft glow instead of a hard outline (API 31+). The view draws
+            // its rim inset from the edge so this blur stays inside the rounded clip at the corners.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float blur = getResources().getDisplayMetrics().density * 6f;
+                float blur = getResources().getDisplayMetrics().density * 5f;
                 glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
             }
         }
@@ -1091,23 +1094,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         });
         specular.setDither(true);
         return specular;
-    }
-
-    /**
-     * Accent rim that lights up the dock edge on contact. A single thin ring hugging the very edge;
-     * a RenderEffect blur (applied to the host view) feathers it into a soft glow rather than the
-     * hard, inset outline it would otherwise read as.
-     */
-    @NonNull
-    private Drawable buildDockEdgeGlowDrawable(int accent, float radius) {
-        GradientDrawable ring = new GradientDrawable();
-        ring.setColor(Color.TRANSPARENT);
-        int strokePx = Math.max(1, Math.round(getResources().getDisplayMetrics().density * 1.5f));
-        ring.setStroke(strokePx, withAlphaComponent(accent, 105));
-        if (radius > 0f) {
-            ring.setCornerRadius(radius);
-        }
-        return ring;
     }
 
     private boolean isReducedMotionEnabled() {
@@ -1329,7 +1315,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Push the icons down so they sit centered between the top-edge page indicator (now flush
         // with the dock's top rim) and the A-Z row below. Tuned against the 9dp indicator band that
         // sits beneath the icons, so the gap above the icons matches the gap below them.
-        return Math.round(dpToPx(12));
+        return Math.round(dpToPx(14));
     }
 
     private int resolveDockCapsuleAppsBottomPaddingPx() {
