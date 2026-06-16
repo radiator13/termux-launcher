@@ -898,23 +898,28 @@ public final class LauncherAzGestureFxView extends View {
         canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
         pageIndicatorPaint.setShader(null);
 
-        // 2) Smooth node glow that slides to the active page — a radial bloom with continuous
-        //    falloff (top half rides above the rim and is clipped, so it hugs the edge).
+        // 2) Active-page marker: a small, soft, field-shaped (horizontal) pale glow — squish a
+        //    radial bloom vertically so it reads as a low pill of light hugging the rim, never a
+        //    circle. Kept small and dim so it stays within the dock's minimal aesthetic.
         float frac = clamp(activePagePosition, 0f, totalPages - 1f) / (totalPages - 1f);
         float nodeCx = lerp(left + dp(8f), right - dp(8f), frac);
-        float bloomR = clamp(tubeW / totalPages, dp(12f), dp(30f));
-        int peak = Math.round(lerp(46f, 162f, bright));
-        RadialGradient bloom = new RadialGradient(nodeCx, cy, bloomR,
-            new int[] { withAlpha(glow, peak), withAlpha(glow, Math.round(peak * 0.34f)), withAlpha(glow, 0) },
+        float glowRx = clamp((tubeW / totalPages) * 0.6f, dp(9f), dp(16f));
+        float glowRy = dp(3.2f);
+        int peak = Math.round(lerp(22f, 78f, bright));
+        int save = canvas.save();
+        canvas.scale(1f, glowRy / glowRx, nodeCx, cy);
+        RadialGradient bloom = new RadialGradient(nodeCx, cy, glowRx,
+            new int[] { withAlpha(glow, peak), withAlpha(glow, Math.round(peak * 0.28f)), withAlpha(glow, 0) },
             new float[] { 0f, 0.5f, 1f }, Shader.TileMode.CLAMP);
         pageIndicatorPaint.setShader(bloom);
-        canvas.drawRect(nodeCx - bloomR, cy - bloomR, nodeCx + bloomR, cy + bloomR, pageIndicatorPaint);
+        canvas.drawCircle(nodeCx, cy, glowRx, pageIndicatorPaint);
         pageIndicatorPaint.setShader(null);
+        canvas.restoreToCount(save);
 
-        // 3) Crisp little core (leaning white) so the active page still has a defined point.
-        float coreHalf = clamp((tubeW / totalPages) * 0.5f, dp(6f), dp(20f));
-        int coreA = Math.round(lerp(58f, 216f, bright));
-        pageIndicatorPaint.setColor(withAlpha(lerpColor(glow, Color.WHITE, 0.28f), coreA));
+        // 3) Whisper-soft core (barely brightened, not white) so the active page has a faint anchor.
+        float coreHalf = clamp((tubeW / totalPages) * 0.4f, dp(5f), dp(11f));
+        int coreA = Math.round(lerp(38f, 116f, bright));
+        pageIndicatorPaint.setColor(withAlpha(lerpColor(glow, Color.WHITE, 0.12f), coreA));
         tmpRect.set(nodeCx - coreHalf, cy - coreR, nodeCx + coreHalf, cy + coreR);
         canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
     }

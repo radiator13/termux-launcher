@@ -2,7 +2,9 @@ package com.termux.shared.termux.extrakeys;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.res.ColorStateList;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -232,6 +234,13 @@ public final class ExtraKeysView extends GridLayout {
     protected int mKeyPressFeedbackColor = 0;
 
     /**
+     * Whether a blur backdrop is active behind the keys. When true the press feedback is a feathered
+     * radial wash (it relies on the blur for softness); when false it uses a more present rounded
+     * fill. The launcher dock sets this from its blur preference.
+     */
+    protected boolean mKeyPressFeedbackBlurAvailable = true;
+
+    /**
      * Defines whether text for the extra keys button should be all capitalized automatically.
      */
     protected boolean mButtonTextAllCaps = true;
@@ -348,6 +357,11 @@ public final class ExtraKeysView extends GridLayout {
     /** Tint for the press glow pill; set to 0 to fall back to the active background colour. */
     public void setKeyPressFeedbackColor(int color) {
         mKeyPressFeedbackColor = color;
+    }
+
+    /** Tells the press feedback whether a blur backdrop is active (soft radial vs rounded fill). */
+    public void setKeyPressFeedbackBlurAvailable(boolean available) {
+        mKeyPressFeedbackBlurAvailable = available;
     }
 
     public void setButtonColors(int buttonTextColor, int buttonActiveTextColor, int buttonBackgroundColor, int buttonActiveBackgroundColor) {
@@ -517,11 +531,6 @@ public final class ExtraKeysView extends GridLayout {
                 button.setTextColor(mButtonTextColor);
                 button.setAllCaps(mButtonTextAllCaps);
                 button.setPadding(0, 0, 0, 0);
-                // Pre-shape every key as a pill so the press glow only has to toggle fill + rim
-                // (kept on MaterialButton's managed properties so the existing setBackgroundColor
-                // restore path keeps working — a raw custom background would disable that).
-                button.setCornerRadius(Math.round(dpToPx(11f)));
-                button.setStrokeWidth(0);
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
@@ -749,26 +758,51 @@ public final class ExtraKeysView extends GridLayout {
             applyKeyGlowPill(button, false);
             animateKeyCapDip(button, true);
         } else {
+            // restoreButtonVisualState repaints the rest background, which also clears the highlight.
             restoreButtonVisualState(button, buttonInfo);
-            clearKeyGlowPill(button);
             animateKeyCapDip(button, false);
         }
     }
 
     /**
-     * Press feedback that integrates with the launcher dock: an accent-tinted "glow pill" fills the
-     * key (deeper while held) paired with a slight key-cap dip. Drawn entirely with MaterialButton's
-     * managed fill/stroke so it composes with the normal background restore.
+     * Press feedback that integrates with the launcher dock: a soft, accent-tinted highlight under
+     * the key (deeper while held) paired with a slight key-cap dip. When the dock blur is active the
+     * highlight is a feathered radial wash with no outline, so it reads as the blur brightening under
+     * the finger rather than a solid chip. With blur off it falls back to a more present rounded
+     * fill + faint rim so the press still registers against the flat surface.
      */
     private void applyKeyGlowPill(@NonNull MaterialButton button, boolean held) {
-        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
-        button.setBackgroundColor(withAlpha(tint, held ? 130 : 82));
-        button.setStrokeColor(ColorStateList.valueOf(withAlpha(tint, held ? 175 : 115)));
-        button.setStrokeWidth(Math.max(1, Math.round(dpToPx(1f))));
+        button.setBackground(buildKeyPressHighlight(held));
     }
 
-    private void clearKeyGlowPill(@NonNull MaterialButton button) {
-        button.setStrokeWidth(0);
+    @NonNull
+    private Drawable buildKeyPressHighlight(boolean held) {
+        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        if (mKeyPressFeedbackBlurAvailable) {
+            // Feathered radial wash: bright-ish centre easing to fully transparent, so the edges are
+            // soft and melt into the dock's existing blur instead of drawing a hard pill.
+            GradientDrawable glow = new GradientDrawable();
+            glow.setShape(GradientDrawable.RECTANGLE);
+            glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+            glow.setGradientCenter(0.5f, 0.5f);
+            glow.setGradientRadius(dpToPx(27f));
+            glow.setColors(new int[] {
+                withAlpha(tint, held ? 104 : 70),
+                withAlpha(tint, held ? 40 : 26),
+                withAlpha(tint, 0)
+            });
+            glow.setDither(true);
+            return glow;
+        }
+        // No blur backdrop: a soft rounded fill (inset so it doesn't touch neighbours) with a faint
+        // rim for definition against the flat surface.
+        GradientDrawable pill = new GradientDrawable();
+        pill.setShape(GradientDrawable.RECTANGLE);
+        pill.setCornerRadius(dpToPx(13f));
+        pill.setColor(withAlpha(tint, held ? 120 : 84));
+        pill.setStroke(Math.max(1, Math.round(dpToPx(1f))), withAlpha(tint, held ? 150 : 96));
+        int inset = Math.round(dpToPx(6f));
+        return new InsetDrawable(pill, inset, inset, inset, inset);
     }
 
     private void animateKeyCapDip(@NonNull MaterialButton button, boolean pressed) {

@@ -1004,11 +1004,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
-     * Builds the Material-tinted glass surface: an opaque neutral base with a diagonal
-     * accent -> tertiary -> clear wash layered on top, so the wallpaper-derived color lives
-     * inside the dock surface rather than reading as a flat grey panel. The host clips this to
-     * the dock's rounded outline, so no corner radius is needed here. The view's own alpha
-     * carries the configured surface opacity.
+     * Builds the Material-tinted glass surface: an opaque neutral base with a faint top-down sheen
+     * layered on top. The earlier corner-to-corner (TL->BR) accent wash read as a "digital"
+     * left-light / right-dark gradient; a real glass pane catches ambient light from above, so this
+     * uses a gentle, low-contrast top sheen (cool accent at the very top easing to clear well before
+     * the bottom) with extra stops for a smooth, bandless falloff. Kept subtle so the blurred
+     * wallpaper behind it carries the glass read rather than a synthetic gradient. The host clips
+     * this to the dock's rounded outline; the view's own alpha carries the configured opacity.
      */
     @NonNull
     private Drawable buildDockGlassSurface() {
@@ -1017,12 +1019,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int tertiary = resolveDockTertiaryColor();
         GradientDrawable baseLayer = new GradientDrawable();
         baseLayer.setColor(0xFF000000 | (base & 0x00FFFFFF));
-        // 41/255 ~= 0.16 accent, 13/255 ~= 0.05 tertiary, fading to clear (matches the prototype wash).
+        // Soft top sheen: a whisper of cool accent at the very top, a warm hint just below, then
+        // clear for most of the surface. Low alphas keep it from reading as a painted-on gradient.
         GradientDrawable tintLayer = new GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
+            GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
-                withAlphaComponent(accent, 41),
-                withAlphaComponent(tertiary, 13),
+                withAlphaComponent(accent, 24),
+                withAlphaComponent(tertiary, 9),
+                withAlphaComponent(base, 0),
                 withAlphaComponent(base, 0)
             }
         );
@@ -4667,6 +4671,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void applyExtraKeysFeedbackAccent(@Nullable ExtraKeysView extraKeysView) {
         if (extraKeysView != null) {
             extraKeysView.setKeyPressFeedbackColor(resolveDockAccentColor());
+            // Soft feathered wash when the dock blur is doing the work; a more present fill otherwise.
+            boolean blurActive = mPreferences != null && mPreferences.getExtraKeysBlurRadius() > 0;
+            extraKeysView.setKeyPressFeedbackBlurAvailable(blurActive);
         }
     }
 
