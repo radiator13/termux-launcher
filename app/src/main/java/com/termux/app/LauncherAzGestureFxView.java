@@ -4,6 +4,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -857,23 +858,19 @@ public final class LauncherAzGestureFxView extends View {
         }
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
-        if (capsuleDockStyle) {
-            // The capsule's top edge is rounded and sits above the apps row, so hard tab segments
-            // float awkwardly inside it. Instead show a soft tube glow riding the very top edge,
-            // reading as part of the dock's own glow/sheen.
-            drawCapsulePageTubeGlow(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
-        } else {
-            drawPageEdgeSegments(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
-        }
+        // Both dock styles use the same soft tube glow riding the very top edge — it reads as part
+        // of the dock's own rim sheen and avoids a second, divergent indicator treatment.
+        drawPageTubeGlow(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
     }
 
     /**
-     * Capsule page indicator: a subtle horizontal "tube" of glow pinned to the very top edge of the
-     * floating dock, with a brighter node that slides to the active page. Uses the dock's glow tints
-     * so it animates as part of the overall capsule glow. Toned down at rest, brighter on interaction.
+     * Page indicator: a soft "tube" of glow pinned to the very top edge of the dock, with a smooth
+     * radial bloom that slides to the active page. Built from gradient shaders (not stacked rings)
+     * so it reads as an actual glow rather than concentric circles, and uses the dock's glow tints
+     * so it animates as part of the overall rim sheen. Toned down at rest, brighter on interaction.
      */
-    private void drawCapsulePageTubeGlow(Canvas canvas, float activePagePosition, int totalPages, float attention) {
-        if (totalPages <= 1) {
+    private void drawPageTubeGlow(Canvas canvas, float activePagePosition, int totalPages, float attention) {
+        if (totalPages <= 1 || getWidth() <= 0) {
             return;
         }
         float bright = clamp01((clamp01(attention) - PINNED_INDICATOR_IDLE_ATTENTION)
@@ -882,103 +879,44 @@ public final class LauncherAzGestureFxView extends View {
         float cx = getWidth() * 0.5f;
         float left = cx - (tubeW * 0.5f);
         float right = cx + (tubeW * 0.5f);
-        float coreR = dp(1.1f);
-        // Ride the very top rim of the dock: the tube's top edge sits flush with the capsule's top
-        // edge (top = cy - coreR = 0) instead of floating a few dp below it.
+        float coreR = dp(1.0f);
+        // Ride the very top rim of the dock: the tube's top edge sits flush with the dock's top edge.
         float cy = coreR;
         // Harmonize with the dock — pull the tube well toward the glass tint (softer than the raw
-        // overflow-glow cyan) so it reads as part of the capsule's own rim sheen rather than a
-        // separate bright bar.
+        // overflow-glow cyan) so it reads as part of the dock's own rim sheen, not a separate bar.
         int glow = lerpColor(boostColor(overflowGlowTintColor, 1.0f, 0.88f), glassTintColor, 0.62f);
 
-        // Faint continuous tube — kept dim so the indicator reads as a diffuse bloom, not a lit tube.
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        pageIndicatorPaint.setColor(withAlpha(glow, Math.round(lerp(7f, 30f, bright))));
+
+        // 1) Faint continuous tube whose ends fade out (no hard caps), so it melts into the rim.
+        int tubeAlpha = Math.round(lerp(6f, 22f, bright));
+        LinearGradient tubeGrad = new LinearGradient(left, 0f, right, 0f,
+            new int[] { withAlpha(glow, 0), withAlpha(glow, tubeAlpha), withAlpha(glow, tubeAlpha), withAlpha(glow, 0) },
+            new float[] { 0f, 0.22f, 0.78f, 1f }, Shader.TileMode.CLAMP);
+        pageIndicatorPaint.setShader(tubeGrad);
         tmpRect.set(left, cy - coreR, right, cy + coreR);
         canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
+        pageIndicatorPaint.setShader(null);
 
-        // Soft node that slides to the active page: a wide, gently-falling bloom (many low-alpha
-        // rings) instead of a hard bright core, so it diffuses into the dock rather than reading as
-        // a solid tube light.
+        // 2) Smooth node glow that slides to the active page — a radial bloom with continuous
+        //    falloff (top half rides above the rim and is clipped, so it hugs the edge).
         float frac = clamp(activePagePosition, 0f, totalPages - 1f) / (totalPages - 1f);
-        float nodeW = clamp(tubeW / totalPages, dp(14f), tubeW);
-        float nodeCx = lerp(left + (nodeW * 0.5f), right - (nodeW * 0.5f), frac);
-        for (int i = 5; i >= 0; i--) {
-            float grow = dp(i * 2.7f);
-            int alpha = i == 0
-                ? Math.round(lerp(34f, 132f, bright))
-                : Math.round(lerp(7f, 40f, bright) / (1f + (i * 0.85f)));
-            pageIndicatorPaint.setColor(withAlpha(glow, alpha));
-            tmpRect.set(nodeCx - (nodeW * 0.5f) - grow, cy - coreR - grow,
-                nodeCx + (nodeW * 0.5f) + grow, cy + coreR + grow);
-            float r = coreR + grow;
-            canvas.drawRoundRect(tmpRect, r, r, pageIndicatorPaint);
-        }
-    }
+        float nodeCx = lerp(left + dp(8f), right - dp(8f), frac);
+        float bloomR = clamp(tubeW / totalPages, dp(12f), dp(30f));
+        int peak = Math.round(lerp(46f, 162f, bright));
+        RadialGradient bloom = new RadialGradient(nodeCx, cy, bloomR,
+            new int[] { withAlpha(glow, peak), withAlpha(glow, Math.round(peak * 0.34f)), withAlpha(glow, 0) },
+            new float[] { 0f, 0.5f, 1f }, Shader.TileMode.CLAMP);
+        pageIndicatorPaint.setShader(bloom);
+        canvas.drawRect(nodeCx - bloomR, cy - bloomR, nodeCx + bloomR, cy + bloomR, pageIndicatorPaint);
+        pageIndicatorPaint.setShader(null);
 
-    /**
-     * Page-as-edge indicator: tab-style segments that hang from the dock surface's top edge
-     * (one per page, ~40x3dp, 4dp gap, centered). The active page reads as an accent fill;
-     * inactive pages read as a faint fill with a hairline outline. Replaces the old indicator
-     * that sat in the gap between the apps row and the A-Z row.
-     */
-    private void drawPageEdgeSegments(Canvas canvas, float activePagePosition, int totalPages, float attention) {
-        if (totalPages <= 1) {
-            return;
-        }
-        float clampedAttention = clamp01(attention);
-
-        // Thin, short segments that sit right at the very top edge of the dock.
-        float segHeight = dp(2f);
-        float segWidth = dp(22f);
-        float segGap = dp(4f);
-        float radius = dp(1f);
-        float available = Math.max(dp(40f), getWidth() - dp(24f));
-        float desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
-        if (desiredWidth > available) {
-            float scale = available / Math.max(1f, desiredWidth);
-            segWidth = Math.max(dp(10f), segWidth * scale);
-            segGap = Math.max(dp(2.5f), segGap * scale);
-            desiredWidth = (segWidth * totalPages) + (segGap * Math.max(0, totalPages - 1));
-        }
-
-        // Anchor to the very top edge of the dock surface (top of the apps row). Kept >= 0 so
-        // the segments are not clipped by the view bounds.
-        float topEdgeY = appsRowRawBounds.top - locationOnScreen[1];
-        float top = Math.max(0f, topEdgeY);
-        float bottom = top + segHeight;
-        float left = (getWidth() - desiredWidth) * 0.5f;
-        float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
-
-        // Toned down at rest; brightens only while the apps bar is being interacted with, then
-        // eases back after the idle timeout (attention fades to PINNED_INDICATOR_IDLE_ATTENTION).
-        float bright = clamp01((clampedAttention - PINNED_INDICATOR_IDLE_ATTENTION)
-            / Math.max(0.001f, 1f - PINNED_INDICATOR_IDLE_ATTENTION));
-        int accentColor = boostColor(edgeTintColor, 1.24f, 1.10f);
-        int inactiveFill = boostColor(glassTintColor, 1.10f, 1.02f);
-        int activeAlpha = Math.round(lerp(60f, 236f, bright));
-        int inactiveAlpha = Math.round(lerp(16f, 76f, bright));
-        int strokeAlpha = Math.round(lerp(10f, 50f, bright));
-        int strokeColor = boostColor(edgeTintColor, 1.05f, 1.0f);
-
-        for (int i = 0; i < totalPages; i++) {
-            float activeAmount = 1f - clamp(Math.abs(i - clampedPosition), 0f, 1f);
-            tmpRect.set(left, top, left + segWidth, bottom);
-            pageIndicatorPaint.setStyle(Paint.Style.FILL);
-            pageIndicatorPaint.setColor(lerpColor(
-                withAlpha(inactiveFill, inactiveAlpha),
-                withAlpha(accentColor, activeAlpha),
-                activeAmount));
-            canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            if (activeAmount < 0.5f) {
-                pageIndicatorPaint.setStyle(Paint.Style.STROKE);
-                pageIndicatorPaint.setStrokeWidth(Math.max(1f, dp(0.75f)));
-                pageIndicatorPaint.setColor(withAlpha(strokeColor, Math.round(strokeAlpha * (1f - (activeAmount * 2f)))));
-                canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            }
-            left += segWidth + segGap;
-        }
-        pageIndicatorPaint.setStyle(Paint.Style.FILL);
+        // 3) Crisp little core (leaning white) so the active page still has a defined point.
+        float coreHalf = clamp((tubeW / totalPages) * 0.5f, dp(6f), dp(20f));
+        int coreA = Math.round(lerp(58f, 216f, bright));
+        pageIndicatorPaint.setColor(withAlpha(lerpColor(glow, Color.WHITE, 0.28f), coreA));
+        tmpRect.set(nodeCx - coreHalf, cy - coreR, nodeCx + coreHalf, cy + coreR);
+        canvas.drawRoundRect(tmpRect, coreR, coreR, pageIndicatorPaint);
     }
 
     private void animateInteractionPageIndicatorTo(int pageIndex, boolean animate) {

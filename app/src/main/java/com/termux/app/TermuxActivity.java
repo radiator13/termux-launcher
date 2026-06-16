@@ -1068,7 +1068,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // Feather the rim into a soft glow instead of a hard outline (API 31+). The view draws
             // its rim inset from the edge so this blur stays inside the rounded clip at the corners.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float blur = getResources().getDisplayMetrics().density * 5f;
+                float blur = getResources().getDisplayMetrics().density * 7f;
                 glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
             }
         }
@@ -4655,10 +4655,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void setExtraKeysView(ExtraKeysView extraKeysView, int i) {
         mExtraKeysView = extraKeysView;
+        applyExtraKeysFeedbackAccent(extraKeysView);
     }
 
     public void setExtraKeysView(ExtraKeysView extraKeysView) {
         mExtraKeysView = extraKeysView;
+        applyExtraKeysFeedbackAccent(extraKeysView);
+    }
+
+    /** Tints the extra-keys press feedback with the dock accent so it matches the dock's rim glow. */
+    private void applyExtraKeysFeedbackAccent(@Nullable ExtraKeysView extraKeysView) {
+        if (extraKeysView != null) {
+            extraKeysView.setKeyPressFeedbackColor(resolveDockAccentColor());
+        }
     }
 
     public DrawerLayout getDrawer() {
@@ -5380,6 +5389,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             reloadProperties();
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());
+                applyExtraKeysFeedbackAccent(mExtraKeysView);
                 mExtraKeysView.reload(mTermuxTerminalExtraKeys.getExtraKeysInfo(), mTerminalToolbarDefaultHeight);
             }
             // Update NightMode.APP_NIGHT_MODE

@@ -34,7 +34,7 @@ public class DockEdgeGlowView extends View {
     private final RectF rimRect = new RectF();
     private final Matrix sweepMatrix = new Matrix();
     private final int[] sweepColors = new int[5];
-    private final float[] sweepStops = {0f, 0.16f, 0.5f, 0.84f, 1f};
+    private final float[] sweepStops = {0f, 0.28f, 0.5f, 0.72f, 1f};
 
     private int accentColor = 0xFF7CE2FF;
     private float cornerRadiusPx = 0f;
@@ -110,30 +110,32 @@ public class DockEdgeGlowView extends View {
         }
 
         float density = getResources().getDisplayMetrics().density;
-        float baseStroke = density * 2.2f;
         // Inset the rim so the (host-blurred) glow stays inside the rounded clip on every side and
         // corner — this continuity at the corners is the whole point of drawing it ourselves.
-        float inset = density * 3.5f;
+        float inset = density * 4.5f;
         rimRect.set(inset, inset, w - inset, h - inset);
         float r = Math.max(0f, cornerRadiusPx - inset);
 
-        // 1) Continuous base rim: a uniform soft glow the whole way around, corners included.
+        // 1) Continuous base rim: a very faint, even sheen the whole way around (corners included).
+        //    Kept subtle so the edge reads as a soft glass refraction line, not a drawn outline.
         rimPaint.setShader(null);
-        rimPaint.setStrokeWidth(baseStroke);
-        rimPaint.setColor(withAlpha(accentColor, Math.round(64f * glowLevel)));
+        rimPaint.setStrokeWidth(density * 1.5f);
+        rimPaint.setColor(withAlpha(accentColor, Math.round(26f * glowLevel)));
         canvas.drawRoundRect(rimRect, r, r, rimPaint);
 
-        // 2) Tilt-driven hot lobe: brighten and thicken the rim where the glass edge catches the
-        //    light. A sweep gradient centred on the dock places a bright arc at the tilt direction;
-        //    rotating it as the plank tips makes the highlight travel around the perimeter.
+        // 2) Tilt-driven specular: a soft, broad highlight that pools on the edge the glass tips
+        //    toward — leaning white like a real edge catch-light rather than a saturated accent
+        //    band. A sweep gradient centred on the dock places the highlight at the tilt direction
+        //    and rotating it as the plank tips makes the catch-light glide around the perimeter.
         if (tiltAmount > 0.02f) {
             float cx = w * 0.5f;
             float cy = h * 0.5f;
-            int hot = withAlpha(accentColor, Math.round(150f * glowLevel * (0.4f + 0.6f * tiltAmount)));
-            int faint = withAlpha(accentColor, Math.round(36f * glowLevel * tiltAmount));
-            int dim = withAlpha(accentColor, 0);
-            // Bright lobe centred at local angle 0 (positions 0 and 1 are the same angle), a faint
-            // counter-glow on the opposite edge, transparent in between.
+            int specular = lerpColor(accentColor, Color.WHITE, 0.6f);
+            int hot = withAlpha(specular, Math.round(118f * glowLevel * (0.35f + 0.65f * tiltAmount)));
+            int faint = withAlpha(accentColor, Math.round(22f * glowLevel * tiltAmount));
+            int dim = withAlpha(specular, 0);
+            // Broad highlight centred at local angle 0 (positions 0 and 1 are the same angle), a
+            // whisper of counter-glow on the opposite edge, transparent in between.
             sweepColors[0] = hot;
             sweepColors[1] = dim;
             sweepColors[2] = faint;
@@ -143,11 +145,21 @@ public class DockEdgeGlowView extends View {
             sweepMatrix.setRotate(hotAngleDeg, cx, cy);
             sweep.setLocalMatrix(sweepMatrix);
             rimPaint.setShader(sweep);
-            rimPaint.setStrokeWidth(baseStroke + (density * 2.6f * tiltAmount));
+            rimPaint.setStrokeWidth((density * 1.5f) + (density * 2.2f * tiltAmount));
             rimPaint.setColor(Color.WHITE); // colour comes from the shader
             canvas.drawRoundRect(rimRect, r, r, rimPaint);
             rimPaint.setShader(null);
         }
+    }
+
+    private static int lerpColor(int a, int b, float t) {
+        t = clamp01(t);
+        int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        int br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        int rr = Math.round(ar + (br - ar) * t);
+        int rg = Math.round(ag + (bg - ag) * t);
+        int rb = Math.round(ab + (bb - ab) * t);
+        return (0xFF << 24) | (rr << 16) | (rg << 8) | rb;
     }
 
     private static int withAlpha(int color, int alpha) {

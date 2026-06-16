@@ -2,6 +2,7 @@ package com.termux.shared.termux.extrakeys;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -224,6 +225,13 @@ public final class ExtraKeysView extends GridLayout {
     protected int mButtonActiveBackgroundColor;
 
     /**
+     * Optional accent used to tint the press "glow pill". When 0 (unset) the press feedback falls
+     * back to {@link #mButtonActiveBackgroundColor}. The launcher dock sets this to its accent so
+     * the key feedback matches the dock's rim glow.
+     */
+    protected int mKeyPressFeedbackColor = 0;
+
+    /**
      * Defines whether text for the extra keys button should be all capitalized automatically.
      */
     protected boolean mButtonTextAllCaps = true;
@@ -337,6 +345,11 @@ public final class ExtraKeysView extends GridLayout {
      * @param buttonBackgroundColor The value for {@link #mButtonBackgroundColor}.
      * @param buttonActiveBackgroundColor The value for {@link #mButtonActiveBackgroundColor}.
      */
+    /** Tint for the press glow pill; set to 0 to fall back to the active background colour. */
+    public void setKeyPressFeedbackColor(int color) {
+        mKeyPressFeedbackColor = color;
+    }
+
     public void setButtonColors(int buttonTextColor, int buttonActiveTextColor, int buttonBackgroundColor, int buttonActiveBackgroundColor) {
         mButtonTextColor = buttonTextColor;
         mButtonActiveTextColor = buttonActiveTextColor;
@@ -504,6 +517,11 @@ public final class ExtraKeysView extends GridLayout {
                 button.setTextColor(mButtonTextColor);
                 button.setAllCaps(mButtonTextAllCaps);
                 button.setPadding(0, 0, 0, 0);
+                // Pre-shape every key as a pill so the press glow only has to toggle fill + rim
+                // (kept on MaterialButton's managed properties so the existing setBackgroundColor
+                // restore path keeps working — a raw custom background would disable that).
+                button.setCornerRadius(Math.round(dpToPx(11f)));
+                button.setStrokeWidth(0);
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
@@ -639,6 +657,10 @@ public final class ExtraKeysView extends GridLayout {
             mScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
             mScheduledExecutor.scheduleWithFixedDelay(() -> {
                 mLongPressCount++;
+                // Deepen the glow pill on the first repeat to signal the held/auto-repeat state.
+                if (mLongPressCount == 1) {
+                    button.post(() -> applyKeyGlowPill(button, true));
+                }
                 onExtraKeyButtonClick(view, buttonInfo, button);
             }, mLongPressTimeout, mLongPressRepeatDelay, TimeUnit.MILLISECONDS);
         } else if (isSpecialButton(buttonInfo)) {
@@ -651,7 +673,7 @@ public final class ExtraKeysView extends GridLayout {
                 return;
             if (mHandler == null)
                 mHandler = new Handler(Looper.getMainLooper());
-            mSpecialButtonsLongHoldRunnable = new SpecialButtonsLongHoldRunnable(state, buttonInfo);
+            mSpecialButtonsLongHoldRunnable = new SpecialButtonsLongHoldRunnable(state, buttonInfo, button);
             mHandler.postDelayed(mSpecialButtonsLongHoldRunnable, mLongPressTimeout);
         }
     }
@@ -671,10 +693,12 @@ public final class ExtraKeysView extends GridLayout {
 
         public final SpecialButtonState mState;
         public final ExtraKeyButton mButtonInfo;
+        public final MaterialButton mButton;
 
-        public SpecialButtonsLongHoldRunnable(SpecialButtonState state, ExtraKeyButton buttonInfo) {
+        public SpecialButtonsLongHoldRunnable(SpecialButtonState state, ExtraKeyButton buttonInfo, MaterialButton button) {
             mState = state;
             mButtonInfo = buttonInfo;
+            mButton = button;
         }
 
         public void run() {
@@ -682,6 +706,10 @@ public final class ExtraKeysView extends GridLayout {
             mState.setIsLocked(!mState.isActive);
             mState.setIsActive(!mState.isActive);
             mLongPressCount++;
+            // Deepen the glow pill to signal the key latched/locked on a long hold.
+            if (mButton != null) {
+                applyKeyGlowPill(mButton, true);
+            }
 
             announceSpecialKeyStateChangeForAccessibility(mButtonInfo.getKey(), mState);
         }
@@ -716,12 +744,49 @@ public final class ExtraKeysView extends GridLayout {
 
     private void setButtonPressedVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
                                              boolean pressed) {
-        button.setBackgroundColor(mButtonBackgroundColor);
         if (pressed) {
             button.setTextColor(mButtonActiveTextColor);
+            applyKeyGlowPill(button, false);
+            animateKeyCapDip(button, true);
         } else {
             restoreButtonVisualState(button, buttonInfo);
+            clearKeyGlowPill(button);
+            animateKeyCapDip(button, false);
         }
+    }
+
+    /**
+     * Press feedback that integrates with the launcher dock: an accent-tinted "glow pill" fills the
+     * key (deeper while held) paired with a slight key-cap dip. Drawn entirely with MaterialButton's
+     * managed fill/stroke so it composes with the normal background restore.
+     */
+    private void applyKeyGlowPill(@NonNull MaterialButton button, boolean held) {
+        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        button.setBackgroundColor(withAlpha(tint, held ? 130 : 82));
+        button.setStrokeColor(ColorStateList.valueOf(withAlpha(tint, held ? 175 : 115)));
+        button.setStrokeWidth(Math.max(1, Math.round(dpToPx(1f))));
+    }
+
+    private void clearKeyGlowPill(@NonNull MaterialButton button) {
+        button.setStrokeWidth(0);
+    }
+
+    private void animateKeyCapDip(@NonNull MaterialButton button, boolean pressed) {
+        button.animate().cancel();
+        float target = pressed ? 0.88f : 1f;
+        button.animate()
+            .scaleX(target)
+            .scaleY(target)
+            .setDuration(pressed ? 55L : 120L)
+            .start();
+    }
+
+    private float dpToPx(float dp) {
+        return dp * getResources().getDisplayMetrics().density;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (Math.max(0, Math.min(255, alpha)) << 24) | (color & 0x00FFFFFF);
     }
 
     private void restoreButtonVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo) {
