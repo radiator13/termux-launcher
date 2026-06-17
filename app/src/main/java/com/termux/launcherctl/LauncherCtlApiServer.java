@@ -347,6 +347,8 @@ public class LauncherCtlApiServer {
                     return sseResponse(output -> writeCompletionStream(context, request.body, output));
                 }
                 return jsonResponse(TaiManager.getInstance(context).openAiCompletions(request.body));
+            } else if ("POST".equals(request.method) && "/v1/embeddings".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).embeddings(request.body));
             }
 
             JSONObject notFound = jsonError("not_found", "Unknown endpoint");
@@ -898,6 +900,7 @@ public class LauncherCtlApiServer {
         rateLimiters.put("GET:/v1/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/chat/completions", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/completions", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/embeddings", new SimpleRateLimiter(60, 60_000));
     }
 
     private void writeClientConfig() throws IOException {
@@ -1237,7 +1240,7 @@ public class LauncherCtlApiServer {
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when supported by the installed APK.\n" +
             "Auto uses backend-specific GPU-first behavior with CPU fallback where available.\n" +
-            "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.\n" +
+            "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, /v1/completions, and /v1/embeddings.\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
             "}\n" +

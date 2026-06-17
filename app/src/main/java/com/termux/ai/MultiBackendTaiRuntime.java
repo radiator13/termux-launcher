@@ -7,7 +7,7 @@ import androidx.annotation.NonNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public final class MultiBackendTaiRuntime implements TaiRuntime {
+public class MultiBackendTaiRuntime implements TaiRuntime {
     private final DualSlotTaiRuntime liteRt;
     private final MlcTaiRuntime mlc;
     private TaiRuntime activeAssistant;
@@ -88,6 +88,11 @@ public final class MultiBackendTaiRuntime implements TaiRuntime {
     @NonNull @Override public JSONObject chat(@NonNull String id, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).chat(id, request, options, callback); }
     @NonNull @Override public JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).complete(id, prompt, options); }
     @NonNull @Override public JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).complete(id, prompt, options, callback); }
+
+    @NonNull
+    public JSONObject embed(@NonNull String modelId, @NonNull String input) throws JSONException {
+        return mlc.embed(modelId, input);
+    }
 
     private synchronized TaiRuntime runtimeForId(String id) {
         if (isMobileActions(id)) return liteRt;

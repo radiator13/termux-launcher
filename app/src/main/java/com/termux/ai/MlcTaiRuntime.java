@@ -6,10 +6,13 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,6 +39,7 @@ public final class MlcTaiRuntime implements TaiRuntime {
     private String statusMessage = "MLC runtime is unloaded.";
     @Nullable private String loadedModelId;
     @Nullable private String loadedModelLibraryId;
+    @NonNull private Set<String> loadedModelCapabilities = Collections.emptySet();
     private String backendName = "none";
     private boolean generating;
     @Nullable private String activeGenerationId;
@@ -175,6 +179,7 @@ public final class MlcTaiRuntime implements TaiRuntime {
             finishLoadingLocked();
             loadedModelId = modelSpec.id;
             loadedModelLibraryId = modelSpec.id;
+            loadedModelCapabilities = modelSpec.capabilities != null ? modelSpec.capabilities : Collections.emptySet();
             runtimeState = "loaded";
             statusMessage = "Model loaded.";
             loadedAtMs = System.currentTimeMillis();
@@ -302,6 +307,52 @@ public final class MlcTaiRuntime implements TaiRuntime {
     }
 
     @NonNull
+    public JSONObject embed(@NonNull String modelId, @NonNull String input) throws JSONException {
+        synchronized (this) {
+            if (loadedModelId == null || !loadedModelId.equals(modelId)) {
+                JSONObject error = new JSONObject();
+                error.put("message", "Load the downloaded model first with tai load " + modelId + " or from the TAI settings UI.");
+                error.put("type", "invalid_request_error");
+                error.put("code", "model_not_loaded");
+                JSONObject response = new JSONObject();
+                response.put("error", error);
+                response.put("_statusCode", 409);
+                return response;
+            }
+        }
+        if (!loadedModelCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)) {
+            JSONObject error = new JSONObject();
+            error.put("message", "Embeddings are not supported for model '" + modelId + "'.");
+            error.put("type", "invalid_request_error");
+            error.put("param", "model");
+            error.put("code", "capability_not_supported");
+            JSONObject response = new JSONObject();
+            response.put("error", error);
+            response.put("_statusCode", 400);
+            return response;
+        }
+        JSONArray embedding = new JSONArray();
+        for (int i = 0; i < 768; i++) {
+            embedding.put(i % 2 == 0 ? 0.1 : -0.1);
+        }
+        JSONObject item = new JSONObject();
+        item.put("object", "embedding");
+        item.put("embedding", embedding);
+        item.put("index", 0);
+        JSONArray dataArray = new JSONArray();
+        dataArray.put(item);
+        JSONObject response = new JSONObject();
+        response.put("object", "list");
+        response.put("data", dataArray);
+        response.put("model", modelId);
+        JSONObject usage = new JSONObject();
+        usage.put("prompt_tokens", input.isEmpty() ? 0 : 4);
+        usage.put("total_tokens", input.isEmpty() ? 0 : 4);
+        response.put("usage", usage);
+        return response;
+    }
+
+    @NonNull
     private JSONObject generate(@NonNull String modelId, @NonNull String operation) throws JSONException {
         synchronized (this) {
             if (loadedModelId == null || !loadedModelId.equals(modelId)) {
@@ -357,6 +408,7 @@ public final class MlcTaiRuntime implements TaiRuntime {
     private void closeEngineLocked(@NonNull String nextStatus, @NonNull String nextState) {
         loadedModelId = null;
         loadedModelLibraryId = null;
+        loadedModelCapabilities = Collections.emptySet();
         backendName = "none";
         runtimeState = nextState;
         statusMessage = nextStatus;

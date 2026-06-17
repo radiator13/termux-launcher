@@ -81,6 +81,7 @@ public final class TaiManager {
         endpoints.put("/v1/models");
         endpoints.put("/v1/chat/completions");
         endpoints.put("/v1/completions");
+        endpoints.put("/v1/embeddings");
         data.put("openAiCompatibleEndpoints", endpoints);
         return data;
     }
@@ -540,6 +541,14 @@ public final class TaiManager {
             item.put("object", "model");
             item.put("created", 0);
             item.put("owned_by", "termux-launcher");
+            String backend = model.optString("backend", TaiModelSpec.BACKEND_LITERT_LM);
+            item.put("_backend", backend);
+            JSONArray capabilities = model.optJSONArray("capabilities");
+            if (capabilities == null || capabilities.length() == 0) {
+                capabilities = new JSONArray();
+                capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+            }
+            item.put("_capabilities", capabilities);
             data.put(item);
         }
 
@@ -547,6 +556,37 @@ public final class TaiManager {
         response.put("object", "list");
         response.put("data", data);
         return response;
+    }
+
+    @NonNull
+    public JSONObject embeddings(@NonNull String body) throws JSONException {
+        JSONObject request = parseBody(body);
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
+        String input = request.optString("input", "");
+        TaiModelSpec spec = resolveModel(modelId);
+        if (spec == null) {
+            JSONObject error = new JSONObject();
+            error.put("message", "Unknown TAI model: " + modelId);
+            error.put("type", "invalid_request_error");
+            error.put("param", "model");
+            error.put("code", "model_not_found");
+            JSONObject response = new JSONObject();
+            response.put("error", error);
+            response.put("_statusCode", 404);
+            return response;
+        }
+        if (TaiModelSpec.BACKEND_LITERT_LM.equals(spec.backend)) {
+            JSONObject error = new JSONObject();
+            error.put("message", "Embeddings are not supported for model '" + modelId + "'.");
+            error.put("type", "invalid_request_error");
+            error.put("param", "model");
+            error.put("code", "capability_not_supported");
+            JSONObject response = new JSONObject();
+            response.put("error", error);
+            response.put("_statusCode", 501);
+            return response;
+        }
+        return ((MultiBackendTaiRuntime) runtime).embed(modelId, input);
     }
 
     @NonNull

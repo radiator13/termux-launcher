@@ -71,3 +71,32 @@
 - `TaiMlcPackageInstallerTest` covers: valid install, HTTP URL rejection, missing SHA-256, `.so` rejection, raw weight rejection, path traversal, unknown `modelLibraryId`, duplicate model ID, hash mismatch, HTML response rejection, missing file, unsupported schema, invalid backend, empty manifest, and non-JSON manifest.
 - Tests use temp directories, fake manifests, and Robolectric context; no network downloads are performed.
 - Verification gate remains GitHub Actions `Build nightly` on the `experimental` branch.
+
+## Wave 4 Task 4 - Device capability gating
+
+- GitHub Actions run 27655616232 passed successfully for commit 51ba855b
+- `TaiDeviceCapabilities` extended with MLC fields: `mlcSupported`, `mlcUnsupportedReason`, `mlcSdkMinimum`, `mlcMemoryEstimateMb`, `mlcAcceleratorInfo`, `mlcBundledLibrariesAvailable`
+- `toJson()` includes `backends` object with `litert-lm` and `mlc-llm` booleans
+- `checkModelCapability(TaiModelSpec)` returns `ModelCapabilityCheck` with warning/blocking reason
+- Debug override `setDebugMlcUnsupportedReason` is gated by `BuildConfig.DEBUG` only
+- 9 unit tests cover supported/unsupported ABI, low SDK, debug override, release ignore, model blocking, memory warning, JSON structure
+
+## Wave 4 Task 5 - Package validation and downloads
+
+- GitHub Actions run 27656472006 passed successfully for commit 88d5c95a
+- `TaiMlcPackageInstaller` validates manifest schema, model ID, backend, format, modelLibraryId, capabilities, file list, SHA-256, size, path traversal
+- Rejects HTTP URLs, .so files, raw weights, path traversal, unknown modelLibraryId, duplicate IDs, hash mismatches, HTML responses
+- Error codes: `mlc_invalid_manifest`, `mlc_unsupported_schema`, `mlc_unknown_model_library`, `mlc_native_artifact_forbidden`, `mlc_raw_weights_forbidden`, `mlc_path_traversal`, `mlc_hash_mismatch`, `mlc_duplicate_model`, `mlc_file_missing`, `insecure_url`
+- 15 unit tests cover all validation scenarios
+
+## Wave 4 Task 7 - OpenAI-compatible MLC routing, model capability metadata, and embeddings endpoint
+
+- `/v1/models` response preserved standard OpenAI `object: list` and `data` entry shape (`id`, `object`, `created`, `owned_by`) while adding internal `_backend` (`litert-lm` or `mlc-llm`) and `_capabilities` array (`text_chat`, `text_embeddings`) per model via `TaiManager.openAiModelsFromTaiModels()`.
+- Added `/v1/embeddings` POST route to `LauncherCtlApiServer` with bearer-token auth and rate limiting (`POST:/v1/embeddings`).
+- `TaiManager.embeddings()` resolves the model spec, returns OpenAI-compatible `capability_not_supported` error for LiteRT models (501), and delegates MLC models to `MultiBackendTaiRuntime.embed()` → `MlcTaiRuntime.embed()`.
+- `MlcTaiRuntime.embed()` checks loaded state (409 `model_not_loaded`) then capability (`text_embeddings`). If capable, returns deterministic 768-dim mock embedding vector with full OpenAI list shape including `usage`; otherwise returns 400 `capability_not_supported` with `param: model`.
+- `MlcTaiRuntime` now stores `loadedModelCapabilities` from the loaded `TaiModelSpec` and clears it on unload.
+- TAI CLI help text updated to mention `/v1/embeddings` alongside existing OpenAI-compatible endpoints.
+- `EmbeddingsEndpointTest` covers: 401 without auth, successful embeddings-capable MLC response, chat-only MLC `capability_not_supported`, LiteRT unsupported error, `/v1/models` backend/capability metadata shape, and existing chat/completions endpoints still responding (non-404).
+- Tests inject a `FakeMultiBackendRuntime` via reflection to avoid requiring real MLC native libraries or LiteRT JNI initialization during endpoint testing.
+- Verification gate remains GitHub Actions `Build nightly` on `experimental` branch; no local Java build environment available in workspace.
