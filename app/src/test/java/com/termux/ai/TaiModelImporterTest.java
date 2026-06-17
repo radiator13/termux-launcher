@@ -12,8 +12,8 @@ public class TaiModelImporterTest {
     public void supportedFileNames_acceptLiteRtLmPackages() {
         assertTrue(TaiModelImporter.isSupportedFileName("model.litertlm"));
         assertTrue(TaiModelImporter.isSupportedFileName("MODEL.TASK"));
-        assertTrue(TaiModelImporter.isSupportedFileName("phi-3-mini.mlc.json"));
-        assertTrue(TaiModelImporter.isSupportedFileName("phi-3-mini-mlc.json"));
+        assertFalse(TaiModelImporter.isSupportedFileName("phi-3-mini.mnn.json"));
+        assertFalse(TaiModelImporter.isSupportedFileName("phi-3-mini-mnn.json"));
         assertFalse(TaiModelImporter.isSupportedFileName("model.bin"));
         assertFalse(TaiModelImporter.isSupportedFileName("model.zip"));
     }
@@ -24,7 +24,7 @@ public class TaiModelImporterTest {
         assertFalse(safetensors.supported);
         assertEquals(TaiModelImporter.ERROR_RAW_WEIGHTS_FORBIDDEN, safetensors.errorCode);
 
-        TaiModelImporter.ValidationResult nativeLibrary = TaiModelImporter.validateSupportedImportFileName("libmlc_llm.so");
+        TaiModelImporter.ValidationResult nativeLibrary = TaiModelImporter.validateSupportedImportFileName("libmnn_llm.so");
         assertFalse(nativeLibrary.supported);
         assertEquals(TaiModelImporter.ERROR_NATIVE_LIBRARY_FORBIDDEN, nativeLibrary.errorCode);
 
@@ -34,14 +34,11 @@ public class TaiModelImporterTest {
     }
 
     @Test
-    public void mlcManifestNames_areRecognizedAsManifestImports() {
-        TaiModelImporter.ValidationResult dotManifest = TaiModelImporter.validateSupportedImportFileName("gemma.mlc.json");
-        assertTrue(dotManifest.supported);
-        assertTrue(dotManifest.mlcManifest);
-
-        TaiModelImporter.ValidationResult dashManifest = TaiModelImporter.validateSupportedImportFileName("gemma-mlc.json");
-        assertTrue(dashManifest.supported);
-        assertTrue(dashManifest.mlcManifest);
+    public void mnnConfigUrl_isRecognizedForBackendDownload() {
+        TaiModelImporter.ValidationResult config = TaiModelImporter.validateImportFileNameForBackend(
+            TaiModelSpec.BACKEND_MNN_LLM, "config.json");
+        assertTrue(config.supported);
+        assertFalse(config.packageManifest);
     }
 
     @Test
@@ -51,25 +48,25 @@ public class TaiModelImporterTest {
         assertTrue(TaiModelImporter.validateImportFileNameForBackend(
             TaiModelSpec.BACKEND_LITERT_LM, "actions.task").supported);
         assertFalse(TaiModelImporter.validateImportFileNameForBackend(
-            TaiModelSpec.BACKEND_LITERT_LM, "phi.mlc.json").supported);
+            TaiModelSpec.BACKEND_LITERT_LM, "phi.mnn.json").supported);
 
-        TaiModelImporter.ValidationResult mlc = TaiModelImporter.validateImportFileNameForBackend(
-            TaiModelSpec.BACKEND_MLC_LLM, "phi.mlc.json");
-        assertTrue(mlc.supported);
-        assertTrue(mlc.mlcManifest);
+        TaiModelImporter.ValidationResult mnn = TaiModelImporter.validateImportFileNameForBackend(
+            TaiModelSpec.BACKEND_MNN_LLM, "config.json");
+        assertTrue(mnn.supported);
+        assertFalse(mnn.packageManifest);
         assertFalse(TaiModelImporter.validateImportFileNameForBackend(
-            TaiModelSpec.BACKEND_MLC_LLM, "assistant.litertlm").supported);
+            TaiModelSpec.BACKEND_MNN_LLM, "assistant.litertlm").supported);
     }
 
     @Test
     public void backendValidation_rejectsRawWeightsAndNativeLibrariesWithStableCodes() {
         TaiModelImporter.ValidationResult raw = TaiModelImporter.validateImportFileNameForBackend(
-            TaiModelSpec.BACKEND_MLC_LLM, "model.gguf");
+            TaiModelSpec.BACKEND_MNN_LLM, "model.gguf");
         assertFalse(raw.supported);
         assertEquals(TaiModelImporter.ERROR_RAW_WEIGHTS_FORBIDDEN, raw.errorCode);
 
         TaiModelImporter.ValidationResult nativeLibrary = TaiModelImporter.validateImportFileNameForBackend(
-            TaiModelSpec.BACKEND_MLC_LLM, "libmodel.so");
+            TaiModelSpec.BACKEND_MNN_LLM, "libmodel.so");
         assertFalse(nativeLibrary.supported);
         assertEquals(TaiModelImporter.ERROR_NATIVE_LIBRARY_FORBIDDEN, nativeLibrary.errorCode);
     }
@@ -84,9 +81,9 @@ public class TaiModelImporterTest {
         assertTrue(TaiModelImporter.validateHuggingFaceImportUrl(
             TaiModelSpec.BACKEND_LITERT_LM, "https://huggingface.co/user/model/resolve/main/model.task?download=1").supported);
         assertTrue(TaiModelImporter.validateHuggingFaceImportUrl(
-            TaiModelSpec.BACKEND_MLC_LLM, "https://huggingface.co/user/model/resolve/main/model.mlc.json").supported);
+            TaiModelSpec.BACKEND_MNN_LLM, "https://huggingface.co/user/model/resolve/main/config.json").supported);
         assertFalse(TaiModelImporter.validateHuggingFaceImportUrl(
-            TaiModelSpec.BACKEND_MLC_LLM, "https://huggingface.co/user/model/resolve/main/model.safetensors").supported);
+            TaiModelSpec.BACKEND_MNN_LLM, "https://huggingface.co/user/model/resolve/main/model.safetensors").supported);
     }
 
     @Test
@@ -95,6 +92,6 @@ public class TaiModelImporterTest {
             TaiModelImporter.sanitizeModelId(
                 TaiModelImporter.stripModelExtension("Gemma 4 E2B it.litertlm")));
         assertEquals("mobile_actions", TaiModelImporter.stripModelExtension("mobile_actions.task"));
-        assertEquals("phi-3-mini", TaiModelImporter.stripModelExtension("phi-3-mini.mlc.json"));
+        assertEquals("config.json", TaiModelImporter.stripModelExtension("config.json"));
     }
 }

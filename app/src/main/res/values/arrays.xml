@@ -135,11 +135,11 @@
     <string-array name="termux_ai_catalog_backend_filter_entries">
         <item>@string/termux_ai_catalog_backend_all</item>
         <item>@string/termux_ai_backend_label_litert</item>
-        <item>@string/termux_ai_backend_label_mlc</item>
+        <item>@string/termux_ai_backend_label_mnn</item>
     </string-array>
     <string-array name="termux_ai_catalog_backend_filter_values">
         <item>all</item>
         <item>litert-lm</item>
-        <item>mlc-llm</item>
+        <item>mnn-llm</item>
     </string-array>
 </resources>

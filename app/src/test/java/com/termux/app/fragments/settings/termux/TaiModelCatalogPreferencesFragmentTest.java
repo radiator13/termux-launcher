@@ -21,26 +21,26 @@ public class TaiModelCatalogPreferencesFragmentTest {
     public void filterEntries_filtersByBackend() {
         List<TaiModelCatalog.CatalogEntry> liteRt = TaiModelCatalogPreferencesFragment.filterEntries(
             TaiModelCatalog.entries().values(), TaiModelCatalogPreferencesFragment.BackendFilter.LITERT, "");
-        List<TaiModelCatalog.CatalogEntry> mlc = TaiModelCatalogPreferencesFragment.filterEntries(
-            TaiModelCatalog.entries().values(), TaiModelCatalogPreferencesFragment.BackendFilter.MLC, "");
+        List<TaiModelCatalog.CatalogEntry> mnn = TaiModelCatalogPreferencesFragment.filterEntries(
+            TaiModelCatalog.entries().values(), TaiModelCatalogPreferencesFragment.BackendFilter.MNN, "");
 
         assertEquals(5, liteRt.size());
-        assertEquals(11, mlc.size());
+        assertEquals(6, mnn.size());
         for (TaiModelCatalog.CatalogEntry entry : liteRt) {
             assertEquals(TaiModelSpec.BACKEND_LITERT_LM, entry.backend);
         }
-        for (TaiModelCatalog.CatalogEntry entry : mlc) {
-            assertEquals(TaiModelSpec.BACKEND_MLC_LLM, entry.backend);
+        for (TaiModelCatalog.CatalogEntry entry : mnn) {
+            assertEquals(TaiModelSpec.BACKEND_MNN_LLM, entry.backend);
         }
     }
 
     @Test
     public void filterEntries_searchesNameIdBackendJobGroupAndCapabilityTags() {
         assertTrue(containsModel(search("Gemma 4 E2B"), TaiModelRegistry.MODEL_GEMMA_4_E2B_IT));
-        assertTrue(containsModel(search("qwen2.5-coder-1.5b"), "qwen2.5-coder-1.5b-instruct-q4f16_1-mlc"));
-        assertTrue(search("mlc_llm").size() >= 11);
+        assertTrue(containsModel(search("qwen2.5-coder-1.5b"), "qwen2.5-coder-1.5b-instruct-mnn"));
+        assertTrue(search("mnn_llm").size() >= 6);
         assertTrue(containsModel(search("general_multimodal"), TaiModelRegistry.MODEL_GEMMA_4_E2B_IT));
-        assertTrue(containsModel(search("Vision"), "qwen2.5-vl-3b-instruct-q4f16_1-mlc"));
+        assertTrue(containsModel(search("Reasoning"), "deepseek-r1-1.5b-qwen-mnn"));
     }
 
     @Test
@@ -69,30 +69,27 @@ public class TaiModelCatalogPreferencesFragmentTest {
     public void actionStateFor_returnsRequiredStatefulActions() throws Exception {
         TaiModelCatalog.CatalogEntry installable = TaiModelCatalog.get(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
         TaiModelCatalog.CatalogEntry importOnly = TaiModelCatalog.get("qwen2.5-1.5b-instruct-litert-lm");
-        TaiModelCatalog.CatalogEntry mlc = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc");
+        TaiModelCatalog.CatalogEntry mnn = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-mnn");
         JSONObject downloading = new JSONObject()
             .put("status", TaiModelStore.STATE_DOWNLOADING)
             .put("bytesRead", 25L)
             .put("totalBytes", 100L);
 
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.INSTALL,
-            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, null, "other", true, null).type);
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, null, "other").type);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.DOWNLOADING,
-            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, downloading, "other", true, null).type);
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, downloading, "other").type);
         assertEquals("25%",
-            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, downloading, "other", true, null).progressLabel);
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, false, downloading, "other").progressLabel);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.INSTALLED,
-            TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, "other", true, null).type);
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, "other").type);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.ACTIVE,
-            TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, installable.modelId, true, null).type);
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, installable.modelId).type);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.IMPORT_ONLY,
-            TaiModelCatalogPreferencesFragment.actionStateFor(importOnly, false, null, "other", true, null).type);
+            TaiModelCatalogPreferencesFragment.actionStateFor(importOnly, false, null, "other").type);
 
-        TaiModelCatalogPreferencesFragment.CatalogActionState blocked = TaiModelCatalogPreferencesFragment.actionStateFor(
-            mlc, false, null, "other", false, "unsupported ABI");
-        assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.MLC_UNSUPPORTED, blocked.type);
-        assertFalse(blocked.enabled);
-        assertEquals("unsupported ABI", blocked.disabledReason);
+        assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.INSTALL,
+            TaiModelCatalogPreferencesFragment.actionStateFor(mnn, false, null, "other").type);
     }
 
     private List<TaiModelCatalog.CatalogEntry> search(String query) {

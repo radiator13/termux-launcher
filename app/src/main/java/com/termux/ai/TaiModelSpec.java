@@ -14,10 +14,9 @@ import java.util.Set;
 public final class TaiModelSpec {
     public static final String BACKEND_LITERT_LM = "litert-lm";
     public static final String BACKEND_MITERT_LM = BACKEND_LITERT_LM;
-    public static final String BACKEND_MLC_LLM = "mlc-llm";
+    public static final String BACKEND_MNN_LLM = "mnn-llm";
     public static final String FORMAT_LITERTLM = "litertlm";
-    public static final String FORMAT_MLC = "mlc";
-    public static final String FORMAT_MLC_LLM = FORMAT_MLC;
+    public static final String FORMAT_MNN = "mnn";
     public static final String CAPABILITY_TEXT_CHAT = "text_chat";
     public static final String CAPABILITY_TEXT_EMBEDDINGS = "text_embeddings";
 
@@ -185,35 +184,35 @@ public final class TaiModelSpec {
 
     @NonNull
     public static String inferBackend(@Nullable String path) {
-        if (hasMlcHint(path)) return BACKEND_MLC_LLM;
+        if (hasMnnHint(path)) return BACKEND_MNN_LLM;
         return BACKEND_LITERT_LM;
     }
 
     @NonNull
     public static String inferFormat(@Nullable String path) {
-        if (hasMlcHint(path)) return FORMAT_MLC;
+        if (hasMnnHint(path)) return FORMAT_MNN;
         return FORMAT_LITERTLM;
     }
 
     public static boolean isSupportedBackendFormat(@Nullable String backend, @Nullable String format) {
         return (BACKEND_LITERT_LM.equals(backend) && FORMAT_LITERTLM.equals(format))
-            || (BACKEND_MLC_LLM.equals(backend) && FORMAT_MLC.equals(format));
+            || (BACKEND_MNN_LLM.equals(backend) && FORMAT_MNN.equals(format));
     }
 
     @NonNull
     private static String requireSupportedBackend(@Nullable String backend) {
-        if (BACKEND_LITERT_LM.equals(backend) || BACKEND_MLC_LLM.equals(backend)) return backend;
+        if (BACKEND_LITERT_LM.equals(backend) || BACKEND_MNN_LLM.equals(backend)) return backend;
         throw new IllegalArgumentException("unsupported_backend");
     }
 
     @NonNull
     private static String requireSupportedFormat(@Nullable String format) {
-        if (FORMAT_LITERTLM.equals(format) || FORMAT_MLC.equals(format)) return format;
+        if (FORMAT_LITERTLM.equals(format) || FORMAT_MNN.equals(format)) return format;
         throw new IllegalArgumentException("unsupported_format");
     }
 
-    private static boolean hasMlcHint(@Nullable String path) {
+    private static boolean hasMnnHint(@Nullable String path) {
         String value = path == null ? "" : path.toLowerCase(java.util.Locale.ROOT);
-        return value.contains("mlc-llm") || value.contains("mlc-ai") || value.contains(".mlc");
+        return value.contains("mnn") || value.endsWith("config.json") || value.endsWith("llm.mnn");
     }
 }

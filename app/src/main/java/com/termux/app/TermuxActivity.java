@@ -2661,12 +2661,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mLauncherAzGestureFxLabelOverlayView = findViewById(R.id.apps_bar_az_label_overlay);
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.UNDERLAY);
+            mLauncherAzGestureFxUnderlayView.setFocusedIconRingEnabled(false);
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.OVERLAY);
+            mLauncherAzGestureFxOverlayView.setFocusedIconRingEnabled(true);
         }
         if (mLauncherAzGestureFxLabelOverlayView != null) {
             mLauncherAzGestureFxLabelOverlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.OVERLAY);
+            mLauncherAzGestureFxLabelOverlayView.setFocusedIconRingEnabled(false);
         }
         setupDockPlankFx();
         if (appsBarContainer == null) {

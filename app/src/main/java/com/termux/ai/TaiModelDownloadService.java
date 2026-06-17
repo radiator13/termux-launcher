@@ -163,24 +163,6 @@ public final class TaiModelDownloadService extends Service {
         switch (error) {
             case "insecure_url":
                 return "Insecure URL: HTTPS required";
-            case "mlc_invalid_manifest":
-                return "Invalid MLC manifest";
-            case "mlc_unsupported_schema":
-                return "Unsupported MLC manifest version";
-            case "mlc_unknown_model_library":
-                return "Unknown MLC model library";
-            case "mlc_native_artifact_forbidden":
-                return "MLC package contains forbidden native files";
-            case "mlc_raw_weights_forbidden":
-                return "MLC package contains raw weight files";
-            case "mlc_path_traversal":
-                return "MLC manifest contains unsafe paths";
-            case "mlc_hash_mismatch":
-                return "MLC file verification failed";
-            case "mlc_duplicate_model":
-                return "Model already installed";
-            case "mlc_file_missing":
-                return "MLC package file missing";
             default:
                 return error;
         }

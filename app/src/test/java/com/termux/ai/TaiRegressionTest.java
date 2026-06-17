@@ -30,10 +30,10 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Regression tests proving LiteRT preservation after MLC backend introduction.
+ * Regression tests proving LiteRT preservation after MNN backend introduction.
  *
  * <p>All tests are deterministic, use fakes/mocks, and do not require a real
- * MLC native runtime or network access.
+ * MNN native runtime or network access.
  */
 @RunWith(RobolectricTestRunner.class)
 public class TaiRegressionTest {
@@ -66,7 +66,7 @@ public class TaiRegressionTest {
     }
 
     @Test
-    public void litertUserModels_persistAfterMlcLogic() throws Exception {
+    public void litertUserModels_persistAfterMnnLogic() throws Exception {
         TaiModelStore store = new TaiModelStore(context);
         TaiModelSpec litert = new TaiModelSpec(
             "my-litert",
@@ -91,7 +91,7 @@ public class TaiRegressionTest {
         store.upsertUserModel(litert);
 
         Map<String, TaiModelSpec> reloaded = new TaiModelStore(context).getUserModels();
-        assertTrue("LiteRT user model should survive MLC filtering", reloaded.containsKey("my-litert"));
+        assertTrue("LiteRT user model should survive MNN filtering", reloaded.containsKey("my-litert"));
         assertEquals(TaiModelSpec.BACKEND_LITERT_LM, reloaded.get("my-litert").backend);
         assertEquals(TaiModelSpec.FORMAT_LITERTLM, reloaded.get("my-litert").format);
     }

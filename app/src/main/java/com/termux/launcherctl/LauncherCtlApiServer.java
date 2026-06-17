@@ -1246,7 +1246,7 @@ private JSONObject buildEndpointSettings(Context context, boolean includeToken) 
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when supported by the installed APK.\n" +
-            "MLC models route through the bundled MLC backend when supported by the installed APK.\n" +
+            "MNN models route through the bundled MNN backend when supported by the installed APK.\n" +
             "Auto uses backend-specific GPU-first behavior with CPU fallback where available.\n" +
             "OpenAI-compatible endpoints (default bind mode is localhost):\n" +
             "  /v1/models\n" +

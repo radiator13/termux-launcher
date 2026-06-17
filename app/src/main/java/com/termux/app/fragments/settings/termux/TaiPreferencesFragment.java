@@ -67,7 +67,7 @@ import java.util.concurrent.Executors;
 public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private static final String MODEL_ROW_PREFIX = "tai_model_row_";
     private static final String IMPORT_BACKEND_LITERT = TaiModelSpec.BACKEND_LITERT_LM;
-    private static final String IMPORT_BACKEND_MLC = TaiModelSpec.BACKEND_MLC_LLM;
+    private static final String IMPORT_BACKEND_MNN = TaiModelSpec.BACKEND_MNN_LLM;
 
     private static final class OverrideSpec {
         final String key;
@@ -169,8 +169,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 case TaiSettings.KEY_SYSTEM_PROMPT_GENERAL:
                     showGeneralPromptDialog(context, editText);
                     return;
-                case "tai_mlc_custom_download":
-                    showMlcCustomDownloadDialog(context, editText);
+                case "tai_mnn_custom_download":
+                    showMnnCustomDownloadDialog(context, editText);
                     return;
                 default:
                     break;
@@ -567,14 +567,14 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             model = runtime.optString("loadedModelId", model);
         } catch (JSONException ignored) {
         }
-        String mlc = capabilities.mlcSupported
-            ? getString(R.string.termux_ai_mlc_support_status_supported)
-            : getString(R.string.termux_ai_mlc_support_status_unsupported);
-        String reason = capabilities.mlcSupported || capabilities.mlcUnsupportedReason == null
+        String mnn = capabilities.mnnSupported
+            ? getString(R.string.termux_ai_mnn_support_status_supported)
+            : getString(R.string.termux_ai_mnn_support_status_unsupported);
+        String reason = capabilities.mnnSupported || capabilities.mnnUnsupportedReason == null
             ? ""
-            : "\n" + capabilities.mlcUnsupportedReason;
+            : "\n" + capabilities.mnnUnsupportedReason;
         info.setSummary(getString(R.string.termux_ai_device_engine_info_summary,
-            model, backend, mlc) + reason);
+            model, backend, mnn) + reason);
     }
 
     private void configureLanToggle(Context context) {
@@ -622,12 +622,12 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             .show();
     }
 
-    private void showMlcCustomDownloadDialog(Context context, EditTextPreference preference) {
+    private void showMnnCustomDownloadDialog(Context context, EditTextPreference preference) {
         EditText input = buildDialogEditText(context, preference.getText(),
             InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, false);
 
         TextView warning = new TextView(context);
-        warning.setText(R.string.termux_ai_mlc_custom_download_warning);
+        warning.setText(R.string.termux_ai_mnn_custom_download_warning);
         warning.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         int padH = Math.round(24 * context.getResources().getDisplayMetrics().density);
         warning.setPadding(0, Math.round(12 * context.getResources().getDisplayMetrics().density), 0, 0);
@@ -636,21 +636,21 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         layout.addView(warning);
 
         new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_mlc_custom_download_title)
+            .setTitle(R.string.termux_ai_mnn_custom_download_title)
             .setView(layout)
             .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) -> {
                 String url = input.getText().toString().trim();
                 if (!url.startsWith("https://")) {
-                    Toast.makeText(context, R.string.termux_ai_mlc_custom_download_invalid_url, Toast.LENGTH_LONG).show();
+                    Toast.makeText(context, R.string.termux_ai_mnn_custom_download_invalid_url, Toast.LENGTH_LONG).show();
                     return;
                 }
-                startMlcCustomDownload(context, url);
+                startMnnCustomDownload(context, url);
             })
             .setNegativeButton(android.R.string.cancel, null)
             .show();
     }
 
-    private void startMlcCustomDownload(Context context, String url) {
+    private void startMnnCustomDownload(Context context, String url) {
         String modelId = deriveModelIdFromUrl(url);
         runtimeActionExecutor.execute(() -> {
             JSONObject result = null;
@@ -694,13 +694,13 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             }
         } catch (Exception ignored) {
         }
-        return "custom-mlc-model";
+        return "custom-mnn-model";
     }
 
     private String buildModelRowSummary(String baseSummary, String backend, java.util.Set<String> capabilities) {
         String backendLabel;
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) {
-            backendLabel = getString(R.string.termux_ai_backend_label_mlc);
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) {
+            backendLabel = getString(R.string.termux_ai_backend_label_mnn);
         } else {
             backendLabel = getString(R.string.termux_ai_backend_label_litert);
         }
@@ -971,8 +971,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             row.setMetaLine(buildInstalledMetaLine(context, model));
 row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_pill_active) : null,
                 model.id.equals(activeModelId));
-            row.setBackendTone(TaiModelSpec.BACKEND_MLC_LLM.equals(model.backend)
-                ? TaiModelPreference.BackendTone.MLC : TaiModelPreference.BackendTone.LITERT);
+            row.setBackendTone(TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)
+                ? TaiModelPreference.BackendTone.MNN : TaiModelPreference.BackendTone.LITERT);
             configureProgress(row, null);
             row.setPersistent(false);
             row.setOnPreferenceClickListener(preference -> {
@@ -1163,20 +1163,6 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
     }
 
     private void showModelActions(Context context, TaiModelCatalog.CatalogEntry entry, TaiModelSpec installed, JSONObject download) {
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend)) {
-            TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
-            if (!capabilities.mlcSupported) {
-                String reason = capabilities.mlcUnsupportedReason != null
-                    ? capabilities.mlcUnsupportedReason
-                    : "MLC backend is not supported on this device.";
-                new MaterialAlertDialogBuilder(context)
-                    .setTitle(entry.displayName)
-                    .setMessage(reason)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-                return;
-            }
-        }
         if (download != null && (TaiModelStore.STATE_QUEUED.equals(download.optString("status"))
             || TaiModelStore.STATE_DOWNLOADING.equals(download.optString("status"))
             || TaiModelStore.STATE_VERIFYING.equals(download.optString("status")))) {
@@ -1220,20 +1206,6 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
     }
 
     private void showInstalledModelActions(Context context, TaiModelSpec model) {
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(model.backend)) {
-            TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
-            if (!capabilities.mlcSupported) {
-                String reason = capabilities.mlcUnsupportedReason != null
-                    ? capabilities.mlcUnsupportedReason
-                    : "MLC backend is not supported on this device.";
-                new MaterialAlertDialogBuilder(context)
-                    .setTitle(model.displayName)
-                    .setMessage(reason)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-                return;
-            }
-        }
         boolean active = model.id.equals(new TaiSettings(context).getDefaultAssistantModel());
         CharSequence[] actions = new CharSequence[] {
             active ? getString(R.string.termux_ai_model_active_action) : getString(R.string.termux_ai_model_set_active_action),
@@ -1495,12 +1467,12 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
         RadioButton litert = new RadioButton(context);
         litert.setText(R.string.termux_ai_backend_label_litert);
         litert.setId(View.generateViewId());
-        RadioButton mlc = new RadioButton(context);
-        mlc.setText(R.string.termux_ai_backend_label_mlc);
-        mlc.setId(View.generateViewId());
+        RadioButton mnn = new RadioButton(context);
+        mnn.setText(R.string.termux_ai_backend_label_mnn);
+        mnn.setId(View.generateViewId());
         backendGroup.addView(litert);
-        backendGroup.addView(mlc);
-        backendGroup.check(IMPORT_BACKEND_MLC.equals(draft.backend) ? mlc.getId() : litert.getId());
+        backendGroup.addView(mnn);
+        backendGroup.check(IMPORT_BACKEND_MNN.equals(draft.backend) ? mnn.getId() : litert.getId());
         layout.addView(backendGroup);
 
         EditText urlInput = new EditText(context);
@@ -1531,7 +1503,7 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
         layout.addView(selectedFile);
 
         backendGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            draft.backend = checkedId == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            draft.backend = checkedId == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
             selectedFile.setText(importSelectionText(context, draft));
         });
 
@@ -1545,7 +1517,7 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
             .show();
         Button positive = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
         positive.setOnClickListener(view -> {
-            draft.backend = backendGroup.getCheckedRadioButtonId() == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            draft.backend = backendGroup.getCheckedRadioButtonId() == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
             draft.hfUrl = urlInput.getText().toString().trim();
             draft.hfToken = tokenInput.getText().toString();
             draft.modelId = modelIdInput.getText().toString().trim();
@@ -1553,7 +1525,7 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
         });
         Button neutral = dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
         neutral.setOnClickListener(view -> {
-            draft.backend = backendGroup.getCheckedRadioButtonId() == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            draft.backend = backendGroup.getCheckedRadioButtonId() == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
             draft.hfUrl = urlInput.getText().toString().trim();
             draft.hfToken = tokenInput.getText().toString();
             draft.modelId = modelIdInput.getText().toString().trim();
@@ -1564,8 +1536,8 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
     }
 
     private CharSequence importSelectionText(Context context, ImportDraft draft) {
-        String backend = IMPORT_BACKEND_MLC.equals(draft.backend)
-            ? getString(R.string.termux_ai_backend_label_mlc)
+        String backend = IMPORT_BACKEND_MNN.equals(draft.backend)
+            ? getString(R.string.termux_ai_backend_label_mnn)
             : getString(R.string.termux_ai_backend_label_litert);
         if (draft.documentMetadata == null) {
             return context.getString(R.string.termux_ai_model_import_no_file_selected, backend);
@@ -1620,8 +1592,8 @@ row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_
                 request.put("url", draft.hfUrl);
                 request.put("acceptedTerms", true);
                 request.put("backend", draft.backend);
-                request.put("format", IMPORT_BACKEND_MLC.equals(draft.backend)
-                    ? TaiModelSpec.FORMAT_MLC : TaiModelSpec.FORMAT_LITERTLM);
+                request.put("format", IMPORT_BACKEND_MNN.equals(draft.backend)
+                    ? TaiModelSpec.FORMAT_MNN : TaiModelSpec.FORMAT_LITERTLM);
                 JSONArray capabilities = new JSONArray();
                 capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
                 request.put("capabilities", capabilities);

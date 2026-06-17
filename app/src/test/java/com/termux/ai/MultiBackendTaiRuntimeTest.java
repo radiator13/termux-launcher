@@ -34,11 +34,11 @@ public class MultiBackendTaiRuntimeTest {
     }
 
     @Test
-    public void runtimeForModel_routesLiteRtAndMlcBackends() throws Exception {
+    public void runtimeForModel_routesLiteRtAndMnnBackends() throws Exception {
         MultiBackendTaiRuntime runtime = new MultiBackendTaiRuntime(context);
 
         assertSame(field(runtime, "liteRt"), runtimeForModel(runtime, model("litert", TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.FORMAT_LITERTLM)));
-        assertSame(field(runtime, "mlc"), runtimeForModel(runtime, model("mlc", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC)));
+        assertSame(field(runtime, "mnn"), runtimeForModel(runtime, model("mnn", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN)));
     }
 
     @Test
@@ -49,25 +49,25 @@ public class MultiBackendTaiRuntimeTest {
     }
 
     @Test
-    public void loadMlcModel_usesMlcStubWithoutTouchingLiteRt() throws Exception {
+    public void loadMnnModel_usesMnnStubWithoutTouchingLiteRt() throws Exception {
         MultiBackendTaiRuntime runtime = new MultiBackendTaiRuntime(context);
 
-        JSONObject result = runtime.load(model("mlc-load", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC), options());
+        JSONObject result = runtime.load(model("mnn-load", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN), options());
 
         assertFalse(result.getBoolean("ok"));
-        assertEquals("mlc_runtime_unavailable", result.getString("error"));
+        assertEquals("model_file_not_readable", result.getString("error"));
         assertEquals(501, result.getInt("_statusCode"));
-        assertSame(field(runtime, "mlc"), field(runtime, "activeAssistant"));
+        assertSame(field(runtime, "mnn"), field(runtime, "activeAssistant"));
     }
 
     @Test
     public void backendMismatch_returnsConflictBeforeRuntimeLoad() throws Exception {
         TaiModelStore store = new TaiModelStore(context);
-        store.upsertUserModel(model("user-mlc", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC));
+        store.upsertUserModel(model("user-mnn", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN));
         TaiManager manager = TaiManager.getInstance(context);
 
         JSONObject result = manager.loadModel(new JSONObject()
-            .put("model", "user-mlc")
+            .put("model", "user-mnn")
             .put("backend", TaiModelSpec.BACKEND_LITERT_LM)
             .toString());
 
@@ -98,7 +98,7 @@ public class MultiBackendTaiRuntimeTest {
         ));
         setField(runtime, "activeAssistant", activeGeneration);
 
-        JSONObject result = runtime.load(model("mlc-switch", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC), options());
+        JSONObject result = runtime.load(model("mnn-switch", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN), options());
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("generation_active", result.getString("error"));
@@ -113,7 +113,7 @@ public class MultiBackendTaiRuntimeTest {
             id,
             "Test model",
             "test",
-            "/models/" + id + "/model." + format,
+            TaiModelSpec.FORMAT_MNN.equals(format) ? "/models/" + id + "/config.json" : "/models/" + id + "/model." + format,
             "test",
             123L,
             new java.util.LinkedHashSet<>(java.util.Collections.singleton(TaiModelSpec.CAPABILITY_TEXT_CHAT)),

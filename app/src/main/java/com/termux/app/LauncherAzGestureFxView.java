@@ -115,6 +115,7 @@ public final class LauncherAzGestureFxView extends View {
     private float previewDisplayRawX;
     private boolean focusedAppPreviewLaunchDismissing;
     private boolean focusedAppPreviewLabelEnabled;
+    private boolean focusedIconRingEnabled = true;
     @Nullable private String focusedAppPreviewLabel;
     private boolean darkThemeActive = true;
     private boolean capsuleDockStyle;
@@ -344,6 +345,14 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
+    public void setFocusedIconRingEnabled(boolean enabled) {
+        if (focusedIconRingEnabled == enabled) {
+            return;
+        }
+        focusedIconRingEnabled = enabled;
+        invalidate();
+    }
+
     public void setDarkThemeActive(boolean active) {
         if (darkThemeActive == active) {
             return;
@@ -450,7 +459,7 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        boolean drawFocusRing = hasFocus && !focusRawRect.isEmpty();
+        boolean drawFocusRing = focusedIconRingEnabled && hasFocus && !focusRawRect.isEmpty();
         if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f
             && focusedAppPreviewProgress <= 0.01f && !drawFocusRing) {
             return;

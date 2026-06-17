@@ -56,7 +56,7 @@ public final class TaiSettings {
     public static final String FIELD_ENABLE_SPECULATIVE_DECODING = "enable_speculative_decoding";
     public static final String FIELD_CONTEXT_WINDOW = "context_window";
     private static final ParameterSchema LITERT_PARAMETER_SCHEMA = createLiteRtParameterSchema();
-    private static final ParameterSchema MLC_PARAMETER_SCHEMA = createMlcParameterSchema();
+    private static final ParameterSchema MNN_PARAMETER_SCHEMA = createMnnParameterSchema();
     private static final String OLD_MODEL_GEMMA_4_E2B_IT = "Gemma-4-E2B-it";
     private static final String OLD_MODEL_GEMMA_4_E4B_IT = "Gemma-4-E4B-it";
     private static final String OLD_MODEL_MOBILE_ACTIONS_270M = "MobileActions-270M";
@@ -158,7 +158,7 @@ public final class TaiSettings {
         for (String field : LITERT_PARAMETER_SCHEMA.fields().keySet()) {
             editor.remove(modelParameterKey(modelId, field));
         }
-        for (String field : MLC_PARAMETER_SCHEMA.fields().keySet()) {
+        for (String field : MNN_PARAMETER_SCHEMA.fields().keySet()) {
             editor.remove(modelParameterKey(modelId, field));
         }
         editor.remove(modelSystemPromptKey(modelId));
@@ -187,7 +187,7 @@ public final class TaiSettings {
 
     @NonNull
     public static ParameterSchema getParameterSchema(@Nullable String backend) {
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) return MLC_PARAMETER_SCHEMA;
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) return MNN_PARAMETER_SCHEMA;
         return LITERT_PARAMETER_SCHEMA;
     }
 
@@ -361,7 +361,7 @@ public final class TaiSettings {
     @Nullable
     private static ParameterSpec findParameterSpec(@NonNull String field) {
         ParameterSpec spec = LITERT_PARAMETER_SCHEMA.get(field);
-        return spec == null ? MLC_PARAMETER_SCHEMA.get(field) : spec;
+        return spec == null ? MNN_PARAMETER_SCHEMA.get(field) : spec;
     }
 
     @NonNull
@@ -388,15 +388,15 @@ public final class TaiSettings {
     }
 
     @NonNull
-    private static ParameterSchema createMlcParameterSchema() {
+    private static ParameterSchema createMnnParameterSchema() {
         LinkedHashMap<String, ParameterSpec> specs = new LinkedHashMap<>();
-        put(specs, ParameterSpec.option(FIELD_ACCELERATOR, "Auto", "Auto", new String[] {"Auto", "CPU", "GPU"}));
+        put(specs, ParameterSpec.option(FIELD_ACCELERATOR, "Auto", "Auto", new String[] {"Auto", "CPU", "OpenCL"}));
         put(specs, ParameterSpec.integer(FIELD_CONTEXT_WINDOW, "4096", 4096, 1024, 8192));
-        put(specs, ParameterSpec.integer(FIELD_MAX_TOKENS, "1024", 1024, 256, 8192));
+        put(specs, ParameterSpec.integer(FIELD_MAX_TOKENS, "1024", 1024, 64, 8192));
         put(specs, ParameterSpec.decimal(FIELD_TEMPERATURE, "0.70", 0.70d, 0.0d, 2.0d));
         put(specs, ParameterSpec.decimal(FIELD_TOP_P, "0.95", 0.95d, 0.0d, 1.0d));
-        put(specs, ParameterSpec.integer(FIELD_TOP_K, "64", 64, 5, 100));
-        return new ParameterSchema(TaiModelSpec.BACKEND_MLC_LLM, specs);
+        put(specs, ParameterSpec.integer(FIELD_TOP_K, "40", 40, 1, 100));
+        return new ParameterSchema(TaiModelSpec.BACKEND_MNN_LLM, specs);
     }
 
     private static void put(@NonNull LinkedHashMap<String, ParameterSpec> specs, @NonNull ParameterSpec spec) {

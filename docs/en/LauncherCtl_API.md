@@ -62,7 +62,7 @@ Each entry in the standard OpenAI-shaped `data` array includes TAI-specific
 metadata prefixed with an underscore so existing OpenAI clients ignore it:
 
 - `_backend`: backend routing for the model, currently `litert-lm` (default
-  LiteRT-LM runtime) or `mlc-llm` (bundled MLC backend).
+  LiteRT-LM runtime) or `mnn-llm` (bundled MNN backend).
 - `_capabilities`: ordered list of capability strings, for example
   `text_chat` and `text_embeddings`. Use this to decide which endpoints are
   meaningful for a given model id before calling `/v1/chat/completions`,
@@ -209,22 +209,22 @@ curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" 
   "$OPENAI_BASE_URL/chat/completions"
 ```
 
-### MLC Backend Example
+### MNN Backend Example
 
-MLC models route through the bundled MLC backend. Only models whose
-`_backend` field equals `mlc-llm` should be requested via MLC; LiteRT models
-return `capability_not_supported` for MLC-only endpoints such as
+MNN models route through the bundled MNN backend. Only models whose
+`_backend` field equals `mnn-llm` should be requested via MNN; LiteRT models
+return `capability_not_supported` for MNN-only endpoints such as
 `/v1/embeddings` (when the model lacks `text_embeddings`).
 
 ```sh
 MODEL=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
-  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="mlc-llm" and (._capabilities | index("text_embeddings"))) | .id' | head -n1)
+  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="mnn-llm" and (._capabilities | index("text_embeddings"))) | .id' | head -n1)
 [ -n "$MODEL" ] && curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "{\"model\":\"$MODEL\",\"input\":\"hello world\"}" \
   "$OPENAI_BASE_URL/embeddings"
 ```
 
-Inspect `/v1/models` first to confirm both `_backend == "mlc-llm"` and the
+Inspect `/v1/models` first to confirm both `_backend == "mnn-llm"` and the
 `text_embeddings` capability are present for the model you intend to use.
 
 ### `launcherctl update-scripts`

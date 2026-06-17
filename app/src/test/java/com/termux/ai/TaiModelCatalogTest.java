@@ -17,23 +17,23 @@ public class TaiModelCatalogTest {
     public void builtInCatalog_matchesYamlModelCountsAndUniqueIds() {
         Map<String, TaiModelCatalog.CatalogEntry> entries = TaiModelCatalog.entries();
         int liteRtCount = 0;
-        int mlcCount = 0;
+        int mnnCount = 0;
 
         for (TaiModelCatalog.CatalogEntry entry : entries.values()) {
             if (TaiModelSpec.BACKEND_LITERT_LM.equals(entry.backend)) liteRtCount++;
-            if (TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend)) mlcCount++;
+            if (TaiModelSpec.BACKEND_MNN_LLM.equals(entry.backend)) mnnCount++;
         }
 
-        assertEquals(16, entries.size());
-        assertEquals(16, new HashSet<>(entries.keySet()).size());
+        assertEquals(11, entries.size());
+        assertEquals(11, new HashSet<>(entries.keySet()).size());
         assertEquals(5, liteRtCount);
-        assertEquals(11, mlcCount);
+        assertEquals(6, mnnCount);
     }
 
     @Test
     public void builtInCatalog_usesCanonicalYamlIdsAndUiMetadata() {
         TaiModelCatalog.CatalogEntry recommended = TaiModelCatalog.get("gemma-4-e2b-it-litert-lm");
-        TaiModelCatalog.CatalogEntry coder = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc");
+        TaiModelCatalog.CatalogEntry coder = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-mnn");
 
         assertNotNull(recommended);
         assertEquals("general_multimodal", recommended.jobGroup);
@@ -45,7 +45,7 @@ public class TaiModelCatalogTest {
 
         assertNotNull(coder);
         assertEquals("coding", coder.jobGroup);
-        assertEquals("q4f16_1", coder.quantization);
+        assertEquals("int4", coder.quantization);
         assertEquals("4GB-6GB+", coder.ramTier);
         assertTrue(coder.recommended);
         assertTrue(coder.displayCapabilityTags.contains("Code"));
@@ -55,7 +55,7 @@ public class TaiModelCatalogTest {
     public void builtInCatalog_gatesDownloadsWithoutVerifiedArtifactMetadata() {
         TaiModelCatalog.CatalogEntry knownArtifact = TaiModelCatalog.get(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
         TaiModelCatalog.CatalogEntry importOnlyLiteRt = TaiModelCatalog.get("qwen2.5-1.5b-instruct-litert-lm");
-        TaiModelCatalog.CatalogEntry importOnlyMlc = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc");
+        TaiModelCatalog.CatalogEntry mnn = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-mnn");
 
         assertNotNull(knownArtifact);
         assertTrue(knownArtifact.downloadAvailable);
@@ -68,10 +68,10 @@ public class TaiModelCatalogTest {
         assertNull(importOnlyLiteRt.downloadUrl);
         assertTrue(importOnlyLiteRt.unavailableReason.contains("Import-only"));
 
-        assertNotNull(importOnlyMlc);
-        assertFalse(importOnlyMlc.downloadAvailable);
-        assertEquals("mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC", importOnlyMlc.repositoryId);
-        assertNull(importOnlyMlc.downloadUrl);
+        assertNotNull(mnn);
+        assertTrue(mnn.downloadAvailable);
+        assertEquals("taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", mnn.repositoryId);
+        assertNotNull(mnn.downloadUrl);
     }
 
     @Test

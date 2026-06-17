@@ -21,8 +21,8 @@ import java.util.Locale;
 
 public final class TaiDeviceCapabilities {
     private static final long BYTES_PER_GIB = 1024L * 1024L * 1024L;
-    public static final int MLC_SDK_MINIMUM = 24;
-    public static final int MLC_MEMORY_ESTIMATE_MB = 2048;
+    public static final int MNN_SDK_MINIMUM = 24;
+    public static final int MNN_MEMORY_ESTIMATE_MB = 2048;
 
     public final String model;
     public final String manufacturer;
@@ -34,14 +34,14 @@ public final class TaiDeviceCapabilities {
     public final boolean pixel10;
     public final boolean liteRtLmAbiSupported;
 
-    public final boolean mlcSupported;
-    @Nullable public final String mlcUnsupportedReason;
-    public final int mlcSdkMinimum;
-    public final int mlcMemoryEstimateMb;
-    @Nullable public final String mlcAcceleratorInfo;
-    public final boolean mlcBundledLibrariesAvailable;
+    public final boolean mnnSupported;
+    @Nullable public final String mnnUnsupportedReason;
+    public final int mnnSdkMinimum;
+    public final int mnnMemoryEstimateMb;
+    @Nullable public final String mnnAcceleratorInfo;
+    public final boolean mnnBundledLibrariesAvailable;
 
-    private static volatile String sDebugMlcUnsupportedReason = null;
+    private static volatile String sDebugMnnUnsupportedReason = null;
 
     private TaiDeviceCapabilities(
         @NonNull String model,
@@ -53,12 +53,12 @@ public final class TaiDeviceCapabilities {
         @NonNull String memorySource,
         boolean pixel10,
         boolean liteRtLmAbiSupported,
-        boolean mlcSupported,
-        @Nullable String mlcUnsupportedReason,
-        int mlcSdkMinimum,
-        int mlcMemoryEstimateMb,
-        @Nullable String mlcAcceleratorInfo,
-        boolean mlcBundledLibrariesAvailable
+        boolean mnnSupported,
+        @Nullable String mnnUnsupportedReason,
+        int mnnSdkMinimum,
+        int mnnMemoryEstimateMb,
+        @Nullable String mnnAcceleratorInfo,
+        boolean mnnBundledLibrariesAvailable
     ) {
         this.model = model;
         this.manufacturer = manufacturer;
@@ -69,12 +69,12 @@ public final class TaiDeviceCapabilities {
         this.memorySource = memorySource;
         this.pixel10 = pixel10;
         this.liteRtLmAbiSupported = liteRtLmAbiSupported;
-        this.mlcSupported = mlcSupported;
-        this.mlcUnsupportedReason = mlcUnsupportedReason;
-        this.mlcSdkMinimum = mlcSdkMinimum;
-        this.mlcMemoryEstimateMb = mlcMemoryEstimateMb;
-        this.mlcAcceleratorInfo = mlcAcceleratorInfo;
-        this.mlcBundledLibrariesAvailable = mlcBundledLibrariesAvailable;
+        this.mnnSupported = mnnSupported;
+        this.mnnUnsupportedReason = mnnUnsupportedReason;
+        this.mnnSdkMinimum = mnnSdkMinimum;
+        this.mnnMemoryEstimateMb = mnnMemoryEstimateMb;
+        this.mnnAcceleratorInfo = mnnAcceleratorInfo;
+        this.mnnBundledLibrariesAvailable = mnnBundledLibrariesAvailable;
     }
 
     @NonNull
@@ -96,7 +96,7 @@ public final class TaiDeviceCapabilities {
         String soc = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && Build.SOC_MODEL != null ? Build.SOC_MODEL : "";
         List<String> abis = Arrays.asList(Build.SUPPORTED_ABIS);
         boolean liteRtSupported = containsSupportedAbi(abis);
-        MlcCapabilityResult mlcResult = computeMlcCapabilities(abis, Build.VERSION.SDK_INT);
+        MnnCapabilityResult mnnResult = computeMnnCapabilities(abis, Build.VERSION.SDK_INT);
         String acceleratorInfo = Build.HARDWARE == null ? "" : Build.HARDWARE;
         return new TaiDeviceCapabilities(
             model,
@@ -108,18 +108,18 @@ public final class TaiDeviceCapabilities {
             memorySource,
             model.toLowerCase(Locale.ROOT).contains("pixel 10"),
             liteRtSupported,
-            mlcResult.mlcSupported,
-            mlcResult.mlcUnsupportedReason,
-            MLC_SDK_MINIMUM,
-            MLC_MEMORY_ESTIMATE_MB,
+            mnnResult.mnnSupported,
+            mnnResult.mnnUnsupportedReason,
+            MNN_SDK_MINIMUM,
+            MNN_MEMORY_ESTIMATE_MB,
             acceleratorInfo,
-            mlcResult.mlcBundledLibrariesAvailable
+            mnnResult.mnnBundledLibrariesAvailable
         );
     }
 
     /**
      * Package-private factory for unit tests that need to inject fake ABIs
-     * and control MLC capability computation without relying on {@link Build}.
+     * and control MNN capability computation without relying on {@link Build}.
      */
     static TaiDeviceCapabilities createForTest(
         @NonNull String model,
@@ -132,7 +132,7 @@ public final class TaiDeviceCapabilities {
         boolean pixel10
     ) {
         boolean liteRtSupported = containsSupportedAbi(supportedAbis);
-        MlcCapabilityResult mlcResult = computeMlcCapabilities(supportedAbis, sdkInt);
+        MnnCapabilityResult mnnResult = computeMnnCapabilities(supportedAbis, sdkInt);
         return new TaiDeviceCapabilities(
             model,
             manufacturer,
@@ -143,12 +143,12 @@ public final class TaiDeviceCapabilities {
             memorySource,
             pixel10,
             liteRtSupported,
-            mlcResult.mlcSupported,
-            mlcResult.mlcUnsupportedReason,
-            MLC_SDK_MINIMUM,
-            MLC_MEMORY_ESTIMATE_MB,
+            mnnResult.mnnSupported,
+            mnnResult.mnnUnsupportedReason,
+            MNN_SDK_MINIMUM,
+            MNN_MEMORY_ESTIMATE_MB,
             "",
-            mlcResult.mlcBundledLibrariesAvailable
+            mnnResult.mnnBundledLibrariesAvailable
         );
     }
 
@@ -189,10 +189,10 @@ public final class TaiDeviceCapabilities {
 
     @NonNull
     public ModelCapabilityCheck checkModelCapability(@NonNull TaiModelSpec modelSpec) {
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(modelSpec.backend)) {
-            if (!mlcSupported) {
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(modelSpec.backend)) {
+            if (!mnnSupported) {
                 return new ModelCapabilityCheck(null,
-                    mlcUnsupportedReason != null ? mlcUnsupportedReason : "MLC backend is not supported on this device.");
+                    mnnUnsupportedReason != null ? mnnUnsupportedReason : "MNN backend is not supported on this device.");
             }
         }
         if (modelSpec.recommendedRamGb > 0 && memoryBytes > 0L) {
@@ -221,15 +221,15 @@ public final class TaiDeviceCapabilities {
         json.put("memorySource", memorySource);
         json.put("pixel10", pixel10);
         json.put("liteRtLmAbiSupported", liteRtLmAbiSupported);
-        json.put("mlcSupported", mlcSupported);
-        json.put("mlcUnsupportedReason", mlcUnsupportedReason == null ? JSONObject.NULL : mlcUnsupportedReason);
-        json.put("mlcSdkMinimum", mlcSdkMinimum);
-        json.put("mlcMemoryEstimateMb", mlcMemoryEstimateMb);
-        json.put("mlcAcceleratorInfo", mlcAcceleratorInfo == null ? JSONObject.NULL : mlcAcceleratorInfo);
-        json.put("mlcBundledLibrariesAvailable", mlcBundledLibrariesAvailable);
+        json.put("mnnSupported", mnnSupported);
+        json.put("mnnUnsupportedReason", mnnUnsupportedReason == null ? JSONObject.NULL : mnnUnsupportedReason);
+        json.put("mnnSdkMinimum", mnnSdkMinimum);
+        json.put("mnnMemoryEstimateMb", mnnMemoryEstimateMb);
+        json.put("mnnAcceleratorInfo", mnnAcceleratorInfo == null ? JSONObject.NULL : mnnAcceleratorInfo);
+        json.put("mnnBundledLibrariesAvailable", mnnBundledLibrariesAvailable);
         JSONObject backends = new JSONObject();
         backends.put(TaiModelSpec.BACKEND_LITERT_LM, liteRtLmAbiSupported);
-        backends.put(TaiModelSpec.BACKEND_MLC_LLM, mlcSupported);
+        backends.put(TaiModelSpec.BACKEND_MNN_LLM, mnnSupported);
         json.put("backends", backends);
         JSONArray accelerators = new JSONArray();
         if (supportsAccelerator("cpu")) accelerators.put("cpu");
@@ -243,29 +243,29 @@ public final class TaiDeviceCapabilities {
 
     /**
      * Debug-build-only override. When called with a non-null reason in a debug build,
-     * subsequent {@link #detect} calls will force {@code mlcSupported=false} and surface
+     * subsequent {@link #detect} calls will force {@code mnnSupported=false} and surface
      * the provided reason. Completely ignored in release builds.
      *
      * <p>QA can enable this via ADB without code changes:
      * <pre>
-     *   adb shell am broadcast -a com.termux.ai.FORCE_MLC_UNSUPPORTED \
+     *   adb shell am broadcast -a com.termux.ai.FORCE_MNN_UNSUPPORTED \
      *       --es reason "Simulated unsupported ABI"
      * </pre>
      * Or by calling this method from a test harness.
      */
-    public static void setDebugMlcUnsupportedReason(@Nullable String reason) {
+    public static void setDebugMnnUnsupportedReason(@Nullable String reason) {
         if (!BuildConfig.DEBUG) {
             return;
         }
-        sDebugMlcUnsupportedReason = reason;
+        sDebugMnnUnsupportedReason = reason;
     }
 
     /** Clears the debug override. Ignored in release builds. */
-    public static void clearDebugMlcUnsupportedReason() {
+    public static void clearDebugMnnUnsupportedReason() {
         if (!BuildConfig.DEBUG) {
             return;
         }
-        sDebugMlcUnsupportedReason = null;
+        sDebugMnnUnsupportedReason = null;
     }
 
     /** Package-private for unit tests to verify release-build behavior. */
@@ -280,63 +280,36 @@ public final class TaiDeviceCapabilities {
         return false;
     }
 
-    @Nullable
-    private static String findMlcSupportedAbi(@NonNull List<String> abis) {
-        for (String abi : abis) {
-            if (MlcBundledLibraryRegistry.isAbiSupported(abi)) {
-                return abi;
-            }
-        }
-        return null;
-    }
+    private static final class MnnCapabilityResult {
+        final boolean mnnSupported;
+        @Nullable final String mnnUnsupportedReason;
+        final boolean mnnBundledLibrariesAvailable;
 
-    private static final class MlcCapabilityResult {
-        final boolean mlcSupported;
-        @Nullable final String mlcUnsupportedReason;
-        final boolean mlcBundledLibrariesAvailable;
-
-        MlcCapabilityResult(boolean mlcSupported, @Nullable String mlcUnsupportedReason, boolean mlcBundledLibrariesAvailable) {
-            this.mlcSupported = mlcSupported;
-            this.mlcUnsupportedReason = mlcUnsupportedReason;
-            this.mlcBundledLibrariesAvailable = mlcBundledLibrariesAvailable;
+        MnnCapabilityResult(boolean mnnSupported, @Nullable String mnnUnsupportedReason, boolean mnnBundledLibrariesAvailable) {
+            this.mnnSupported = mnnSupported;
+            this.mnnUnsupportedReason = mnnUnsupportedReason;
+            this.mnnBundledLibrariesAvailable = mnnBundledLibrariesAvailable;
         }
     }
 
     @NonNull
-    private static MlcCapabilityResult computeMlcCapabilities(@NonNull List<String> abis, int sdkInt) {
-        String deviceAbi = findMlcSupportedAbi(abis);
-        boolean mlcBundledLibrariesAvailable = deviceAbi != null;
-        boolean mlcSupported = mlcBundledLibrariesAvailable && sdkInt >= MLC_SDK_MINIMUM;
-        String mlcUnsupportedReason = null;
+    private static MnnCapabilityResult computeMnnCapabilities(@NonNull List<String> abis, int sdkInt) {
+        boolean abiSupported = containsSupportedAbi(abis);
+        boolean mnnBundledLibrariesAvailable = false;
+        boolean mnnSupported = false;
+        String mnnUnsupportedReason = "Native MNN runtime libraries are not bundled in this APK yet.";
 
-        if (!mlcSupported) {
-            List<String> reasons = new ArrayList<>();
-            if (sdkInt < MLC_SDK_MINIMUM) {
-                reasons.add("MLC requires Android 7.0 (API " + MLC_SDK_MINIMUM + ") or higher. Device is API " + sdkInt + ".");
-            }
-            if (!mlcBundledLibrariesAvailable) {
-                StringBuilder supported = new StringBuilder();
-                for (String abi : MlcBundledLibraryRegistry.supportedAbis()) {
-                    if (supported.length() > 0) supported.append(", ");
-                    supported.append(abi);
-                }
-                reasons.add("MLC runtime is not available for this device ABI. Supported: " + supported + ".");
-            }
-            if (!reasons.isEmpty()) {
-                StringBuilder reasonBuilder = new StringBuilder();
-                for (int i = 0; i < reasons.size(); i++) {
-                    if (i > 0) reasonBuilder.append(" ");
-                    reasonBuilder.append(reasons.get(i));
-                }
-                mlcUnsupportedReason = reasonBuilder.toString();
-            }
+        if (sdkInt < MNN_SDK_MINIMUM) {
+            mnnUnsupportedReason = "MNN requires Android 7.0 (API " + MNN_SDK_MINIMUM + ") or higher. Device is API " + sdkInt + ".";
+        } else if (!abiSupported) {
+            mnnUnsupportedReason = "MNN runtime target ABI is not supported by this device.";
         }
 
-        if (shouldApplyDebugOverride(BuildConfig.DEBUG, sDebugMlcUnsupportedReason)) {
-            mlcSupported = false;
-            mlcUnsupportedReason = sDebugMlcUnsupportedReason;
+        if (shouldApplyDebugOverride(BuildConfig.DEBUG, sDebugMnnUnsupportedReason)) {
+            mnnSupported = false;
+            mnnUnsupportedReason = sDebugMnnUnsupportedReason;
         }
 
-        return new MlcCapabilityResult(mlcSupported, mlcUnsupportedReason, mlcBundledLibrariesAvailable);
+        return new MnnCapabilityResult(mnnSupported, mnnUnsupportedReason, mnnBundledLibrariesAvailable);
     }
 }

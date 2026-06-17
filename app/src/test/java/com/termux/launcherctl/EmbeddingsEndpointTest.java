@@ -95,19 +95,19 @@ public class EmbeddingsEndpointTest {
     }
 
     @Test
-    public void embeddings_withEmbeddingsCapableMlcModel_returnsOpenAiEmbeddingList() throws Exception {
-        File tempFile = File.createTempFile("embed-model", ".mlc");
+    public void embeddings_withEmbeddingsCapableMnnModel_returnsOpenAiEmbeddingList() throws Exception {
+        File tempFile = File.createTempFile("embed-model", ".mnn");
         tempFile.deleteOnExit();
         manager.importModel(new JSONObject()
             .put("path", tempFile.getAbsolutePath())
-            .put("modelId", "embed-mlc")
+            .put("modelId", "embed-mnn")
             .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS))
             .toString());
-        fakeRuntime.addEmbeddingsCapableModel("embed-mlc");
-        manager.loadModel(new JSONObject().put("model", "embed-mlc").toString());
+        fakeRuntime.addEmbeddingsCapableModel("embed-mnn");
+        manager.loadModel(new JSONObject().put("model", "embed-mnn").toString());
 
         HttpURLConnection conn = post("/v1/embeddings", new JSONObject()
-            .put("model", "embed-mlc")
+            .put("model", "embed-mnn")
             .put("input", "hello world"));
 
         assertEquals(200, conn.getResponseCode());
@@ -117,23 +117,23 @@ public class EmbeddingsEndpointTest {
         JSONObject embedding = response.getJSONArray("data").getJSONObject(0);
         assertEquals("embedding", embedding.getString("object"));
         assertEquals(768, embedding.getJSONArray("embedding").length());
-        assertEquals("embed-mlc", response.getString("model"));
+        assertEquals("embed-mnn", response.getString("model"));
         assertTrue(response.has("usage"));
     }
 
     @Test
-    public void embeddings_withChatOnlyMlcModel_returnsCapabilityNotSupported() throws Exception {
-        File tempFile = File.createTempFile("chat-model", ".mlc");
+    public void embeddings_withChatOnlyMnnModel_returnsCapabilityNotSupported() throws Exception {
+        File tempFile = File.createTempFile("chat-model", ".mnn");
         tempFile.deleteOnExit();
         manager.importModel(new JSONObject()
             .put("path", tempFile.getAbsolutePath())
-            .put("modelId", "chat-mlc")
+            .put("modelId", "chat-mnn")
             .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_CHAT))
             .toString());
-        manager.loadModel(new JSONObject().put("model", "chat-mlc").toString());
+        manager.loadModel(new JSONObject().put("model", "chat-mnn").toString());
 
         HttpURLConnection conn = post("/v1/embeddings", new JSONObject()
-            .put("model", "chat-mlc")
+            .put("model", "chat-mnn")
             .put("input", "hello world"));
 
         int code = conn.getResponseCode();

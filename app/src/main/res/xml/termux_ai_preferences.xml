@@ -84,10 +84,6 @@
             app:title="@string/termux_ai_parameters_defaults_title"
             app:summary="@string/termux_ai_parameters_defaults_summary"
             app:persistent="false"/>
-        <EditTextPreference
-            app:key="tai_system_prompt_general"
-            app:title="@string/termux_ai_general_prompt_title"
-            app:useSimpleSummaryProvider="true"/>
         <com.termux.app.fragments.settings.termux.TaiOverridesPreference
             app:key="tai_runtime_overrides"
             app:persistent="false"

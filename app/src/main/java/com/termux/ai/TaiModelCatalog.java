@@ -13,7 +13,6 @@ import org.json.JSONObject;
 
 public final class TaiModelCatalog {
     private static final String UNVERIFIED_ARTIFACT_POLICY = "Import-only: models.yaml provides repository URL and estimates, but no verified artifact path, revision, and checksum policy exists in code.";
-    private static final String MLC_PACKAGE_POLICY = "Import-only: this MLC repo exposes model package files, but this app requires a verified TAI MLC manifest and a matching APK-bundled native model library before direct install can work.";
     private static final Map<String, CatalogEntry> BUILT_IN_ENTRIES = buildEntries();
     private static volatile Map<String, CatalogEntry> entries = BUILT_IN_ENTRIES;
     private TaiModelCatalog() {}
@@ -85,39 +84,30 @@ public final class TaiModelCatalog {
             "mobile_actions_q8_ekv1024.litertlm", "Gemma Terms of Use", 288_964_608L, "0.3 GB", "4GB+", true,
             tags("Tools"), setOf("text_chat", "tool_use", "mobile_actions")));
 
-        entries.put("qwen2.5-coder-0.5b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-coder-0.5b-instruct-q4f16_1-mlc", "Qwen2.5-Coder 0.5B", "coding", "tiny_coder", false,
-            "mlc-ai/Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC", 400_000_000L, "0.4 GB", "3GB+", "q4f16_1", tags("Code"), setOf("text_chat", "code")));
-        entries.put("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-coder-1.5b-instruct-q4f16_1-mlc", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,
-            "mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC", 1_000_000_000L, "1.0 GB", "4GB-6GB+", "q4f16_1", tags("Code"), setOf("text_chat", "code")));
-        entries.put("qwen2.5-coder-3b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-coder-3b-instruct-q4f16_1-mlc", "Qwen2.5-Coder 3B", "coding", "balanced_coder", false,
-            "mlc-ai/Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC", 1_900_000_000L, "1.9 GB", "6GB-8GB+", "q4f16_1", tags("Code"), setOf("text_chat", "code")));
-        entries.put("qwen2.5-coder-7b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-coder-7b-instruct-q4f16_1-mlc", "Qwen2.5-Coder 7B", "coding", "advanced_coder", false,
-            "mlc-ai/Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC", 4_400_000_000L, "4.4 GB", "10GB-12GB+", "q4f16_1", tags("Code"), setOf("text_chat", "code")));
-        entries.put("qwen2.5-1.5b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-1.5b-instruct-q4f16_1-mlc", "Qwen2.5 1.5B", "general_text", "lightweight_general", false,
-            "mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC", 1_000_000_000L, "1.0 GB", "4GB-6GB+", "q4f16_1", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
-        entries.put("qwen2.5-3b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-3b-instruct-q4f16_1-mlc", "Qwen2.5 3B", "general_text", "balanced_general", false,
-            "mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC", 1_900_000_000L, "1.9 GB", "6GB-8GB+", "q4f16_1", tags("Text"), setOf("text_chat")));
-        entries.put("qwen2.5-7b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-7b-instruct-q4f16_1-mlc", "Qwen2.5 7B", "general_text", "strong_general", false,
-            "mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC", 4_400_000_000L, "4.4 GB", "10GB-12GB+", "q4f16_1", tags("Text", "Reasoning", "Multilingual"), setOf("text_chat", "reasoning", "multilingual")));
-        entries.put("deepseek-r1-distill-qwen-1.5b-q4f16_1-mlc", mlcImportOnly(
-            "deepseek-r1-distill-qwen-1.5b-q4f16_1-mlc", "DeepSeek-R1 Distill 1.5B", "reasoning", "lightweight_reasoning", false,
-            "mlc-ai/DeepSeek-R1-Distill-Qwen-1.5B-q4f16_1-MLC", 1_000_000_000L, "1.0 GB", "4GB-6GB+", "q4f16_1", tags("Reasoning"), setOf("text_chat", "reasoning")));
-        entries.put("deepseek-r1-distill-qwen-7b-q4f16_1-mlc", mlcImportOnly(
-            "deepseek-r1-distill-qwen-7b-q4f16_1-mlc", "DeepSeek-R1 Distill 7B", "reasoning", "strong_reasoning", false,
-            "mlc-ai/DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC", 4_400_000_000L, "4.4 GB", "10GB-12GB+", "q4f16_1", tags("Reasoning"), setOf("text_chat", "reasoning")));
-        entries.put("qwen2.5-vl-3b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-vl-3b-instruct-q4f16_1-mlc", "Qwen2.5-VL 3B", "vision_multimodal", "balanced_vision", false,
-            "mlc-ai/Qwen2.5-VL-3B-Instruct-q4f16_1-MLC", 2_400_000_000L, "2.4 GB", "6GB-8GB+", "q4f16_1", tags("Vision", "Text"), setOf("text_chat", "image_input")));
-        entries.put("qwen2.5-vl-7b-instruct-q4f16_1-mlc", mlcImportOnly(
-            "qwen2.5-vl-7b-instruct-q4f16_1-mlc", "Qwen2.5-VL 7B", "vision_multimodal", "strong_vision", false,
-            "mlc-ai/Qwen2.5-VL-7B-Instruct-q4f16_1-MLC", 5_100_000_000L, "5.1 GB", "10GB-12GB+", "q4f16_1", tags("Vision", "Text"), setOf("text_chat", "image_input")));
+        entries.put("qwen2.5-coder-1.5b-instruct-mnn", mnnAvailable(
+            "qwen2.5-coder-1.5b-instruct-mnn", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,
+            "Code and terminal assistant", "taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", 1_100_000_000L,
+            "1.1 GB", "4GB-6GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
+        entries.put("qwen2.5-coder-7b-instruct-mnn", mnnAvailable(
+            "qwen2.5-coder-7b-instruct-mnn", "Qwen2.5-Coder 7B", "coding", "advanced_coder", false,
+            "Higher quality code model", "taobao-mnn/Qwen2.5-Coder-7B-Instruct-MNN", 4_700_000_000L,
+            "4.7 GB", "10GB-12GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
+        entries.put("qwen2.5-0.5b-instruct-mnn", mnnAvailable(
+            "qwen2.5-0.5b-instruct-mnn", "Qwen2.5 0.5B", "lightweight_text", "tiny_general", false,
+            "Tiny general chat", "taobao-mnn/Qwen2.5-0.5B-Instruct-MNN", 557_000_000L,
+            "557 MB", "3GB+", "qwen2.5", "int4", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
+        entries.put("qwen2.5-1.5b-instruct-mnn", mnnAvailable(
+            "qwen2.5-1.5b-instruct-mnn", "Qwen2.5 1.5B", "general_text", "lightweight_general", false,
+            "Lightweight text and multilingual", "taobao-mnn/Qwen2.5-1.5B-Instruct-MNN", 1_100_000_000L,
+            "1.1 GB", "4GB-6GB+", "qwen2.5", "int4", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
+        entries.put("qwen2.5-3b-instruct-mnn", mnnAvailable(
+            "qwen2.5-3b-instruct-mnn", "Qwen2.5 3B", "general_text", "balanced_general", false,
+            "Balanced local assistant", "taobao-mnn/Qwen2.5-3B-Instruct-MNN", 2_100_000_000L,
+            "2.1 GB", "6GB-8GB+", "qwen2.5", "int4", tags("Text"), setOf("text_chat")));
+        entries.put("deepseek-r1-1.5b-qwen-mnn", mnnAvailable(
+            "deepseek-r1-1.5b-qwen-mnn", "DeepSeek-R1 1.5B Qwen", "reasoning", "lightweight_reasoning", false,
+            "Small reasoning model", "taobao-mnn/DeepSeek-R1-1.5B-Qwen-MNN", 1_100_000_000L,
+            "1.1 GB", "4GB-6GB+", "deepseek-r1-qwen", "int4", tags("Reasoning", "Text"), setOf("text_chat", "reasoning")));
 
         return Collections.unmodifiableMap(entries);
     }
@@ -149,12 +139,14 @@ public final class TaiModelCatalog {
             capabilities, jobGroup, priority, displayTags, sizeEstimate, ramTier, recommended, false, UNVERIFIED_ARTIFACT_POLICY);
     }
 
-    private static CatalogEntry mlcImportOnly(String id, String name, String jobGroup, String priority, boolean recommended,
-                                              String repo, long size, String sizeEstimate, String ramTier, String quantization,
-                                              LinkedHashSet<String> displayTags, LinkedHashSet<String> capabilities) {
-        return entry(id, name, "Import MLC package", repo, "main", null, "Review upstream license before import", size, false,
-            TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC, "", quantization, 4096, ramGb(ramTier), null,
-            capabilities, jobGroup, priority, displayTags, sizeEstimate, ramTier, recommended, false, MLC_PACKAGE_POLICY);
+    private static CatalogEntry mnnAvailable(String id, String name, String jobGroup, String priority, boolean recommended,
+                                             String role, String repo, long size, String sizeEstimate, String ramTier,
+                                             String architecture, String quantization, LinkedHashSet<String> displayTags,
+                                             LinkedHashSet<String> capabilities) {
+        return entry(id, name, role, repo, "main", "config.json", "Apache-2.0", size, false,
+            TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, architecture, quantization, 4096,
+            ramGb(ramTier), null, capabilities, jobGroup, priority, displayTags, sizeEstimate, ramTier,
+            recommended, true, "");
     }
 
     private static CatalogEntry entry(String id, String name, String role, String repo, String revision, @Nullable String file,

@@ -188,11 +188,10 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         row.setTitle((entry.recommended ? "★ " : "") + entry.displayName + "  [" + backendLabel(entry.backend) + "]");
         row.setSummary(buildSummary(entry));
         row.setMetaLine(buildMetaLine(entry));
-        CatalogActionState state = actionStateFor(entry, installed != null, download, activeModelId,
-            capabilities.mlcSupported, capabilities.mlcUnsupportedReason);
+        CatalogActionState state = actionStateFor(entry, installed != null, download, activeModelId);
         row.setPill(state.pill, state.accentPill);
-        row.setBackendTone(TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend)
-            ? TaiModelPreference.BackendTone.MLC : TaiModelPreference.BackendTone.LITERT);
+        row.setBackendTone(TaiModelSpec.BACKEND_MNN_LLM.equals(entry.backend)
+            ? TaiModelPreference.BackendTone.MNN : TaiModelPreference.BackendTone.LITERT);
         configureProgress(row, download);
         row.setTuneAction(installed == null ? null : getString(R.string.termux_ai_model_tune_action),
             view -> openParameterScreen(installed));
@@ -238,9 +237,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         message.append("\nProvider: ").append(entry.repositoryId);
         if (!entry.downloadAvailable) message.append("\n\n").append(entry.unavailableReason);
         if (download != null) message.append("\n\nDownload: ").append(download.optString("status", "unknown"));
-        if (CatalogActionType.MLC_UNSUPPORTED == state.type && state.disabledReason != null) {
-            message.append("\n\n").append(state.disabledReason);
-        }
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
             .setTitle(entry.displayName)
             .setMessage(message.toString())
@@ -290,8 +286,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
                 return getString(R.string.termux_ai_catalog_action_active);
             case IMPORT_ONLY:
                 return getString(R.string.termux_ai_catalog_action_import_only);
-            case MLC_UNSUPPORTED:
-                return getString(R.string.termux_ai_catalog_action_mlc_unsupported);
             default:
                 return "";
         }
@@ -338,8 +332,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     }
 
     static CatalogActionState actionStateFor(TaiModelCatalog.CatalogEntry entry, boolean installed,
-                                             @Nullable JSONObject download, @Nullable String activeModelId,
-                                             boolean mlcSupported, @Nullable String mlcUnsupportedReason) {
+                                             @Nullable JSONObject download, @Nullable String activeModelId) {
         if (installed) {
             boolean active = entry.modelId.equals(activeModelId);
             return active
@@ -349,12 +342,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         if (download != null && isActiveDownload(download.optString("status", ""))) {
             return CatalogActionState.of(CatalogActionType.DOWNLOADING, "Downloading", false, true,
                 null, progressLabel(download));
-        }
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend) && !mlcSupported) {
-            String reason = mlcUnsupportedReason == null || mlcUnsupportedReason.isEmpty()
-                ? "MLC backend is not supported on this device." : mlcUnsupportedReason;
-            return CatalogActionState.of(CatalogActionType.MLC_UNSUPPORTED, "MLC blocked", false, false,
-                reason, "");
         }
         if (!entry.downloadAvailable) {
             return CatalogActionState.of(CatalogActionType.IMPORT_ONLY, "Import only", false, true,
@@ -666,7 +653,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     }
 
     private String backendLabel(String backend) {
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) return getString(R.string.termux_ai_backend_label_mlc);
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) return getString(R.string.termux_ai_backend_label_mnn);
         return getString(R.string.termux_ai_backend_label_litert);
     }
 
@@ -730,7 +717,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     }
 
     enum BackendFilter {
-        ALL("all", ""), LITERT(TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.BACKEND_LITERT_LM), MLC(TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.BACKEND_MLC_LLM);
+        ALL("all", ""), LITERT(TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.BACKEND_LITERT_LM), MNN(TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.BACKEND_MNN_LLM);
         final String value;
         final String backend;
         BackendFilter(String value, String backend) { this.value = value; this.backend = backend; }
@@ -740,7 +727,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         }
     }
 
-    enum CatalogActionType { INSTALL, DOWNLOADING, INSTALLED, ACTIVE, IMPORT_ONLY, MLC_UNSUPPORTED }
+    enum CatalogActionType { INSTALL, DOWNLOADING, INSTALLED, ACTIVE, IMPORT_ONLY }
 
     static final class CatalogActionState {
         final CatalogActionType type;

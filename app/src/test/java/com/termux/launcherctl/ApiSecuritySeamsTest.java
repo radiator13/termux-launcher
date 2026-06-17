@@ -37,7 +37,7 @@ import static org.junit.Assert.assertTrue;
  * and embeddings endpoint behavior.
  *
  * <p>All tests are deterministic, use fakes/mocks, and do not require a real
- * MLC native runtime or network access.
+ * MNN native runtime or network access.
  */
 @RunWith(RobolectricTestRunner.class)
 public class ApiSecuritySeamsTest {
@@ -153,47 +153,47 @@ public class ApiSecuritySeamsTest {
     }
 
     @Test
-    public void embeddingsMlcChatOnly_returnsUnsupported() throws Exception {
-        File tempFile = File.createTempFile("chat-model", ".mlc");
+    public void embeddingsMnnChatOnly_returnsUnsupported() throws Exception {
+        File tempFile = File.createTempFile("chat-model", ".mnn");
         tempFile.deleteOnExit();
         TaiManager manager = TaiManager.getInstance(context);
         manager.importModel(new JSONObject()
             .put("path", tempFile.getAbsolutePath())
-            .put("modelId", "chat-only-mlc")
+            .put("modelId", "chat-only-mnn")
             .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_CHAT))
             .toString());
 
         // Inject fake runtime so load succeeds without real native libs
         injectFakeRuntime(manager);
-        manager.loadModel(new JSONObject().put("model", "chat-only-mlc").toString());
+        manager.loadModel(new JSONObject().put("model", "chat-only-mnn").toString());
 
         HttpURLConnection conn = post("/v1/embeddings", new JSONObject()
-            .put("model", "chat-only-mlc")
+            .put("model", "chat-only-mnn")
             .put("input", "hello world"));
 
         int code = conn.getResponseCode();
-        assertTrue("Expected 400 or 501 for chat-only MLC embeddings, got " + code, code == 400 || code == 501);
+        assertTrue("Expected 400 or 501 for chat-only MNN embeddings, got " + code, code == 400 || code == 501);
         JSONObject response = new JSONObject(readBody(conn));
         assertEquals("capability_not_supported", response.getJSONObject("error").getString("code"));
     }
 
     @Test
-    public void embeddingsMlcCapable_returnsSuccess() throws Exception {
-        File tempFile = File.createTempFile("embed-model", ".mlc");
+    public void embeddingsMnnCapable_returnsSuccess() throws Exception {
+        File tempFile = File.createTempFile("embed-model", ".mnn");
         tempFile.deleteOnExit();
         TaiManager manager = TaiManager.getInstance(context);
         manager.importModel(new JSONObject()
             .put("path", tempFile.getAbsolutePath())
-            .put("modelId", "embed-capable-mlc")
+            .put("modelId", "embed-capable-mnn")
             .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS))
             .toString());
 
         FakeMultiBackendRuntime fake = injectFakeRuntime(manager);
-        fake.addEmbeddingsCapableModel("embed-capable-mlc");
-        manager.loadModel(new JSONObject().put("model", "embed-capable-mlc").toString());
+        fake.addEmbeddingsCapableModel("embed-capable-mnn");
+        manager.loadModel(new JSONObject().put("model", "embed-capable-mnn").toString());
 
         HttpURLConnection conn = post("/v1/embeddings", new JSONObject()
-            .put("model", "embed-capable-mlc")
+            .put("model", "embed-capable-mnn")
             .put("input", "hello world"));
 
         assertEquals(200, conn.getResponseCode());
@@ -203,7 +203,7 @@ public class ApiSecuritySeamsTest {
         JSONObject embedding = response.getJSONArray("data").getJSONObject(0);
         assertEquals("embedding", embedding.getString("object"));
         assertEquals(768, embedding.getJSONArray("embedding").length());
-        assertEquals("embed-capable-mlc", response.getString("model"));
+        assertEquals("embed-capable-mnn", response.getString("model"));
         assertTrue(response.has("usage"));
     }
 

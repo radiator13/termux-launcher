@@ -76,25 +76,6 @@ public final class TaiModelImporter {
         File temporary = new File(modelDir, fileName + ".importing");
         try {
             copyDocument(uri, temporary);
-            if (fileValidation.mlcManifest) {
-                String manifestJson = readSmallTextFile(temporary);
-                TaiMlcPackageInstaller.InstallResult result =
-                    new TaiMlcPackageInstaller().installFromManifest(manifestJson, modelDir, store);
-                if (!result.success) {
-                    temporary.delete();
-                    deleteEmptyDirectory(modelDir);
-                    return error(400, result.errorCode, result.message);
-                }
-                temporary.delete();
-                JSONObject json = new JSONObject();
-                json.put("ok", true);
-                json.put("imported", true);
-                json.put("copiedIntoAppPrivateStorage", true);
-                json.put("sourceUri", uri.toString());
-                json.put("model", result.installedSpec == null ? JSONObject.NULL : result.installedSpec.toJson());
-                json.put("message", "MLC package verified, copied into app-private storage, and registered.");
-                return json;
-            }
             if (!looksLikeModelFile(temporary, fileName)) {
                 throw new IllegalStateException("The selected file does not look like a readable model package.");
             }
@@ -221,19 +202,27 @@ public final class TaiModelImporter {
     @NonNull
     public static ValidationResult validateImportFileNameForBackend(@NonNull String backend, @NonNull String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        ValidationResult base = validateSupportedImportFileName(fileName);
-        if (!base.supported) return base;
+        if (lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".dll")) {
+            return ValidationResult.rejected(ERROR_NATIVE_LIBRARY_FORBIDDEN,
+                "Native libraries cannot be imported as models.");
+        }
+        if (isRawWeightFileName(lower)) {
+            return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
+                "Raw weight files are not supported. Select a LiteRT .litertlm/.task package or download an MNN config.json from the model market.");
+        }
         if (TaiModelSpec.BACKEND_LITERT_LM.equals(backend)) {
+            ValidationResult base = validateSupportedImportFileName(fileName);
+            if (!base.supported) return base;
             if (lower.endsWith(".litertlm") || lower.endsWith(".task")) return ValidationResult.accepted(false);
             return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
                 "LiteRT imports must be .litertlm or .task packages.");
         }
-        if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) {
-            if (isMlcManifestFileName(lower)) return ValidationResult.accepted(true);
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) {
+            if (lower.endsWith("config.json")) return ValidationResult.accepted(false);
             return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
-                "MLC imports must use a supported MLC manifest/package form; raw weights and native libraries are not allowed.");
+                "MNN downloads must start from the model repository config.json URL. Local folder import is not supported by this file picker yet.");
         }
-        return ValidationResult.rejected(ERROR_UNSUPPORTED_BACKEND, "Choose LiteRT or MLC before importing.");
+        return ValidationResult.rejected(ERROR_UNSUPPORTED_BACKEND, "Choose LiteRT or MNN before importing.");
     }
 
     @NonNull
@@ -255,16 +244,13 @@ public final class TaiModelImporter {
         }
         if (isRawWeightFileName(lower)) {
             return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
-                "Raw weight files are not supported. Select a LiteRT .litertlm/.task package or an MLC manifest.");
+                "Raw weight files are not supported. Select a LiteRT .litertlm/.task package or download an MNN config.json from the model market.");
         }
         if (lower.endsWith(".litertlm") || lower.endsWith(".task")) {
             return ValidationResult.accepted(false);
         }
-        if (isMlcManifestFileName(lower)) {
-            return ValidationResult.accepted(true);
-        }
         return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
-            "Select a LiteRT .litertlm/.task package or an MLC manifest JSON file.");
+            "Select a LiteRT .litertlm/.task package. MNN models should be downloaded from their config.json URL.");
     }
 
     @NonNull
@@ -273,13 +259,7 @@ public final class TaiModelImporter {
         String lower = value.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".litertlm")) return value.substring(0, value.length() - ".litertlm".length());
         if (lower.endsWith(".task")) return value.substring(0, value.length() - ".task".length());
-        if (lower.endsWith(".mlc.json")) return value.substring(0, value.length() - ".mlc.json".length());
-        if (lower.endsWith("-mlc.json")) return value.substring(0, value.length() - "-mlc.json".length());
         return value;
-    }
-
-    private static boolean isMlcManifestFileName(@NonNull String lowerFileName) {
-        return lowerFileName.endsWith(".mlc.json") || lowerFileName.endsWith("-mlc.json");
     }
 
     private static boolean isRawWeightFileName(@NonNull String lowerFileName) {
@@ -301,35 +281,6 @@ public final class TaiModelImporter {
         return name;
     }
 
-    @NonNull
-    private TaiMlcPackageInstaller.InstallResult validateMlcManifestFile(@NonNull File file) {
-        try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
-            byte[] bytes = new byte[(int) Math.min(file.length(), 10L * 1024L * 1024L + 1L)];
-            int read = input.read(bytes);
-            if (read <= 0 || read > 10L * 1024L * 1024L) {
-                return TaiMlcPackageInstaller.InstallResult.failure(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST,
-                    "MLC manifest is empty or too large.");
-            }
-            JSONObject manifest = new JSONObject(new String(bytes, 0, read, StandardCharsets.UTF_8));
-            return new TaiMlcPackageInstaller().validateManifestInternal(manifest, store);
-        } catch (Exception e) {
-            return TaiMlcPackageInstaller.InstallResult.failure(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST,
-                "MLC manifest is not valid JSON.");
-        }
-    }
-
-    @NonNull
-    private String readSmallTextFile(@NonNull File file) throws Exception {
-        if (file.length() <= 0L || file.length() > 10L * 1024L * 1024L) {
-            throw new IllegalStateException("MLC manifest is empty or too large.");
-        }
-        try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
-            byte[] bytes = new byte[(int) file.length()];
-            int read = input.read(bytes);
-            if (read <= 0) throw new IllegalStateException("MLC manifest is empty.");
-            return new String(bytes, 0, read, StandardCharsets.UTF_8);
-        }
-    }
 
     @NonNull
     public static String sanitizeModelId(@NonNull String value) {
@@ -378,21 +329,21 @@ public final class TaiModelImporter {
 
     public static final class ValidationResult {
         public final boolean supported;
-        public final boolean mlcManifest;
+        public final boolean packageManifest;
         @NonNull public final String errorCode;
         @NonNull public final String message;
 
-        private ValidationResult(boolean supported, boolean mlcManifest,
+        private ValidationResult(boolean supported, boolean packageManifest,
                                  @NonNull String errorCode, @NonNull String message) {
             this.supported = supported;
-            this.mlcManifest = mlcManifest;
+            this.packageManifest = packageManifest;
             this.errorCode = errorCode;
             this.message = message;
         }
 
         @NonNull
-        static ValidationResult accepted(boolean mlcManifest) {
-            return new ValidationResult(true, mlcManifest, "", "");
+        static ValidationResult accepted(boolean packageManifest) {
+            return new ValidationResult(true, packageManifest, "", "");
         }
 
         @NonNull

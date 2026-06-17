@@ -23,8 +23,8 @@ import com.termux.R;
  */
 public final class TaiModelPreference extends Preference {
 
-    /** Backend tone controls pill color: LiteRT uses primaryContainer, MLC uses tertiaryContainer. */
-    public enum BackendTone { LITERT, MLC, NEUTRAL }
+    /** Backend tone controls pill color: LiteRT uses primaryContainer, MNN uses tertiaryContainer. */
+    public enum BackendTone { LITERT, MNN, NEUTRAL }
 
     private boolean showProgress;
     private boolean indeterminate;
@@ -114,10 +114,10 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
                 int pillTextColor;
                 int pillBgColor;
                 if (pillAccent) {
-                    int pillAttr = backendTone == BackendTone.MLC
+                    int pillAttr = backendTone == BackendTone.MNN
                         ? com.termux.shared.R.attr.termuxColorTertiaryContainer
                         : com.termux.shared.R.attr.termuxColorPrimaryContainer;
-                    int pillOnAttr = backendTone == BackendTone.MLC
+                    int pillOnAttr = backendTone == BackendTone.MNN
                         ? com.termux.shared.R.attr.termuxColorOnTertiaryContainer
                         : com.termux.shared.R.attr.termuxColorOnPrimaryContainer;
                     pillTextColor = resolveAttrColor(pillOnAttr);

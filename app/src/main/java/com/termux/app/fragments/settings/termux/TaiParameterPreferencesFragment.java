@@ -108,10 +108,10 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
         screen.addPreference(liteRtCategory);
         addParameterRows(context, liteRtCategory, liteRt.backend, liteRt.fields(), false);
 
-        TaiSettings.ParameterSchema mlc = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_MLC_LLM);
-        PreferenceCategory mlcCategory = category(context, R.string.termux_ai_parameters_mlc_title);
-        screen.addPreference(mlcCategory);
-        addParameterRows(context, mlcCategory, mlc.backend, mlc.fields(), false);
+        TaiSettings.ParameterSchema mnn = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_MNN_LLM);
+        PreferenceCategory mnnCategory = category(context, R.string.termux_ai_parameters_mnn_title);
+        screen.addPreference(mnnCategory);
+        addParameterRows(context, mnnCategory, mnn.backend, mnn.fields(), false);
 
         PreferenceCategory prompts = category(context, R.string.termux_ai_parameters_system_prompt_title);
         screen.addPreference(prompts);

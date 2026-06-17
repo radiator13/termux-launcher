@@ -31,10 +31,10 @@ public class TaiModelSchemaTest {
     }
 
     @Test
-    public void mlcJson_deserializesAndSerializesBackendFormatAndCapabilities() throws Exception {
-        JSONObject json = baseModelJson("mlc-chat", "/models/mlc-chat/model.mlc");
-        json.put("backend", TaiModelSpec.BACKEND_MLC_LLM);
-        json.put("format", TaiModelSpec.FORMAT_MLC);
+    public void mnnJson_deserializesAndSerializesBackendFormatAndCapabilities() throws Exception {
+        JSONObject json = baseModelJson("mnn-chat", "/models/mnn-chat/model.mnn");
+        json.put("backend", TaiModelSpec.BACKEND_MNN_LLM);
+        json.put("format", TaiModelSpec.FORMAT_MNN);
         json.put("capabilities", new JSONArray()
             .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
             .put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
@@ -42,19 +42,19 @@ public class TaiModelSchemaTest {
         TaiModelSpec spec = TaiModelSpec.fromJson(json);
         JSONObject roundTrip = spec.toJson();
 
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, spec.backend);
-        assertEquals(TaiModelSpec.FORMAT_MLC, spec.format);
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, spec.backend);
+        assertEquals(TaiModelSpec.FORMAT_MNN, spec.format);
         assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
         assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, roundTrip.getString("backend"));
-        assertEquals(TaiModelSpec.FORMAT_MLC, roundTrip.getString("format"));
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, roundTrip.getString("backend"));
+        assertEquals(TaiModelSpec.FORMAT_MNN, roundTrip.getString("format"));
         assertEquals(2, roundTrip.getJSONArray("capabilities").length());
     }
 
     @Test
-    public void inferBackendAndFormat_detectMlcPathHints() {
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.inferBackend("/models/chat/model.mlc"));
-        assertEquals(TaiModelSpec.FORMAT_MLC, TaiModelSpec.inferFormat("https://huggingface.co/mlc-ai/test-model/config.json"));
+    public void inferBackendAndFormat_detectMnnPathHints() {
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.inferBackend("/models/chat/model.mnn"));
+        assertEquals(TaiModelSpec.FORMAT_MNN, TaiModelSpec.inferFormat("https://huggingface.co/mnn-ai/test-model/config.json"));
         assertEquals(TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.inferBackend("/models/chat/model.litertlm"));
         assertEquals(TaiModelSpec.FORMAT_LITERTLM, TaiModelSpec.inferFormat("/models/chat/model.litertlm"));
     }
@@ -63,13 +63,13 @@ public class TaiModelSchemaTest {
     public void duplicateModelIds_lastRecordWins() throws Exception {
         JSONObject payload = new JSONObject().put("entries", new JSONArray()
             .put(catalogEntry("duplicate-model", "First", TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.FORMAT_LITERTLM))
-            .put(catalogEntry("duplicate-model", "Second", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC)));
+            .put(catalogEntry("duplicate-model", "Second", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN)));
 
         TaiModelCatalog.applyRemotePayload(payload, true);
 
         TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get("duplicate-model");
         assertEquals("Second", entry.displayName);
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, entry.backend);
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, entry.backend);
     }
 
     @Test
@@ -81,39 +81,39 @@ public class TaiModelSchemaTest {
     }
 
     @Test
-    public void catalogMerge_preservesLiteRtAndMlcEntries() throws Exception {
+    public void catalogMerge_preservesLiteRtAndMnnEntries() throws Exception {
         JSONObject payload = new JSONObject().put("entries", new JSONArray()
             .put(catalogEntry("remote-litert", "Remote LiteRT", TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.FORMAT_LITERTLM))
-            .put(catalogEntry("remote-mlc", "Remote MLC", TaiModelSpec.BACKEND_MLC_LLM, TaiModelSpec.FORMAT_MLC))
+            .put(catalogEntry("remote-mnn", "Remote MNN", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN))
             .put(catalogEntry("remote-bad", "Remote Bad", "custom-backend", TaiModelSpec.FORMAT_LITERTLM)));
 
         TaiModelCatalog.applyRemotePayload(payload, true);
 
         assertEquals(TaiModelSpec.BACKEND_LITERT_LM, TaiModelCatalog.get("remote-litert").backend);
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, TaiModelCatalog.get("remote-mlc").backend);
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, TaiModelCatalog.get("remote-mnn").backend);
         assertEquals(null, TaiModelCatalog.get("remote-bad"));
         assertTrue(TaiModelCatalog.entries().containsKey(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT));
     }
 
     @Test
-    public void userModelStore_persistsAndReloadsMlcModels() throws Exception {
+    public void userModelStore_persistsAndReloadsMnnModels() throws Exception {
         Context context = ApplicationProvider.getApplicationContext();
         context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit();
         TaiModelStore store = new TaiModelStore(context);
-        TaiModelSpec mlc = TaiModelSpec.fromJson(baseModelJson("user-mlc", "/models/user-mlc/model.mlc")
-            .put("backend", TaiModelSpec.BACKEND_MLC_LLM)
-            .put("format", TaiModelSpec.FORMAT_MLC)
+        TaiModelSpec mnn = TaiModelSpec.fromJson(baseModelJson("user-mnn", "/models/user-mnn/model.mnn")
+            .put("backend", TaiModelSpec.BACKEND_MNN_LLM)
+            .put("format", TaiModelSpec.FORMAT_MNN)
             .put("capabilities", new JSONArray()
                 .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
                 .put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)));
 
-        store.upsertUserModel(mlc);
+        store.upsertUserModel(mnn);
         Map<String, TaiModelSpec> reloaded = new TaiModelStore(context).getUserModels();
 
         assertEquals(1, reloaded.size());
-        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, reloaded.get("user-mlc").backend);
-        assertEquals(TaiModelSpec.FORMAT_MLC, reloaded.get("user-mlc").format);
-        assertTrue(reloaded.get("user-mlc").capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertEquals(TaiModelSpec.BACKEND_MNN_LLM, reloaded.get("user-mnn").backend);
+        assertEquals(TaiModelSpec.FORMAT_MNN, reloaded.get("user-mnn").format);
+        assertTrue(reloaded.get("user-mnn").capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
     }
 
     private static JSONObject baseModelJson(String id, String localPath) throws Exception {
