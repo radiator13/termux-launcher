@@ -6,11 +6,13 @@ import android.content.Intent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -64,7 +66,7 @@ public final class TaiModelDownloader {
     ) throws JSONException {
         String safeModelId = sanitize(modelId);
         if (safeModelId.isEmpty()) return error(400, "bad_request", "Missing model id");
-        if (!url.startsWith("https://")) return error(400, "bad_request", "Model downloads require an https URL");
+        if (!url.startsWith("https://")) return error(400, "insecure_url", "Model downloads require an https URL");
 
         File modelDir = new File(store.getModelsDirectory(), safeModelId);
         File output = new File(modelDir, fileNameFromUrl(url));
@@ -148,6 +150,78 @@ public final class TaiModelDownloader {
             }
             if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
             if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
+
+            // Detect and route MLC packages
+            if (isMlcPackage(output, url, backend, format)) {
+                String manifestJson = readManifestString(output);
+                if (manifestJson == null || manifestJson.trim().isEmpty()) {
+                    throw new IllegalStateException(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST);
+                }
+
+                TaiMlcPackageInstaller installer = new TaiMlcPackageInstaller();
+                TaiMlcPackageInstaller.InstallResult validation = installer.validateManifestInternal(
+                    new JSONObject(manifestJson), store);
+                if (!validation.success) {
+                    throw new IllegalStateException(validation.errorCode);
+                }
+
+                // Download files listed in manifest
+                JSONObject manifest = new JSONObject(manifestJson);
+                JSONArray files = manifest.getJSONArray("files");
+                File downloadDir = output.getParentFile();
+                String baseUrl = baseUrlFromUrl(url);
+                long manifestSize = output.length();
+                long totalMlcBytes = manifestSize;
+                for (int i = 0; i < files.length(); i++) {
+                    totalMlcBytes += files.getJSONObject(i).getLong("size");
+                }
+                long currentBytes = manifestSize;
+
+                for (int i = 0; i < files.length(); i++) {
+                    JSONObject fileEntry = files.getJSONObject(i);
+                    String path = fileEntry.getString("path");
+                    String fileUrl = baseUrl + path;
+                    if (!fileUrl.startsWith("https://")) {
+                        throw new IllegalStateException(TaiMlcPackageInstaller.ERROR_INSECURE_URL);
+                    }
+                    File fileOutput = new File(downloadDir, path);
+                    File fileParent = fileOutput.getParentFile();
+                    if (fileParent != null && !fileParent.exists() && !fileParent.mkdirs()) {
+                        throw new IllegalStateException(TaiMlcPackageInstaller.ERROR_FILE_MISSING);
+                    }
+
+                    File filePartial = new File(fileOutput.getAbsolutePath() + ".part");
+                    HttpURLConnection fileConn = open(fileUrl, authToken, 0);
+                    int fileStatus = fileConn.getResponseCode();
+                    if (fileStatus < 200 || fileStatus >= 300) {
+                        throw new IllegalStateException(TaiMlcPackageInstaller.ERROR_FILE_MISSING);
+                    }
+
+                    try (InputStream fileInput = new BufferedInputStream(fileConn.getInputStream());
+                         FileOutputStream fileOut = new FileOutputStream(filePartial)) {
+                        byte[] buffer = new byte[1024 * 64];
+                        int read;
+                        while ((read = fileInput.read(buffer)) != -1) {
+                            if (TaiModelDownloadService.isCancelled(modelId)) throw new InterruptedException("Download cancelled.");
+                            fileOut.write(buffer, 0, read);
+                            currentBytes += read;
+                        }
+                    }
+
+                    if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace file.");
+                    if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize file download.");
+
+                    persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", currentBytes, totalMlcBytes, ""), callback);
+                }
+
+                TaiMlcPackageInstaller.InstallResult result = installer.installFromManifest(manifestJson, downloadDir, store);
+                if (!result.success) {
+                    throw new IllegalStateException(result.errorCode);
+                }
+
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "complete", currentBytes, currentBytes, ""), callback);
+                return;
+            }
 
             if (!looksLikeModelFile(output)) {
                 throw new IllegalStateException("Downloaded file does not look like a LiteRT-LM model. It may be an HTML login or error page.");
@@ -249,6 +323,55 @@ public final class TaiModelDownloader {
         }
     }
 
+    private boolean isMlcPackage(@NonNull File file, @NonNull String url, @NonNull String backend, @NonNull String format) {
+        boolean urlHint = hasMlcHint(url);
+        boolean paramHint = TaiModelSpec.BACKEND_MLC_LLM.equals(backend) && TaiModelSpec.FORMAT_MLC.equals(format);
+        if (!urlHint && !paramHint) return false;
+
+        if (!file.exists() || file.length() == 0 || file.length() > 10 * 1024 * 1024) return false;
+
+        try {
+            String content = readManifestString(file);
+            if (content == null) return false;
+            String trimmed = content.trim().toLowerCase(Locale.ROOT);
+            if (trimmed.startsWith("<!doctype html") || trimmed.startsWith("<html")) return false;
+
+            JSONObject manifest = new JSONObject(content);
+            return TaiModelSpec.BACKEND_MLC_LLM.equals(manifest.optString("backend", ""))
+                && TaiModelSpec.FORMAT_MLC.equals(manifest.optString("format", ""));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean hasMlcHint(@NonNull String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        return lower.contains(".mlc") || lower.contains("mlc-llm") || lower.contains("mlc-ai");
+    }
+
+    @Nullable
+    private String readManifestString(@NonNull File file) {
+        try {
+            if (file.length() > 10 * 1024 * 1024) return null;
+            try (InputStream input = new FileInputStream(file)) {
+                byte[] bytes = new byte[(int) file.length()];
+                int read = input.read(bytes);
+                return new String(bytes, 0, read, java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @NonNull
+    private String baseUrlFromUrl(@NonNull String url) {
+        int query = url.indexOf('?');
+        String base = query >= 0 ? url.substring(0, query) : url;
+        int lastSlash = base.lastIndexOf('/');
+        if (lastSlash < 0) return base.endsWith("/") ? base : base + "/";
+        return base.substring(0, lastSlash + 1);
+    }
+
     private void putRuntimeMetadata(Intent intent, String backend, String format, @Nullable String architecture,
         @Nullable String quantization, int contextWindow, int recommendedRamGb, @Nullable String sha256) {
         intent.putExtra(TaiModelDownloadService.EXTRA_BACKEND, backend == null ? "" : backend);
@@ -300,5 +423,4 @@ public final class TaiModelDownloader {
     private String emptyToNull(@Nullable String value) {
         return value == null || value.trim().isEmpty() ? null : value;
     }
-
 }

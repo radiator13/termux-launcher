@@ -136,7 +136,7 @@ public final class TaiModelDownloadService extends Service {
             text = modelId + " is ready";
         } else if ("failed".equals(status)) {
             title = "TAI model download failed";
-            text = transfer.optString("error", "Download failed");
+            text = formatErrorForNotification(transfer.optString("error", "Download failed"));
         } else if (totalBytes > 0L) {
             text = formatPercent(bytesRead, totalBytes) + " - " + formatBytes(bytesRead) + " of " + formatBytes(totalBytes);
         } else {
@@ -145,6 +145,34 @@ public final class TaiModelDownloadService extends Service {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, buildNotification(title, text, bytesRead, totalBytes, "queued".equals(status) || "running".equals(status)));
+        }
+    }
+
+    @NonNull
+    private String formatErrorForNotification(@NonNull String error) {
+        switch (error) {
+            case "insecure_url":
+                return "Insecure URL: HTTPS required";
+            case "mlc_invalid_manifest":
+                return "Invalid MLC manifest";
+            case "mlc_unsupported_schema":
+                return "Unsupported MLC manifest version";
+            case "mlc_unknown_model_library":
+                return "Unknown MLC model library";
+            case "mlc_native_artifact_forbidden":
+                return "MLC package contains forbidden native files";
+            case "mlc_raw_weights_forbidden":
+                return "MLC package contains raw weight files";
+            case "mlc_path_traversal":
+                return "MLC manifest contains unsafe paths";
+            case "mlc_hash_mismatch":
+                return "MLC file verification failed";
+            case "mlc_duplicate_model":
+                return "Model already installed";
+            case "mlc_file_missing":
+                return "MLC package file missing";
+            default:
+                return error;
         }
     }
 

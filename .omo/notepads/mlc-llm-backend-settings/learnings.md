@@ -54,3 +54,20 @@
 - Added debug-build-only capability override (`setDebugMlcUnsupportedReason`) gated by `BuildConfig.DEBUG`. QA can force `mlcUnsupportedReason` for settings/UI tests without needing multiple physical devices; completely ignored in release builds.
 - `TaiDeviceCapabilitiesTest` covers: supported arm64-v8a device, unsupported ABI with concrete reason, low SDK reason, debug override in debug builds, release-build override ignore via `shouldApplyDebugOverride`, MLC model blocking on unsupported device, LiteRT model memory warning, and correct JSON backends structure.
 - `createForTest()` package-private factory allows tests to inject fake ABIs without mocking `Build.SUPPORTED_ABIS` directly.
+
+## Wave 2 Task 5 - MLC package manifest validation and download/install flow
+
+- `TaiMlcPackageInstaller` handles the full MLC package install flow: `installFromManifest(String manifestJson, File downloadDir, TaiModelStore store)` validates manifest schema, verifies downloaded files, copies them to app-private model storage, and persists a `TaiModelSpec` with backend `mlc-llm`.
+- Manifest schema version is strictly enforced to `"1.0"`; unsupported versions return `mlc_unsupported_schema`.
+- Validation covers: non-empty `modelId` (with duplicate check against store), backend exactly `mlc-llm`, format exactly `mlc`, `modelLibraryId` lookup in `MlcBundledLibraryRegistry`, known capabilities, and complete file list with `path`, `size`, and `sha256`.
+- File-level trust boundary checks: path traversal (`../`), `.so` files, and raw weight extensions (`.safetensors`, `.gguf`, `.bin`, `.pt`, `.onnx`) are all rejected with specific error codes.
+- Missing SHA-256 in any file entry is rejected with `mlc_hash_mismatch` (treating missing hash as a hash validation failure).
+- HTML/login responses are rejected at the installer boundary by checking for `<!doctype html` or `<html` prefixes before JSON parsing.
+- `TaiModelDownloader` detects MLC packages by URL path hint (`.mlc`, `mlc-llm`, `mlc-ai`) or by `backend`/`format` parameters, then routes through `TaiMlcPackageInstaller`.
+- HTTP URLs are rejected with `insecure_url` in both the downloader (`startDownload`) and the installer (`sourceUrl` validation).
+- For detected MLC manifests, the downloader validates the manifest first, then downloads each file listed in the manifest from the base URL derived from the manifest URL, verifies HTTPS for each file URL, and finally calls `installFromManifest`.
+- Existing LiteRT `.litertlm` validation is preserved unchanged; MLC detection happens after the single-file download and before `looksLikeModelFile()`.
+- `TaiModelDownloadService` maps MLC-specific error codes to human-readable notification text via `formatErrorForNotification()`, improving UX for MLC install failures.
+- `TaiMlcPackageInstallerTest` covers: valid install, HTTP URL rejection, missing SHA-256, `.so` rejection, raw weight rejection, path traversal, unknown `modelLibraryId`, duplicate model ID, hash mismatch, HTML response rejection, missing file, unsupported schema, invalid backend, empty manifest, and non-JSON manifest.
+- Tests use temp directories, fake manifests, and Robolectric context; no network downloads are performed.
+- Verification gate remains GitHub Actions `Build nightly` on the `experimental` branch.
