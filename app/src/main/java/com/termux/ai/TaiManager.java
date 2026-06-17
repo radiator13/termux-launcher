@@ -202,6 +202,13 @@ public final class TaiManager {
     public JSONObject downloadCatalogModel(@NonNull String modelId) throws JSONException {
         TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
         if (entry == null) return error(404, "model_not_found", "Unknown catalog model: " + modelId);
+        if (!entry.downloadAvailable) {
+            JSONObject error = error(409, "catalog_download_unavailable", entry.unavailableReason);
+            error.put("providerPageUrl", entry.providerPageUrl);
+            error.put("downloadAvailable", false);
+            error.put("unavailableReason", entry.unavailableReason);
+            return error;
+        }
         if (entry.gated) {
             String token = settings.getHuggingFaceToken();
             if (token.trim().isEmpty()) {
@@ -220,10 +227,14 @@ public final class TaiManager {
         JSONObject request = parseBody(body);
         String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", "")));
         if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
-        boolean deleted = modelStore.deleteUserModel(modelId);
+        TaiRuntimeState state = runtime.getState();
+        boolean activeModelLoaded = state.loadedModelId != null && state.loadedModelId.equals(modelId);
+        TaiModelStore.DeleteResult deleteResult = modelStore.deleteUserModel(modelId,
+            activeModelLoaded, request.optBoolean("confirm", false));
+        if (!deleteResult.ok) return error(409, deleteResult.errorCode, deleteResult.message);
         JSONObject data = new JSONObject();
         data.put("ok", true);
-        data.put("deleted", deleted);
+        data.put("deleted", deleteResult.deleted);
         data.put("modelId", modelId);
         return data;
     }
@@ -294,13 +305,13 @@ public final class TaiManager {
         JSONArray messages = request.optJSONArray("messages");
         if (messages == null || messages.length() == 0) return error(400, "bad_request", "Missing messages");
 
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         OpenAiChatRequest chatRequest;
         try {
-            chatRequest = openAiChatRequest(request, messages);
+            chatRequest = openAiChatRequest(request, messages, modelId);
         } catch (JSONException e) {
             return openAiError(error(400, "invalid_chat_request", e.getMessage()));
         }
-        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         JSONObject loadError = ensureModelLoadedForGeneration(modelId, options);
         if (loadError != null) return openAiError(loadError);
@@ -381,14 +392,14 @@ public final class TaiManager {
             return;
         }
 
+        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         OpenAiChatRequest chatRequest;
         try {
-            chatRequest = openAiChatRequest(request, messages);
+            chatRequest = openAiChatRequest(request, messages, modelId);
         } catch (JSONException e) {
             emitOpenAiError(sink, error(400, "invalid_chat_request", e.getMessage()));
             return;
         }
-        String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request);
         JSONObject loadError = ensureModelLoadedForGeneration(modelId, options);
         if (loadError != null) {
@@ -794,7 +805,11 @@ public final class TaiManager {
     }
 
     @NonNull
-    private OpenAiChatRequest openAiChatRequest(@NonNull JSONObject request, @NonNull JSONArray messages) throws JSONException {
+    private OpenAiChatRequest openAiChatRequest(
+        @NonNull JSONObject request,
+        @NonNull JSONArray messages,
+        @NonNull String modelId
+    ) throws JSONException {
         StringBuilder clientSystemPrompt = new StringBuilder();
         List<Message> conversationMessages = new ArrayList<>();
         Map<String, String> toolNamesByCallId = new LinkedHashMap<>();
@@ -830,7 +845,7 @@ public final class TaiManager {
         }
 
         String systemPrompt = clientSystemPrompt.length() > 0
-            ? clientSystemPrompt.toString() : settings.getGeneralSystemPrompt();
+            ? clientSystemPrompt.toString() : settings.getSystemPrompt(modelId);
         JSONArray toolsJson = request.optJSONArray("tools");
         List<ToolProvider> tools = toolProviders(toolsJson, request.opt("tool_choice"));
         systemPrompt = applyToolChoiceInstruction(systemPrompt, request.opt("tool_choice"), toolsJson);
@@ -1031,10 +1046,17 @@ public final class TaiManager {
             json.put("modelId", entry.modelId);
             json.put("displayName", entry.displayName);
             json.put("roleHint", entry.roleHint);
+            json.put("jobGroup", entry.jobGroup);
+            json.put("priority", entry.priority);
             json.put("providerPageUrl", entry.providerPageUrl);
-            json.put("downloadUrl", entry.downloadUrl);
+            json.put("downloadUrl", entry.downloadUrl == null ? JSONObject.NULL : entry.downloadUrl);
+            json.put("downloadAvailable", entry.downloadAvailable);
+            json.put("unavailableReason", entry.unavailableReason);
             json.put("license", entry.license);
             json.put("sizeBytes", entry.sizeBytes);
+            json.put("sizeEstimate", entry.sizeEstimate);
+            json.put("ramTier", entry.ramTier);
+            json.put("recommended", entry.recommended);
             json.put("gated", entry.gated);
             json.put("backend", entry.backend);
             json.put("format", entry.format);
@@ -1049,6 +1071,9 @@ public final class TaiManager {
             JSONArray capabilities = new JSONArray();
             for (String capability : entry.capabilities) capabilities.put(capability);
             json.put("capabilities", capabilities);
+            JSONArray displayCapabilityTags = new JSONArray();
+            for (String tag : entry.displayCapabilityTags) displayCapabilityTags.put(tag);
+            json.put("displayCapabilityTags", displayCapabilityTags);
             array.put(json);
         }
         return array;

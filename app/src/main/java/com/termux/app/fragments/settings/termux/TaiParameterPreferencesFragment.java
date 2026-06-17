@@ -1,0 +1,458 @@
+package com.termux.app.fragments.settings.termux;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
+import androidx.preference.PreferenceManager;
+import androidx.preference.PreferenceScreen;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.termux.R;
+import com.termux.ai.TaiModelSpec;
+import com.termux.ai.TaiSettings;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
+
+import java.util.ArrayList;
+import java.util.Map;
+
+@Keep
+public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment {
+    public static final String ARG_MODEL_ID = "modelId";
+    public static final String ARG_MODEL_NAME = "modelName";
+    public static final String ARG_BACKEND = "backend";
+
+    private String modelId;
+    private String modelName;
+    private String backend;
+    private boolean modelScreen;
+
+    @NonNull
+    public static Bundle argumentsForModel(@NonNull TaiModelSpec model) {
+        Bundle args = new Bundle();
+        args.putString(ARG_MODEL_ID, model.id);
+        args.putString(ARG_MODEL_NAME, model.displayName);
+        args.putString(ARG_BACKEND, model.backend);
+        return args;
+    }
+
+    @Override
+    public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+        Context context = getContext();
+        if (context == null) return;
+        PreferenceManager preferenceManager = getPreferenceManager();
+        preferenceManager.setSharedPreferencesName(TaiSettings.PREFS_NAME);
+
+        Bundle args = getArguments();
+        modelId = args == null ? null : args.getString(ARG_MODEL_ID);
+        modelName = args == null ? null : args.getString(ARG_MODEL_NAME);
+        backend = args == null ? null : args.getString(ARG_BACKEND);
+        modelScreen = modelId != null && !modelId.isEmpty();
+
+        PreferenceScreen screen = preferenceManager.createPreferenceScreen(context);
+        setPreferenceScreen(screen);
+        if (modelScreen) buildModelScreen(context, screen);
+        else buildGlobalScreen(context, screen);
+        SettingsLayoutUtils.applyScreenLayout(this);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (getActivity() != null) {
+            getActivity().setTitle(modelScreen
+                ? getString(R.string.termux_ai_model_tune_title, modelName == null ? modelId : modelName)
+                : getString(R.string.termux_ai_parameters_defaults_title));
+        }
+    }
+
+    private void buildModelScreen(@NonNull Context context, @NonNull PreferenceScreen screen) {
+        TaiSettings.ParameterSchema schema = TaiSettings.getParameterSchema(backend);
+        PreferenceCategory configs = category(context, R.string.termux_ai_parameters_model_configs_title);
+        screen.addPreference(configs);
+        addParameterRows(context, configs, schema.backend, schema.fields(), true);
+
+        PreferenceCategory prompts = category(context, R.string.termux_ai_parameters_system_prompt_title);
+        screen.addPreference(prompts);
+        prompts.addPreference(systemPromptPreference(context, true));
+
+        Preference reset = new Preference(context);
+        reset.setTitle(R.string.termux_ai_parameters_reset_model_title);
+        reset.setSummary(R.string.termux_ai_parameters_reset_model_summary);
+        reset.setPersistent(false);
+        reset.setOnPreferenceClickListener(preference -> {
+            new TaiSettings(context).resetModelParametersToGlobal(modelId);
+            Toast.makeText(context, R.string.termux_ai_model_tune_reset_done, Toast.LENGTH_SHORT).show();
+            refreshSummaries();
+            return true;
+        });
+        screen.addPreference(reset);
+    }
+
+    private void buildGlobalScreen(@NonNull Context context, @NonNull PreferenceScreen screen) {
+        TaiSettings.ParameterSchema liteRt = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_LITERT_LM);
+        PreferenceCategory liteRtCategory = category(context, R.string.termux_ai_parameters_litert_title);
+        screen.addPreference(liteRtCategory);
+        addParameterRows(context, liteRtCategory, liteRt.backend, liteRt.fields(), false);
+
+        TaiSettings.ParameterSchema mlc = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_MLC_LLM);
+        PreferenceCategory mlcCategory = category(context, R.string.termux_ai_parameters_mlc_title);
+        screen.addPreference(mlcCategory);
+        addParameterRows(context, mlcCategory, mlc.backend, mlc.fields(), false);
+
+        PreferenceCategory prompts = category(context, R.string.termux_ai_parameters_system_prompt_title);
+        screen.addPreference(prompts);
+        prompts.addPreference(systemPromptPreference(context, false));
+    }
+
+    @NonNull
+    private PreferenceCategory category(@NonNull Context context, int titleRes) {
+        PreferenceCategory category = new PreferenceCategory(context);
+        category.setTitle(titleRes);
+        category.setPersistent(false);
+        return category;
+    }
+
+    private void addParameterRows(
+        @NonNull Context context,
+        @NonNull PreferenceCategory category,
+        @NonNull String rowBackend,
+        @NonNull Map<String, TaiSettings.ParameterSpec> specs,
+        boolean modelRows
+    ) {
+        for (TaiSettings.ParameterSpec spec : specs.values()) {
+            Preference preference = new Preference(context);
+            preference.setKey(parameterPreferenceKey(rowBackend, spec.field, modelRows));
+            preference.setTitle(parameterLabel(spec.field));
+            preference.setPersistent(false);
+            preference.setSummary(parameterSummary(rowBackend, spec, modelRows));
+            preference.setOnPreferenceClickListener(clicked -> {
+                showParameterDialog(context, rowBackend, spec, modelRows);
+                return true;
+            });
+            category.addPreference(preference);
+        }
+    }
+
+    @NonNull
+    public static String parameterPreferenceKey(@NonNull String backend, @NonNull String field, boolean modelRows) {
+        return (modelRows ? "tai_model_parameter_screen." : "tai_global_parameter_screen.") + backend + "." + field;
+    }
+
+    private void showParameterDialog(
+        @NonNull Context context,
+        @NonNull String rowBackend,
+        @NonNull TaiSettings.ParameterSpec spec,
+        boolean modelRows
+    ) {
+        if (spec.options.length > 0 || spec.fallbackValue instanceof Boolean) {
+            showChoiceParameterDialog(context, rowBackend, spec, modelRows);
+        } else {
+            showTextParameterDialog(context, rowBackend, spec, modelRows);
+        }
+    }
+
+    private void showChoiceParameterDialog(
+        @NonNull Context context,
+        @NonNull String rowBackend,
+        @NonNull TaiSettings.ParameterSpec spec,
+        boolean modelRows
+    ) {
+        ArrayList<String> values = new ArrayList<>();
+        if (modelRows) values.add("auto");
+        if (spec.fallbackValue instanceof Boolean) {
+            values.add("true");
+            values.add("false");
+        } else {
+            for (String option : spec.options) values.add(option);
+        }
+        String[] labels = values.toArray(new String[0]);
+        String current = currentRawValue(rowBackend, spec.field, modelRows, spec.defaultValue);
+        int checked = 0;
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i].equalsIgnoreCase(current)) {
+                checked = i;
+                break;
+            }
+        }
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(parameterLabel(spec.field))
+            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                saveParameter(context, rowBackend, spec, modelRows, labels[which]);
+                dialog.dismiss();
+            })
+            .setNeutralButton(modelRows
+                ? R.string.termux_ai_model_tune_reset_one_action
+                : R.string.termux_ai_parameters_restore_backend_default_action,
+                (dialog, which) -> saveParameter(context, rowBackend, spec, modelRows, ""))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showTextParameterDialog(
+        @NonNull Context context,
+        @NonNull String rowBackend,
+        @NonNull TaiSettings.ParameterSpec spec,
+        boolean modelRows
+    ) {
+        EditText input = buildDialogEditText(context, currentRawValue(rowBackend, spec.field, modelRows, spec.defaultValue), false);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | (spec.fallbackValue instanceof Double ? InputType.TYPE_NUMBER_FLAG_DECIMAL : 0));
+        String range = spec.minValue == null || spec.maxValue == null
+            ? null
+            : getString(R.string.termux_ai_model_tune_range, spec.minValue, spec.maxValue);
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(parameterLabel(spec.field))
+            .setView(wrapDialogView(context, range, input))
+            .setNeutralButton(modelRows
+                ? R.string.termux_ai_model_tune_reset_one_action
+                : R.string.termux_ai_parameters_restore_backend_default_action,
+                (dialog, which) -> saveParameter(context, rowBackend, spec, modelRows, ""))
+            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
+                saveParameter(context, rowBackend, spec, modelRows, input.getText().toString()))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void saveParameter(
+        @NonNull Context context,
+        @NonNull String rowBackend,
+        @NonNull TaiSettings.ParameterSpec spec,
+        boolean modelRows,
+        @Nullable String rawValue
+    ) {
+        String value = rawValue == null ? "" : rawValue.trim();
+        TaiSettings settings = new TaiSettings(context);
+        if (value.isEmpty() || "auto".equalsIgnoreCase(value)) {
+            if (modelRows) settings.resetModelParameterToGlobal(modelId, spec.field);
+            else settings.setGlobalParameter(rowBackend, spec.field, null);
+            Toast.makeText(context, R.string.termux_ai_model_tune_saved, Toast.LENGTH_SHORT).show();
+            refreshSummaries();
+            return;
+        }
+        Object parsed = spec.parse(value);
+        if (parsed == null) {
+            Toast.makeText(context, R.string.termux_ai_model_tune_invalid, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (modelRows) settings.setModelParameter(modelId, spec.field, parsed);
+        else settings.setGlobalParameter(rowBackend, spec.field, parsed);
+        Toast.makeText(context, R.string.termux_ai_model_tune_saved, Toast.LENGTH_SHORT).show();
+        refreshSummaries();
+    }
+
+    @NonNull
+    private Preference systemPromptPreference(@NonNull Context context, boolean modelPrompt) {
+        Preference preference = new Preference(context);
+        preference.setKey(modelPrompt ? TaiSettings.modelSystemPromptPreferenceKey(modelId) : TaiSettings.KEY_SYSTEM_PROMPT_GENERAL);
+        preference.setTitle(modelPrompt ? R.string.termux_ai_model_system_prompt_title : R.string.termux_ai_general_prompt_title);
+        preference.setPersistent(false);
+        preference.setSummary(systemPromptSummary(modelPrompt));
+        preference.setOnPreferenceClickListener(clicked -> {
+            showSystemPromptDialog(context, modelPrompt);
+            return true;
+        });
+        return preference;
+    }
+
+    private void showSystemPromptDialog(@NonNull Context context, boolean modelPrompt) {
+        String current = modelPrompt ? currentModelSystemPrompt() : new TaiSettings(context).getGeneralSystemPrompt();
+        EditText input = buildDialogEditText(context, current, true);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
+            .setTitle(modelPrompt ? R.string.termux_ai_model_system_prompt_title : R.string.termux_ai_general_prompt_title)
+            .setView(wrapDialogView(context, modelPrompt ? getString(R.string.termux_ai_model_system_prompt_summary) : null, input))
+            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) -> {
+                if (modelPrompt) new TaiSettings(context).setModelSystemPrompt(modelId, input.getText().toString());
+                else getPreferenceManager().getSharedPreferences().edit()
+                    .putString(TaiSettings.KEY_SYSTEM_PROMPT_GENERAL, input.getText().toString()).apply();
+                refreshSummaries();
+            })
+            .setNegativeButton(android.R.string.cancel, null);
+        if (modelPrompt) {
+            builder.setNeutralButton(R.string.termux_ai_model_tune_reset_one_action, (dialog, which) -> {
+                new TaiSettings(context).resetModelSystemPromptToGlobal(modelId);
+                refreshSummaries();
+            });
+        } else {
+            builder.setNeutralButton(R.string.termux_ai_parameters_restore_backend_default_action, (dialog, which) -> {
+                getPreferenceManager().getSharedPreferences().edit().remove(TaiSettings.KEY_SYSTEM_PROMPT_GENERAL).apply();
+                refreshSummaries();
+            });
+        }
+        builder.show();
+    }
+
+    private void refreshSummaries() {
+        PreferenceScreen screen = getPreferenceScreen();
+        if (screen == null) return;
+        refreshGroupSummaries(screen);
+    }
+
+    private void refreshGroupSummaries(@NonNull PreferenceScreen screen) {
+        for (int i = 0; i < screen.getPreferenceCount(); i++) {
+            Preference preference = screen.getPreference(i);
+            if (preference instanceof PreferenceCategory) refreshCategorySummaries((PreferenceCategory) preference);
+        }
+    }
+
+    private void refreshCategorySummaries(@NonNull PreferenceCategory category) {
+        for (int i = 0; i < category.getPreferenceCount(); i++) {
+            Preference preference = category.getPreference(i);
+            String key = preference.getKey();
+            if (key == null) continue;
+            if (key.equals(TaiSettings.KEY_SYSTEM_PROMPT_GENERAL)) {
+                preference.setSummary(systemPromptSummary(false));
+            } else if (modelId != null && key.equals(TaiSettings.modelSystemPromptPreferenceKey(modelId))) {
+                preference.setSummary(systemPromptSummary(true));
+            } else {
+                refreshParameterSummary(preference, key);
+            }
+        }
+    }
+
+    private void refreshParameterSummary(@NonNull Preference preference, @NonNull String key) {
+        String[] parts = key.split("\\.", 3);
+        if (parts.length < 3) return;
+        boolean modelRows = key.startsWith("tai_model_parameter_screen.");
+        String rowBackend = parts[1];
+        String field = parts[2];
+        TaiSettings.ParameterSpec spec = TaiSettings.getParameterSchema(rowBackend).get(field);
+        if (spec != null) preference.setSummary(parameterSummary(rowBackend, spec, modelRows));
+    }
+
+    @NonNull
+    private String currentRawValue(@NonNull String rowBackend, @NonNull String field, boolean modelRows, @NonNull String defaultValue) {
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        if (preferences == null) return modelRows ? "auto" : defaultValue;
+        if (modelRows) return preferences.getString(TaiSettings.modelParameterPreferenceKey(modelId, field), "auto");
+        return preferences.getString(TaiSettings.globalParameterKey(rowBackend, field), defaultValue);
+    }
+
+    @NonNull
+    private CharSequence parameterSummary(@NonNull String rowBackend, @NonNull TaiSettings.ParameterSpec spec, boolean modelRows) {
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        String raw = currentRawValue(rowBackend, spec.field, modelRows, spec.defaultValue);
+        if (modelRows && (preferences == null || !preferences.contains(TaiSettings.modelParameterPreferenceKey(modelId, spec.field)))) {
+            return getString(R.string.termux_ai_parameters_summary_global, resolvedValue(rowBackend, spec));
+        }
+        if (!modelRows && (preferences == null || !preferences.contains(TaiSettings.globalParameterKey(rowBackend, spec.field)))) {
+            return getString(R.string.termux_ai_parameters_summary_backend_default, overrideValueLabel(spec.field, spec.defaultValue));
+        }
+        return getString(modelRows ? R.string.termux_ai_parameters_summary_override : R.string.termux_ai_parameters_summary_default,
+            overrideValueLabel(spec.field, raw));
+    }
+
+    @NonNull
+    private String resolvedValue(@NonNull String rowBackend, @NonNull TaiSettings.ParameterSpec spec) {
+        TaiSettings settings = new TaiSettings(requireContext());
+        Object value = resolvedRuntimeValue(settings, rowBackend, spec.field);
+        return overrideValueLabel(spec.field, value == null ? spec.defaultValue : String.valueOf(value));
+    }
+
+    @Nullable
+    private Object resolvedRuntimeValue(@NonNull TaiSettings settings, @NonNull String rowBackend, @NonNull String field) {
+        if (TaiSettings.FIELD_MAX_TOKENS.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).maxTokens;
+        if (TaiSettings.FIELD_TOP_K.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).topK;
+        if (TaiSettings.FIELD_TOP_P.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).topP;
+        if (TaiSettings.FIELD_TEMPERATURE.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).temperature;
+        if (TaiSettings.FIELD_ACCELERATOR.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).accelerator;
+        if (TaiSettings.FIELD_CONTEXT_WINDOW.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).contextWindow;
+        if (TaiSettings.FIELD_ENABLE_THINKING.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).thinkingEnabled;
+        if (TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(field)) return settings.getRuntimeOptions(rowBackend, modelId).speculativeDecodingEnabled;
+        return null;
+    }
+
+    @NonNull
+    private CharSequence systemPromptSummary(boolean modelPrompt) {
+        if (modelPrompt) {
+            SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+            boolean hasOverride = preferences != null && preferences.contains(TaiSettings.modelSystemPromptPreferenceKey(modelId));
+            return hasOverride
+                ? getString(R.string.termux_ai_parameters_summary_override, trimForSummary(currentModelSystemPrompt()))
+                : getString(R.string.termux_ai_parameters_summary_global, trimForSummary(new TaiSettings(requireContext()).getGeneralSystemPrompt()));
+        }
+        return trimForSummary(new TaiSettings(requireContext()).getGeneralSystemPrompt());
+    }
+
+    @NonNull
+    private String currentModelSystemPrompt() {
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        return preferences == null ? "" : preferences.getString(TaiSettings.modelSystemPromptPreferenceKey(modelId), "");
+    }
+
+    @NonNull
+    private String trimForSummary(@Nullable String value) {
+        if (value == null || value.trim().isEmpty()) return getString(R.string.termux_ai_parameters_prompt_empty);
+        String compact = value.trim().replace('\n', ' ');
+        return compact.length() > 120 ? compact.substring(0, 117) + "..." : compact;
+    }
+
+    @NonNull
+    private String overrideValueLabel(@NonNull String field, @Nullable String value) {
+        if (value == null || value.isEmpty() || "auto".equalsIgnoreCase(value)) return "auto";
+        if (TaiSettings.FIELD_ENABLE_THINKING.equals(field) || TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(field)) {
+            if ("true".equalsIgnoreCase(value)) return getString(R.string.termux_ai_enabled);
+            if ("false".equalsIgnoreCase(value)) return getString(R.string.termux_ai_disabled);
+        }
+        return value;
+    }
+
+    @NonNull
+    private String parameterLabel(@NonNull String field) {
+        if (TaiSettings.FIELD_MAX_TOKENS.equals(field)) return getString(R.string.termux_ai_max_tokens_title);
+        if (TaiSettings.FIELD_TOP_K.equals(field)) return getString(R.string.termux_ai_top_k_title);
+        if (TaiSettings.FIELD_TOP_P.equals(field)) return getString(R.string.termux_ai_top_p_title);
+        if (TaiSettings.FIELD_TEMPERATURE.equals(field)) return getString(R.string.termux_ai_temperature_title);
+        if (TaiSettings.FIELD_ACCELERATOR.equals(field)) return getString(R.string.termux_ai_accelerator_title);
+        if (TaiSettings.FIELD_ENABLE_THINKING.equals(field)) return getString(R.string.termux_ai_thinking_title);
+        if (TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(field)) return getString(R.string.termux_ai_speculative_decoding_title);
+        if (TaiSettings.FIELD_CONTEXT_WINDOW.equals(field)) return getString(R.string.termux_ai_context_window_title);
+        return field;
+    }
+
+    @NonNull
+    private EditText buildDialogEditText(@NonNull Context context, @Nullable String value, boolean multiline) {
+        EditText input = new EditText(context);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | (multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0));
+        input.setSingleLine(!multiline);
+        if (multiline) {
+            input.setMinLines(4);
+            input.setGravity(Gravity.TOP | Gravity.START);
+        }
+        if (value != null) {
+            input.setText(value);
+            input.setSelection(value.length());
+        }
+        return input;
+    }
+
+    @NonNull
+    private View wrapDialogView(@NonNull Context context, @Nullable CharSequence header, @NonNull View input) {
+        float density = context.getResources().getDisplayMetrics().density;
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int padH = Math.round(24 * density);
+        layout.setPadding(padH, Math.round(8 * density), padH, 0);
+        if (header != null) {
+            TextView headerView = new TextView(context);
+            headerView.setText(header);
+            headerView.setTextIsSelectable(true);
+            headerView.setPadding(0, 0, 0, Math.round(12 * density));
+            layout.addView(headerView);
+        }
+        layout.addView(input);
+        return layout;
+    }
+}

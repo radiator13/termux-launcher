@@ -1,0 +1,84 @@
+package com.termux.ai;
+
+import org.junit.Test;
+
+import java.util.HashSet;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+public class TaiModelCatalogTest {
+
+    @Test
+    public void builtInCatalog_matchesYamlModelCountsAndUniqueIds() {
+        Map<String, TaiModelCatalog.CatalogEntry> entries = TaiModelCatalog.entries();
+        int liteRtCount = 0;
+        int mlcCount = 0;
+
+        for (TaiModelCatalog.CatalogEntry entry : entries.values()) {
+            if (TaiModelSpec.BACKEND_LITERT_LM.equals(entry.backend)) liteRtCount++;
+            if (TaiModelSpec.BACKEND_MLC_LLM.equals(entry.backend)) mlcCount++;
+        }
+
+        assertEquals(16, entries.size());
+        assertEquals(16, new HashSet<>(entries.keySet()).size());
+        assertEquals(5, liteRtCount);
+        assertEquals(11, mlcCount);
+    }
+
+    @Test
+    public void builtInCatalog_usesCanonicalYamlIdsAndUiMetadata() {
+        TaiModelCatalog.CatalogEntry recommended = TaiModelCatalog.get("gemma-4-e2b-it-litert-lm");
+        TaiModelCatalog.CatalogEntry coder = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc");
+
+        assertNotNull(recommended);
+        assertEquals("general_multimodal", recommended.jobGroup);
+        assertEquals("recommended_default", recommended.priority);
+        assertEquals("2.4 GB", recommended.sizeEstimate);
+        assertEquals("8GB+", recommended.ramTier);
+        assertTrue(recommended.recommended);
+        assertTrue(recommended.displayCapabilityTags.contains("Vision"));
+
+        assertNotNull(coder);
+        assertEquals("coding", coder.jobGroup);
+        assertEquals("q4f16_1", coder.quantization);
+        assertEquals("4GB-6GB+", coder.ramTier);
+        assertTrue(coder.recommended);
+        assertTrue(coder.displayCapabilityTags.contains("Code"));
+    }
+
+    @Test
+    public void builtInCatalog_gatesDownloadsWithoutVerifiedArtifactMetadata() {
+        TaiModelCatalog.CatalogEntry knownArtifact = TaiModelCatalog.get(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
+        TaiModelCatalog.CatalogEntry importOnlyLiteRt = TaiModelCatalog.get("qwen2.5-1.5b-instruct-litert-lm");
+        TaiModelCatalog.CatalogEntry importOnlyMlc = TaiModelCatalog.get("qwen2.5-coder-1.5b-instruct-q4f16_1-mlc");
+
+        assertNotNull(knownArtifact);
+        assertTrue(knownArtifact.downloadAvailable);
+        assertNotNull(knownArtifact.artifactPath);
+        assertNotNull(knownArtifact.downloadUrl);
+
+        assertNotNull(importOnlyLiteRt);
+        assertFalse(importOnlyLiteRt.downloadAvailable);
+        assertNull(importOnlyLiteRt.artifactPath);
+        assertNull(importOnlyLiteRt.downloadUrl);
+        assertTrue(importOnlyLiteRt.unavailableReason.contains("Import-only"));
+
+        assertNotNull(importOnlyMlc);
+        assertFalse(importOnlyMlc.downloadAvailable);
+        assertEquals("mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC", importOnlyMlc.repositoryId);
+        assertNull(importOnlyMlc.downloadUrl);
+    }
+
+    @Test
+    public void oldBuiltInIds_migrateToCanonicalYamlIds() {
+        assertEquals("gemma-4-e2b-it-litert-lm", TaiSettings.migrateBuiltInModelId("Gemma-4-E2B-it"));
+        assertEquals("gemma-4-e4b-it-litert-lm", TaiSettings.migrateBuiltInModelId("Gemma-4-E4B-it"));
+        assertEquals("functiongemma-270m-mobile-actions-litert-lm", TaiSettings.migrateBuiltInModelId("MobileActions-270M"));
+        assertEquals("user-model", TaiSettings.migrateBuiltInModelId("user-model"));
+    }
+}

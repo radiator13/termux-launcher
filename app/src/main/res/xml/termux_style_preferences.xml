@@ -96,6 +96,28 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        app:key="apps_bar_icons"
+        app:title="@string/apps_bar_icons_header">
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_bw_icons"
+            app:title="@string/termux_app_launcher_bw_icons_title"
+            app:summary="@string/termux_app_launcher_bw_icons_summary"
+            android:defaultValue="false" />
+
+        <Preference
+            app:key="app_launcher_icon_pack_package"
+            app:title="@string/termux_app_launcher_icon_pack_title"
+            app:summary="@string/termux_app_launcher_icon_pack_summary" />
+
+        <Preference
+            app:key="app_launcher_pinned_icon_pack_package"
+            app:title="@string/termux_app_launcher_pinned_icon_pack_title"
+            app:summary="@string/termux_app_launcher_pinned_icon_pack_summary" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:key="termux_sessions"
         app:title="@string/termux_sessions_header">
 

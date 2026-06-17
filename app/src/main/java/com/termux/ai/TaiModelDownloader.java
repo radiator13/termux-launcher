@@ -71,7 +71,8 @@ public final class TaiModelDownloader {
         File modelDir = new File(store.getModelsDirectory(), safeModelId);
         File output = new File(modelDir, fileNameFromUrl(url));
         String transferId = "download-" + safeModelId;
-        JSONObject transfer = transfer(transferId, safeModelId, url, output.getAbsolutePath(), "queued", 0L, 0L, "");
+        TaiModelDownloadService.clearCancellation(safeModelId);
+        JSONObject transfer = transfer(transferId, safeModelId, url, output.getAbsolutePath(), TaiModelStore.STATE_QUEUED, 0L, 0L, "");
         store.upsertDownload(transfer);
 
         Intent intent = new Intent(appContext, TaiModelDownloadService.class);
@@ -124,13 +125,15 @@ public final class TaiModelDownloader {
             if (status < 200 || status >= 300) {
                 throw new IllegalStateException("Download failed with HTTP " + status);
             }
+            boolean resumed = existing > 0L && status == 206;
+            if (!resumed) existing = 0L;
             long responseLength = connection.getHeaderFieldLong("Content-Length", -1L);
             contentLength = responseLength > 0 ? existing + responseLength : -1L;
             bytesRead = existing;
-            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", bytesRead, contentLength, ""), callback);
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, bytesRead, contentLength, ""), callback);
 
             try (InputStream input = new BufferedInputStream(connection.getInputStream());
-                 FileOutputStream outputStream = new FileOutputStream(partial, existing > 0L && connection.getResponseCode() == 206)) {
+                 FileOutputStream outputStream = new FileOutputStream(partial, resumed)) {
                 byte[] buffer = new byte[1024 * 64];
                 int read;
                 long lastPersisted = 0L;
@@ -139,7 +142,7 @@ public final class TaiModelDownloader {
                     outputStream.write(buffer, 0, read);
                     bytesRead += read;
                     if (bytesRead - lastPersisted >= 1024L * 1024L) {
-                        persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", bytesRead, contentLength, ""), callback);
+                        persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, bytesRead, contentLength, ""), callback);
                         lastPersisted = bytesRead;
                     }
                 }
@@ -148,12 +151,11 @@ public final class TaiModelDownloader {
             if (!expectedSha256.isEmpty() && !expectedSha256.equalsIgnoreCase(sha256(partial))) {
                 throw new IllegalStateException("Downloaded model failed SHA-256 verification.");
             }
-            if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
-            if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_VERIFYING, bytesRead, contentLength, ""), callback);
 
             // Detect and route MLC packages
-            if (isMlcPackage(output, url, backend, format)) {
-                String manifestJson = readManifestString(output);
+            if (isMlcPackage(partial, url, backend, format)) {
+                String manifestJson = readManifestString(partial);
                 if (manifestJson == null || manifestJson.trim().isEmpty()) {
                     throw new IllegalStateException(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST);
                 }
@@ -164,6 +166,9 @@ public final class TaiModelDownloader {
                 if (!validation.success) {
                     throw new IllegalStateException(validation.errorCode);
                 }
+
+                if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
+                if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
 
                 // Download files listed in manifest
                 JSONObject manifest = new JSONObject(manifestJson);
@@ -211,7 +216,7 @@ public final class TaiModelDownloader {
                     if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace file.");
                     if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize file download.");
 
-                    persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", currentBytes, totalMlcBytes, ""), callback);
+                    persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, currentBytes, totalMlcBytes, ""), callback);
                 }
 
                 TaiMlcPackageInstaller.InstallResult result = installer.installFromManifest(manifestJson, downloadDir, store);
@@ -219,13 +224,15 @@ public final class TaiModelDownloader {
                     throw new IllegalStateException(result.errorCode);
                 }
 
-                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "complete", currentBytes, currentBytes, ""), callback);
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_INSTALLED, currentBytes, currentBytes, ""), callback);
                 return;
             }
 
-            if (!looksLikeModelFile(output)) {
+            if (!looksLikeModelFile(partial, output.getName())) {
                 throw new IllegalStateException("Downloaded file does not look like a LiteRT-LM model. It may be an HTML login or error page.");
             }
+            if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
+            if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
 
             TaiModelSpec spec = new TaiModelSpec(
                 modelId,
@@ -244,10 +251,15 @@ public final class TaiModelDownloader {
                 recommendedRamGb, emptyToNull(expectedSha256)
             );
             store.upsertUserModel(spec);
-            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "complete", output.length(), output.length(), ""), callback);
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_INSTALLED, output.length(), output.length(), ""), callback);
+        } catch (InterruptedException e) {
+            try {
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_CANCELLED, bytesRead, contentLength, "cancelled"), callback);
+            } catch (JSONException ignored) {
+            }
         } catch (Exception e) {
             try {
-                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "failed", bytesRead, contentLength, e.getMessage()), callback);
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_FAILED, bytesRead, contentLength, e.getMessage()), callback);
             } catch (JSONException ignored) {
             }
         }
@@ -304,8 +316,8 @@ public final class TaiModelDownloader {
         return name.isEmpty() ? "model.bin" : name;
     }
 
-    private boolean looksLikeModelFile(@NonNull File file) {
-        String lowerName = file.getName().toLowerCase();
+    private boolean looksLikeModelFile(@NonNull File file, @NonNull String originalName) {
+        String lowerName = originalName.toLowerCase(Locale.ROOT);
         if (!lowerName.endsWith(".litertlm") && !lowerName.endsWith(".task")) {
             return false;
         }

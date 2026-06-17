@@ -33,6 +33,10 @@
     <color name="termux_on_surface">#171C24</color>
     <color name="termux_on_surface_variant">#586171</color>
     <color name="termux_outline_variant">#C1C9D6</color>
+    <color name="termux_primary_container">#D8E3FF</color>
+    <color name="termux_on_primary_container">#0B1F44</color>
+    <color name="termux_tertiary_container">#E8DEF8</color>
+    <color name="termux_on_tertiary_container">#4F378B</color>
     <color name="termux_accent_container">#D8E3FF</color>
     <color name="termux_on_accent_container">#0B1F44</color>
     <color name="termux_error">#BA1A1A</color>

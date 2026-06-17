@@ -15,6 +15,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class TaiModelStore {
+    public static final String STATE_QUEUED = "queued";
+    public static final String STATE_DOWNLOADING = "downloading";
+    public static final String STATE_CANCELLED = "cancelled";
+    public static final String STATE_FAILED = "failed";
+    public static final String STATE_VERIFYING = "verifying";
+    public static final String STATE_INSTALLED = "installed";
+    public static final String STATE_UNAVAILABLE = "unavailable";
+
+    public static final String ERROR_ACTIVE_MODEL_LOADED = "active_model_loaded";
+    public static final String ERROR_DELETE_REQUIRES_CONFIRMATION = "delete_requires_confirmation";
+
     private static final String KEY_USER_MODELS = "tai_user_models_json";
     private static final String KEY_DOWNLOADS = "tai_downloads_json";
 
@@ -69,6 +80,22 @@ public final class TaiModelStore {
     }
 
     public synchronized boolean deleteUserModel(@NonNull String modelId) {
+        return deleteUserModel(modelId, false, true).deleted;
+    }
+
+    @NonNull
+    public synchronized DeleteResult deleteUserModel(@NonNull String modelId,
+                                                     boolean activeModelLoaded,
+                                                     boolean confirmed) {
+        if (activeModelLoaded) {
+            return DeleteResult.blocked(ERROR_ACTIVE_MODEL_LOADED,
+                "Unload the active model before deleting it.");
+        }
+        if (!confirmed) {
+            return DeleteResult.blocked(ERROR_DELETE_REQUIRES_CONFIRMATION,
+                "Deleting a model requires explicit confirmation.");
+        }
+
         Map<String, TaiModelSpec> models = getUserModels();
         TaiModelSpec removed = models.remove(modelId);
         JSONArray array = new JSONArray();
@@ -96,7 +123,7 @@ public final class TaiModelStore {
 
         File modelDir = new File(getModelsDirectory(), modelId);
         deleteRecursively(modelDir);
-        return removed != null;
+        return DeleteResult.deleted(removed != null);
     }
 
     @NonNull
@@ -160,5 +187,29 @@ public final class TaiModelStore {
             }
         }
         file.delete();
+    }
+
+    public static final class DeleteResult {
+        public final boolean ok;
+        public final boolean deleted;
+        @NonNull public final String errorCode;
+        @NonNull public final String message;
+
+        private DeleteResult(boolean ok, boolean deleted, @NonNull String errorCode, @NonNull String message) {
+            this.ok = ok;
+            this.deleted = deleted;
+            this.errorCode = errorCode;
+            this.message = message;
+        }
+
+        @NonNull
+        static DeleteResult deleted(boolean deleted) {
+            return new DeleteResult(true, deleted, "", deleted ? "Model deleted." : "Model was not installed.");
+        }
+
+        @NonNull
+        static DeleteResult blocked(@NonNull String errorCode, @NonNull String message) {
+            return new DeleteResult(false, false, errorCode, message);
+        }
     }
 }

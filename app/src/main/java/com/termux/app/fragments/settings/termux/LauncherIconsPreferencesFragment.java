@@ -1,32 +1,7 @@
 package com.termux.app.fragments.settings.termux;
 
-import android.content.Context;
-import android.os.Bundle;
-
 import androidx.annotation.Keep;
-import androidx.preference.PreferenceManager;
-
-import com.termux.R;
-import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 
 @Keep
-public class LauncherIconsPreferencesFragment extends MaterialPreferenceFragment {
-    @Override
-    public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-        Context context = getContext();
-        if (context == null)
-            return;
-        PreferenceManager preferenceManager = getPreferenceManager();
-        preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
-        setPreferencesFromResource(R.xml.launcher_icons_preferences, rootKey);
-        LauncherIconPackPreferenceController.configure(this, context);
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        Context context = getContext();
-        if (context == null) return;
-        LauncherIconPackPreferenceController.configure(this, context);
-    }
+public class LauncherIconsPreferencesFragment extends TermuxStylePreferencesFragment {
 }

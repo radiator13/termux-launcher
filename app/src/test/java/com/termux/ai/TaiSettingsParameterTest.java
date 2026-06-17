@@ -1,0 +1,270 @@
+package com.termux.ai;
+
+import android.content.Context;
+
+import androidx.test.core.app.ApplicationProvider;
+
+import com.termux.app.fragments.settings.termux.TaiParameterPreferencesFragment;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+
+import java.util.Map;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+@RunWith(RobolectricTestRunner.class)
+public class TaiSettingsParameterTest {
+    private Context context;
+    private TaiSettings settings;
+
+    @Before
+    public void setUp() {
+        context = ApplicationProvider.getApplicationContext();
+        context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit();
+        settings = new TaiSettings(context);
+    }
+
+    @Test
+    public void liteRtSchema_matchesHandoffRangesAndDefaults() {
+        TaiSettings.ParameterSchema schema = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_LITERT_LM);
+        Map<String, TaiSettings.ParameterSpec> fields = schema.fields();
+
+        assertEquals(TaiModelSpec.BACKEND_LITERT_LM, schema.backend);
+        assertEquals(7, fields.size());
+        assertIntegerSpec(fields.get(TaiSettings.FIELD_MAX_TOKENS), "4000", 2000, 32000);
+        assertIntegerSpec(fields.get(TaiSettings.FIELD_TOP_K), "64", 5, 100);
+        assertDecimalSpec(fields.get(TaiSettings.FIELD_TOP_P), "0.95", 0.0d, 1.0d);
+        assertDecimalSpec(fields.get(TaiSettings.FIELD_TEMPERATURE), "1.00", 0.0d, 2.0d);
+        assertArrayEquals(new String[] {"GPU", "CPU"}, fields.get(TaiSettings.FIELD_ACCELERATOR).options);
+        assertBooleanSpec(fields.get(TaiSettings.FIELD_ENABLE_THINKING), "false");
+        assertBooleanSpec(fields.get(TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING), "false");
+
+        TaiRuntimeOptions options = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, null);
+        assertEquals(Integer.valueOf(4000), options.maxTokens);
+        assertEquals(Integer.valueOf(64), options.topK);
+        assertEquals(Double.valueOf(0.95d), options.topP);
+        assertEquals(Double.valueOf(1.0d), options.temperature);
+        assertEquals("GPU", options.accelerator);
+        assertEquals(Boolean.FALSE, options.thinkingEnabled);
+        assertEquals(Boolean.FALSE, options.speculativeDecodingEnabled);
+        assertNull(options.contextWindow);
+    }
+
+    @Test
+    public void mlcSchema_matchesHandoffRangesAndDefaults() {
+        TaiSettings.ParameterSchema schema = TaiSettings.getParameterSchema(TaiModelSpec.BACKEND_MLC_LLM);
+        Map<String, TaiSettings.ParameterSpec> fields = schema.fields();
+
+        assertEquals(TaiModelSpec.BACKEND_MLC_LLM, schema.backend);
+        assertEquals(6, fields.size());
+        assertArrayEquals(new String[] {"Auto", "CPU", "GPU"}, fields.get(TaiSettings.FIELD_ACCELERATOR).options);
+        assertIntegerSpec(fields.get(TaiSettings.FIELD_CONTEXT_WINDOW), "4096", 1024, 8192);
+        assertIntegerSpec(fields.get(TaiSettings.FIELD_MAX_TOKENS), "1024", 256, 8192);
+        assertDecimalSpec(fields.get(TaiSettings.FIELD_TEMPERATURE), "0.70", 0.0d, 2.0d);
+        assertDecimalSpec(fields.get(TaiSettings.FIELD_TOP_P), "0.95", 0.0d, 1.0d);
+        assertIntegerSpec(fields.get(TaiSettings.FIELD_TOP_K), "64", 5, 100);
+
+        TaiRuntimeOptions options = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, null);
+        assertEquals("Auto", options.accelerator);
+        assertEquals(Integer.valueOf(4096), options.contextWindow);
+        assertEquals(Integer.valueOf(1024), options.maxTokens);
+        assertEquals(Double.valueOf(0.70d), options.temperature);
+        assertEquals(Double.valueOf(0.95d), options.topP);
+        assertEquals(Integer.valueOf(64), options.topK);
+        assertNull(options.thinkingEnabled);
+        assertNull(options.speculativeDecodingEnabled);
+    }
+
+    @Test
+    public void validMinAndMaxValues_resolveForEveryRangedField() {
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 2000);
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_K, 5);
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_P, 0.0d);
+        settings.setGlobalParameter(TaiSettings.FIELD_TEMPERATURE, 0.0d);
+        TaiRuntimeOptions liteRtMin = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, null);
+        assertEquals(Integer.valueOf(2000), liteRtMin.maxTokens);
+        assertEquals(Integer.valueOf(5), liteRtMin.topK);
+        assertEquals(Double.valueOf(0.0d), liteRtMin.topP);
+        assertEquals(Double.valueOf(0.0d), liteRtMin.temperature);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 32000);
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_K, 100);
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_P, 1.0d);
+        settings.setGlobalParameter(TaiSettings.FIELD_TEMPERATURE, 2.0d);
+        TaiRuntimeOptions liteRtMax = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, null);
+        assertEquals(Integer.valueOf(32000), liteRtMax.maxTokens);
+        assertEquals(Integer.valueOf(100), liteRtMax.topK);
+        assertEquals(Double.valueOf(1.0d), liteRtMax.topP);
+        assertEquals(Double.valueOf(2.0d), liteRtMax.temperature);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_CONTEXT_WINDOW, 1024);
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 256);
+        TaiRuntimeOptions mlcMin = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, null);
+        assertEquals(Integer.valueOf(1024), mlcMin.contextWindow);
+        assertEquals(Integer.valueOf(256), mlcMin.maxTokens);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_CONTEXT_WINDOW, 8192);
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 8192);
+        TaiRuntimeOptions mlcMax = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, null);
+        assertEquals(Integer.valueOf(8192), mlcMax.contextWindow);
+        assertEquals(Integer.valueOf(8192), mlcMax.maxTokens);
+    }
+
+    @Test
+    public void invalidValues_fallBackByPrecedenceWithoutCrashing() {
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, "not-a-number");
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_K, 101);
+        settings.setGlobalParameter(TaiSettings.FIELD_TOP_P, 1.01d);
+        settings.setGlobalParameter(TaiSettings.FIELD_TEMPERATURE, Double.NaN);
+        settings.setGlobalParameter(TaiSettings.FIELD_ACCELERATOR, "NPU");
+        settings.setGlobalParameter(TaiSettings.FIELD_ENABLE_THINKING, "maybe");
+        settings.setGlobalParameter(TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING, "yes");
+
+        TaiRuntimeOptions liteRt = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, "litert-bad");
+        assertEquals(Integer.valueOf(4000), liteRt.maxTokens);
+        assertEquals(Integer.valueOf(64), liteRt.topK);
+        assertEquals(Double.valueOf(0.95d), liteRt.topP);
+        assertEquals(Double.valueOf(1.0d), liteRt.temperature);
+        assertEquals("GPU", liteRt.accelerator);
+        assertFalse(liteRt.thinkingEnabled);
+        assertFalse(liteRt.speculativeDecodingEnabled);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_CONTEXT_WINDOW, 9000);
+        TaiRuntimeOptions mlc = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, "mlc-bad");
+        assertEquals("Auto", mlc.accelerator);
+        assertEquals(Integer.valueOf(4096), mlc.contextWindow);
+        assertEquals(Integer.valueOf(1024), mlc.maxTokens);
+    }
+
+    @Test
+    public void perModelOverrideWinsAndResetRestoresGlobalWithoutRetroactiveEdits() {
+        String modelId = "model-one";
+        settings.setGlobalParameter(TaiSettings.FIELD_TEMPERATURE, 1.2d);
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 5000);
+        settings.setModelParameter(modelId, TaiSettings.FIELD_TEMPERATURE, 0.4d);
+        settings.setModelParameter(modelId, TaiSettings.FIELD_MAX_TOKENS, 6000);
+
+        TaiRuntimeOptions withOverride = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, modelId);
+        assertEquals(Double.valueOf(0.4d), withOverride.temperature);
+        assertEquals(Integer.valueOf(6000), withOverride.maxTokens);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_TEMPERATURE, 1.6d);
+        settings.setGlobalParameter(TaiSettings.FIELD_MAX_TOKENS, 7000);
+        TaiRuntimeOptions afterGlobalEdit = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, modelId);
+        assertEquals(Double.valueOf(0.4d), afterGlobalEdit.temperature);
+        assertEquals(Integer.valueOf(6000), afterGlobalEdit.maxTokens);
+
+        settings.resetModelParameterToGlobal(modelId, TaiSettings.FIELD_TEMPERATURE);
+        TaiRuntimeOptions afterFieldReset = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, modelId);
+        assertEquals(Double.valueOf(1.6d), afterFieldReset.temperature);
+        assertEquals(Integer.valueOf(6000), afterFieldReset.maxTokens);
+
+        settings.resetModelParametersToGlobal(modelId);
+        TaiRuntimeOptions afterModelReset = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, modelId);
+        assertEquals(Double.valueOf(1.6d), afterModelReset.temperature);
+        assertEquals(Integer.valueOf(7000), afterModelReset.maxTokens);
+    }
+
+    @Test
+    public void backendScopedGlobalDefaults_doNotLeakAcrossBackends() {
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_LITERT_LM, TaiSettings.FIELD_MAX_TOKENS, 32000);
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_MLC_LLM, TaiSettings.FIELD_MAX_TOKENS, 256);
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_LITERT_LM, TaiSettings.FIELD_ACCELERATOR, "CPU");
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_MLC_LLM, TaiSettings.FIELD_ACCELERATOR, "Auto");
+
+        TaiRuntimeOptions liteRt = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, "litert-one");
+        TaiRuntimeOptions mlc = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, "mlc-one");
+
+        assertEquals(Integer.valueOf(32000), liteRt.maxTokens);
+        assertEquals("CPU", liteRt.accelerator);
+        assertEquals(Integer.valueOf(256), mlc.maxTokens);
+        assertEquals("Auto", mlc.accelerator);
+        assertNull(liteRt.contextWindow);
+        assertNull(mlc.thinkingEnabled);
+        assertFalse(context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE)
+            .contains(TaiSettings.modelParameterPreferenceKey("mlc-one", TaiSettings.FIELD_ENABLE_THINKING)));
+    }
+
+    @Test
+    public void parameterScreenKeys_includeBackendToPreventCrossBackendRowsColliding() {
+        assertEquals("tai_global_parameter_screen.litert_lm.max_tokens",
+            TaiParameterPreferencesFragment.parameterPreferenceKey(
+                TaiModelSpec.BACKEND_LITERT_LM, TaiSettings.FIELD_MAX_TOKENS, false));
+        assertEquals("tai_global_parameter_screen.mlc_llm.max_tokens",
+            TaiParameterPreferencesFragment.parameterPreferenceKey(
+                TaiModelSpec.BACKEND_MLC_LLM, TaiSettings.FIELD_MAX_TOKENS, false));
+        assertEquals("tai_model_parameter_screen.mlc_llm.context_window",
+            TaiParameterPreferencesFragment.parameterPreferenceKey(
+                TaiModelSpec.BACKEND_MLC_LLM, TaiSettings.FIELD_CONTEXT_WINDOW, true));
+    }
+
+    @Test
+    public void restoringBackendGlobalDefault_removesOnlyThatBackendDefault() {
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_LITERT_LM, TaiSettings.FIELD_TEMPERATURE, 1.7d);
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_MLC_LLM, TaiSettings.FIELD_TEMPERATURE, 0.2d);
+
+        settings.setGlobalParameter(TaiModelSpec.BACKEND_LITERT_LM, TaiSettings.FIELD_TEMPERATURE, null);
+
+        TaiRuntimeOptions liteRt = settings.getRuntimeOptions(TaiModelSpec.BACKEND_LITERT_LM, null);
+        TaiRuntimeOptions mlc = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, null);
+        assertEquals(Double.valueOf(1.0d), liteRt.temperature);
+        assertEquals(Double.valueOf(0.2d), mlc.temperature);
+    }
+
+    @Test
+    public void modelSystemPromptOverridesGeneralAndResetsWithModel() {
+        String modelId = "prompt-model";
+        context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(TaiSettings.KEY_SYSTEM_PROMPT_GENERAL, "global prompt").commit();
+
+        assertEquals("global prompt", settings.getSystemPrompt(modelId));
+
+        settings.setModelSystemPrompt(modelId, "model prompt");
+        assertEquals("model prompt", settings.getSystemPrompt(modelId));
+
+        settings.resetModelSystemPromptToGlobal(modelId);
+        assertEquals("global prompt", settings.getSystemPrompt(modelId));
+
+        settings.setModelSystemPrompt(modelId, "model prompt again");
+        settings.resetModelParametersToGlobal(modelId);
+        assertEquals("global prompt", settings.getSystemPrompt(modelId));
+    }
+
+    @Test
+    public void invalidPerModelOverrideFallsBackToGlobalThenBackendDefault() {
+        String modelId = "mlc-one";
+        settings.setGlobalParameter(TaiSettings.FIELD_CONTEXT_WINDOW, 2048);
+        settings.setModelParameter(modelId, TaiSettings.FIELD_CONTEXT_WINDOW, 100000);
+
+        TaiRuntimeOptions withGlobalFallback = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, modelId);
+        assertEquals(Integer.valueOf(2048), withGlobalFallback.contextWindow);
+
+        settings.setGlobalParameter(TaiSettings.FIELD_CONTEXT_WINDOW, "bad");
+        TaiRuntimeOptions withBackendFallback = settings.getRuntimeOptions(TaiModelSpec.BACKEND_MLC_LLM, modelId);
+        assertEquals(Integer.valueOf(4096), withBackendFallback.contextWindow);
+    }
+
+    private static void assertIntegerSpec(TaiSettings.ParameterSpec spec, String defaultValue, int min, int max) {
+        assertEquals(defaultValue, spec.defaultValue);
+        assertEquals(Double.valueOf(min), spec.minValue);
+        assertEquals(Double.valueOf(max), spec.maxValue);
+    }
+
+    private static void assertDecimalSpec(TaiSettings.ParameterSpec spec, String defaultValue, double min, double max) {
+        assertEquals(defaultValue, spec.defaultValue);
+        assertEquals(Double.valueOf(min), spec.minValue);
+        assertEquals(Double.valueOf(max), spec.maxValue);
+    }
+
+    private static void assertBooleanSpec(TaiSettings.ParameterSpec spec, String defaultValue) {
+        assertEquals(defaultValue, spec.defaultValue);
+        assertTrue(spec.fallbackValue instanceof Boolean);
+    }
+}

@@ -9,6 +9,7 @@ import android.widget.TextView;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
@@ -76,6 +77,6 @@ public class PillPreference extends Preference {
         if (getContext().getTheme().resolveAttribute(attr, value, true)) {
             return value.data;
         }
-        return 0xFF888888;
+        return ContextCompat.getColor(getContext(), R.color.termux_on_surface_variant);
     }
 }

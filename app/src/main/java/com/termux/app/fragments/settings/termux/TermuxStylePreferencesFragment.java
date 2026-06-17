@@ -55,6 +55,7 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.termux_style_preferences, rootKey);
         SettingsLayoutUtils.applyScreenLayout(this);
+        LauncherIconPackPreferenceController.configure(this, context);
         configureDockPreferencePresentation();
         updateDockBlurAvailability();
     }
@@ -62,6 +63,10 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
     @Override
     public void onResume() {
         super.onResume();
+        Context context = getContext();
+        if (context != null) {
+            LauncherIconPackPreferenceController.configure(this, context);
+        }
         updateDockBlurAvailability();
     }
 

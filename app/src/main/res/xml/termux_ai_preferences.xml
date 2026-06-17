@@ -1,106 +1,50 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <com.termux.app.fragments.settings.StatusCardPreference
-        app:key="tai_runtime_status"
-        app:title="@string/termux_ai_runtime_status_title"
-        app:summary="@string/termux_ai_runtime_status_summary"
-        app:persistent="false"
-        app:selectable="false"/>
-
-    <PreferenceCategory app:title="@string/termux_ai_runtime_control_header">
+    <PreferenceCategory
+        app:key="tai_runtime_category"
+        app:title="@string/termux_ai_zone_runtime_title">
+        <com.termux.app.fragments.settings.StatusCardPreference
+            app:key="tai_runtime_status"
+            app:title="@string/termux_ai_runtime_status_title"
+            app:summary="@string/termux_ai_runtime_status_summary"
+            app:persistent="false"
+            app:selectable="false"/>
         <com.termux.app.fragments.settings.termux.TaiRuntimeActionsPreference
             app:key="tai_runtime_actions"
             app:persistent="false"
             app:selectable="false"/>
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="@string/termux_ai_model_roles_header">
-        <ListPreference
-            app:key="tai_role_default_assistant"
-            app:title="@string/termux_ai_default_assistant_model_title"
-            app:entries="@array/termux_ai_model_entries"
-            app:entryValues="@array/termux_ai_model_values"
-            app:defaultValue="Gemma-4-E2B-it"
-            app:useSimpleSummaryProvider="true"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        app:key="tai_backend_category"
-        app:title="@string/termux_ai_backend_header">
-        <Preference
-            app:key="tai_active_backend"
-            app:title="@string/termux_ai_active_backend_title"
-            app:persistent="false"
-            app:selectable="false"/>
-        <Preference
-            app:key="tai_mlc_catalog_notice"
-            app:title="@string/termux_ai_mlc_catalog_title"
-            app:summary="@string/termux_ai_mlc_catalog_summary"
-            app:persistent="false"
-            app:selectable="false"/>
-        <EditTextPreference
-            app:key="tai_mlc_custom_download"
-            app:title="@string/termux_ai_mlc_custom_download_title"
-            app:dialogTitle="@string/termux_ai_mlc_custom_download_title"
-            app:summary="@string/termux_ai_mlc_custom_download_warning"/>
-    </PreferenceCategory>
-
     <PreferenceCategory
         app:key="tai_models_category"
-        app:title="@string/termux_ai_models_header">
+        app:title="@string/termux_ai_zone_models_title">
         <Preference
-            app:key="tai_model_privacy_notice"
-            app:title="@string/termux_ai_model_privacy_notice_title"
+            app:key="tai_models_empty"
+            app:title="@string/termux_ai_models_empty_title"
+            app:summary="@string/termux_ai_models_empty_summary"
             app:persistent="false"
             app:selectable="false"/>
-        <EditTextPreference
-            app:key="tai_huggingface_token"
-            app:title="@string/termux_ai_huggingface_token_title"
-            app:dialogTitle="@string/termux_ai_huggingface_token_title"
-            app:summary="@string/termux_ai_huggingface_token_summary"/>
+        <Preference
+            app:key="tai_models_browse_catalog"
+            app:title="@string/termux_ai_models_browse_catalog_title"
+            app:summary="@string/termux_ai_models_browse_catalog_summary"
+            app:fragment="com.termux.app.fragments.settings.termux.TaiModelCatalogPreferencesFragment"
+            app:persistent="false"/>
         <Preference
             app:key="tai_model_import"
             app:title="@string/termux_ai_model_import_title"
             app:summary="@string/termux_ai_model_import_summary"
             app:persistent="false"/>
-        <Preference
-            app:key="tai_models_refresh"
-            app:title="@string/termux_ai_models_refresh_title"
-            app:summary="@string/termux_ai_models_refresh_summary"
-            app:persistent="false"/>
     </PreferenceCategory>
 
     <PreferenceCategory
-        app:key="tai_device_capabilities_category"
-        app:title="@string/termux_ai_device_capabilities_header">
+        app:key="tai_server_category"
+        app:title="@string/termux_ai_zone_server_title">
         <Preference
-            app:key="tai_mlc_support_status"
-            app:title="@string/termux_ai_mlc_support_status_title"
-            app:persistent="false"
-            app:selectable="false"/>
-        <Preference
-            app:key="tai_mlc_unsupported_reason"
-            app:title="@string/termux_ai_mlc_unsupported_reason_title"
-            app:persistent="false"
-            app:selectable="false"
-            app:enabled="false"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory app:title="@string/termux_ai_runtime_header">
-        <com.termux.app.fragments.settings.termux.TaiOverridesPreference
-            app:key="tai_runtime_overrides"
-            app:persistent="false"
-            app:selectable="false"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory app:title="@string/termux_ai_prompts_header">
-        <EditTextPreference
-            app:key="tai_system_prompt_general"
-            app:title="@string/termux_ai_general_prompt_title"
-            app:useSimpleSummaryProvider="true"/>
-    </PreferenceCategory>
-
-    <PreferenceCategory app:title="@string/termux_ai_capabilities_header">
+            app:key="tai_endpoint_copy"
+            app:title="@string/termux_ai_endpoint_copy_title"
+            app:summary="@string/termux_ai_endpoint_notice_summary"
+            app:persistent="false"/>
         <EditTextPreference
             app:key="tai_api_port"
             app:title="@string/termux_ai_api_port_title"
@@ -126,5 +70,28 @@
             app:summaryOff="@string/termux_ai_lan_enabled_summary_off"
             app:summaryOn="@string/termux_ai_lan_enabled_summary_on"
             app:defaultValue="false"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="tai_advanced_category"
+        app:title="@string/termux_ai_zone_advanced_title">
+        <Preference
+            app:key="tai_parameters_defaults"
+            app:title="@string/termux_ai_parameters_defaults_title"
+            app:summary="@string/termux_ai_parameters_defaults_summary"
+            app:persistent="false"/>
+        <EditTextPreference
+            app:key="tai_system_prompt_general"
+            app:title="@string/termux_ai_general_prompt_title"
+            app:useSimpleSummaryProvider="true"/>
+        <com.termux.app.fragments.settings.termux.TaiOverridesPreference
+            app:key="tai_runtime_overrides"
+            app:persistent="false"
+            app:selectable="false"/>
+        <Preference
+            app:key="tai_device_engine_info"
+            app:title="@string/termux_ai_device_engine_info_title"
+            app:persistent="false"
+            app:selectable="false"/>
     </PreferenceCategory>
 </PreferenceScreen>

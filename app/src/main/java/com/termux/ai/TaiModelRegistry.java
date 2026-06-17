@@ -11,9 +11,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class TaiModelRegistry {
-    public static final String MODEL_GEMMA_4_E2B_IT = "Gemma-4-E2B-it";
-    public static final String MODEL_GEMMA_4_E4B_IT = "Gemma-4-E4B-it";
-    public static final String MODEL_MOBILE_ACTIONS_270M = "MobileActions-270M";
+    public static final String MODEL_GEMMA_4_E2B_IT = "gemma-4-e2b-it-litert-lm";
+    public static final String MODEL_GEMMA_4_E4B_IT = "gemma-4-e4b-it-litert-lm";
+    public static final String MODEL_MOBILE_ACTIONS_270M = "functiongemma-270m-mobile-actions-litert-lm";
 
     public static final String ROLE_DEFAULT_ASSISTANT = "defaultAssistant";
 
@@ -27,8 +27,8 @@ public final class TaiModelRegistry {
                 entry.roleHint,
                 "built-in-catalog",
                 null,
-                "User-provided model; review upstream license before download/import",
-                0L,
+                entry.license,
+                entry.sizeBytes,
                 entry.capabilities,
                 true,
                 null,

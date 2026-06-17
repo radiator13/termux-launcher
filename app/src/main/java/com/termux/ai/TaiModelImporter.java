@@ -24,6 +24,11 @@ import java.util.Locale;
 
 public final class TaiModelImporter {
     private static final long MIN_MODEL_BYTES = 1024L * 1024L;
+    public static final String ERROR_UNSUPPORTED_MODEL_FILE = "unsupported_model_file";
+    public static final String ERROR_RAW_WEIGHTS_FORBIDDEN = "raw_weights_forbidden";
+    public static final String ERROR_NATIVE_LIBRARY_FORBIDDEN = "native_library_forbidden";
+    public static final String ERROR_INSECURE_URL = "insecure_url";
+    public static final String ERROR_UNSUPPORTED_BACKEND = "unsupported_backend";
 
     private final Context appContext;
     private final TaiModelStore store;
@@ -35,10 +40,19 @@ public final class TaiModelImporter {
 
     @NonNull
     public JSONObject importDocument(@NonNull Uri uri, @Nullable String requestedModelId) throws JSONException {
+        return importDocument(uri, requestedModelId, null);
+    }
+
+    @NonNull
+    public JSONObject importDocument(@NonNull Uri uri, @Nullable String requestedModelId,
+                                     @Nullable String backend) throws JSONException {
         DocumentMetadata metadata = readMetadata(uri);
         String fileName = sanitizeFileName(metadata.displayName);
-        if (!isSupportedFileName(fileName)) {
-            return error(400, "unsupported_model_file", "Select a .litertlm or .task model file.");
+        ValidationResult fileValidation = backend == null || backend.trim().isEmpty()
+            ? validateSupportedImportFileName(fileName)
+            : validateImportFileNameForBackend(backend, fileName);
+        if (!fileValidation.supported) {
+            return error(400, fileValidation.errorCode, fileValidation.message);
         }
 
         String inferredId = stripModelExtension(fileName);
@@ -62,6 +76,25 @@ public final class TaiModelImporter {
         File temporary = new File(modelDir, fileName + ".importing");
         try {
             copyDocument(uri, temporary);
+            if (fileValidation.mlcManifest) {
+                String manifestJson = readSmallTextFile(temporary);
+                TaiMlcPackageInstaller.InstallResult result =
+                    new TaiMlcPackageInstaller().installFromManifest(manifestJson, modelDir, store);
+                if (!result.success) {
+                    temporary.delete();
+                    deleteEmptyDirectory(modelDir);
+                    return error(400, result.errorCode, result.message);
+                }
+                temporary.delete();
+                JSONObject json = new JSONObject();
+                json.put("ok", true);
+                json.put("imported", true);
+                json.put("copiedIntoAppPrivateStorage", true);
+                json.put("sourceUri", uri.toString());
+                json.put("model", result.installedSpec == null ? JSONObject.NULL : result.installedSpec.toJson());
+                json.put("message", "MLC package verified, copied into app-private storage, and registered.");
+                return json;
+            }
             if (!looksLikeModelFile(temporary, fileName)) {
                 throw new IllegalStateException("The selected file does not look like a readable model package.");
             }
@@ -182,8 +215,56 @@ public final class TaiModelImporter {
     }
 
     public static boolean isSupportedFileName(@NonNull String fileName) {
+        return validateSupportedImportFileName(fileName).supported;
+    }
+
+    @NonNull
+    public static ValidationResult validateImportFileNameForBackend(@NonNull String backend, @NonNull String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".litertlm") || lower.endsWith(".task");
+        ValidationResult base = validateSupportedImportFileName(fileName);
+        if (!base.supported) return base;
+        if (TaiModelSpec.BACKEND_LITERT_LM.equals(backend)) {
+            if (lower.endsWith(".litertlm") || lower.endsWith(".task")) return ValidationResult.accepted(false);
+            return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
+                "LiteRT imports must be .litertlm or .task packages.");
+        }
+        if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) {
+            if (isMlcManifestFileName(lower)) return ValidationResult.accepted(true);
+            return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
+                "MLC imports must use a supported MLC manifest/package form; raw weights and native libraries are not allowed.");
+        }
+        return ValidationResult.rejected(ERROR_UNSUPPORTED_BACKEND, "Choose LiteRT or MLC before importing.");
+    }
+
+    @NonNull
+    public static ValidationResult validateHuggingFaceImportUrl(@NonNull String backend, @NonNull String url) {
+        String trimmed = url.trim();
+        if (!trimmed.startsWith("https://")) {
+            return ValidationResult.rejected(ERROR_INSECURE_URL, "Hugging Face imports require an https:// URL.");
+        }
+        String name = fileNameFromUrl(trimmed);
+        return validateImportFileNameForBackend(backend, name);
+    }
+
+    @NonNull
+    public static ValidationResult validateSupportedImportFileName(@NonNull String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".dll")) {
+            return ValidationResult.rejected(ERROR_NATIVE_LIBRARY_FORBIDDEN,
+                "Native libraries cannot be imported as models.");
+        }
+        if (isRawWeightFileName(lower)) {
+            return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
+                "Raw weight files are not supported. Select a LiteRT .litertlm/.task package or an MLC manifest.");
+        }
+        if (lower.endsWith(".litertlm") || lower.endsWith(".task")) {
+            return ValidationResult.accepted(false);
+        }
+        if (isMlcManifestFileName(lower)) {
+            return ValidationResult.accepted(true);
+        }
+        return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
+            "Select a LiteRT .litertlm/.task package or an MLC manifest JSON file.");
     }
 
     @NonNull
@@ -192,7 +273,62 @@ public final class TaiModelImporter {
         String lower = value.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".litertlm")) return value.substring(0, value.length() - ".litertlm".length());
         if (lower.endsWith(".task")) return value.substring(0, value.length() - ".task".length());
+        if (lower.endsWith(".mlc.json")) return value.substring(0, value.length() - ".mlc.json".length());
+        if (lower.endsWith("-mlc.json")) return value.substring(0, value.length() - "-mlc.json".length());
         return value;
+    }
+
+    private static boolean isMlcManifestFileName(@NonNull String lowerFileName) {
+        return lowerFileName.endsWith(".mlc.json") || lowerFileName.endsWith("-mlc.json");
+    }
+
+    private static boolean isRawWeightFileName(@NonNull String lowerFileName) {
+        return lowerFileName.endsWith(".safetensors")
+            || lowerFileName.endsWith(".gguf")
+            || lowerFileName.endsWith(".bin")
+            || lowerFileName.endsWith(".pt")
+            || lowerFileName.endsWith(".onnx");
+    }
+
+    @NonNull
+    private static String fileNameFromUrl(@NonNull String url) {
+        int slash = url.lastIndexOf('/');
+        String name = slash >= 0 ? url.substring(slash + 1) : url;
+        int query = name.indexOf('?');
+        if (query >= 0) name = name.substring(0, query);
+        int fragment = name.indexOf('#');
+        if (fragment >= 0) name = name.substring(0, fragment);
+        return name;
+    }
+
+    @NonNull
+    private TaiMlcPackageInstaller.InstallResult validateMlcManifestFile(@NonNull File file) {
+        try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
+            byte[] bytes = new byte[(int) Math.min(file.length(), 10L * 1024L * 1024L + 1L)];
+            int read = input.read(bytes);
+            if (read <= 0 || read > 10L * 1024L * 1024L) {
+                return TaiMlcPackageInstaller.InstallResult.failure(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST,
+                    "MLC manifest is empty or too large.");
+            }
+            JSONObject manifest = new JSONObject(new String(bytes, 0, read, StandardCharsets.UTF_8));
+            return new TaiMlcPackageInstaller().validateManifestInternal(manifest, store);
+        } catch (Exception e) {
+            return TaiMlcPackageInstaller.InstallResult.failure(TaiMlcPackageInstaller.ERROR_INVALID_MANIFEST,
+                "MLC manifest is not valid JSON.");
+        }
+    }
+
+    @NonNull
+    private String readSmallTextFile(@NonNull File file) throws Exception {
+        if (file.length() <= 0L || file.length() > 10L * 1024L * 1024L) {
+            throw new IllegalStateException("MLC manifest is empty or too large.");
+        }
+        try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
+            byte[] bytes = new byte[(int) file.length()];
+            int read = input.read(bytes);
+            if (read <= 0) throw new IllegalStateException("MLC manifest is empty.");
+            return new String(bytes, 0, read, StandardCharsets.UTF_8);
+        }
     }
 
     @NonNull
@@ -237,6 +373,31 @@ public final class TaiModelImporter {
         DocumentMetadata(@NonNull String displayName, long sizeBytes) {
             this.displayName = displayName;
             this.sizeBytes = sizeBytes;
+        }
+    }
+
+    public static final class ValidationResult {
+        public final boolean supported;
+        public final boolean mlcManifest;
+        @NonNull public final String errorCode;
+        @NonNull public final String message;
+
+        private ValidationResult(boolean supported, boolean mlcManifest,
+                                 @NonNull String errorCode, @NonNull String message) {
+            this.supported = supported;
+            this.mlcManifest = mlcManifest;
+            this.errorCode = errorCode;
+            this.message = message;
+        }
+
+        @NonNull
+        static ValidationResult accepted(boolean mlcManifest) {
+            return new ValidationResult(true, mlcManifest, "", "");
+        }
+
+        @NonNull
+        static ValidationResult rejected(@NonNull String errorCode, @NonNull String message) {
+            return new ValidationResult(false, false, errorCode, message);
         }
     }
 }

@@ -13,25 +13,22 @@ import androidx.preference.PreferenceViewHolder;
 import com.termux.R;
 
 /**
- * 2x2 grid of TAI runtime action cards (load / keep warm / cancel / unload),
- * matching the TL handoff "Runtime control" design.
+ * Row of TAI runtime action cards (stop / unload / logs), matching the TL
+ * handoff "Runtime control" design.
  */
 @Keep
 public class TaiRuntimeActionsPreference extends Preference {
 
     public interface OnActionClickListener {
-        void onLoad();
-        void onKeepWarm();
-        void onCancel();
+        void onStop();
         void onUnload();
+        void onLogs();
     }
 
     private OnActionClickListener mListener;
-    private CharSequence mLoadSub = "";
-    private boolean mLoadEnabled = true;
-    private boolean mKeepWarmEnabled = true;
-    private boolean mCancelEnabled = false;
+    private boolean mStopEnabled = false;
     private boolean mUnloadEnabled = false;
+    private boolean mLogsEnabled = true;
 
     public TaiRuntimeActionsPreference(@NonNull Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -54,16 +51,10 @@ public class TaiRuntimeActionsPreference extends Preference {
         mListener = listener;
     }
 
-    public void setLoadSub(CharSequence loadSub) {
-        mLoadSub = loadSub == null ? "" : loadSub;
-        notifyChanged();
-    }
-
-    public void setActionStates(boolean loadEnabled, boolean keepWarmEnabled, boolean cancelEnabled, boolean unloadEnabled) {
-        mLoadEnabled = loadEnabled;
-        mKeepWarmEnabled = keepWarmEnabled;
-        mCancelEnabled = cancelEnabled;
+    public void setActionStates(boolean stopEnabled, boolean unloadEnabled, boolean logsEnabled) {
+        mStopEnabled = stopEnabled;
         mUnloadEnabled = unloadEnabled;
+        mLogsEnabled = logsEnabled;
         notifyChanged();
     }
 
@@ -73,26 +64,14 @@ public class TaiRuntimeActionsPreference extends Preference {
         holder.itemView.setClickable(false);
         holder.itemView.setFocusable(false);
 
-        TextView loadLabel = (TextView) holder.findViewById(R.id.tai_action_load_label);
-        if (loadLabel != null) {
-            loadLabel.setText(R.string.termux_ai_runtime_load_title);
-        }
-        TextView loadSub = (TextView) holder.findViewById(R.id.tai_action_load_sub);
-        if (loadSub != null) {
-            loadSub.setText(mLoadSub);
-        }
-
-        bindCard(holder, R.id.tai_action_load, mLoadEnabled, () -> {
-            if (mListener != null) mListener.onLoad();
-        });
-        bindCard(holder, R.id.tai_action_keep_warm, mKeepWarmEnabled, () -> {
-            if (mListener != null) mListener.onKeepWarm();
-        });
-        bindCard(holder, R.id.tai_action_cancel, mCancelEnabled, () -> {
-            if (mListener != null) mListener.onCancel();
+        bindCard(holder, R.id.tai_action_stop, mStopEnabled, () -> {
+            if (mListener != null) mListener.onStop();
         });
         bindCard(holder, R.id.tai_action_unload, mUnloadEnabled, () -> {
             if (mListener != null) mListener.onUnload();
+        });
+        bindCard(holder, R.id.tai_action_logs, mLogsEnabled, () -> {
+            if (mListener != null) mListener.onLogs();
         });
     }
 

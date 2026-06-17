@@ -67,6 +67,42 @@
             android:textSize="11sp"
             android:visibility="gone" />
 
+        <LinearLayout
+            android:id="@+id/tai_model_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/tai_model_tune_action"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:minWidth="0dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:contentDescription="@string/termux_ai_model_tune_action"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/tai_model_primary_action"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:contentDescription="@string/termux_ai_model_primary_action_desc"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <ProgressBar
             android:id="@+id/tai_download_progress"
             style="?android:attr/progressBarStyleHorizontal"

@@ -23,6 +23,10 @@
         <item name="termuxColorOutlineVariant">?attr/colorOutlineVariant</item>
         <item name="termuxColorAccentContainer">?attr/colorSecondaryContainer</item>
         <item name="termuxColorOnAccentContainer">?attr/colorOnSecondaryContainer</item>
+        <item name="termuxColorPrimaryContainer">?attr/colorPrimaryContainer</item>
+        <item name="termuxColorOnPrimaryContainer">?attr/colorOnPrimaryContainer</item>
+        <item name="termuxColorTertiaryContainer">?attr/colorTertiaryContainer</item>
+        <item name="termuxColorOnTertiaryContainer">?attr/colorOnTertiaryContainer</item>
         <item name="termuxColorError">?attr/colorError</item>
         <item name="termuxColorErrorContainer">?attr/colorErrorContainer</item>
         <item name="termuxColorOnErrorContainer">?attr/colorOnErrorContainer</item>

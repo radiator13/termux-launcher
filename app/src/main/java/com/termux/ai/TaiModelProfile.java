@@ -54,10 +54,10 @@ public final class TaiModelProfile {
 
         String id = normalizedIdentity(modelSpec.id);
         String path = modelSpec.localPath == null ? "" : modelSpec.localPath.toLowerCase(Locale.ROOT);
-        if ("gemma4e2bit".equals(id) || path.contains("gemma-4-e2b-it.litertlm")) {
+        if ("gemma4e2bit".equals(id) || "gemma4e2bitlitertlm".equals(id) || path.contains("gemma-4-e2b-it.litertlm")) {
             return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4000, 1.0d, 8);
         }
-        if ("gemma4e4bit".equals(id) || path.contains("gemma-4-e4b-it.litertlm")) {
+        if ("gemma4e4bit".equals(id) || "gemma4e4bitlitertlm".equals(id) || path.contains("gemma-4-e4b-it.litertlm")) {
             return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4000, 1.0d, 12);
         }
         if (normalizedIdentity(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M).equals(id)

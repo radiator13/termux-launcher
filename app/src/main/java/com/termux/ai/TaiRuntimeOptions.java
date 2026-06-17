@@ -12,6 +12,7 @@ public final class TaiRuntimeOptions {
     @Nullable public final Double topP;
     @Nullable public final Double temperature;
     @Nullable public final String accelerator;
+    @Nullable public final Integer contextWindow;
     @Nullable public final Boolean thinkingEnabled;
     @Nullable public final Boolean speculativeDecodingEnabled;
     @Nullable public final Integer idleUnloadMinutes;
@@ -26,11 +27,27 @@ public final class TaiRuntimeOptions {
         @Nullable Boolean speculativeDecodingEnabled,
         @Nullable Integer idleUnloadMinutes
     ) {
+        this(maxTokens, topK, topP, temperature, accelerator, null,
+            thinkingEnabled, speculativeDecodingEnabled, idleUnloadMinutes);
+    }
+
+    public TaiRuntimeOptions(
+        @Nullable Integer maxTokens,
+        @Nullable Integer topK,
+        @Nullable Double topP,
+        @Nullable Double temperature,
+        @Nullable String accelerator,
+        @Nullable Integer contextWindow,
+        @Nullable Boolean thinkingEnabled,
+        @Nullable Boolean speculativeDecodingEnabled,
+        @Nullable Integer idleUnloadMinutes
+    ) {
         this.maxTokens = maxTokens;
         this.topK = topK;
         this.topP = topP;
         this.temperature = temperature;
         this.accelerator = accelerator;
+        this.contextWindow = contextWindow;
         this.thinkingEnabled = thinkingEnabled;
         this.speculativeDecodingEnabled = speculativeDecodingEnabled;
         this.idleUnloadMinutes = idleUnloadMinutes;
@@ -44,6 +61,7 @@ public final class TaiRuntimeOptions {
         putNullable(json, "topP", topP);
         putNullable(json, "temperature", temperature);
         putNullable(json, "accelerator", accelerator);
+        putNullable(json, "contextWindow", contextWindow);
         putNullable(json, "thinkingEnabled", thinkingEnabled);
         putNullable(json, "speculativeDecodingEnabled", speculativeDecodingEnabled);
         putNullable(json, "idleUnloadMinutes", idleUnloadMinutes);
@@ -59,6 +77,7 @@ public final class TaiRuntimeOptions {
             topP,
             temperature,
             overrideAccelerator,
+            contextWindow,
             thinkingEnabled,
             speculativeDecodingEnabled,
             idleUnloadMinutes
@@ -81,6 +100,7 @@ public final class TaiRuntimeOptions {
             overrideTopP != null ? overrideTopP : topP,
             overrideTemperature != null ? overrideTemperature : temperature,
             overrideAccelerator != null ? overrideAccelerator : accelerator,
+            contextWindow,
             overrideThinkingEnabled != null ? overrideThinkingEnabled : thinkingEnabled,
             overrideSpeculativeDecodingEnabled != null ? overrideSpeculativeDecodingEnabled : speculativeDecodingEnabled,
             idleUnloadMinutes

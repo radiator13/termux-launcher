@@ -17,17 +17,20 @@ import android.text.style.ForegroundColorSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.preference.EditTextPreference;
-import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceManager;
@@ -54,7 +57,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -64,6 +66,8 @@ import java.util.concurrent.Executors;
 @Keep
 public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private static final String MODEL_ROW_PREFIX = "tai_model_row_";
+    private static final String IMPORT_BACKEND_LITERT = TaiModelSpec.BACKEND_LITERT_LM;
+    private static final String IMPORT_BACKEND_MLC = TaiModelSpec.BACKEND_MLC_LLM;
 
     private static final class OverrideSpec {
         final String key;
@@ -79,6 +83,15 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             this.valuesRes = valuesRes;
             this.defaultValue = defaultValue;
         }
+    }
+
+    private static final class ImportDraft {
+        String backend = IMPORT_BACKEND_LITERT;
+        String hfUrl = "";
+        String hfToken = "";
+        String modelId = "";
+        Uri documentUri;
+        TaiModelImporter.DocumentMetadata documentMetadata;
     }
 
     private static final OverrideSpec[] OVERRIDE_SPECS = {
@@ -103,6 +116,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private final ActivityResultLauncher<String[]> modelPicker = registerForActivityResult(
         new ActivityResultContracts.OpenDocument(),
         this::onModelDocumentSelected);
+    private ImportDraft pendingImportDraft;
     private final ExecutorService runtimeActionExecutor = Executors.newFixedThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "tai-settings-runtime");
         thread.setDaemon(true);
@@ -130,14 +144,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         preferenceManager.setSharedPreferencesName(TaiSettings.PREFS_NAME);
         setPreferencesFromResource(R.xml.termux_ai_preferences, rootKey);
         SettingsLayoutUtils.applyScreenLayout(this);
-        setStaticSummary("tai_model_privacy_notice", R.string.termux_ai_model_privacy_notice_summary);
         configureRuntimeControls(context);
         configureOverrides(context);
-        configureHuggingFaceToken();
         configureEndpointPreferences(context);
         configureModelManager(context);
-        configureBackendSection(context);
-        configureDeviceCapabilities(context);
+        configureAdvancedSection(context);
         configureLanToggle(context);
     }
 
@@ -210,13 +221,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void refreshTaiPage(Context context) {
-        configureDefaultModelSelector(context);
         updateRuntimeStatus(context);
         refreshOverrides();
         refreshEndpointPreferences(context);
         populateModelRows(context);
-        refreshBackendSection(context);
-        refreshDeviceCapabilities(context);
+        refreshDeviceEngineInfo(context);
         refreshLanToggle(context);
     }
 
@@ -225,23 +234,18 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         if (actions == null) return;
         actions.setOnActionClickListener(new TaiRuntimeActionsPreference.OnActionClickListener() {
             @Override
-            public void onLoad() {
-                loadDefaultModel(context);
-            }
-
-            @Override
-            public void onKeepWarm() {
-                keepWarmDefaultModel(context);
-            }
-
-            @Override
-            public void onCancel() {
+            public void onStop() {
                 cancelGeneration(context);
             }
 
             @Override
             public void onUnload() {
                 unloadRuntime(context);
+            }
+
+            @Override
+            public void onLogs() {
+                showRuntimeLogs(context);
             }
         });
     }
@@ -268,13 +272,15 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
     private String overrideValueLabel(String key, String value) {
         if (value == null || value.isEmpty()) return "auto";
-        if ("tai_accelerator".equals(key)) {
+        if ("tai_accelerator".equals(key) || TaiSettings.FIELD_ACCELERATOR.equals(key)) {
             return "auto".equals(value) ? "profile" : value;
         }
         if ("tai_idle_unload_minutes".equals(key)) {
             return "0".equals(value) ? "off" : value + " min";
         }
-        if ("tai_thinking".equals(key) || "tai_speculative_decoding".equals(key)) {
+        if ("tai_thinking".equals(key) || "tai_speculative_decoding".equals(key)
+            || TaiSettings.FIELD_ENABLE_THINKING.equals(key)
+            || TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(key)) {
             if ("true".equals(value)) return "on";
             if ("false".equals(value)) return "off";
             return "auto";
@@ -311,6 +317,13 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private void configureEndpointPreferences(Context context) {
         configureApiPortPreference(context);
         configureApiTokenPreference(context);
+        Preference endpointCopy = findPreference("tai_endpoint_copy");
+        if (endpointCopy != null) {
+            endpointCopy.setOnPreferenceClickListener(preference -> {
+                copyEndpointInfo(context);
+                return true;
+            });
+        }
         Preference randomizePort = findPreference("tai_api_port_randomize");
         if (randomizePort != null) {
             randomizePort.setOnPreferenceClickListener(preference -> {
@@ -340,6 +353,16 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 } catch (JSONException e) {
                     Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
                 }
+                return true;
+            });
+        }
+    }
+
+    private void configureAdvancedSection(Context context) {
+        Preference parameters = findPreference("tai_parameters_defaults");
+        if (parameters != null) {
+            parameters.setOnPreferenceClickListener(preference -> {
+                openParameterScreen(null);
                 return true;
             });
         }
@@ -440,6 +463,37 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         Toast.makeText(context, toastResId, Toast.LENGTH_SHORT).show();
     }
 
+    private void copyEndpointInfo(Context context) {
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            String text = getString(R.string.termux_ai_endpoint_detail_message_dynamic,
+                endpoint.optString("baseUrl", ""),
+                endpoint.optString("openAiBaseUrl", ""),
+                endpoint.optString("token", ""),
+                endpoint.optString("endpointFile", "~/.launcherctl/endpoint"),
+                endpoint.optString("tokenFile", "~/.launcherctl/token"));
+            copyToClipboard(context, text, R.string.termux_ai_endpoint_copied);
+        } catch (JSONException e) {
+            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showGlobalParametersDialog(Context context) {
+        String[] entries = new String[OVERRIDE_SPECS.length];
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        for (int i = 0; i < OVERRIDE_SPECS.length; i++) {
+            OverrideSpec spec = OVERRIDE_SPECS[i];
+            String value = preferences == null ? spec.defaultValue : preferences.getString(spec.key, spec.defaultValue);
+            entries[i] = getString(spec.titleRes) + "  ·  " + overrideValueLabel(spec.key,
+                value);
+        }
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_parameters_defaults_title)
+            .setItems(entries, (dialog, which) -> showOverrideDialog(context, which))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
     private EditText buildDialogEditText(Context context, String value, int inputType, boolean multiline) {
         EditText input = new EditText(context);
         input.setInputType(inputType | (multiline ? InputType.TYPE_TEXT_FLAG_MULTI_LINE : 0));
@@ -488,72 +542,37 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 token.setText(endpoint.optString("token", new TaiSettings(context).getOrCreateApiToken()));
                 token.setSummary(endpoint.optString("token", ""));
             }
+            Preference endpointCopy = findPreference("tai_endpoint_copy");
+            if (endpointCopy != null) {
+                endpointCopy.setSummary(getString(R.string.termux_ai_endpoint_notice_summary_dynamic,
+                    endpoint.optString("openAiBaseUrl", ""),
+                    endpoint.optString("tokenFile", "~/.launcherctl/token")));
+            }
         } catch (JSONException e) {
             // Endpoint settings unavailable; leave existing summaries in place.
         }
     }
 
-    private void configureBackendSection(Context context) {
-        EditTextPreference customDownload = findPreference("tai_mlc_custom_download");
-        if (customDownload != null) {
-            customDownload.setText("");
-        }
-    }
-
-    private void refreshBackendSection(Context context) {
-        Preference activeBackend = findPreference("tai_active_backend");
-        if (activeBackend == null) return;
-        try {
-            JSONObject runtimeStatus = TaiManager.getInstance(context).runtimeStatus();
-            String backend = runtimeStatus.getJSONObject("runtime").optString("backend", "none");
-            String label;
-            if (TaiModelSpec.BACKEND_MLC_LLM.equals(backend)) {
-                label = getString(R.string.termux_ai_backend_label_mlc);
-            } else if (TaiModelSpec.BACKEND_LITERT_LM.equals(backend)) {
-                label = getString(R.string.termux_ai_backend_label_litert);
-            } else {
-                label = backend;
-            }
-            activeBackend.setSummary(label);
-        } catch (JSONException e) {
-            activeBackend.setSummary(R.string.termux_ai_backend_label_litert);
-        }
-    }
-
-    private void configureDeviceCapabilities(Context context) {
-    }
-
-    private void refreshDeviceCapabilities(Context context) {
+    private void refreshDeviceEngineInfo(Context context) {
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
-        Preference supportStatus = findPreference("tai_mlc_support_status");
-        Preference unsupportedReason = findPreference("tai_mlc_unsupported_reason");
-        if (supportStatus != null) {
-            supportStatus.setSummary(capabilities.mlcSupported
-                ? R.string.termux_ai_mlc_support_status_supported
-                : R.string.termux_ai_mlc_support_status_unsupported);
+        Preference info = findPreference("tai_device_engine_info");
+        if (info == null) return;
+        String backend = "none";
+        String model = new TaiSettings(context).getDefaultAssistantModel();
+        try {
+            JSONObject runtime = TaiManager.getInstance(context).runtimeStatus().getJSONObject("runtime");
+            backend = runtime.optString("backend", backend);
+            model = runtime.optString("loadedModelId", model);
+        } catch (JSONException ignored) {
         }
-        if (unsupportedReason != null) {
-            if (capabilities.mlcSupported) {
-                unsupportedReason.setVisible(false);
-            } else {
-                unsupportedReason.setVisible(true);
-                unsupportedReason.setSummary(capabilities.mlcUnsupportedReason != null
-                    ? capabilities.mlcUnsupportedReason
-                    : getString(R.string.termux_ai_mlc_unsupported_reason_summary));
-            }
-        }
-        EditTextPreference customDownload = findPreference("tai_mlc_custom_download");
-        if (customDownload != null) {
-            if (capabilities.mlcSupported) {
-                customDownload.setEnabled(true);
-                customDownload.setSummary(R.string.termux_ai_mlc_custom_download_warning);
-            } else {
-                customDownload.setEnabled(false);
-                customDownload.setSummary(capabilities.mlcUnsupportedReason != null
-                    ? capabilities.mlcUnsupportedReason
-                    : getString(R.string.termux_ai_mlc_unsupported_reason_summary));
-            }
-        }
+        String mlc = capabilities.mlcSupported
+            ? getString(R.string.termux_ai_mlc_support_status_supported)
+            : getString(R.string.termux_ai_mlc_support_status_unsupported);
+        String reason = capabilities.mlcSupported || capabilities.mlcUnsupportedReason == null
+            ? ""
+            : "\n" + capabilities.mlcUnsupportedReason;
+        info.setSummary(getString(R.string.termux_ai_device_engine_info_summary,
+            model, backend, mlc) + reason);
     }
 
     private void configureLanToggle(Context context) {
@@ -697,36 +716,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         return baseSummary + " · [" + backendLabel + "] · " + capBuilder.toString();
     }
 
-    private void configureDefaultModelSelector(Context context) {
-        ListPreference preference = findPreference(TaiSettings.KEY_ROLE_DEFAULT_ASSISTANT);
-        if (preference == null) return;
-
-        TaiModelStore store = new TaiModelStore(context);
-        Map<String, TaiModelSpec> installedModels = store.getUserModels();
-        ArrayList<String> entries = new ArrayList<>();
-        ArrayList<String> values = new ArrayList<>();
-        HashSet<String> seen = new HashSet<>();
-
-        for (TaiModelCatalog.CatalogEntry entry : TaiModelCatalog.entries().values()) {
-            entries.add(entry.displayName);
-            values.add(entry.modelId);
-            seen.add(entry.modelId);
-        }
-        for (TaiModelSpec model : installedModels.values()) {
-            if (seen.contains(model.id)) continue;
-            entries.add(model.displayName + " (" + model.id + ")");
-            values.add(model.id);
-            seen.add(model.id);
-        }
-
-        String current = preference.getValue();
-        if (current != null && !current.isEmpty() && !seen.contains(current)) {
-            preference.setValue(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
-        }
-        preference.setEntries(entries.toArray(new CharSequence[0]));
-        preference.setEntryValues(values.toArray(new CharSequence[0]));
-    }
-
     private void updateRuntimeStatus(Context context) {
         Preference status = findPreference("tai_runtime_status");
         TaiRuntimeActionsPreference actions = findPreference("tai_runtime_actions");
@@ -747,12 +736,10 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 status.setSummary(buildRuntimeCardBody(context, runtime, runtimeStatus));
             }
             if (actions != null) {
-                actions.setLoadSub(getDefaultAssistantDisplayName(context));
                 actions.setActionStates(
-                    !activeGeneration && !loading && !stopping,
-                    !activeGeneration && !loading && !stopping,
                     activeGeneration || loading,
-                    (loaded || loading) && !activeGeneration && !stopping);
+                    (loaded || loading) && !activeGeneration && !stopping,
+                    true);
             }
         } catch (JSONException e) {
             if (status != null) status.setSummary(R.string.termux_ai_runtime_status_summary);
@@ -821,10 +808,15 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void configureModelManager(Context context) {
+        Preference browseCatalog = findPreference("tai_models_browse_catalog");
+        if (browseCatalog != null) {
+            browseCatalog.setSummary(R.string.termux_ai_models_browse_catalog_summary);
+        }
+
         Preference importModel = findPreference("tai_model_import");
         if (importModel != null) {
             importModel.setOnPreferenceClickListener(preference -> {
-                modelPicker.launch(new String[]{"application/octet-stream", "application/zip", "*/*"});
+                showImportFlowDialog(context, new ImportDraft());
                 return true;
             });
         }
@@ -928,36 +920,20 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         TaiModelStore store = new TaiModelStore(context);
         Map<String, TaiModelSpec> installedModels = store.getUserModels();
-        JSONArray downloads = store.getDownloads();
-        HashSet<String> catalogIds = new HashSet<>();
-
-        for (TaiModelCatalog.CatalogEntry entry : TaiModelCatalog.entries().values()) {
-            catalogIds.add(entry.modelId);
-            TaiModelPreference row = new TaiModelPreference(context);
-            JSONObject download = findDownload(downloads, entry.modelId);
-            TaiModelSpec installed = installedModels.get(entry.modelId);
-            row.setKey(MODEL_ROW_PREFIX + entry.modelId);
-            row.setTitle(entry.displayName);
-            row.setSummary(buildModelRowSummary(entry.roleHint, entry.backend, entry.capabilities));
-            row.setMetaLine(buildCatalogMetaLine(context, entry));
-            configureModelPill(row, installed, download, entry.gated);
-            configureProgress(row, download);
-            row.setPersistent(false);
-            row.setOnPreferenceClickListener(preference -> {
-                showModelActions(context, entry, installedModels.get(entry.modelId), findDownload(new TaiModelStore(context).getDownloads(), entry.modelId));
-                return true;
-            });
-            category.addPreference(row);
-        }
+        Preference empty = findPreference("tai_models_empty");
+        if (empty != null) empty.setVisible(installedModels.isEmpty());
+        String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
 
         for (TaiModelSpec model : installedModels.values()) {
-            if (catalogIds.contains(model.id)) continue;
             TaiModelPreference row = new TaiModelPreference(context);
             row.setKey(MODEL_ROW_PREFIX + model.id);
             row.setTitle(model.displayName);
             row.setSummary(buildModelRowSummary(model.roleHint + " · " + model.source, model.backend, model.capabilities));
             row.setMetaLine(buildInstalledMetaLine(context, model));
-            row.setPill(getString(R.string.termux_ai_model_pill_installed), true);
+row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_pill_active) : null,
+                model.id.equals(activeModelId));
+            row.setBackendTone(TaiModelSpec.BACKEND_MLC_LLM.equals(model.backend)
+                ? TaiModelPreference.BackendTone.MLC : TaiModelPreference.BackendTone.LITERT);
             configureProgress(row, null);
             row.setPersistent(false);
             row.setOnPreferenceClickListener(preference -> {
@@ -975,7 +951,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         }
         if (download != null) {
             String status = download.optString("status", "");
-            if ("queued".equals(status) || "running".equals(status)) {
+            if (TaiModelStore.STATE_QUEUED.equals(status)
+                || TaiModelStore.STATE_DOWNLOADING.equals(status)
+                || TaiModelStore.STATE_VERIFYING.equals(status)) {
                 row.setPill(getString(R.string.termux_ai_model_pill_downloading), false);
                 return;
             }
@@ -1054,7 +1032,10 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         if (context.getTheme().resolveAttribute(attr, value, true)) {
             return value.data;
         }
-        return 0xFF888888;
+        if (context.getTheme().resolveAttribute(android.R.attr.textColorSecondary, value, true)) {
+            return value.data;
+        }
+        return 0;
     }
 
     private void configureProgress(TaiModelPreference row, JSONObject download) {
@@ -1063,7 +1044,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             return;
         }
         String status = download.optString("status", "");
-        boolean active = "queued".equals(status) || "running".equals(status);
+        boolean active = TaiModelStore.STATE_QUEUED.equals(status)
+            || TaiModelStore.STATE_DOWNLOADING.equals(status)
+            || TaiModelStore.STATE_VERIFYING.equals(status);
         long bytesRead = download.optLong("bytesRead", 0L);
         long totalBytes = download.optLong("totalBytes", 0L);
         row.setDownloadProgress(active, totalBytes <= 0L, totalBytes > 0L ? (int) (bytesRead * 10000L / totalBytes) : 0);
@@ -1155,7 +1138,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 return;
             }
         }
-        if (download != null && ("queued".equals(download.optString("status")) || "running".equals(download.optString("status")))) {
+        if (download != null && (TaiModelStore.STATE_QUEUED.equals(download.optString("status"))
+            || TaiModelStore.STATE_DOWNLOADING.equals(download.optString("status"))
+            || TaiModelStore.STATE_VERIFYING.equals(download.optString("status")))) {
             new MaterialAlertDialogBuilder(context)
                 .setTitle(entry.displayName)
                 .setMessage(buildModelSummary(entry, installed, download))
@@ -1210,13 +1195,202 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 return;
             }
         }
+        boolean active = model.id.equals(new TaiSettings(context).getDefaultAssistantModel());
+        CharSequence[] actions = new CharSequence[] {
+            active ? getString(R.string.termux_ai_model_active_action) : getString(R.string.termux_ai_model_set_active_action),
+            getString(R.string.termux_ai_model_tune_action),
+            getString(R.string.termux_ai_model_delete_action)
+        };
         new MaterialAlertDialogBuilder(context)
             .setTitle(model.displayName)
             .setMessage(buildInstalledModelSummary(model))
-            .setPositiveButton(R.string.termux_ai_model_load_action, (dialog, which) -> loadModel(context, model.id))
-            .setNeutralButton(R.string.termux_ai_model_delete_action, (dialog, which) -> deleteModel(context, model.id))
+            .setItems(actions, (dialog, which) -> {
+                if (which == 0 && !active) setActiveModel(context, model.id);
+                else if (which == 1) openParameterScreen(model);
+                else if (which == 2) confirmDeleteModel(context, model);
+            })
             .setNegativeButton(android.R.string.cancel, null)
             .show();
+    }
+
+    private void openParameterScreen(@Nullable TaiModelSpec model) {
+        TaiParameterPreferencesFragment fragment = new TaiParameterPreferencesFragment();
+        if (model != null) fragment.setArguments(TaiParameterPreferencesFragment.argumentsForModel(model));
+        getParentFragmentManager().beginTransaction()
+            .replace(R.id.settings, fragment)
+            .addToBackStack(null)
+            .commit();
+    }
+
+    private void showCatalogBrowser(Context context) {
+        ArrayList<TaiModelCatalog.CatalogEntry> entries = new ArrayList<>(TaiModelCatalog.entries().values());
+        CharSequence[] labels = new CharSequence[entries.size()];
+        TaiModelStore store = new TaiModelStore(context);
+        Map<String, TaiModelSpec> installed = store.getUserModels();
+        JSONArray downloads = store.getDownloads();
+        for (int i = 0; i < entries.size(); i++) {
+            TaiModelCatalog.CatalogEntry entry = entries.get(i);
+            JSONObject download = findDownload(downloads, entry.modelId);
+            String state = installed.containsKey(entry.modelId)
+                ? getString(R.string.termux_ai_model_pill_installed)
+                : download == null ? getString(R.string.termux_ai_model_catalog_not_installed) : download.optString("status", "");
+            labels[i] = entry.displayName + " · " + formatBytes(entry.sizeBytes) + " · " + state;
+        }
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_models_browse_catalog_title)
+            .setItems(labels, (dialog, which) -> {
+                TaiModelCatalog.CatalogEntry entry = entries.get(which);
+                TaiModelSpec installedSpec = new TaiModelStore(context).getUserModels().get(entry.modelId);
+                if (installedSpec != null) {
+                    showInstalledModelActions(context, installedSpec);
+                } else {
+                    showModelActions(context, entry, null, findDownload(new TaiModelStore(context).getDownloads(), entry.modelId));
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void setActiveModel(Context context, String modelId) {
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        if (preferences == null) return;
+        preferences.edit().putString(TaiSettings.KEY_ROLE_DEFAULT_ASSISTANT, modelId).apply();
+        Toast.makeText(context, R.string.termux_ai_model_active_saved, Toast.LENGTH_SHORT).show();
+        refreshTaiPage(context);
+    }
+
+    private void confirmDeleteModel(Context context, TaiModelSpec model) {
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(getString(R.string.termux_ai_model_delete_title, model.displayName))
+            .setMessage(R.string.termux_ai_model_delete_message)
+            .setPositiveButton(R.string.termux_ai_model_delete_action, (dialog, which) -> deleteModel(context, model.id))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showTuneModelDialog(Context context, TaiModelSpec model) {
+        TaiSettings.ParameterSchema schema = TaiSettings.getParameterSchema(model.backend);
+        ArrayList<TaiSettings.ParameterSpec> specs = new ArrayList<>(schema.fields().values());
+        CharSequence[] labels = new CharSequence[specs.size() + 1];
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        for (int i = 0; i < specs.size(); i++) {
+            TaiSettings.ParameterSpec spec = specs.get(i);
+            String value = preferences == null ? "auto" : preferences.getString(modelParameterKey(model.id, spec.field), "auto");
+            labels[i] = parameterLabel(spec.field) + "  ·  " + overrideValueLabel(spec.field, value);
+        }
+        labels[specs.size()] = getString(R.string.termux_ai_model_tune_reset_action);
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(getString(R.string.termux_ai_model_tune_title, model.displayName))
+            .setItems(labels, (dialog, which) -> {
+                if (which == specs.size()) {
+                    new TaiSettings(context).resetModelParametersToGlobal(model.id);
+                    Toast.makeText(context, R.string.termux_ai_model_tune_reset_done, Toast.LENGTH_SHORT).show();
+                } else {
+                    showTuneParameterDialog(context, model, specs.get(which));
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showTuneParameterDialog(Context context, TaiModelSpec model, TaiSettings.ParameterSpec spec) {
+        if (spec.options.length > 0 || spec.fallbackValue instanceof Boolean) {
+            ArrayList<String> values = new ArrayList<>();
+            values.add("auto");
+            if (spec.fallbackValue instanceof Boolean) {
+                values.add("true");
+                values.add("false");
+            } else {
+                for (String option : spec.options) values.add(option);
+            }
+            String[] labels = values.toArray(new String[0]);
+            String current = currentModelParameterValue(model.id, spec.field);
+            int checked = 0;
+            for (int i = 0; i < labels.length; i++) {
+                if (labels[i].equalsIgnoreCase(current)) {
+                    checked = i;
+                    break;
+                }
+            }
+            new MaterialAlertDialogBuilder(context)
+                .setTitle(parameterLabel(spec.field))
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    saveModelParameter(context, model.id, spec, labels[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+            return;
+        }
+
+        EditText input = buildDialogEditText(context, currentModelParameterValue(model.id, spec.field),
+            InputType.TYPE_CLASS_NUMBER | (spec.fallbackValue instanceof Double
+                ? InputType.TYPE_NUMBER_FLAG_DECIMAL : 0), false);
+        String range = spec.minValue == null || spec.maxValue == null
+            ? null
+            : getString(R.string.termux_ai_model_tune_range, spec.minValue, spec.maxValue);
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(parameterLabel(spec.field))
+            .setView(wrapDialogView(context, range, input))
+            .setNeutralButton(R.string.termux_ai_model_tune_reset_one_action, (dialog, which) ->
+                saveModelParameter(context, model.id, spec, "auto"))
+            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
+                saveModelParameter(context, model.id, spec, input.getText().toString()))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private String currentModelParameterValue(String modelId, String field) {
+        SharedPreferences preferences = getPreferenceManager().getSharedPreferences();
+        return preferences == null ? "auto" : preferences.getString(modelParameterKey(modelId, field), "auto");
+    }
+
+    private void saveModelParameter(Context context, String modelId, TaiSettings.ParameterSpec spec, String rawValue) {
+        String value = rawValue == null ? "auto" : rawValue.trim();
+        TaiSettings settings = new TaiSettings(context);
+        if (value.isEmpty() || "auto".equalsIgnoreCase(value)) {
+            settings.resetModelParameterToGlobal(modelId, spec.field);
+            Toast.makeText(context, R.string.termux_ai_model_tune_saved, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Object parsed = spec.parse(value);
+        if (parsed == null) {
+            Toast.makeText(context, R.string.termux_ai_model_tune_invalid, Toast.LENGTH_LONG).show();
+            return;
+        }
+        settings.setModelParameter(modelId, spec.field, parsed);
+        Toast.makeText(context, R.string.termux_ai_model_tune_saved, Toast.LENGTH_SHORT).show();
+    }
+
+    private String modelParameterKey(String modelId, String field) {
+        return "tai_model_parameter." + modelId + "." + field;
+    }
+
+    private String parameterLabel(String field) {
+        if (TaiSettings.FIELD_MAX_TOKENS.equals(field)) return getString(R.string.termux_ai_max_tokens_title);
+        if (TaiSettings.FIELD_TOP_K.equals(field)) return getString(R.string.termux_ai_top_k_title);
+        if (TaiSettings.FIELD_TOP_P.equals(field)) return getString(R.string.termux_ai_top_p_title);
+        if (TaiSettings.FIELD_TEMPERATURE.equals(field)) return getString(R.string.termux_ai_temperature_title);
+        if (TaiSettings.FIELD_ACCELERATOR.equals(field)) return getString(R.string.termux_ai_accelerator_title);
+        if (TaiSettings.FIELD_ENABLE_THINKING.equals(field)) return getString(R.string.termux_ai_thinking_title);
+        if (TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(field)) return getString(R.string.termux_ai_speculative_decoding_title);
+        if (TaiSettings.FIELD_CONTEXT_WINDOW.equals(field)) return getString(R.string.termux_ai_context_window_title);
+        return field;
+    }
+
+    private void showRuntimeLogs(Context context) {
+        try {
+            String status = TaiManager.getInstance(context).runtimeStatus().toString(2);
+            new MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.termux_ai_runtime_logs_title)
+                .setMessage(status)
+                .setPositiveButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
+                    copyToClipboard(context, status, R.string.termux_ai_runtime_logs_copied))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } catch (JSONException e) {
+            Toast.makeText(context, R.string.termux_ai_runtime_action_failed, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void startCatalogDownload(Context context, TaiModelCatalog.CatalogEntry entry) {
@@ -1252,42 +1426,193 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         if (uri == null) return;
         Context context = getContext();
         if (context == null) return;
+        ImportDraft draft = pendingImportDraft == null ? new ImportDraft() : pendingImportDraft;
         TaiModelImporter.DocumentMetadata metadata =
             TaiManager.getInstance(context).modelDocumentMetadata(uri);
-        if (!TaiModelImporter.isSupportedFileName(metadata.displayName)) {
-            Toast.makeText(context, R.string.termux_ai_model_import_invalid_file, Toast.LENGTH_LONG).show();
+        TaiModelImporter.ValidationResult validation =
+            TaiModelImporter.validateImportFileNameForBackend(draft.backend, metadata.displayName);
+        if (!validation.supported) {
+            Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
             return;
         }
-        showImportDialog(context, uri, metadata);
+        draft.documentUri = uri;
+        draft.documentMetadata = metadata;
+        if (draft.modelId == null || draft.modelId.trim().isEmpty()) {
+            draft.modelId = TaiModelImporter.sanitizeModelId(
+                TaiModelImporter.stripModelExtension(metadata.displayName));
+        }
+        pendingImportDraft = draft;
+        showImportFlowDialog(context, draft);
     }
 
-    private void showImportDialog(Context context, Uri uri, TaiModelImporter.DocumentMetadata metadata) {
+    private void showImportFlowDialog(Context context, ImportDraft draft) {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         int padding = (int) (20 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(padding, 0, padding, 0);
 
+        RadioGroup backendGroup = new RadioGroup(context);
+        backendGroup.setOrientation(RadioGroup.HORIZONTAL);
+        RadioButton litert = new RadioButton(context);
+        litert.setText(R.string.termux_ai_backend_label_litert);
+        litert.setId(View.generateViewId());
+        RadioButton mlc = new RadioButton(context);
+        mlc.setText(R.string.termux_ai_backend_label_mlc);
+        mlc.setId(View.generateViewId());
+        backendGroup.addView(litert);
+        backendGroup.addView(mlc);
+        backendGroup.check(IMPORT_BACKEND_MLC.equals(draft.backend) ? mlc.getId() : litert.getId());
+        layout.addView(backendGroup);
+
+        EditText urlInput = new EditText(context);
+        urlInput.setSingleLine(true);
+        urlInput.setHint(R.string.termux_ai_model_import_hf_url_hint);
+        urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        urlInput.setText(draft.hfUrl == null ? "" : draft.hfUrl);
+        layout.addView(urlInput);
+
+        EditText tokenInput = new EditText(context);
+        tokenInput.setSingleLine(true);
+        tokenInput.setHint(R.string.termux_ai_model_import_hf_token_hint);
+        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tokenInput.setText(draft.hfToken == null ? "" : draft.hfToken);
+        layout.addView(tokenInput);
+
         EditText modelIdInput = new EditText(context);
         modelIdInput.setSingleLine(true);
         modelIdInput.setHint(R.string.termux_ai_model_import_id_hint);
         modelIdInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        modelIdInput.setText(TaiModelImporter.sanitizeModelId(
-            TaiModelImporter.stripModelExtension(metadata.displayName)));
+        modelIdInput.setText(draft.modelId == null ? "" : draft.modelId);
         modelIdInput.setSelectAllOnFocus(true);
         layout.addView(modelIdInput);
 
-        new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_model_import_title)
-            .setMessage(context.getString(R.string.termux_ai_model_import_selected,
-                metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size"))
+        TextView selectedFile = new TextView(context);
+        selectedFile.setText(importSelectionText(context, draft));
+        selectedFile.setPadding(0, padding / 2, 0, 0);
+        layout.addView(selectedFile);
+
+        backendGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            draft.backend = checkedId == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            selectedFile.setText(importSelectionText(context, draft));
+        });
+
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_model_import_dialog_title)
+            .setMessage(R.string.termux_ai_model_import_dialog_message)
             .setView(layout)
-            .setPositiveButton(R.string.termux_ai_model_import_title, (dialog, which) ->
-                importModelDocument(context, uri, modelIdInput.getText().toString()))
+            .setPositiveButton(R.string.termux_ai_model_import_verify_action, null)
+            .setNeutralButton(R.string.termux_ai_model_import_choose_file, null)
             .setNegativeButton(android.R.string.cancel, null)
             .show();
+        Button positive = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
+        positive.setOnClickListener(view -> {
+            draft.backend = backendGroup.getCheckedRadioButtonId() == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            draft.hfUrl = urlInput.getText().toString().trim();
+            draft.hfToken = tokenInput.getText().toString();
+            draft.modelId = modelIdInput.getText().toString().trim();
+            if (startImportDraft(context, draft)) dialog.dismiss();
+        });
+        Button neutral = dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
+        neutral.setOnClickListener(view -> {
+            draft.backend = backendGroup.getCheckedRadioButtonId() == mlc.getId() ? IMPORT_BACKEND_MLC : IMPORT_BACKEND_LITERT;
+            draft.hfUrl = urlInput.getText().toString().trim();
+            draft.hfToken = tokenInput.getText().toString();
+            draft.modelId = modelIdInput.getText().toString().trim();
+            pendingImportDraft = draft;
+            modelPicker.launch(new String[]{"application/octet-stream", "application/json", "*/*"});
+            dialog.dismiss();
+        });
     }
 
-    private void importModelDocument(Context context, Uri uri, String modelId) {
+    private CharSequence importSelectionText(Context context, ImportDraft draft) {
+        String backend = IMPORT_BACKEND_MLC.equals(draft.backend)
+            ? getString(R.string.termux_ai_backend_label_mlc)
+            : getString(R.string.termux_ai_backend_label_litert);
+        if (draft.documentMetadata == null) {
+            return context.getString(R.string.termux_ai_model_import_no_file_selected, backend);
+        }
+        TaiModelImporter.DocumentMetadata metadata = draft.documentMetadata;
+        return context.getString(R.string.termux_ai_model_import_selected,
+            metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size")
+            + "\nBackend: " + backend;
+    }
+
+    private boolean startImportDraft(Context context, ImportDraft draft) {
+        boolean hasUrl = draft.hfUrl != null && !draft.hfUrl.trim().isEmpty();
+        boolean hasFile = draft.documentUri != null && draft.documentMetadata != null;
+        if (hasUrl == hasFile) {
+            Toast.makeText(context, R.string.termux_ai_model_import_choose_one_source, Toast.LENGTH_LONG).show();
+            return false;
+        }
+        if (hasUrl) {
+            TaiModelImporter.ValidationResult validation =
+                TaiModelImporter.validateHuggingFaceImportUrl(draft.backend, draft.hfUrl);
+            if (!validation.supported) {
+                Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
+                return false;
+            }
+            startHuggingFaceImport(context, draft);
+            return true;
+        }
+        TaiModelImporter.ValidationResult validation = TaiModelImporter.validateImportFileNameForBackend(
+            draft.backend, draft.documentMetadata.displayName);
+        if (!validation.supported) {
+            Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
+            return false;
+        }
+        importModelDocument(context, draft.documentUri, draft.modelId, draft.backend);
+        pendingImportDraft = null;
+        return true;
+    }
+
+    private void startHuggingFaceImport(Context context, ImportDraft draft) {
+        String modelId = TaiModelImporter.sanitizeModelId(draft.modelId == null || draft.modelId.trim().isEmpty()
+            ? deriveModelIdFromUrl(draft.hfUrl) : draft.modelId);
+        if (modelId.isEmpty()) {
+            Toast.makeText(context, R.string.termux_ai_model_import_invalid_model_id, Toast.LENGTH_LONG).show();
+            return;
+        }
+        runtimeActionExecutor.execute(() -> {
+            JSONObject result = null;
+            try {
+                JSONObject request = new JSONObject();
+                request.put("modelId", modelId);
+                request.put("displayName", modelId);
+                request.put("url", draft.hfUrl);
+                request.put("acceptedTerms", true);
+                request.put("backend", draft.backend);
+                request.put("format", IMPORT_BACKEND_MLC.equals(draft.backend)
+                    ? TaiModelSpec.FORMAT_MLC : TaiModelSpec.FORMAT_LITERTLM);
+                JSONArray capabilities = new JSONArray();
+                capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+                request.put("capabilities", capabilities);
+                if (draft.hfToken != null && !draft.hfToken.trim().isEmpty()) {
+                    request.put("huggingFaceToken", draft.hfToken.trim());
+                }
+                result = TaiManager.getInstance(context.getApplicationContext()).downloadModel(request.toString());
+            } catch (JSONException | RuntimeException ignored) {
+            }
+            JSONObject finalResult = result;
+            handler.post(() -> {
+                Context currentContext = getContext();
+                if (currentContext == null) return;
+                if (finalResult != null && finalResult.optBoolean("ok", false)) {
+                    Toast.makeText(currentContext, R.string.termux_ai_model_download_started, Toast.LENGTH_SHORT).show();
+                    handler.removeCallbacks(refreshRuntimeRunnable);
+                    handler.postDelayed(refreshRuntimeRunnable, 1000L);
+                } else {
+                    String message = finalResult == null
+                        ? currentContext.getString(R.string.termux_ai_model_action_failed)
+                        : finalResult.optString("message", currentContext.getString(R.string.termux_ai_model_action_failed));
+                    Toast.makeText(currentContext, message, Toast.LENGTH_LONG).show();
+                }
+                pendingImportDraft = null;
+                refreshTaiPage(currentContext);
+            });
+        });
+    }
+
+    private void importModelDocument(Context context, Uri uri, String modelId, String backend) {
         Context appContext = context.getApplicationContext();
         Preference importPreference = findPreference("tai_model_import");
         if (importPreference != null) {
@@ -1297,7 +1622,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         runtimeActionExecutor.execute(() -> {
             JSONObject result = null;
             try {
-                result = TaiManager.getInstance(appContext).importModelDocument(uri, modelId);
+                result = new TaiModelImporter(appContext, new TaiModelStore(appContext))
+                    .importDocument(uri, modelId, backend);
             } catch (JSONException | RuntimeException ignored) {
             }
             JSONObject finalResult = result;
@@ -1338,6 +1664,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         try {
             JSONObject request = new JSONObject();
             request.put("modelId", modelId);
+            request.put("confirm", true);
             JSONObject result = TaiManager.getInstance(context).deleteModel(request.toString());
             Toast.makeText(context,
                 result.optBoolean("deleted", false) ? R.string.termux_ai_model_deleted : R.string.termux_ai_model_delete_missing,
@@ -1365,7 +1692,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             JSONObject item = downloads.optJSONObject(i);
             if (item == null) continue;
             String status = item.optString("status", "");
-            if ("queued".equals(status) || "running".equals(status)) return true;
+            if (TaiModelStore.STATE_QUEUED.equals(status)
+                || TaiModelStore.STATE_DOWNLOADING.equals(status)
+                || TaiModelStore.STATE_VERIFYING.equals(status)) return true;
         }
         return false;
     }
