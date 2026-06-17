@@ -49,6 +49,9 @@ public class PrivilegedAccessPreferencesFragment extends MaterialPreferenceFragm
     @Override
     public void onResume() {
         super.onResume();
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_privileged_access_preferences_title);
+        }
         Context context = getContext();
         if (context != null) {
             PrivilegedBackendManager.getInstance().initializeIfNeeded(context).thenAccept(success -> {

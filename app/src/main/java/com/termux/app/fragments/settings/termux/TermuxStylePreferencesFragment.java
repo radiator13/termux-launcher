@@ -63,6 +63,9 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_style_preferences_title);
+        }
         Context context = getContext();
         if (context != null) {
             LauncherIconPackPreferenceController.configure(this, context);

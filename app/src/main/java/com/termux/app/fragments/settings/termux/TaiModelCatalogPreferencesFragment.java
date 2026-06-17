@@ -95,6 +95,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     @Override
     public void onResume() {
         super.onResume();
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_ai_models_browse_catalog_title);
+        }
         Context context = getContext();
         if (context != null) {
             refreshCatalogRows(context);

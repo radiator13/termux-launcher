@@ -124,6 +124,9 @@ public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
         super.onResume();
         Context context = getContext();
         if (context == null) return;
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_launcher_preferences_title);
+        }
         updatePermissionSummaries(context);
         SwitchPreferenceCompat notificationDotsPreference = findPreference("app_launcher_notification_dots");
         if (notificationDotsPreference != null) {

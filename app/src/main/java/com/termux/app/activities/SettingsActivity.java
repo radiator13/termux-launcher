@@ -169,6 +169,9 @@ public class SettingsActivity extends AppCompatActivity {
         @Override
         public void onResume() {
             super.onResume();
+            if (getActivity() != null) {
+                getActivity().setTitle(R.string.application_name);
+            }
             updateShizukuPill();
         }
 

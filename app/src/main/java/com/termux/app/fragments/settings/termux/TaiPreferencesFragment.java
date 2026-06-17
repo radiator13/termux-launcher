@@ -194,6 +194,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_ai_preferences_title);
+        }
         Context context = getContext();
         if (context != null) {
             refreshTaiPage(context);
