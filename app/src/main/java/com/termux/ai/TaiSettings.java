@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -216,8 +217,19 @@ public final class TaiSettings {
         if (BIND_MODE_LAN.equals(bindMode)) {
             json.put("lanWarning", "LAN exposure allows any device on your network to reach this endpoint when the token is known.");
         }
-        json.put("apiTokenConfigured", isValidApiToken(preferences.getString(KEY_API_TOKEN, "")));
-        json.put("openAiBaseUrl", "http://127.0.0.1:" + getApiPort() + "/v1");
+        String configuredToken = preferences.getString(KEY_API_TOKEN, "");
+        json.put("apiTokenConfigured", isValidApiToken(configuredToken));
+        json.put("tokenConfigured", isValidApiToken(configuredToken));
+        int port = getApiPort();
+        json.put("baseUrl", "http://127.0.0.1:" + port);
+        json.put("openAiBaseUrl", "http://127.0.0.1:" + port + "/v1");
+        JSONArray supportedEndpoints = new JSONArray();
+        supportedEndpoints.put("/v1/models");
+        supportedEndpoints.put("/v1/chat/completions");
+        supportedEndpoints.put("/v1/completions");
+        supportedEndpoints.put("/v1/embeddings");
+        json.put("supportedEndpoints", supportedEndpoints);
+        json.put("embeddingsNote", "Embeddings support is model-capability dependent.");
         json.put("autoGenerationDefaultState", "nullable generation overrides use Google AI Edge Gallery defaults in the LiteRT runtime");
         return json;
     }

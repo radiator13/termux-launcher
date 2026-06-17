@@ -952,7 +952,7 @@ public class LauncherCtlApiServer {
         return TaiSettings.BIND_MODE_LAN.equals(TaiSettings.normalizeApiBindMode(bindMode)) ? "0.0.0.0" : "127.0.0.1";
     }
 
-    private JSONObject buildEndpointSettings(Context context, boolean includeToken) throws JSONException {
+private JSONObject buildEndpointSettings(Context context, boolean includeToken) throws JSONException {
         TaiSettings settings = new TaiSettings(context);
         JSONObject data = new JSONObject();
         int configuredPort = settings.getApiPort();
@@ -974,6 +974,13 @@ public class LauncherCtlApiServer {
         data.put("running", running);
         data.put("usingConfiguredPort", activePort == configuredPort);
         data.put("tokenConfigured", TaiSettings.isValidApiToken(settings.getOrCreateApiToken()));
+        JSONArray supportedEndpoints = new JSONArray();
+        supportedEndpoints.put("/v1/models");
+        supportedEndpoints.put("/v1/chat/completions");
+        supportedEndpoints.put("/v1/completions");
+        supportedEndpoints.put("/v1/embeddings");
+        data.put("supportedEndpoints", supportedEndpoints);
+        data.put("embeddingsNote", "Embeddings support is model-capability dependent.");
         if (includeToken) {
             data.put("token", settings.getOrCreateApiToken());
         }
@@ -1239,8 +1246,24 @@ public class LauncherCtlApiServer {
             "\n" +
             "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
             "LiteRT-LM runs in the Android app process when supported by the installed APK.\n" +
+            "MLC models route through the bundled MLC backend when supported by the installed APK.\n" +
             "Auto uses backend-specific GPU-first behavior with CPU fallback where available.\n" +
-            "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, /v1/completions, and /v1/embeddings.\n" +
+            "OpenAI-compatible endpoints (default bind mode is localhost):\n" +
+            "  /v1/models\n" +
+            "  /v1/chat/completions\n" +
+            "  /v1/completions\n" +
+            "  /v1/embeddings\n" +
+            "\n" +
+            "Point OpenAI-compatible terminal tools at this host, e.g.:\n" +
+            "  export OPENAI_BASE_URL=http://127.0.0.1:<port>/v1\n" +
+            "  export OPENAI_API_KEY=<your-token>\n" +
+            "The actual token is stored at ~/.launcherctl/token (do not echo it into shell history).\n" +
+            "\n" +
+            "Security notes:\n" +
+            "  LAN mode (opt-in via settings) exposes the API to your local network. Keep your token secure.\n" +
+            "  /v1/embeddings is model-capability dependent. Not all models support embeddings.\n" +
+            "  Check /v1/models for capability metadata (for example, _backend and _capabilities per model).\n" +
+            "\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
             "}\n" +

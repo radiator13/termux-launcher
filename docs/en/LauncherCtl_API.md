@@ -52,8 +52,28 @@ Common routes:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/completions`
+- `POST /v1/embeddings`
 
 `/v1/chat/completions` and `/v1/completions` support `stream: true` and return `text/event-stream` chunks ending with `data: [DONE]`.
+
+#### `GET /v1/models` metadata
+
+Each entry in the standard OpenAI-shaped `data` array includes TAI-specific
+metadata prefixed with an underscore so existing OpenAI clients ignore it:
+
+- `_backend`: backend routing for the model, currently `litert-lm` (default
+  LiteRT-LM runtime) or `mlc-llm` (bundled MLC backend).
+- `_capabilities`: ordered list of capability strings, for example
+  `text_chat` and `text_embeddings`. Use this to decide which endpoints are
+  meaningful for a given model id before calling `/v1/chat/completions`,
+  `/v1/completions`, or `/v1/embeddings`.
+
+#### `POST /v1/embeddings`
+
+OpenAI-compatible embeddings endpoint. Embeddings support is
+model-capability dependent: only models that advertise `text_embeddings` in
+their `/v1/models` `_capabilities` array are accepted. Other models return a
+`capability_not_supported` error.
 
 ### `GET /v1/status`
 Returns backend + LauncherCtl runtime status.
@@ -134,6 +154,79 @@ launcherctl token rotate
 
 Note: `launcherctl-status` is not a command. Use `launcherctl status`.
 
+## Terminal LLM Client Configuration
+
+TAI exposes OpenAI-compatible HTTP endpoints so terminal clients such as
+`aichat`, `tmuxai`, or any tool that reads `OPENAI_BASE_URL` /
+`OPENAI_API_KEY` can drive the local model runtime.
+
+Default bind mode is `localhost` (server bound to `127.0.0.1`). The bearer
+token is required for every request. Token and endpoint URL are written to:
+
+```sh
+~/.launcherctl/token
+~/.launcherctl/endpoint
+```
+
+The first line of `~/.launcherctl/endpoint` is the active base URL, e.g.
+`http://127.0.0.1:41237`. Pass it as `OPENAI_BASE_URL` with `/v1` appended:
+
+```sh
+BASE=$(sed -n '1p' ~/.launcherctl/endpoint)
+TOKEN=$(cat ~/.launcherctl/token)
+export OPENAI_BASE_URL="$BASE/v1"
+export OPENAI_API_KEY="$TOKEN"
+```
+
+Do not echo `$TOKEN` into shell history. Prefer reading it from the file at
+call time or storing it in a credentials manager.
+
+### Supported Endpoints
+
+- `GET /v1/models` — list models with TAI-specific `_backend` and
+  `_capabilities` metadata.
+- `POST /v1/chat/completions` — OpenAI chat completion.
+- `POST /v1/completions` — OpenAI legacy completion.
+- `POST /v1/embeddings` — OpenAI embeddings (model-capability dependent).
+
+`/v1/embeddings` is model-capability dependent. Not all models support
+embeddings. Check each model's `_capabilities` field returned by
+`GET /v1/models` before calling this endpoint; unsupported models return a
+`capability_not_supported` error.
+
+### LiteRT Backend Example
+
+LiteRT (default) models expose the LiteRT-LM runtime and return standard
+OpenAI-compatible responses. Use the same `OPENAI_BASE_URL` /
+`OPENAI_API_KEY` setup as above and pick any LiteRT model id from
+`/v1/models`:
+
+```sh
+MODEL=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
+  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="litert-lm") | .id' | head -n1)
+curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" \
+  "$OPENAI_BASE_URL/chat/completions"
+```
+
+### MLC Backend Example
+
+MLC models route through the bundled MLC backend. Only models whose
+`_backend` field equals `mlc-llm` should be requested via MLC; LiteRT models
+return `capability_not_supported` for MLC-only endpoints such as
+`/v1/embeddings` (when the model lacks `text_embeddings`).
+
+```sh
+MODEL=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
+  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="mlc-llm" and (._capabilities | index("text_embeddings"))) | .id' | head -n1)
+[ -n "$MODEL" ] && curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"input\":\"hello world\"}" \
+  "$OPENAI_BASE_URL/embeddings"
+```
+
+Inspect `/v1/models` first to confirm both `_backend == "mlc-llm"` and the
+`text_embeddings` capability are present for the model you intend to use.
+
 ### `launcherctl update-scripts`
 
 Refreshes repo-owned shell helpers such as `launcher-system-monitor`, `launcher-weather-widget`, `setup-btop-rish`, and the tmux material theme script. It backs up existing files before replacing them and does not overwrite `~/.tmux.conf`.
@@ -166,6 +259,13 @@ For btop, use the documented `setup-btop-rish` helper. For tmux CPU/RAM widgets,
 - Token theft enables API calls.
 - Notification/media endpoints may expose sensitive user content.
 
+### Bind Mode
+- Default: `localhost` — server bound to `127.0.0.1`. Only processes on the
+  device can reach the API.
+- Opt-in: `lan` — server bound to `0.0.0.0`. Any device on the local network
+  that knows the bearer token can reach the API. LAN mode is disabled by
+  default and only becomes active after the user changes the setting.
+
 ### Mitigations Implemented
 - Bearer token auth, startup-generated random token.
 - Constant-time token comparison.
@@ -177,10 +277,24 @@ For btop, use the documented `setup-btop-rish` helper. For tmux CPU/RAM widgets,
 - Endpoint rate limiting (`429` on abuse).
 - Token rotation endpoint.
 - Sensitive files written owner-only.
+- No CORS headers emitted (browser-based clients cannot use the API even in
+  LAN mode without an explicit proxy).
+
+### LAN Opt-In Considerations
+- LAN mode (`bindMode: lan`) is opt-in and surfaces a `lanWarning` field in
+  the endpoint settings JSON plus the `tai` CLI help text.
+- Treat the bearer token as a network secret whenever LAN mode is active.
+  Do not paste it into shell history, screenshots, or shared notes.
+- Rotate the token (`launcherctl token rotate`) after temporarily enabling
+  LAN mode if the token may have been observed.
+- A firewall on the LAN, a per-call `Authorization: Bearer <token>` header,
+  and short-lived sessions are recommended for any non-trivial LAN use.
 
 ### Remaining Security Considerations
 - Localhost token auth still depends on local process trust.
 - If same app UID ecosystem is compromised, token can be read.
+- LAN mode trusts every device on the local network; it does not implement
+  per-device authentication.
 - Consider Unix domain sockets for tighter local access boundaries in future.
 - Consider endpoint toggles for media/notifications if privacy requirements increase.
 
