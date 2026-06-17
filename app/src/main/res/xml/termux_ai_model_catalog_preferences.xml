@@ -3,12 +3,8 @@
     <PreferenceCategory
         app:key="tai_catalog_controls_category"
         app:title="@string/termux_ai_catalog_controls_title">
-        <ListPreference
+        <com.termux.app.fragments.settings.termux.TaiCatalogFilterPreference
             app:key="tai_catalog_backend_filter"
-            app:title="@string/termux_ai_catalog_backend_filter_title"
-            app:entries="@array/termux_ai_catalog_backend_filter_entries"
-            app:entryValues="@array/termux_ai_catalog_backend_filter_values"
-            app:defaultValue="all"
             app:persistent="false" />
         <EditTextPreference
             app:key="tai_catalog_search"

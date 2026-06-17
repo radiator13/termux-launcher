@@ -899,14 +899,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void configureHuggingFaceToken() {
-        EditTextPreference token = findPreference(TaiSettings.KEY_HUGGINGFACE_TOKEN);
+        Preference token = findPreference(TaiSettings.KEY_HUGGINGFACE_TOKEN);
         if (token == null) return;
-        token.setSummaryProvider(preference -> {
-            String value = ((EditTextPreference) preference).getText();
-            return value == null || value.trim().isEmpty()
-                ? getString(R.string.termux_ai_huggingface_token_summary)
-                : getString(R.string.termux_ai_huggingface_token_set_summary);
-        });
+        updateHuggingFaceTokenSummary(token);
         token.setOnPreferenceClickListener(preference -> {
             Context context = getContext();
             if (context == null) return true;
@@ -915,7 +910,16 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         });
     }
 
-    private void showHuggingFaceTokenDialog(Context context, EditTextPreference preference) {
+    private void updateHuggingFaceTokenSummary(@NonNull Preference preference) {
+        String value = preference.getContext()
+            .getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(TaiSettings.KEY_HUGGINGFACE_TOKEN, "");
+        preference.setSummary(value == null || value.trim().isEmpty()
+            ? getString(R.string.termux_ai_huggingface_token_summary)
+            : getString(R.string.termux_ai_huggingface_token_set_summary));
+    }
+
+    private void showHuggingFaceTokenDialog(Context context, Preference preference) {
         int padding = (int) (24 * getResources().getDisplayMetrics().density);
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -929,7 +933,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         input.setHint(R.string.termux_ai_huggingface_token_title);
-        input.setText(preference.getText() == null ? "" : preference.getText());
+        input.setText(context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(TaiSettings.KEY_HUGGINGFACE_TOKEN, ""));
         input.setSelectAllOnFocus(true);
         layout.addView(input);
 
@@ -937,7 +942,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             .setTitle(R.string.termux_ai_huggingface_token_title)
             .setView(layout)
             .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                preference.setText(input.getText().toString().trim());
+                context.getSharedPreferences(TaiSettings.PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(TaiSettings.KEY_HUGGINGFACE_TOKEN, input.getText().toString().trim())
+                    .apply();
+                updateHuggingFaceTokenSummary(preference);
                 Toast.makeText(context, R.string.termux_ai_huggingface_token_saved, Toast.LENGTH_SHORT).show();
             })
             .setNeutralButton(R.string.termux_ai_huggingface_token_get_action,

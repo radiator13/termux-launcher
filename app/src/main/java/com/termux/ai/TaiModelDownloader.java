@@ -6,6 +6,7 @@ import android.content.Intent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -26,8 +27,8 @@ public final class TaiModelDownloader {
         "llm.mnn.weight",
         "llm_config.json",
         "llm.mnn.json",
-        "tokenizer.txt",
-        "embeddings_bf16.bin"
+        "tokenizer.mtok",
+        "tokenizer.txt"
     };
 
     public interface ProgressCallback {
@@ -170,19 +171,32 @@ public final class TaiModelDownloader {
 
                 File modelDir = output.getParentFile();
                 String baseUrl = baseUrlFromUrl(url);
+                LinkedHashSet<String> packageFiles = mnnPackageFilesFromHuggingFace(url, authToken);
+                if (packageFiles.isEmpty()) {
+                    for (String fileName : MNN_MODEL_FILES) packageFiles.add(fileName);
+                }
                 long currentBytes = output.length();
                 persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, currentBytes, -1L, ""), callback);
 
-                for (String fileName : MNN_MODEL_FILES) {
+                for (String fileName : packageFiles) {
                     if (output.getName().equals(fileName)) continue;
                     String fileUrl = baseUrl + fileName;
                     File fileOutput = new File(modelDir, fileName);
+                    File fileParent = fileOutput.getParentFile();
+                    if (fileParent != null && !fileParent.exists() && !fileParent.mkdirs()) {
+                        throw new IllegalStateException("Could not create MNN package directory.");
+                    }
                     File filePartial = new File(fileOutput.getAbsolutePath() + ".part");
                     HttpURLConnection fileConn = open(fileUrl, authToken, 0);
                     int fileStatus = fileConn.getResponseCode();
                     if (fileStatus < 200 || fileStatus >= 300) {
-                        throw new IllegalStateException("MNN package file missing: " + fileName);
+                        if (isRequiredMnnPackageFile(fileName)) {
+                            throw new IllegalStateException("MNN package file missing: " + fileName);
+                        }
+                        continue;
                     }
+                    persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                        TaiModelStore.STATE_DOWNLOADING, currentBytes, -1L, ""), fileName), callback);
                     try (InputStream fileInput = new BufferedInputStream(fileConn.getInputStream());
                          FileOutputStream fileOut = new FileOutputStream(filePartial)) {
                         byte[] buffer = new byte[1024 * 64];
@@ -191,11 +205,16 @@ public final class TaiModelDownloader {
                             if (TaiModelDownloadService.isCancelled(modelId)) throw new InterruptedException("Download cancelled.");
                             fileOut.write(buffer, 0, read);
                             currentBytes += read;
+                            if (currentBytes % (1024L * 1024L) < read) {
+                                persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                                    TaiModelStore.STATE_DOWNLOADING, currentBytes, -1L, ""), fileName), callback);
+                            }
                         }
                     }
                     if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace file.");
                     if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize file download.");
-                    persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, currentBytes, -1L, ""), callback);
+                    persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                        TaiModelStore.STATE_DOWNLOADING, currentBytes, -1L, ""), fileName), callback);
                 }
 
                 TaiModelSpec spec = new TaiModelSpec(
@@ -348,6 +367,79 @@ public final class TaiModelDownloader {
         boolean paramHint = TaiModelSpec.BACKEND_MNN_LLM.equals(backend) && TaiModelSpec.FORMAT_MNN.equals(format);
         boolean urlHint = url.toLowerCase(Locale.ROOT).contains("-mnn") || url.toLowerCase(Locale.ROOT).contains("taobao-mnn/");
         return paramHint || urlHint;
+    }
+
+    @NonNull
+    private LinkedHashSet<String> mnnPackageFilesFromHuggingFace(@NonNull String url, @Nullable String authToken) {
+        LinkedHashSet<String> files = new LinkedHashSet<>();
+        String repoId = huggingFaceRepoIdFromResolveUrl(url);
+        if (repoId.isEmpty()) return files;
+        try {
+            HttpURLConnection connection = open("https://huggingface.co/api/models/" + repoId, authToken, 0);
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) return files;
+            String body = readSmallUtf8(connection.getInputStream(), 2L * 1024L * 1024L);
+            JSONObject json = new JSONObject(body);
+            JSONArray siblings = json.optJSONArray("siblings");
+            if (siblings == null) return files;
+            for (int i = 0; i < siblings.length(); i++) {
+                JSONObject sibling = siblings.optJSONObject(i);
+                if (sibling == null) continue;
+                String fileName = sibling.optString("rfilename", "");
+                if (isMnnPackageFile(fileName)) files.add(fileName);
+            }
+        } catch (Exception ignored) {
+        }
+        return files;
+    }
+
+    @NonNull
+    private String huggingFaceRepoIdFromResolveUrl(@NonNull String url) {
+        String prefix = "https://huggingface.co/";
+        if (!url.startsWith(prefix)) return "";
+        String path = url.substring(prefix.length());
+        int resolve = path.indexOf("/resolve/");
+        if (resolve <= 0) return "";
+        return path.substring(0, resolve);
+    }
+
+    private boolean isMnnPackageFile(@NonNull String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        return !lower.startsWith(".")
+            && (lower.endsWith(".mnn")
+            || lower.endsWith(".mnn.weight")
+            || lower.endsWith(".mnn.json")
+            || lower.endsWith(".json")
+            || lower.endsWith(".mtok")
+            || lower.startsWith("tokenizer."));
+    }
+
+    private boolean isRequiredMnnPackageFile(@NonNull String fileName) {
+        return "config.json".equals(fileName)
+            || "llm.mnn".equals(fileName)
+            || "llm.mnn.weight".equals(fileName);
+    }
+
+    @NonNull
+    private JSONObject withCurrentFile(@NonNull JSONObject transfer, @NonNull String currentFile) throws JSONException {
+        transfer.put("currentFile", currentFile);
+        return transfer;
+    }
+
+    @NonNull
+    private String readSmallUtf8(@NonNull InputStream input, long maxBytes) throws Exception {
+        try (BufferedInputStream buffered = new BufferedInputStream(input)) {
+            byte[] buffer = new byte[8192];
+            StringBuilder builder = new StringBuilder();
+            long total = 0L;
+            int read;
+            while ((read = buffered.read(buffer)) != -1) {
+                total += read;
+                if (total > maxBytes) throw new IllegalStateException("Response too large.");
+                builder.append(new String(buffer, 0, read, java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return builder.toString();
+        }
     }
 
     @NonNull

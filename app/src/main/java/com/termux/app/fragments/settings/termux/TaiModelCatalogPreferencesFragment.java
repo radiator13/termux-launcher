@@ -21,7 +21,6 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.EditTextPreference;
-import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceManager;
@@ -70,7 +69,11 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         public void run() {
             Context context = getContext();
             if (context == null) return;
-            refreshCatalogRows(context);
+            JSONArray downloads = new TaiModelStore(context).getDownloads();
+            String signature = downloadStatusSignature(downloads);
+            if (!signature.equals(lastDownloadStatusSignature)) {
+                refreshCatalogRows(context);
+            }
             if (hasActiveDownloads(context)) handler.postDelayed(this, 2000L);
         }
     };
@@ -79,6 +82,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
 
     private BackendFilter backendFilter = BackendFilter.ALL;
     private String searchQuery = "";
+    private String lastDownloadStatusSignature = "";
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -118,14 +122,12 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     }
 
     private void configureControls(Context context) {
-        ListPreference backend = findPreference("tai_catalog_backend_filter");
+        TaiCatalogFilterPreference backend = findPreference("tai_catalog_backend_filter");
         if (backend != null) {
-            backend.setValue(backendFilter.value);
-            backend.setSummaryProvider(preference -> backend.getEntry());
-            backend.setOnPreferenceChangeListener((preference, newValue) -> {
-                backendFilter = BackendFilter.fromValue(String.valueOf(newValue));
+            backend.setSelectedValue(backendFilter.value);
+            backend.setOnFilterSelectedListener(value -> {
+                backendFilter = BackendFilter.fromValue(value);
                 refreshCatalogRows(context);
-                return true;
             });
         }
         EditTextPreference search = findPreference("tai_catalog_search");
@@ -154,6 +156,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         TaiModelStore store = new TaiModelStore(context);
         Map<String, TaiModelSpec> installed = store.getUserModels();
         JSONArray downloads = store.getDownloads();
+        lastDownloadStatusSignature = downloadStatusSignature(downloads);
         String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
 
@@ -382,7 +385,12 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     private static String progressLabel(@Nullable JSONObject download) {
         if (download == null) return "…";
         long total = download.optLong("totalBytes", 0L);
-        if (total <= 0L) return "…";
+        if (total <= 0L) {
+            String currentFile = download.optString("currentFile", "");
+            long bytesRead = download.optLong("bytesRead", 0L);
+            if (!currentFile.isEmpty()) return currentFile + " - " + formatBytes(bytesRead);
+            return bytesRead > 0L ? formatBytes(bytesRead) : "…";
+        }
         return String.format(Locale.US, "%.0f%%", Math.max(0d, Math.min(100d,
             download.optLong("bytesRead", 0L) * 100d / total)));
     }
@@ -635,6 +643,20 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             if (item != null && isActiveDownload(item.optString("status", ""))) return true;
         }
         return false;
+    }
+
+    private static String downloadStatusSignature(@Nullable JSONArray downloads) {
+        if (downloads == null) return "";
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < downloads.length(); i++) {
+            JSONObject item = downloads.optJSONObject(i);
+            if (item == null) continue;
+            builder.append(item.optString("modelId", ""))
+                .append(':')
+                .append(item.optString("status", ""))
+                .append(';');
+        }
+        return builder.toString();
     }
 
     private void copyToClipboard(Context context, String text) {

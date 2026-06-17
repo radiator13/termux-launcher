@@ -86,28 +86,28 @@ public final class TaiModelCatalog {
 
         entries.put("qwen2.5-coder-1.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-1.5b-instruct-mnn", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,
-            "Code and terminal assistant", "taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", 1_100_000_000L,
-            "1.1 GB", "4GB-6GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
+            "Code and terminal assistant", "taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", 1_343_595_873L,
+            "1.3 GB", "4GB-6GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
         entries.put("qwen2.5-coder-7b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-7b-instruct-mnn", "Qwen2.5-Coder 7B", "coding", "advanced_coder", false,
-            "Higher quality code model", "taobao-mnn/Qwen2.5-Coder-7B-Instruct-MNN", 4_700_000_000L,
-            "4.7 GB", "10GB-12GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
+            "Higher quality code model", "taobao-mnn/Qwen2.5-Coder-7B-Instruct-MNN", 5_079_861_358L,
+            "5.1 GB", "10GB-12GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
         entries.put("qwen2.5-0.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-0.5b-instruct-mnn", "Qwen2.5 0.5B", "lightweight_text", "tiny_general", false,
-            "Tiny general chat", "taobao-mnn/Qwen2.5-0.5B-Instruct-MNN", 557_000_000L,
+            "Tiny general chat", "taobao-mnn/Qwen2.5-0.5B-Instruct-MNN", 556_808_791L,
             "557 MB", "3GB+", "qwen2.5", "int4", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
         entries.put("qwen2.5-1.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-1.5b-instruct-mnn", "Qwen2.5 1.5B", "general_text", "lightweight_general", false,
-            "Lightweight text and multilingual", "taobao-mnn/Qwen2.5-1.5B-Instruct-MNN", 1_100_000_000L,
-            "1.1 GB", "4GB-6GB+", "qwen2.5", "int4", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
+            "Lightweight text and multilingual", "taobao-mnn/Qwen2.5-1.5B-Instruct-MNN", 879_484_183L,
+            "879 MB", "4GB-6GB+", "qwen2.5", "int4", tags("Text", "Multilingual"), setOf("text_chat", "multilingual")));
         entries.put("qwen2.5-3b-instruct-mnn", mnnAvailable(
             "qwen2.5-3b-instruct-mnn", "Qwen2.5 3B", "general_text", "balanced_general", false,
-            "Balanced local assistant", "taobao-mnn/Qwen2.5-3B-Instruct-MNN", 2_100_000_000L,
-            "2.1 GB", "6GB-8GB+", "qwen2.5", "int4", tags("Text"), setOf("text_chat")));
+            "Balanced local assistant", "taobao-mnn/Qwen2.5-3B-Instruct-MNN", 2_369_484_250L,
+            "2.4 GB", "6GB-8GB+", "qwen2.5", "int4", tags("Text"), setOf("text_chat")));
         entries.put("deepseek-r1-1.5b-qwen-mnn", mnnAvailable(
             "deepseek-r1-1.5b-qwen-mnn", "DeepSeek-R1 1.5B Qwen", "reasoning", "lightweight_reasoning", false,
-            "Small reasoning model", "taobao-mnn/DeepSeek-R1-1.5B-Qwen-MNN", 1_100_000_000L,
-            "1.1 GB", "4GB-6GB+", "deepseek-r1-qwen", "int4", tags("Reasoning", "Text"), setOf("text_chat", "reasoning")));
+            "Small reasoning model", "taobao-mnn/DeepSeek-R1-1.5B-Qwen-MNN", 1_557_822_247L,
+            "1.6 GB", "4GB-6GB+", "deepseek-r1-qwen", "int4", tags("Reasoning", "Text"), setOf("text_chat", "reasoning")));
 
         return Collections.unmodifiableMap(entries);
     }
