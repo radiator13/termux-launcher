@@ -4,6 +4,7 @@ import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.termux.ai.MultiBackendTaiRuntime;
 import com.termux.ai.TaiManager;
 import com.termux.ai.TaiModelSpec;
 import com.termux.ai.TaiRuntimeOptions;
