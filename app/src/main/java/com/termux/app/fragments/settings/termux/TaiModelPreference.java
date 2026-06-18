@@ -5,6 +5,7 @@ import android.content.res.ColorStateList;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -141,13 +142,13 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
             }
         }
 
-        Button tuneAction = (Button) holder.findViewById(R.id.tai_model_tune_action);
-        boolean showTune = bindActionButton(tuneAction, tuneActionText, true, tuneActionClickListener);
+        ImageButton tuneAction = (ImageButton) holder.findViewById(R.id.tai_model_tune_action);
+        boolean showTune = bindTuneButton(tuneAction, tuneActionText, tuneActionClickListener);
         Button primaryAction = (Button) holder.findViewById(R.id.tai_model_primary_action);
         boolean showPrimary = bindActionButton(primaryAction, primaryActionText, primaryActionEnabled,
             primaryActionClickListener);
-        if (primaryAction != null && primaryActionDestructive) {
-            primaryAction.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorError));
+        if (primaryAction != null && showPrimary) {
+            tintPrimaryAction(primaryAction);
         }
         LinearLayout actions = (LinearLayout) holder.findViewById(R.id.tai_model_actions);
         if (actions != null) actions.setVisibility(showTune || showPrimary ? View.VISIBLE : View.GONE);
@@ -164,6 +165,41 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         button.setVisibility(View.VISIBLE);
         button.setText(text);
         button.setEnabled(enabled);
+        button.setOnClickListener(listener);
+        return true;
+    }
+
+    private void tintPrimaryAction(@NonNull Button button) {
+        int backgroundAttr;
+        int textAttr;
+        if (!button.isEnabled()) {
+            backgroundAttr = com.termux.shared.R.attr.termuxColorSurfacePanelHigh;
+            textAttr = com.termux.shared.R.attr.termuxColorOnSurfaceVariant;
+        } else if (primaryActionDestructive) {
+            backgroundAttr = com.termux.shared.R.attr.termuxColorErrorContainer;
+            textAttr = com.termux.shared.R.attr.termuxColorOnErrorContainer;
+        } else {
+            backgroundAttr = com.termux.shared.R.attr.termuxColorPrimaryContainer;
+            textAttr = com.termux.shared.R.attr.termuxColorOnPrimaryContainer;
+        }
+        button.setBackgroundTintList(ColorStateList.valueOf(resolveAttrColor(backgroundAttr)));
+        button.setTextColor(resolveAttrColor(textAttr));
+    }
+
+    private boolean bindTuneButton(@Nullable ImageButton button, @NonNull CharSequence text,
+                                   @Nullable View.OnClickListener listener) {
+        if (button == null) return false;
+        if (text.length() == 0) {
+            button.setVisibility(View.GONE);
+            button.setOnClickListener(null);
+            return false;
+        }
+        button.setVisibility(View.VISIBLE);
+        button.setEnabled(true);
+        button.setImageTintList(ColorStateList.valueOf(
+            resolveAttrColor(com.termux.shared.R.attr.termuxColorOnSurface)));
+        button.setBackgroundTintList(ColorStateList.valueOf(
+            resolveAttrColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh)));
         button.setOnClickListener(listener);
         return true;
     }
