@@ -592,7 +592,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             modelPath,
             backend,
             imageInput ? matchingBackend(backend) : null,
-            audioInput ? matchingBackend(backend) : null,
+            audioInput ? new Backend.CPU(null) : null,
             options.maxTokens == null ? profile.defaultMaxTokens : options.maxTokens,
             imageInput ? 8 : null,
             cacheDir
