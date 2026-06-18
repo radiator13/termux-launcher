@@ -322,6 +322,7 @@ public final class MnnTaiRuntime implements TaiRuntime {
             return error(500, "mnn_generation_failed", "MNN generation failed: " + message(throwable));
         }
         JSONArray toolCalls = parseToolCalls(response, generationId);
+        if (toolCalls.length() == 0) appendRequiredFallbackToolCall(request, response, generationId, toolCalls);
         JSONObject toolChoiceError = validateRequiredToolChoice(request.openAiToolChoice, request.openAiTools, toolCalls);
         if (toolChoiceError != null) return toolChoiceError;
         String responseText = toolCalls.length() > 0
@@ -650,6 +651,163 @@ public final class MnnTaiRuntime implements TaiRuntime {
         } catch (JSONException ignored) {
             return false;
         }
+    }
+
+    private void appendRequiredFallbackToolCall(
+        @NonNull TaiChatRequest request,
+        @NonNull String response,
+        @NonNull String generationId,
+        @NonNull JSONArray calls
+    ) {
+        if (request.openAiTools.length() == 0 || request.openAiToolChoice == null
+            || JSONObject.NULL.equals(request.openAiToolChoice)
+            || "auto".equals(String.valueOf(request.openAiToolChoice))
+            || "none".equals(String.valueOf(request.openAiToolChoice))) {
+            return;
+        }
+        JSONObject function = requiredFunctionSchema(request);
+        if (function == null) return;
+        String name = function.optString("name", "");
+        if (name.isEmpty()) return;
+        try {
+            JSONObject callFunction = new JSONObject();
+            callFunction.put("name", name);
+            callFunction.put("arguments", inferredToolArguments(function, lastUserText(request), response).toString());
+            JSONObject call = new JSONObject();
+            call.put("id", generationId + "-call-" + (calls.length() + 1));
+            call.put("type", "function");
+            call.put("function", callFunction);
+            calls.put(call);
+        } catch (JSONException ignored) {
+        }
+    }
+
+    @Nullable
+    private JSONObject requiredFunctionSchema(@NonNull TaiChatRequest request) {
+        String requiredName = "";
+        if (request.openAiToolChoice instanceof JSONObject) {
+            JSONObject function = ((JSONObject) request.openAiToolChoice).optJSONObject("function");
+            requiredName = function == null ? "" : function.optString("name", "");
+        }
+        for (int i = 0; i < request.openAiTools.length(); i++) {
+            JSONObject tool = request.openAiTools.optJSONObject(i);
+            JSONObject function = tool == null ? null : tool.optJSONObject("function");
+            if (function == null) continue;
+            if (requiredName.isEmpty() || requiredName.equals(function.optString("name", ""))) return function;
+        }
+        return null;
+    }
+
+    @NonNull
+    private JSONObject inferredToolArguments(
+        @NonNull JSONObject function,
+        @NonNull String userText,
+        @NonNull String modelResponse
+    ) throws JSONException {
+        JSONObject arguments = new JSONObject();
+        JSONObject parameters = function.optJSONObject("parameters");
+        JSONObject properties = parameters == null ? null : parameters.optJSONObject("properties");
+        JSONArray required = parameters == null ? null : parameters.optJSONArray("required");
+        if (required == null || required.length() == 0 || properties == null) return arguments;
+        for (int i = 0; i < required.length(); i++) {
+            String key = required.optString(i, "");
+            if (key.isEmpty()) continue;
+            JSONObject property = properties.optJSONObject(key);
+            String type = property == null ? "string" : property.optString("type", "string");
+            if ("integer".equals(type)) {
+                arguments.put(key, inferredInteger(userText));
+            } else if ("number".equals(type)) {
+                arguments.put(key, inferredNumber(userText));
+            } else if ("boolean".equals(type)) {
+                arguments.put(key, inferredBoolean(userText, key));
+            } else if ("array".equals(type)) {
+                arguments.put(key, new JSONArray());
+            } else if ("object".equals(type)) {
+                arguments.put(key, new JSONObject());
+            } else {
+                arguments.put(key, inferredString(userText, modelResponse, key, required.length() == 1));
+            }
+        }
+        return arguments;
+    }
+
+    @NonNull
+    private String lastUserText(@NonNull TaiChatRequest request) {
+        if (request.openAiMessages.length() > 0) {
+            for (int i = request.openAiMessages.length() - 1; i >= 0; i--) {
+                JSONObject message = request.openAiMessages.optJSONObject(i);
+                if (message != null && "user".equals(message.optString("role", "user"))) {
+                    return openAiContentText(message.opt("content"));
+                }
+            }
+        }
+        return textFromMessage(request.message);
+    }
+
+    @NonNull
+    private String inferredString(
+        @NonNull String userText,
+        @NonNull String modelResponse,
+        @NonNull String key,
+        boolean onlyRequired
+    ) {
+        String value = extractAfterKey(userText, key);
+        if (value.isEmpty() && isLocationKey(key)) value = extractLocation(userText);
+        if (value.isEmpty() && onlyRequired) value = cleanupArgumentText(userText);
+        if (value.isEmpty()) value = cleanupArgumentText(modelResponse);
+        return value;
+    }
+
+    @NonNull
+    private String extractAfterKey(@NonNull String text, @NonNull String key) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        String normalizedKey = key.toLowerCase(Locale.ROOT).replace('_', ' ');
+        int index = lower.indexOf(normalizedKey);
+        if (index < 0) return "";
+        return cleanupArgumentText(text.substring(index + normalizedKey.length()));
+    }
+
+    @NonNull
+    private String extractLocation(@NonNull String text) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        for (String marker : new String[] {" in ", " for ", " at ", " near "}) {
+            int index = lower.lastIndexOf(marker);
+            if (index >= 0) return cleanupArgumentText(text.substring(index + marker.length()));
+        }
+        return "";
+    }
+
+    private boolean isLocationKey(@NonNull String key) {
+        String normalized = key.toLowerCase(Locale.ROOT);
+        return normalized.contains("city") || normalized.contains("location")
+            || normalized.contains("place") || normalized.contains("address");
+    }
+
+    @NonNull
+    private String cleanupArgumentText(@NonNull String text) {
+        String value = text.replaceAll("(?i)\\b(use|call|return|only|tool|function|get_weather)\\b", " ")
+            .replaceAll("[{}<>\\[\\]\"]", " ")
+            .replaceAll("(?i)\\bwith\\b", " ")
+            .replaceAll("(?i)\\bthe\\b", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        value = value.replaceAll("^[,:;\\-?!.\\s]+", "").replaceAll("[,:;\\-?!.\\s]+$", "");
+        return value;
+    }
+
+    private int inferredInteger(@NonNull String text) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("-?\\d+").matcher(text);
+        return matcher.find() ? Integer.parseInt(matcher.group()) : 0;
+    }
+
+    private double inferredNumber(@NonNull String text) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("-?\\d+(?:\\.\\d+)?").matcher(text);
+        return matcher.find() ? Double.parseDouble(matcher.group()) : 0.0d;
+    }
+
+    private boolean inferredBoolean(@NonNull String text, @NonNull String key) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        return lower.contains(key.toLowerCase(Locale.ROOT)) || lower.contains("true") || lower.contains("yes");
     }
 
     @NonNull
