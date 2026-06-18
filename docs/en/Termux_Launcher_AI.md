@@ -6,7 +6,7 @@ The short version:
 
 - The AI runs on your device, inside the Termux Launcher app process.
 - It exposes an OpenAI-compatible API for tools such as `aichat`.
-- It supports LiteRT-LM models.
+- It supports LiteRT-LM and MNN model backends.
 - It does not bundle model files inside the APK. You download or import models yourself.
 - The API is protected by a bearer token stored on your device.
 
@@ -44,9 +44,9 @@ Useful commands:
 tai status
 tai runtime
 tai models
-tai load Gemma-4-E2B-it
+tai load gemma-4-e2b-it-litert-lm
 tai unload
-tai keep-warm Gemma-4-E2B-it --minutes 30
+tai keep-warm gemma-4-e2b-it-litert-lm --minutes 30
 ```
 
 Use raw JSON output when scripting:
@@ -97,7 +97,11 @@ Supported OpenAI-style endpoints:
 GET  /v1/models
 POST /v1/chat/completions
 POST /v1/completions
+POST /v1/embeddings
+POST /v1/audio/speech
 ```
+
+`/v1/audio/speech` returns a clear `unsupported_audio_output` error because the local runners do not currently generate audio output.
 
 Most OpenAI-compatible CLI tools expect a base URL ending in `/v1`, so use:
 
@@ -116,16 +120,19 @@ http://127.0.0.1:41237
 Use these model IDs exactly:
 
 ```text
-Gemma-4-E2B-it
-Gemma-4-E4B-it
-MobileActions-270M
+gemma-4-e2b-it-litert-lm
+gemma-4-e4b-it-litert-lm
+functiongemma-270m-mobile-actions-litert-lm
+qwen2.5-coder-1.5b-instruct-mnn
 ```
 
-`Gemma-4-E2B-it` is the fast default assistant model.
+`gemma-4-e2b-it-litert-lm` is the fast default assistant model.
 
-`Gemma-4-E4B-it` is the larger assistant model.
+`gemma-4-e4b-it-litert-lm` is the larger assistant model.
 
-`MobileActions-270M` is a smaller model intended for mobile action-style tasks. It is CPU-only.
+`functiongemma-270m-mobile-actions-litert-lm` is a smaller model intended for mobile action-style tasks. It is CPU-only.
+
+`qwen2.5-coder-1.5b-instruct-mnn` is the default installed MNN code model.
 
 ## How Model Loading Works
 
@@ -143,7 +150,7 @@ The loaded model is kept warm for the configured timeout, then unloaded when idl
 You can also load manually:
 
 ```sh
-tai load Gemma-4-E2B-it
+tai load gemma-4-e2b-it-litert-lm
 ```
 
 and unload manually:
@@ -162,14 +169,14 @@ Termux Launcher AI supports two runtime slots:
 The assistant slot is for:
 
 ```text
-Gemma-4-E2B-it
-Gemma-4-E4B-it
+gemma-4-e2b-it-litert-lm
+gemma-4-e4b-it-litert-lm
 ```
 
 The MobileActions slot is for:
 
 ```text
-MobileActions-270M
+functiongemma-270m-mobile-actions-litert-lm
 ```
 
 This means the launcher can keep one main assistant model available while also keeping MobileActions available separately on CPU.
@@ -213,7 +220,7 @@ export OPENAI_API_KEY="$(cat ~/.launcherctl/token)"
 Then choose one of the supported model IDs, for example:
 
 ```text
-Gemma-4-E2B-it
+gemma-4-e2b-it-litert-lm
 ```
 
 When the first request is sent, Termux Launcher AI will load the model if it is installed and not already loaded.
@@ -225,7 +232,7 @@ The APK does not include model files. This keeps the APK smaller and avoids bund
 You can download supported catalog models from the settings page, or use the CLI:
 
 ```sh
-tai download Gemma-4-E2B-it <model-url> --accept-terms
+tai download gemma-4-e2b-it-litert-lm <model-url> --accept-terms
 ```
 
 You can import an existing local LiteRT-LM file:
@@ -312,7 +319,7 @@ tai runtime
 Try CPU mode if GPU loading fails:
 
 ```sh
-tai load Gemma-4-E2B-it --cpu
+tai load gemma-4-e2b-it-litert-lm --cpu
 ```
 
 ### The API key does not work
@@ -330,4 +337,5 @@ If needed, recreate it in Settings and update your CLI tool.
 For the technical reference, see:
 
 - [TAI / Termux AI](Termux_AI)
+- [TAI LLM backends](Termux_AI_Backends)
 - [LauncherCtl API](LauncherCtl_API)

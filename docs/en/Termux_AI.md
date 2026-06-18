@@ -15,13 +15,15 @@ TAI currently handles:
 - OpenAI-compatible `POST /v1/chat/completions`
 - OpenAI-compatible `POST /v1/completions`
 - streaming SSE responses for chat and completion requests
+- LiteRT-LM image and audio input for models that advertise those capabilities
+- MNN chat and tool-call compatibility through the local OpenAI endpoint
 
 TAI does not currently:
 
 - plan or execute shell commands
 - summarize notifications
 - execute Android/device actions
-- accept multimodal image/audio prompts
+- generate audio output
 - expose Gallery skills or benchmark UI
 
 Those features should be built later as explicit capability APIs or delegated to dedicated external tools instead of being hidden inside the `tai` shell helper.
@@ -30,7 +32,7 @@ Those features should be built later as explicit capability APIs or delegated to
 
 TAI keeps one default model assignment for requests that omit `model`:
 
-- `Gemma-4-E2B-it`: default fast assistant model
+- `gemma-4-e2b-it-litert-lm`: default fast assistant model
 
 Open Settings -> TAI / Termux AI to change the default model and runtime overrides.
 
@@ -49,15 +51,15 @@ TAI stores user overrides separately from model metadata. Runtime tunables defau
 - speculative decoding
 - idle unload / keep-warm policy
 
-Auto accelerator follows the ordered compatible accelerator list from Google AI Edge Gallery's model allowlist. MobileActions-270M is CPU-only with temperature 0.0, while Gemma 4 E2B/E4B prefer GPU with CPU fallback and use their Gallery defaults. TAI also applies Gallery's Pixel 10 GPU exclusion and minimum-memory metadata. Explicit `--gpu` or `--cpu` is accepted only when both the model profile and device support it.
+Auto accelerator follows the ordered compatible accelerator list from Google AI Edge Gallery's model allowlist. `functiongemma-270m-mobile-actions-litert-lm` is CPU-only with temperature 0.0, while Gemma 4 E2B/E4B prefer GPU with CPU fallback and use their Gallery defaults. TAI also applies Gallery's Pixel 10 GPU exclusion and minimum-memory metadata. Explicit `--gpu` or `--cpu` is accepted only when both the model profile and device support it.
 
 Device memory detection matches Gallery: Android 14 and newer use `ActivityManager.MemoryInfo.advertisedMem`; older versions use `totalMem`. `tai runtime` exposes the detected ABI, memory source, SoC, device model, available phase-one accelerators, active model profile, and any memory warning. A low-memory result is a warning, matching Gallery's proceed-anyway behavior, rather than an automatic load failure.
 
 Known profiles are synchronized with Edge Gallery 1.0.15:
 
-- Gemma-4-E2B-it: GPU, CPU; 8 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- Gemma-4-E4B-it: GPU, CPU; 12 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- MobileActions-270M: CPU only; 6 GiB minimum; 1024 max tokens; TopK 64; TopP 0.95; temperature 0.0.
+- `gemma-4-e2b-it-litert-lm`: GPU, CPU; 8 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `gemma-4-e4b-it-litert-lm`: GPU, CPU; 12 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `functiongemma-270m-mobile-actions-litert-lm`: CPU only; 6 GiB minimum; 1024 max tokens; TopK 64; TopP 0.95; temperature 0.0.
 
 Unknown imported models default to CPU, matching Gallery's import dialog. The import API accepts `runtimeProfile.compatibleAccelerators`, `defaultMaxTokens`, `defaultTopK`, `defaultTopP`, `defaultTemperature`, and `minDeviceMemoryInGb` when the user knows the package's requirements.
 
@@ -78,13 +80,13 @@ tai --json status
 tai status
 tai runtime
 tai models
-tai import ~/models/gemma.litertlm Gemma-4-E2B-it-local
-tai download Gemma-4-E2B-it https://example.invalid/path/to/model.litertlm --accept-terms
+tai import ~/models/gemma.litertlm gemma-4-e2b-it-local
+tai download gemma-4-e2b-it-litert-lm https://example.invalid/path/to/model.litertlm --accept-terms
 tai downloads
-tai load Gemma-4-E2B-it
-tai load Gemma-4-E2B-it --gpu
-tai load Gemma-4-E2B-it --cpu
-tai keep-warm Gemma-4-E2B-it --minutes 30
+tai load gemma-4-e2b-it-litert-lm
+tai load gemma-4-e2b-it-litert-lm --gpu
+tai load gemma-4-e2b-it-litert-lm --cpu
+tai keep-warm gemma-4-e2b-it-litert-lm --minutes 30
 tai cancel
 tai unload
 tai doctor
@@ -115,6 +117,8 @@ Implemented endpoints:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/completions`
+- `POST /v1/embeddings`
+- `POST /v1/audio/speech`
 
 Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
 
@@ -163,9 +167,15 @@ Download starts a foreground app-process transfer into app-private storage under
 
 For gated Hugging Face models, first accept the provider terms on Hugging Face, create a read token, and save it in Settings -> TAI / Termux AI -> Hugging Face token. TAI sends that token only as a Bearer token to Hugging Face download URLs. Do not put Hugging Face or other private tokens in shell history.
 
+## LLM Backends
+
+For backend-specific details, including LiteRT-LM GPU multimodal behavior, MNN config defaults, MNN tool-call handling, and OpenAI-compatible media errors, see:
+
+- [TAI LLM backends](Termux_AI_Backends)
+
 ## Current Limitations / TODO
 
-- Expand the LiteRT-LM runtime adapter with benchmark counters, multimodal prompts, and tool-calling integration.
+- Expand benchmark counters and deeper runtime diagnostics.
 - Move LiteRT-LM GPU probing/loading into an isolated runtime process so native GPU failures cannot crash the main launcher process.
 - Add copy-into-private-storage import mode and UI file picker.
 - Add pause/cancel/retry controls for foreground downloads.
