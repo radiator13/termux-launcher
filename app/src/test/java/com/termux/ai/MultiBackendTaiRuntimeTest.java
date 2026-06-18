@@ -49,14 +49,14 @@ public class MultiBackendTaiRuntimeTest {
     }
 
     @Test
-    public void loadMnnModel_usesMnnStubWithoutTouchingLiteRt() throws Exception {
+    public void loadMnnModel_validatesFilesBeforeNativeRuntime() throws Exception {
         MultiBackendTaiRuntime runtime = new MultiBackendTaiRuntime(context);
 
         JSONObject result = runtime.load(model("mnn-load", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN), options());
 
         assertFalse(result.getBoolean("ok"));
         assertEquals("model_file_not_readable", result.getString("error"));
-        assertEquals(501, result.getInt("_statusCode"));
+        assertEquals(404, result.getInt("_statusCode"));
         assertSame(field(runtime, "mnn"), field(runtime, "activeAssistant"));
     }
 

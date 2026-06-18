@@ -7,6 +7,10 @@ build/
 release/
 *.apk
 *.so
+!app/src/main/jniLibs/
+!app/src/main/jniLibs/arm64-v8a/
+!app/src/main/jniLibs/arm64-v8a/libMNN.so
+!app/src/main/jniLibs/arm64-v8a/libmnnllmapp.so
 .externalNativeBuild
 .cxx
 *.zip

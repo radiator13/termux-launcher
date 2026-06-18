@@ -1256,8 +1256,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
     private void setActiveModel(Context context, String modelId) {
         TaiModelSpec model = new TaiModelStore(context).getUserModels().get(modelId);
-        if (model != null && TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)) {
-            String reason = TaiDeviceCapabilities.detect(context).mnnUnsupportedReason;
+        TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
+        if (model != null && TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend) && !capabilities.mnnSupported) {
+            String reason = capabilities.mnnUnsupportedReason;
             Toast.makeText(context, reason == null ? getString(R.string.termux_ai_mnn_runtime_pending) : reason,
                 Toast.LENGTH_LONG).show();
             return;

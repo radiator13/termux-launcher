@@ -294,15 +294,17 @@ public final class TaiDeviceCapabilities {
 
     @NonNull
     private static MnnCapabilityResult computeMnnCapabilities(@NonNull List<String> abis, int sdkInt) {
-        boolean abiSupported = containsSupportedAbi(abis);
-        boolean mnnBundledLibrariesAvailable = false;
-        boolean mnnSupported = false;
-        String mnnUnsupportedReason = "Native MNN runtime libraries are not bundled in this APK yet.";
+        boolean abiSupported = abis.contains("arm64-v8a");
+        boolean mnnBundledLibrariesAvailable = MnnTaiRuntime.isNativeRuntimeAvailable();
+        boolean mnnSupported = sdkInt >= MNN_SDK_MINIMUM && abiSupported && mnnBundledLibrariesAvailable;
+        String mnnUnsupportedReason = mnnSupported ? null : "Native MNN runtime libraries are not bundled for this APK/ABI.";
 
         if (sdkInt < MNN_SDK_MINIMUM) {
             mnnUnsupportedReason = "MNN requires Android 7.0 (API " + MNN_SDK_MINIMUM + ") or higher. Device is API " + sdkInt + ".";
         } else if (!abiSupported) {
-            mnnUnsupportedReason = "MNN runtime target ABI is not supported by this device.";
+            mnnUnsupportedReason = "MNN runtime is bundled for arm64-v8a only.";
+        } else if (!mnnBundledLibrariesAvailable) {
+            mnnUnsupportedReason = "Native MNN runtime libraries are not available in this APK.";
         }
 
         if (shouldApplyDebugOverride(BuildConfig.DEBUG, sDebugMnnUnsupportedReason)) {

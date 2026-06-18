@@ -25,7 +25,7 @@ public class TaiDeviceCapabilitiesTest {
     }
 
     @Test
-    public void arm64Device_reportsMnnRuntimePending() {
+    public void arm64DeviceWithoutLoadableNativeLibraries_reportsMnnUnavailable() {
         TaiDeviceCapabilities device = TaiDeviceCapabilities.createForTest(
             "Pixel 9", "Google", "tensor", 34,
             Arrays.asList("arm64-v8a", "armeabi-v7a", "armeabi"),
@@ -35,6 +35,7 @@ public class TaiDeviceCapabilitiesTest {
         assertFalse(device.mnnSupported);
         assertFalse(device.mnnBundledLibrariesAvailable);
         assertNotNull(device.mnnUnsupportedReason);
+        assertTrue(device.mnnUnsupportedReason.contains("not available"));
         assertEquals(TaiDeviceCapabilities.MNN_SDK_MINIMUM, device.mnnSdkMinimum);
         assertEquals(TaiDeviceCapabilities.MNN_MEMORY_ESTIMATE_MB, device.mnnMemoryEstimateMb);
     }
@@ -51,7 +52,7 @@ public class TaiDeviceCapabilitiesTest {
         assertFalse(device.mnnBundledLibrariesAvailable);
         assertNotNull(device.mnnUnsupportedReason);
         assertTrue("Expected ABI unsupported reason, got: " + device.mnnUnsupportedReason,
-            device.mnnUnsupportedReason.contains("target ABI is not supported"));
+            device.mnnUnsupportedReason.contains("arm64-v8a only"));
     }
 
     @Test
