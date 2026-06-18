@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
@@ -49,6 +50,7 @@ public class TaiModelDownloaderStateTest {
         store.deleteUserModel("state-test");
         store.deleteUserModel("cancel-test");
         store.deleteUserModel("retry-test");
+        store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
     }
 
     @Test
@@ -121,6 +123,27 @@ public class TaiModelDownloaderStateTest {
         assertEquals(TaiModelStore.STATE_INSTALLED, retryStates.get(retryStates.size() - 1));
         assertTrue(output.isFile());
         assertFalse(new File(output.getAbsolutePath() + ".part").exists());
+    }
+
+    @Test
+    public void completedDownloadRecordAdvertisesReadableModel() throws Exception {
+        File output = output(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT, "gemma-4-E2B-it.litertlm");
+        assertTrue(output.getParentFile().mkdirs() || output.getParentFile().isDirectory());
+        java.nio.file.Files.write(output.toPath(), modelBytes('g'));
+        store.upsertDownload(new JSONObject()
+            .put("id", "legacy-gemma-download")
+            .put("modelId", TaiModelRegistry.MODEL_GEMMA_4_E2B_IT)
+            .put("path", output.getAbsolutePath())
+            .put("status", "complete")
+            .put("bytesRead", output.length())
+            .put("totalBytes", output.length()));
+
+        TaiModelSpec advertised = store.getDownloadedReadableModels().get(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
+
+        assertNotNull(advertised);
+        assertEquals(TaiModelSpec.BACKEND_LITERT_LM, advertised.backend);
+        assertTrue(advertised.capabilities.contains("image_input"));
+        assertTrue(advertised.capabilities.contains("audio_input"));
     }
 
     private void run(String modelId, String url, File output, List<String> states) {

@@ -380,6 +380,10 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
         if (token == null) return;
         token.setText(new TaiSettings(context).getOrCreateApiToken());
+        token.setOnPreferenceClickListener(preference -> {
+            copyApiToken(context);
+            return true;
+        });
     }
 
     private void showApiPortDialog(Context context, EditTextPreference preference) {
@@ -468,9 +472,21 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private void copyEndpointInfo(Context context) {
         try {
             JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
-            copyToClipboard(context, endpoint.optString("baseUrl", ""), R.string.termux_ai_endpoint_copied);
+            copyToClipboard(context, endpoint.optString("openAiBaseUrl", endpoint.optString("baseUrl", "")),
+                R.string.termux_ai_endpoint_copied);
         } catch (JSONException e) {
             Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void copyApiToken(Context context) {
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            String token = endpoint.optString("token", "");
+            if (token.isEmpty()) token = new TaiSettings(context).getOrCreateApiToken();
+            copyToClipboard(context, token, R.string.termux_ai_api_token_copied);
+        } catch (JSONException e) {
+            copyToClipboard(context, new TaiSettings(context).getOrCreateApiToken(), R.string.termux_ai_api_token_copied);
         }
     }
 

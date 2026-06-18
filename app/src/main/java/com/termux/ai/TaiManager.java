@@ -568,7 +568,10 @@ public final class TaiManager {
         JSONObject installed = new JSONObject();
         JSONArray models = new JSONArray();
         boolean mnnSupported = TaiDeviceCapabilities.detect(appContext).mnnSupported;
-        for (TaiModelSpec spec : modelStore.getInstalledUserModels().values()) {
+        LinkedHashMap<String, TaiModelSpec> availableModels = new LinkedHashMap<>();
+        availableModels.putAll(modelStore.getDownloadedReadableModels());
+        availableModels.putAll(modelStore.getInstalledUserModels());
+        for (TaiModelSpec spec : availableModels.values()) {
             if (TaiModelSpec.BACKEND_MNN_LLM.equals(spec.backend) && !mnnSupported) continue;
             models.put(spec.toJson());
         }

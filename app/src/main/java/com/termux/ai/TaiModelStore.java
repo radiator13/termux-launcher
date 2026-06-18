@@ -12,6 +12,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 public final class TaiModelStore {
@@ -77,6 +78,19 @@ public final class TaiModelStore {
             if (isModelReadable(spec)) installed.put(spec.id, spec);
         }
         return installed;
+    }
+
+    @NonNull
+    public synchronized Map<String, TaiModelSpec> getDownloadedReadableModels() {
+        LinkedHashMap<String, TaiModelSpec> models = new LinkedHashMap<>();
+        JSONArray downloads = getDownloads();
+        for (int i = 0; i < downloads.length(); i++) {
+            JSONObject item = downloads.optJSONObject(i);
+            if (item == null || !isCompletedDownload(item)) continue;
+            TaiModelSpec spec = specFromDownload(item);
+            if (spec != null && isModelReadable(spec)) models.put(spec.id, spec);
+        }
+        return models;
     }
 
     public synchronized int pruneMissingUserModels() {
@@ -232,6 +246,79 @@ public final class TaiModelStore {
         if (fileName == null || fileName.trim().isEmpty()) return false;
         File file = new File(modelDir, fileName);
         return file.isFile() && file.canRead();
+    }
+
+    private boolean isCompletedDownload(@NonNull JSONObject item) {
+        String status = item.optString("status", "");
+        return STATE_INSTALLED.equals(status) || "complete".equals(status);
+    }
+
+    @Nullable
+    private TaiModelSpec specFromDownload(@NonNull JSONObject item) {
+        String rawId = item.optString("modelId", item.optString("id", ""));
+        String modelId = TaiSettings.migrateBuiltInModelId(rawId);
+        if (modelId.trim().isEmpty()) return null;
+        String path = item.optString("path", "");
+        if (path.trim().isEmpty()) return null;
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
+        LinkedHashSet<String> capabilities = new LinkedHashSet<>();
+        String displayName = modelId;
+        String roleHint = "Downloaded model";
+        String license = "User accepted provider terms externally";
+        long sizeBytes = item.optLong("bytesRead", item.optLong("totalBytes", 0L));
+        String backend = TaiModelSpec.inferBackend(path);
+        String format = TaiModelSpec.inferFormat(path);
+        String architecture = null;
+        String quantization = null;
+        int contextWindow = 4096;
+        int recommendedRamGb = 0;
+        String sha256 = null;
+        if (entry != null) {
+            displayName = entry.displayName;
+            roleHint = entry.roleHint;
+            license = entry.license;
+            sizeBytes = entry.sizeBytes > 0L ? entry.sizeBytes : sizeBytes;
+            capabilities.addAll(entry.capabilities);
+            backend = entry.backend;
+            format = entry.format;
+            architecture = entry.architecture;
+            quantization = entry.quantization;
+            contextWindow = entry.contextWindow;
+            recommendedRamGb = entry.recommendedRamGb;
+            sha256 = entry.sha256;
+        }
+        JSONArray capabilityArray = item.optJSONArray("capabilities");
+        if (capabilityArray != null) {
+            capabilities.clear();
+            for (int i = 0; i < capabilityArray.length(); i++) {
+                String capability = capabilityArray.optString(i, "");
+                if (!capability.isEmpty()) capabilities.add(capability);
+            }
+        }
+        if (capabilities.isEmpty()) capabilities.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        try {
+            return new TaiModelSpec(
+                modelId,
+                displayName,
+                roleHint,
+                "downloaded",
+                path,
+                license,
+                sizeBytes,
+                capabilities,
+                false,
+                null,
+                backend,
+                format,
+                architecture,
+                quantization,
+                contextWindow,
+                recommendedRamGb,
+                sha256
+            );
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     @NonNull
