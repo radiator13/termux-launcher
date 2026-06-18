@@ -256,10 +256,25 @@ public final class MnnTaiRuntime implements TaiRuntime {
                 && !"none".equals(String.valueOf(request.openAiToolChoice));
             HashMap<String, Object> nativeResult;
             if (hasTools) {
-                nativeResult = activeSession.generateStructuredChat(
-                    mnnStructuredMessagesJson(request).toString(),
-                    request.openAiTools.toString(),
-                    progress -> {
+                try {
+                    nativeResult = activeSession.generateStructuredChat(
+                        mnnStructuredMessagesJson(request).toString(),
+                        request.openAiTools.toString(),
+                        progress -> {
+                            if (cancelRequested) return true;
+                            if (progress == null) return false;
+                            synchronized (responseBuilder) {
+                                responseBuilder.append(progress);
+                            }
+                            if (callback != null) callback.onToken(progress);
+                            return false;
+                        });
+                } catch (UnsatisfiedLinkError missingStructuredBridge) {
+                    synchronized (responseBuilder) {
+                        responseBuilder.setLength(0);
+                    }
+                    List<Pair<String, String>> history = mnnHistory(request);
+                    nativeResult = activeSession.generateHistory(history, progress -> {
                         if (cancelRequested) return true;
                         if (progress == null) return false;
                         synchronized (responseBuilder) {
@@ -268,6 +283,9 @@ public final class MnnTaiRuntime implements TaiRuntime {
                         if (callback != null) callback.onToken(progress);
                         return false;
                     });
+                    if (nativeResult == null) nativeResult = new HashMap<>();
+                    nativeResult.put("structuredChatFallback", true);
+                }
             } else {
                 List<Pair<String, String>> history = mnnHistory(request);
                 nativeResult = activeSession.generateHistory(history, progress -> {
@@ -401,10 +419,91 @@ public final class MnnTaiRuntime implements TaiRuntime {
     @NonNull
     private List<Pair<String, String>> mnnHistory(@NonNull TaiChatRequest request) {
         ArrayList<Pair<String, String>> history = new ArrayList<>();
-        if (!request.systemPrompt.trim().isEmpty()) history.add(new Pair<>("system", request.systemPrompt));
+        String systemPrompt = mnnSystemPrompt(request);
+        if (!systemPrompt.trim().isEmpty()) history.add(new Pair<>("system", systemPrompt));
+        if (request.openAiMessages.length() > 0) {
+            appendOpenAiHistory(history, request.openAiMessages);
+            return history;
+        }
         for (Message message : request.initialMessages) history.add(new Pair<>(mnnRole(message), textFromMessage(message)));
         history.add(new Pair<>(mnnRole(request.message), textFromMessage(request.message)));
         return history;
+    }
+
+    private void appendOpenAiHistory(
+        @NonNull ArrayList<Pair<String, String>> history,
+        @NonNull JSONArray messages
+    ) {
+        for (int i = 0; i < messages.length(); i++) {
+            JSONObject source = messages.optJSONObject(i);
+            if (source == null) continue;
+            String role = source.optString("role", "user");
+            if ("system".equals(role) || "developer".equals(role)) continue;
+            String content = openAiContentText(source.opt("content"));
+            if ("assistant".equals(role) && source.has("tool_calls")) {
+                content = appendAssistantToolCalls(content, source.optJSONArray("tool_calls"));
+            } else if ("tool".equals(role)) {
+                content = "<tool_response>\n" + content + "\n</tool_response>";
+            }
+            history.add(new Pair<>(role, content));
+        }
+    }
+
+    @NonNull
+    private String appendAssistantToolCalls(@NonNull String content, @Nullable JSONArray toolCalls) {
+        StringBuilder builder = new StringBuilder(content);
+        if (toolCalls == null) return builder.toString();
+        for (int i = 0; i < toolCalls.length(); i++) {
+            JSONObject call = toolCalls.optJSONObject(i);
+            JSONObject function = call == null ? null : call.optJSONObject("function");
+            if (function == null) continue;
+            JSONObject toolCall = new JSONObject();
+            try {
+                toolCall.put("name", function.optString("name", ""));
+                Object arguments = function.opt("arguments");
+                if (arguments instanceof JSONObject) {
+                    toolCall.put("arguments", arguments);
+                } else {
+                    String argumentsText = arguments == null ? "{}" : String.valueOf(arguments);
+                    toolCall.put("arguments", argumentsText.trim().isEmpty() ? new JSONObject() : new JSONObject(argumentsText));
+                }
+                builder.append("\n<tool_call>\n").append(toolCall).append("\n</tool_call>");
+            } catch (JSONException ignored) {
+            }
+        }
+        return builder.toString();
+    }
+
+    @NonNull
+    private String mnnSystemPrompt(@NonNull TaiChatRequest request) {
+        StringBuilder prompt = new StringBuilder(request.systemPrompt == null ? "" : request.systemPrompt.trim());
+        if (request.openAiTools.length() == 0 || "none".equals(String.valueOf(request.openAiToolChoice))) {
+            return prompt.toString();
+        }
+        if (prompt.length() > 0) prompt.append("\n\n");
+        prompt.append("# Tools\n\n")
+            .append("You may call one or more functions to assist with the user query.\n")
+            .append("Function signatures are provided inside <tools></tools> XML tags:\n<tools>");
+        for (int i = 0; i < request.openAiTools.length(); i++) {
+            JSONObject tool = request.openAiTools.optJSONObject(i);
+            if (tool != null) prompt.append('\n').append(tool);
+        }
+        prompt.append("\n</tools>\n\n")
+            .append("For each function call, return exactly one JSON object with function name and arguments ")
+            .append("inside <tool_call></tool_call> XML tags:\n")
+            .append("<tool_call>\n")
+            .append("{\"name\":\"function_name\",\"arguments\":{\"argument\":\"value\"}}\n")
+            .append("</tool_call>\n")
+            .append("Do not answer in prose when a tool call is required.");
+        Object choice = request.openAiToolChoice;
+        if ("required".equals(String.valueOf(choice))) {
+            prompt.append("\nYou must call one of the provided tools.");
+        } else if (choice instanceof JSONObject) {
+            JSONObject function = ((JSONObject) choice).optJSONObject("function");
+            String name = function == null ? "" : function.optString("name", "");
+            if (!name.isEmpty()) prompt.append("\nYou must call the tool named ").append(name).append('.');
+        }
+        return prompt.toString();
     }
 
     @NonNull
