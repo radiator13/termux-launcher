@@ -17,16 +17,16 @@ TAI currently handles:
 - streaming SSE responses for chat and completion requests
 - LiteRT-LM image and audio input for models that advertise those capabilities
 - MNN chat and tool-call compatibility through the local OpenAI endpoint
+- compatibility with the LauncherCtl agent/tool layer through the same localhost bridge
 
 TAI does not currently:
 
 - plan or execute shell commands
 - summarize notifications
-- execute Android/device actions
 - generate audio output
 - expose Gallery skills or benchmark UI
 
-Those features should be built later as explicit capability APIs or delegated to dedicated external tools instead of being hidden inside the `tai` shell helper.
+Android/device actions are exposed separately through LauncherCtl capability, agent, and MCP APIs instead of being hidden inside the `tai` shell helper or the OpenAI-compatible model endpoints.
 
 ## Model Roles
 
@@ -147,6 +147,8 @@ The endpoint URL and bearer token are stored at:
 ~/.launcherctl/token
 ```
 
+MCP-capable clients can use `launcherctl mcp` for the Android tool surface. That bridge is separate from the OpenAI-compatible TAI chat/completions endpoints and uses the same `~/.launcherctl` endpoint/token files.
+
 ## Importing and Downloading Models
 
 TAI supports two explicit model registration paths:
@@ -179,4 +181,3 @@ For backend-specific details, including LiteRT-LM GPU multimodal behavior, MNN c
 - Move LiteRT-LM GPU probing/loading into an isolated runtime process so native GPU failures cannot crash the main launcher process.
 - Add copy-into-private-storage import mode and UI file picker.
 - Add pause/cancel/retry controls for foreground downloads.
-- Add explicit Android capability APIs separately from the local model endpoint.

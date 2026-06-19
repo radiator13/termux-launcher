@@ -28,6 +28,12 @@ Runtime files under `$HOME/.launcherctl`:
 
 - `token`: API bearer token.
 - `endpoint`: local base URL (`http://127.0.0.1:<port>`).
+- `launcher.db`: SQLite store for notification history and agent memory.
+- `notifications.jsonl`: append-only notification event stream for scripts/debugging.
+- `events.jsonl`: append-only system/agent event stream.
+- `agent-runs.jsonl`: append-only route/execute audit stream.
+- `tools.json`: generated LauncherCtl tool schema snapshot.
+- `capabilities.json`: generated hardware/capability snapshot.
 
 ## Endpoints (v1)
 
@@ -133,6 +139,46 @@ Requires notification listener access.
 Returns cached notification list.
 Requires notification listener access.
 
+### Notification History
+Notification listener events are persisted under `~/.launcherctl` and can be queried without scraping the active notification snapshot.
+
+- `POST /v1/notifications/recent` with `{ "limit": 50 }`
+- `POST /v1/notifications/since` with `{ "since": 1710000000000, "limit": 200 }`
+- `POST /v1/notifications/search` with `{ "query": "invoice", "limit": 50 }`
+- `POST /v1/notifications/stats` with optional `{ "since": 1710000000000 }`
+
+The `launcherctl notifications recent|since|search|stats` commands wrap these endpoints.
+
+### `GET /v1/launcher/capabilities`
+Returns device and integration capability metadata for scripts and agents:
+
+- ABI, SDK, RAM, device model, accelerator support, and backend warnings.
+- notification listener/access state.
+- TAI runtime state and loaded model id.
+- FunctionGemma mobile-actions availability and loaded state.
+- available LauncherCtl tool names.
+- integration hints including `openAiCompatible`, `mcpStdio`, and `mcpCommand`.
+
+Unsupported hardware is reported as structured warnings/blocking reasons rather than hidden failure.
+
+### Agent Tools
+LauncherCtl exposes a shared tool registry for local agents, MCP clients, and scripts.
+
+- `GET /v1/agent/tools`: internal tool metadata plus OpenAI-compatible function schemas.
+- `POST /v1/agent/route`: route a natural-language request to a tool and arguments.
+- `POST /v1/agent/execute`: execute a named tool with JSON arguments.
+
+Execution is confirmation-gated for medium/high/critical risk tools. `launcherctl agent --dry-run "open maps"` routes only; `launcherctl agent "open maps"` routes and executes with explicit CLI confirmation.
+
+FunctionGemma mobile-actions routing is used only when the model is already loaded and supported. LauncherCtl does not auto-download or auto-load it.
+
+### Events
+Agent route/execute calls are audited to `~/.launcherctl/events.jsonl` and `~/.launcherctl/agent-runs.jsonl`.
+
+- `GET /v1/events`: recent event snapshot.
+- `POST /v1/events/tail`: recent events with optional limit/since body.
+- `GET /v1/events/stream`: snapshot SSE stream ending with `data: [DONE]`.
+
 ### `POST /v1/auth/rotate`
 Rotates API token and rewrites `~/.launcherctl/token` and `~/.launcherctl/endpoint`.
 
@@ -147,6 +193,12 @@ launcherctl resources
 launcherctl media
 launcherctl art
 launcherctl notifications
+launcherctl notifications recent 50
+launcherctl capabilities
+launcherctl tools
+launcherctl agent --dry-run "open maps"
+launcherctl events tail 20
+launcherctl mcp
 launcherctl update-scripts
 launcherctl tty-doctor
 launcherctl token rotate
@@ -193,6 +245,19 @@ call time or storing it in a credentials manager.
 embeddings. Check each model's `_capabilities` field returned by
 `GET /v1/models` before calling this endpoint; unsupported models return a
 `capability_not_supported` error.
+
+## MCP Stdio Bridge
+
+`launcherctl mcp` runs an MCP stdio server backed by the LauncherCtl tool registry. It is intended for MCP-capable local clients that want to list and call Android launcher tools while keeping all state and credentials in `~/.launcherctl`.
+
+The bridge requires Python in Termux:
+
+```sh
+pkg install python
+launcherctl mcp
+```
+
+It supports newline-delimited JSON-RPC and `Content-Length` framed JSON-RPC. Tool calls use the same confirmation gates as `/v1/agent/execute`; pass `_confirm: true` in MCP tool arguments only when the client has obtained explicit user confirmation.
 
 ### LiteRT Backend Example
 

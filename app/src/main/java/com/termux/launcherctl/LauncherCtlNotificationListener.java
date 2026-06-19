@@ -58,6 +58,7 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
     public void onNotificationPosted(StatusBarNotification sbn) {
         LauncherNotificationBadgeStore.onNotificationPosted(sbn, null);
         updateNotification(sbn);
+        persistPosted(sbn);
         refreshNowPlaying();
     }
 
@@ -65,6 +66,7 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
     public void onNotificationPosted(StatusBarNotification sbn, NotificationListenerService.RankingMap rankingMap) {
         LauncherNotificationBadgeStore.onNotificationPosted(sbn, rankingMap);
         updateNotification(sbn);
+        persistPosted(sbn);
         refreshNowPlaying();
     }
 
@@ -74,6 +76,7 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
         if (sbn != null) {
             NOTIFICATIONS.remove(sbn.getKey());
         }
+        persistRemoved(sbn);
         refreshNowPlaying();
     }
 
@@ -176,6 +179,28 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
             NOTIFICATIONS.put(sbn.getKey(), toNotificationJson(sbn));
         } catch (Exception e) {
             Logger.logErrorExtended(LOG_TAG, "Failed to parse notification: " + e.getMessage());
+        }
+    }
+
+    private void persistPosted(StatusBarNotification sbn) {
+        if (sbn == null || sbn.getNotification() == null) {
+            return;
+        }
+        try {
+            LauncherCtlNotificationStore.getInstance().persistPosted(toNotificationJson(sbn));
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to persist posted notification: " + e.getMessage());
+        }
+    }
+
+    private void persistRemoved(StatusBarNotification sbn) {
+        if (sbn == null || sbn.getNotification() == null) {
+            return;
+        }
+        try {
+            LauncherCtlNotificationStore.getInstance().persistRemoved(toNotificationJson(sbn));
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to persist removed notification: " + e.getMessage());
         }
     }
 

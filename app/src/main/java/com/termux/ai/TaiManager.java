@@ -306,6 +306,23 @@ public final class TaiManager {
         return runtime.cancel();
     }
 
+    /**
+     * Returns whether the model is known and has a readable local path registered.
+     * Does not load the model.
+     */
+    public boolean isModelAvailable(@NonNull String modelId) {
+        TaiModelSpec spec = resolveModel(modelId);
+        if (spec == null || spec.localPath == null || spec.localPath.trim().isEmpty()) {
+            return false;
+        }
+        return new File(spec.localPath).canRead();
+    }
+
+    @NonNull
+    public TaiRuntimeState getRuntimeState() {
+        return runtime.getState();
+    }
+
     @NonNull
     public JSONObject openAiChatCompletions(@NonNull String body) throws JSONException {
         JSONObject request = parseBody(body);

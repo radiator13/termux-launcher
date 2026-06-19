@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - experimental
+      - tai-ext
 
 
 concurrency:
