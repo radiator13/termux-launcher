@@ -23,6 +23,7 @@ import androidx.annotation.Nullable;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.ai.TaiCliFormatter;
+import com.termux.ai.TaiDeviceCapabilities;
 import com.termux.ai.TaiManager;
 import com.termux.ai.TaiModelCatalog;
 import com.termux.ai.TaiModelRegistry;
