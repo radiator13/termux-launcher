@@ -1015,26 +1015,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * this to the dock's rounded outline; the view's own alpha carries the configured opacity.
      */
     @NonNull
-    private Drawable buildDockGlassSurface() {
+    private Drawable buildDockGlassSurface(float barAlpha) {
         int base = resolveAccessoryGlassBaseColor();
         int accent = resolveDockAccentColor();
-        int tertiary = resolveDockTertiaryColor();
+        float clamped = barAlpha < 0f ? 0f : (barAlpha > 1f ? 1f : barAlpha);
+        // Translucent base — NOT an opaque card. This is the single biggest lever for the glass read:
+        // the blurred wallpaper behind the dock now shows THROUGH the surface. The user's opacity
+        // preference scales how much shows through (it is baked into the drawable so the light model
+        // below is not also crushed by the view's own alpha — callers set view alpha to 1f).
+        int baseAlpha = Math.round(clamped * DOCK_GLASS_BASE_MAX_ALPHA);
         GradientDrawable baseLayer = new GradientDrawable();
-        baseLayer.setColor(0xFF000000 | (base & 0x00FFFFFF));
-        // Soft top sheen: a whisper of cool accent at the very top, a warm hint just below, then
-        // clear for most of the surface. Low alphas keep it from reading as a painted-on gradient.
-        GradientDrawable tintLayer = new GradientDrawable(
+        baseLayer.setColor(withAlphaComponent(base, baseAlpha));
+        baseLayer.setDither(true);
+        // Vertical glass light model, held roughly constant so the slab still reads as glass even at
+        // low opacity: a thin cool sheen at the top, a faint saturated accent edge tint, a clear
+        // see-through middle, then a soft dark "foot" at the bottom that suggests the slab's
+        // thickness. The crisp thin top/bottom edge highlights are drawn by DockEdgeGlowView.
+        GradientDrawable lightLayer = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
-                withAlphaComponent(accent, 24),
-                withAlphaComponent(tertiary, 9),
-                withAlphaComponent(base, 0),
-                withAlphaComponent(base, 0)
+                withAlphaComponent(Color.WHITE, 26),
+                withAlphaComponent(accent, 14),
+                Color.TRANSPARENT,
+                withAlphaComponent(Color.BLACK, 22)
             }
         );
-        tintLayer.setDither(true);
-        return new LayerDrawable(new Drawable[] { baseLayer, tintLayer });
+        lightLayer.setDither(true);
+        return new LayerDrawable(new Drawable[] { baseLayer, lightLayer });
     }
+
+    /** Max alpha (of 255) the translucent dock-glass base reaches at full user opacity. */
+    private static final int DOCK_GLASS_BASE_MAX_ALPHA = 140;
 
     /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
     private void setupDockPlankFx() {
@@ -1094,10 +1105,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         specular.setShape(GradientDrawable.RECTANGLE);
         specular.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         specular.setGradientCenter(0.5f, 0.5f);
-        specular.setGradientRadius(dpToPx(100));
+        specular.setGradientRadius(dpToPx(120));
+        // White-leaning, wide and soft so it reads as caught light gliding over glass rather than a
+        // painted accent disc under the finger.
         specular.setColors(new int[] {
-            withAlphaComponent(accent, 140),
-            withAlphaComponent(Color.WHITE, 42),
+            withAlphaComponent(Color.WHITE, 70),
+            withAlphaComponent(accent, 22),
             withAlphaComponent(accent, 0)
         });
         specular.setDither(true);
@@ -1361,7 +1374,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         GradientDrawable outline = new GradientDrawable();
         outline.setColor(Color.TRANSPARENT);
         outline.setCornerRadius(resolveDockCapsuleCornerRadiusPx(surfaceHeightPx));
-        outline.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(resolveAccessoryOutlineColor(), 54));
+        // Thin neutral containing stroke only; DockEdgeGlowView owns the directional top/bottom edge
+        // light, so a bright outline here would double up into the old milky edge.
+        outline.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(resolveAccessoryOutlineColor(), 40));
         surface.setBackground(outline);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             surface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
@@ -1380,7 +1395,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        int highlight = withAlphaComponent(Color.WHITE, Math.round(30f * Math.max(0.35f, barAlpha)));
+        // DockEdgeGlowView now draws the crisp top edge highlight; keep this as only a whisper so the
+        // top doesn't read as a white film (single source of truth for the top highlight).
+        int highlight = withAlphaComponent(Color.WHITE, Math.round(12f * Math.max(0.35f, barAlpha)));
         int shadow = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(26f * Math.max(0.40f, barAlpha)));
         GradientDrawable edge = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
@@ -1640,8 +1657,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mDecorNavBarTintOverlay != null) {
             // Only the normal (edge-to-edge) dock reaches here. Match the dock's own material-tinted
             // glass surface so the under-pill strip is a seamless continuation of the dock.
-            mDecorNavBarTintOverlay.setBackground(buildDockGlassSurface());
-            mDecorNavBarTintOverlay.setAlpha(state.barAlpha);
+            mDecorNavBarTintOverlay.setBackground(buildDockGlassSurface(state.barAlpha));
+            mDecorNavBarTintOverlay.setAlpha(1f);
             mDecorNavBarTintOverlay.setVisibility(View.VISIBLE);
         }
 
@@ -2253,8 +2270,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (extraKeysBackground != null) {
             extraKeysBackground.setVisibility(useDecorSurface && !isValarieDockStyle() ? View.GONE : View.VISIBLE);
-            extraKeysBackground.setBackground(buildDockGlassSurface());
-            extraKeysBackground.setAlpha(state.barAlpha);
+            extraKeysBackground.setBackground(buildDockGlassSurface(state.barAlpha));
+            // Opacity is baked into the drawable (translucent base) so the glass light model survives.
+            extraKeysBackground.setAlpha(1f);
         }
         refreshDockPlankFx();
 

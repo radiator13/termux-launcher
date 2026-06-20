@@ -1,5 +1,8 @@
 package com.termux.shared.termux.extrakeys;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Color;
@@ -293,8 +296,22 @@ public final class ExtraKeysView extends GridLayout {
 
     protected boolean mAccessibilityEnabled;
 
+    /**
+     * Press-and-hold "bloom": a soft radial glow centred on the held key, drawn in this view's
+     * {@link #getOverlay() overlay} so it can bleed outward past the key bounds while still being
+     * contained by the dock's rounded-capsule clip. {@link #mKeyBloomButton} is the key it belongs
+     * to so a late hide for a different key can't tear down the wrong bloom.
+     */
+    @Nullable private GradientDrawable mKeyBloom;
+    @Nullable private Animator mKeyBloomAnimator;
+    @Nullable private MaterialButton mKeyBloomButton;
+
     public ExtraKeysView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        // The hold bloom lives in this view's overlay and must be allowed to draw past the
+        // GridLayout content box; the dock's ancestor capsule clip still contains it.
+        setClipChildren(false);
+        setClipToPadding(false);
         setRepetitiveKeys(ExtraKeysConstants.PRIMARY_REPETITIVE_KEYS);
         setSpecialButtons(getDefaultSpecialButtons(this));
         setButtonColors(ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_TEXT_COLOR, DEFAULT_BUTTON_TEXT_COLOR), ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_ACTIVE_TEXT_COLOR, DEFAULT_BUTTON_ACTIVE_TEXT_COLOR), ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_BACKGROUND_COLOR, DEFAULT_BUTTON_BACKGROUND_COLOR), ThemeUtils.getSystemAttrColor(context, ATTR_BUTTON_ACTIVE_BACKGROUND_COLOR, DEFAULT_BUTTON_ACTIVE_BACKGROUND_COLOR));
@@ -546,6 +563,11 @@ public final class ExtraKeysView extends GridLayout {
                 button.setTextColor(mButtonTextColor);
                 button.setAllCaps(mButtonTextAllCaps);
                 button.setPadding(0, 0, 0, 0);
+                // MaterialButton applies a default vertical inset (~6dp top/bottom) to its background.
+                // On this short row that squeezes the pressed-state background into a thin strip and
+                // clips the key to its top half. Zero it so the cap fills the full button height.
+                button.setInsetTop(0);
+                button.setInsetBottom(0);
                 button.setOnClickListener(view -> {
                     performExtraKeyButtonHapticFeedback(view, buttonInfo, button);
                     onAnyExtraKeyButtonClick(view, buttonInfo, button);
@@ -574,6 +596,7 @@ public final class ExtraKeysView extends GridLayout {
                                     showPopup(view, buttonInfo.getPopup());
                                     setButtonVisualState(button, buttonInfo, KeyVisualState.POPUP_ARMED);
                                     animateKeyCapDip(button, KeyVisualState.POPUP_ARMED);
+                                    showKeyBloom(button, KeyVisualState.POPUP_ARMED);
                                 }
                                 if (mPopupWindow != null && event.getY() > 0 && upwardTravelPx < (popupSwipeThresholdPx * 0.35f)) {
                                     setButtonPressedVisualState(button, buttonInfo, true);
@@ -706,6 +729,7 @@ public final class ExtraKeysView extends GridLayout {
                     button.post(() -> {
                         setButtonVisualState(button, buttonInfo, KeyVisualState.REPEAT_HELD);
                         animateKeyCapDip(button, KeyVisualState.REPEAT_HELD);
+                        showKeyBloom(button, KeyVisualState.REPEAT_HELD);
                     });
                 }
                 onExtraKeyButtonClick(view, buttonInfo, button);
@@ -756,6 +780,7 @@ public final class ExtraKeysView extends GridLayout {
             if (mButton != null) {
                 updateSpecialButtonVisualState(mButton, mState);
                 animateKeyCapDip(mButton, KeyVisualState.REPEAT_HELD);
+                showKeyBloom(mButton, KeyVisualState.REPEAT_HELD);
             }
 
             announceSpecialKeyStateChangeForAccessibility(mButtonInfo.getKey(), mState);
@@ -780,6 +805,8 @@ public final class ExtraKeysView extends GridLayout {
         button.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         button.setIncludeFontPadding(false);
         button.setPadding(0, 0, 0, 0);
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
         button.setMinWidth(0);
         button.setMinHeight(0);
         button.setMinimumWidth(width);
@@ -828,6 +855,7 @@ public final class ExtraKeysView extends GridLayout {
             // restoreButtonVisualState repaints the rest background, which also clears the highlight.
             restoreButtonVisualState(button, buttonInfo);
             animateKeyCapDip(button, KeyVisualState.RESTING);
+            hideKeyBloom();
         }
     }
 
@@ -863,67 +891,48 @@ public final class ExtraKeysView extends GridLayout {
         }
 
         int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
-        int centerAlpha;
-        int midAlpha;
+        // In-bounds key cap: a tinted rounded chip + white inner rim. The soft radial "bloom" that
+        // used to live here (and overflowed the short row, getting clipped to the top half) now
+        // lives in the view overlay via showKeyBloom(), so this drawable always fits the key.
         int fillAlpha;
         int rimAlpha;
         int whiteRimAlpha;
         switch (state) {
             case REPEAT_HELD:
-                centerAlpha = mKeyPressFeedbackBlurAvailable ? 178 : 122;
-                midAlpha = mKeyPressFeedbackBlurAvailable ? 84 : 58;
                 fillAlpha = mKeyPressFeedbackBlurAvailable ? 64 : 134;
-                rimAlpha = 188;
-                whiteRimAlpha = 72;
+                rimAlpha = 200;
+                whiteRimAlpha = 78;
                 break;
             case STICKY_LOCKED:
-                centerAlpha = mKeyPressFeedbackBlurAvailable ? 132 : 92;
-                midAlpha = mKeyPressFeedbackBlurAvailable ? 58 : 42;
                 fillAlpha = mKeyPressFeedbackBlurAvailable ? 48 : 116;
                 rimAlpha = 210;
                 whiteRimAlpha = 86;
                 break;
             case STICKY_ACTIVE:
-                centerAlpha = mKeyPressFeedbackBlurAvailable ? 92 : 64;
-                midAlpha = mKeyPressFeedbackBlurAvailable ? 36 : 26;
                 fillAlpha = mKeyPressFeedbackBlurAvailable ? 34 : 88;
                 rimAlpha = 138;
                 whiteRimAlpha = 42;
                 break;
             case POPUP_ARMED:
-                centerAlpha = mKeyPressFeedbackBlurAvailable ? 126 : 88;
-                midAlpha = mKeyPressFeedbackBlurAvailable ? 52 : 36;
-                fillAlpha = mKeyPressFeedbackBlurAvailable ? 42 : 106;
-                rimAlpha = 166;
-                whiteRimAlpha = 58;
+                // Source key reads as a "lifted/empty socket" while the popup floats above it.
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 30 : 84;
+                rimAlpha = 210;
+                whiteRimAlpha = 64;
                 break;
             case PRESSED:
             default:
-                centerAlpha = mKeyPressFeedbackBlurAvailable ? 144 : 104;
-                midAlpha = mKeyPressFeedbackBlurAvailable ? 64 : 46;
                 fillAlpha = mKeyPressFeedbackBlurAvailable ? 52 : 118;
-                rimAlpha = 166;
-                whiteRimAlpha = 58;
+                rimAlpha = 170;
+                whiteRimAlpha = 60;
                 break;
         }
-
-        GradientDrawable glow = new GradientDrawable();
-        glow.setShape(GradientDrawable.RECTANGLE);
-        glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        glow.setGradientCenter(0.5f, 0.50f);
-        glow.setGradientRadius(dpToPx(mKeyPressFeedbackBlurAvailable ? 34f : 28f));
-        glow.setColors(new int[] {
-            withAlpha(tint, centerAlpha),
-            withAlpha(tint, midAlpha),
-            withAlpha(tint, 0)
-        });
-        glow.setDither(true);
 
         GradientDrawable chip = new GradientDrawable();
         chip.setShape(GradientDrawable.RECTANGLE);
         chip.setCornerRadius(dpToPx(13f));
         chip.setColor(withAlpha(tint, fillAlpha));
         chip.setStroke(Math.max(1, Math.round(dpToPx(1.1f))), withAlpha(tint, rimAlpha));
+        chip.setDither(true);
 
         GradientDrawable innerRim = new GradientDrawable();
         innerRim.setShape(GradientDrawable.RECTANGLE);
@@ -931,10 +940,9 @@ public final class ExtraKeysView extends GridLayout {
         innerRim.setColor(Color.TRANSPARENT);
         innerRim.setStroke(Math.max(1, Math.round(dpToPx(0.75f))), withAlpha(Color.WHITE, whiteRimAlpha));
 
-        int chipInset = Math.round(dpToPx(mKeyPressFeedbackBlurAvailable ? 5.5f : 5f));
+        int chipInset = Math.round(dpToPx(4f));
         int rimInset = chipInset + Math.round(dpToPx(2f));
         return new LayerDrawable(new Drawable[] {
-            glow,
             new InsetDrawable(chip, chipInset, chipInset, chipInset, chipInset),
             new InsetDrawable(innerRim, rimInset, rimInset, rimInset, rimInset)
         });
@@ -946,15 +954,15 @@ public final class ExtraKeysView extends GridLayout {
         long duration;
         switch (state) {
             case REPEAT_HELD:
-                target = 0.84f;
+                target = 0.86f;
                 duration = 70L;
                 break;
             case PRESSED:
-                target = 0.88f;
+                target = 0.90f;
                 duration = 55L;
                 break;
             case POPUP_ARMED:
-                target = 0.92f;
+                target = 0.94f;
                 duration = 70L;
                 break;
             default:
@@ -972,6 +980,111 @@ public final class ExtraKeysView extends GridLayout {
             .scaleY(target)
             .setDuration(duration)
             .start();
+    }
+
+    /**
+     * Show a soft radial "bloom" centred on {@code button}, in this view's overlay so it can bleed
+     * past the key bounds. Used to signal the press-and-hold / repeat state and the swipe-up armed
+     * state. The bloom radius and peak intensity are keyed to {@code state}.
+     */
+    private void showKeyBloom(@NonNull MaterialButton button, @NonNull KeyVisualState state) {
+        // Tear down any previous bloom (possibly on another key) before starting a new one.
+        clearKeyBloom();
+
+        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        final float radius = dpToPx(state == KeyVisualState.POPUP_ARMED ? 22f : 30f);
+        final int peakAlpha = state == KeyVisualState.POPUP_ARMED ? 120 : 150;
+        final float cx = button.getX() + button.getWidth() / 2f;
+        final float cy = button.getY() + button.getHeight() / 2f;
+
+        final GradientDrawable bloom = new GradientDrawable();
+        bloom.setShape(GradientDrawable.RECTANGLE);
+        bloom.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        bloom.setGradientCenter(0.5f, 0.5f);
+        bloom.setGradientRadius(radius);
+        bloom.setColors(new int[] {
+            withAlpha(tint, peakAlpha),
+            withAlpha(tint, Math.round(peakAlpha * 0.4f)),
+            withAlpha(tint, 0)
+        });
+        bloom.setDither(true);
+
+        mKeyBloom = bloom;
+        mKeyBloomButton = button;
+        getOverlay().add(bloom);
+
+        if (shouldSnapKeyMotion()) {
+            applyKeyBloomFrame(bloom, cx, cy, radius, 1f);
+            return;
+        }
+        applyKeyBloomFrame(bloom, cx, cy, radius, 0f);
+        ValueAnimator in = ValueAnimator.ofFloat(0f, 1f);
+        in.setDuration(120L);
+        in.addUpdateListener(a -> applyKeyBloomFrame(bloom, cx, cy, radius, (float) a.getAnimatedValue()));
+        mKeyBloomAnimator = in;
+        in.start();
+    }
+
+    /** Fade and remove the active bloom, if any. */
+    private void hideKeyBloom() {
+        final GradientDrawable bloom = mKeyBloom;
+        if (bloom == null)
+            return;
+        final MaterialButton button = mKeyBloomButton;
+        if (mKeyBloomAnimator != null) {
+            mKeyBloomAnimator.cancel();
+            mKeyBloomAnimator = null;
+        }
+        // The fields are about to be reassigned; the animator captures the local refs.
+        mKeyBloom = null;
+        mKeyBloomButton = null;
+
+        if (button == null || shouldSnapKeyMotion()) {
+            getOverlay().remove(bloom);
+            return;
+        }
+        final float cx = button.getX() + button.getWidth() / 2f;
+        final float cy = button.getY() + button.getHeight() / 2f;
+        final float radius = bloom.getBounds().width() / 2f;
+        ValueAnimator out = ValueAnimator.ofFloat(1f, 0f);
+        out.setDuration(140L);
+        out.addUpdateListener(a -> applyKeyBloomFrame(bloom, cx, cy, radius, (float) a.getAnimatedValue()));
+        out.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                getOverlay().remove(bloom);
+            }
+        });
+        out.start();
+    }
+
+    /** Immediately drop the active bloom with no animation (used before replacing it). */
+    private void clearKeyBloom() {
+        if (mKeyBloomAnimator != null) {
+            mKeyBloomAnimator.cancel();
+            mKeyBloomAnimator = null;
+        }
+        if (mKeyBloom != null) {
+            getOverlay().remove(mKeyBloom);
+            mKeyBloom = null;
+        }
+        mKeyBloomButton = null;
+    }
+
+    /** Position/scale/fade one frame of the bloom. {@code f} is 0 (hidden) .. 1 (full). */
+    private void applyKeyBloomFrame(@NonNull GradientDrawable bloom, float cx, float cy,
+                                    float radius, float f) {
+        float scale = 0.6f + 0.4f * f;
+        float half = radius * scale;
+        bloom.setBounds(
+            Math.round(cx - half), Math.round(cy - half),
+            Math.round(cx + half), Math.round(cy + half));
+        bloom.setAlpha(Math.round(255 * clamp01(f)));
+        bloom.invalidateSelf();
+    }
+
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
     }
 
     private boolean shouldSnapKeyMotion() {
@@ -1035,7 +1148,7 @@ public final class ExtraKeysView extends GridLayout {
         key.setShape(GradientDrawable.RECTANGLE);
         key.setCornerRadius(dpToPx(12f));
         key.setColor(withAlpha(Color.rgb(10, 18, 24), mKeyPressFeedbackBlurAvailable ? 228 : 242));
-        key.setStroke(Math.max(1, Math.round(dpToPx(selected ? 1.7f : 1.25f))), withAlpha(tint, selected ? 248 : 190));
+        key.setStroke(Math.max(1, Math.round(dpToPx(selected ? 2f : 1.25f))), withAlpha(tint, selected ? 255 : 190));
 
         GradientDrawable innerRim = new GradientDrawable();
         innerRim.setShape(GradientDrawable.RECTANGLE);
@@ -1053,6 +1166,7 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     public void dismissPopup() {
+        hideKeyBloom();
         if (mPopupWindow == null) {
             return;
         }
@@ -1100,6 +1214,8 @@ public final class ExtraKeysView extends GridLayout {
             return null;
         state.setIsCreated(true);
         MaterialButton button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
         updateSpecialButtonVisualState(button, state);
         if (needUpdate) {
             state.buttons.add(button);
