@@ -307,16 +307,15 @@ public final class ExtraKeysView extends GridLayout {
      * the revealed secondary glyph, until release commits it. Recreated per press to avoid
      * add/remove races on rapid taps.
      */
-    @Nullable private TextView mBubble;
-    @Nullable private GradientDrawable mBubbleBg;
-    @Nullable private ViewPropertyAnimator mBubbleAnim;
+    @Nullable private GradientDrawable mBubble;
+    @Nullable private Animator mBubbleAnim;
     @Nullable private MaterialButton mBubbleAnchor;
+    /** Base (full-scale) bounds of the on-key bubble in this view's coordinate space. */
+    private int mBubbleL, mBubbleT, mBubbleR, mBubbleB;
     /** Swipe-up popup travel is active (finger is dragging the bubble toward the secondary slot). */
     private boolean mBubbleArmed;
     /** The press has crossed into the persistent long-press/held state. */
     private boolean mBubbleHeld;
-    /** Bubble resting translation (on the source key), in this view's coordinate space. */
-    private float mBubbleHomeX, mBubbleHomeY;
     /** Vertical distance (px, positive) from the key to the secondary "popup" slot above it. */
     private float mBubbleTravelDistPx;
     /** 0 (on key) .. 1 (fully at the secondary slot) — last computed swipe-up progress. */
@@ -978,86 +977,86 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     /**
-     * Snap the liquid-glass bubble onto {@code button} as instant press feedback. The bubble lives
-     * in this view's overlay (so it can later travel above the row) and is recreated each press.
+     * Snap the liquid-glass bubble onto {@code button} as instant press feedback. It is a rounded
+     * glass cap drawn in this view's overlay, sized to the key cell via {@link Drawable#setBounds}
+     * (a View added to a ViewGroupOverlay gets re-laid-out to wrap-content, so a Drawable is used to
+     * keep the cap exactly key-shaped). Recreated per press.
      */
     private void showBubbleOnKey(@NonNull MaterialButton button) {
         // Drop any previous bubble (e.g. from a key released a frame ago) without animation.
         removeBubbleNow();
 
-        int w = Math.max(1, button.getWidth());
-        int h = Math.max(1, button.getHeight());
+        int inset = Math.round(dpToPx(3f)); // a little breathing room from the cell edges
+        mBubbleL = Math.round(button.getX()) + inset;
+        mBubbleT = Math.round(button.getY()) + inset;
+        mBubbleR = Math.round(button.getX() + button.getWidth()) - inset;
+        mBubbleB = Math.round(button.getY() + button.getHeight()) - inset;
 
-        TextView bubble = new TextView(getContext());
-        bubble.setGravity(Gravity.CENTER);
-        bubble.setIncludeFontPadding(false);
-        bubble.setSingleLine(true);
-        bubble.setMaxLines(1);
-        bubble.setAllCaps(mButtonTextAllCaps);
-        bubble.setTextColor(withAlpha(activeTextColor(), 0)); // transparent until a glyph is carried
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.RECTANGLE);
+        g.setDither(true);
+        // Generous corner -> a glass key-cap matching the dock's rounded language.
+        g.setCornerRadius(Math.min(mBubbleR - mBubbleL, mBubbleB - mBubbleT) * 0.42f);
 
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setDither(true);
-        // Wider-than-tall keys: a generous corner reads as a glass key-cap / matches the dock capsule.
-        bg.setCornerRadius(Math.min(w, h) * (mPopupVerticalPill ? 0.5f : 0.42f));
-        bubble.setBackground(bg);
-
-        mBubble = bubble;
-        mBubbleBg = bg;
+        mBubble = g;
         mBubbleAnchor = button;
         mBubbleArmed = false;
         mBubbleHeld = false;
         mBubbleFrac = 0f;
-        mBubbleTravelDistPx = h + dpToPx(10f);
+        mBubbleTravelDistPx = (mBubbleB - mBubbleT) + dpToPx(10f);
         paintBubble(false);
-
-        bubble.measure(
-            MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
-        bubble.layout(0, 0, w, h);
-        bubble.setPivotX(w / 2f);
-        bubble.setPivotY(h / 2f);
-
-        mBubbleHomeX = button.getX();
-        mBubbleHomeY = button.getY();
-        bubble.setTranslationX(mBubbleHomeX);
-        bubble.setTranslationY(mBubbleHomeY);
-        getOverlay().add(bubble);
+        getOverlay().add(g);
 
         if (shouldSnapKeyMotion()) {
-            bubble.setAlpha(1f);
+            applyBubbleFrame(1f, 1f);
             return;
         }
-        bubble.setAlpha(0f);
-        bubble.setScaleX(0.82f);
-        bubble.setScaleY(0.82f);
-        mBubbleAnim = bubble.animate()
-            .alpha(1f).scaleX(1f).scaleY(1f)
-            .setDuration(70L)
-            .setInterpolator(new DecelerateInterpolator());
-        mBubbleAnim.start();
+        applyBubbleFrame(0.82f, 0f);
+        ValueAnimator in = ValueAnimator.ofFloat(0f, 1f);
+        in.setDuration(80L);
+        in.setInterpolator(new DecelerateInterpolator());
+        in.addUpdateListener(a -> {
+            float f = (float) a.getAnimatedValue();
+            applyBubbleFrame(0.82f + 0.18f * f, f);
+        });
+        mBubbleAnim = in;
+        in.start();
+    }
+
+    /** Position+scale+fade one frame of the on-key bubble about the key centre. */
+    private void applyBubbleFrame(float scale, float alpha) {
+        if (mBubble == null)
+            return;
+        float cx = (mBubbleL + mBubbleR) / 2f;
+        float cy = (mBubbleT + mBubbleB) / 2f;
+        float hw = (mBubbleR - mBubbleL) / 2f * scale;
+        float hh = (mBubbleB - mBubbleT) / 2f * scale;
+        mBubble.setBounds(Math.round(cx - hw), Math.round(cy - hh),
+            Math.round(cx + hw), Math.round(cy + hh));
+        mBubble.setAlpha(Math.round(255 * clamp01(alpha)));
+        mBubble.invalidateSelf();
     }
 
     /** Promote the bubble to the persistent held state (long-press / auto-repeat / sticky-lock). */
     private void holdBubble() {
-        if (mBubble == null || mBubbleBg == null)
+        if (mBubble == null)
             return;
         mBubbleHeld = true;
         paintBubble(true);
-        if (shouldSnapKeyMotion())
+        if (shouldSnapKeyMotion()) {
+            applyBubbleFrame(1f, 1f);
             return;
-        // A small "settle" pulse signals the press has locked into a hold.
-        final TextView bubble = mBubble;
+        }
+        // A small "settle" pulse (1 -> 1.06 -> 1) signals the press has locked into a hold.
         if (mBubbleAnim != null) mBubbleAnim.cancel();
-        bubble.setScaleX(1f);
-        bubble.setScaleY(1f);
-        mBubbleAnim = bubble.animate().scaleX(1.06f).scaleY(1.06f).setDuration(90L)
-            .setInterpolator(new DecelerateInterpolator())
-            .withEndAction(() -> {
-                if (mBubble == bubble) bubble.animate().scaleX(1f).scaleY(1f).setDuration(110L).start();
-            });
-        mBubbleAnim.start();
+        ValueAnimator pulse = ValueAnimator.ofFloat(0f, 1f);
+        pulse.setDuration(190L);
+        pulse.addUpdateListener(a -> {
+            float f = (float) a.getAnimatedValue();
+            applyBubbleFrame(1f + 0.06f * (float) Math.sin(f * Math.PI), 1f);
+        });
+        mBubbleAnim = pulse;
+        pulse.start();
     }
 
     /**
@@ -1085,12 +1084,14 @@ public final class ExtraKeysView extends GridLayout {
         bg.setDither(true);
         bg.setCornerRadius(Math.min(mTravelKeyW, mTravelKeyH) * (mPopupVerticalPill ? 0.5f : 0.42f));
         bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        // Travel popup floats free of the dock blur, so it gets a present, readable dark fill with a
+        // crisp bright accent rim (the same border language as the on-key bubble) — not a milky wash.
         bg.setColors(new int[] {
-            withAlpha(lerpColor(tint, Color.WHITE, 0.55f), 64),
-            // Travel popup floats free of the dock blur, so give it a more present (readable) fill.
-            withAlpha(Color.rgb(12, 16, 22), mKeyPressFeedbackBlurAvailable ? 150 : 210)
+            withAlpha(Color.rgb(20, 24, 32), mKeyPressFeedbackBlurAvailable ? 170 : 220),
+            withAlpha(Color.rgb(10, 12, 18), mKeyPressFeedbackBlurAvailable ? 170 : 220)
         });
-        bg.setStroke(Math.max(1, Math.round(dpToPx(1.8f))), withAlpha(tint, 245));
+        bg.setStroke(Math.max(1, Math.round(dpToPx(2.4f))),
+            withAlpha(lerpColor(tint, Color.WHITE, 0.18f), 255));
 
         TextView tv = new TextView(getContext());
         tv.setGravity(Gravity.CENTER);
@@ -1150,8 +1151,8 @@ public final class ExtraKeysView extends GridLayout {
         // Border brightens to "selected" as the bubble reaches the secondary slot.
         boolean selected = frac >= 0.5f;
         int tint = feedbackTint();
-        mTravelBubbleBg.setStroke(Math.max(1, Math.round(dpToPx(selected ? 2.2f : 1.8f))),
-            withAlpha(tint, selected ? 255 : 235));
+        mTravelBubbleBg.setStroke(Math.max(1, Math.round(dpToPx(selected ? 2.8f : 2.4f))),
+            withAlpha(lerpColor(tint, Color.WHITE, selected ? 0.35f : 0.18f), 255));
         mTravelBubble.invalidate();
     }
 
@@ -1189,9 +1190,9 @@ public final class ExtraKeysView extends GridLayout {
      * so the feedback is visible around the finger; false (a held release / swipe commit) collapses.
      */
     private void hideBubble(boolean expand) {
-        final TextView bubble = mBubble;
+        final GradientDrawable g = mBubble;
+        final int l = mBubbleL, t = mBubbleT, r = mBubbleR, b = mBubbleB;
         mBubble = null;
-        mBubbleBg = null;
         mBubbleAnchor = null;
         mBubbleArmed = false;
         mBubbleHeld = false;
@@ -1200,19 +1201,33 @@ public final class ExtraKeysView extends GridLayout {
             mBubbleAnim.cancel();
             mBubbleAnim = null;
         }
-        if (bubble == null)
+        if (g == null)
             return;
         if (shouldSnapKeyMotion()) {
-            getOverlay().remove(bubble);
+            getOverlay().remove(g);
             return;
         }
-        float endScale = expand ? 1.16f : 0.9f;
-        bubble.animate()
-            .alpha(0f).scaleX(endScale).scaleY(endScale)
-            .setDuration(expand ? 160L : 120L)
-            .setInterpolator(expand ? new DecelerateInterpolator() : new AccelerateInterpolator())
-            .withEndAction(() -> getOverlay().remove(bubble))
-            .start();
+        final float endScale = expand ? 1.16f : 0.9f;
+        ValueAnimator out = ValueAnimator.ofFloat(0f, 1f);
+        out.setDuration(expand ? 170L : 130L);
+        out.setInterpolator(expand ? new DecelerateInterpolator() : new AccelerateInterpolator());
+        out.addUpdateListener(a -> {
+            float f = (float) a.getAnimatedValue();
+            float s = 1f + (endScale - 1f) * f;
+            float cx = (l + r) / 2f, cy = (t + b) / 2f;
+            float hw = (r - l) / 2f * s, hh = (b - t) / 2f * s;
+            g.setBounds(Math.round(cx - hw), Math.round(cy - hh),
+                Math.round(cx + hw), Math.round(cy + hh));
+            g.setAlpha(Math.round(255 * (1f - f)));
+            g.invalidateSelf();
+        });
+        out.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                getOverlay().remove(g);
+            }
+        });
+        out.start();
     }
 
     /** Drop the current bubble immediately with no animation (before starting a fresh one). */
@@ -1224,26 +1239,26 @@ public final class ExtraKeysView extends GridLayout {
         if (mBubble != null) {
             getOverlay().remove(mBubble);
             mBubble = null;
-            mBubbleBg = null;
             mBubbleAnchor = null;
         }
     }
 
-    /** Paint the bubble's glass fill + accent rim. {@code strong} for the held/armed (vs press) look. */
+    /**
+     * Paint the bubble's glass fill + accent rim. {@code strong} for the held look. The border is
+     * the feature (a crisp, bright accent rim matching the dock); the fill is a faint accent tint so
+     * the key glyph and wallpaper read through it as glass — no white sheen (that read as milky).
+     */
     private void paintBubble(boolean strong) {
-        if (mBubbleBg == null)
+        if (mBubble == null)
             return;
         int tint = feedbackTint();
-        // Faint glass: a cool sheen at the top grading to a low-alpha accent fill — the dock blur
-        // behind it supplies the real translucency, so the fill stays light (not a plastic slab).
-        int topSheen = withAlpha(lerpColor(tint, Color.WHITE, 0.55f), strong ? 64 : 44);
-        int bottomFill = withAlpha(tint, mKeyPressFeedbackBlurAvailable
-            ? (strong ? 52 : 32)
-            : (strong ? 92 : 64));
-        mBubbleBg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-        mBubbleBg.setColors(new int[] { topSheen, bottomFill });
-        mBubbleBg.setStroke(Math.max(1, Math.round(dpToPx(strong ? 1.8f : 1.4f))),
-            withAlpha(tint, strong ? 245 : 225));
+        mBubble.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        mBubble.setColors(new int[] {
+            withAlpha(tint, strong ? 58 : 40),
+            withAlpha(tint, strong ? 30 : 18)
+        });
+        mBubble.setStroke(Math.max(1, Math.round(dpToPx(strong ? 2.6f : 2.2f))),
+            withAlpha(lerpColor(tint, Color.WHITE, 0.18f), 255));
     }
 
     private int feedbackTint() {
