@@ -1114,15 +1114,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         "    float e = clamp(1.0 - inside / uBand, 0.0, 1.0);\n" +
         "    e = e * e;\n" +
         "    half4 col = content.eval(fragCoord - n * (e * uStrength));\n" +
-        // Directional bevel: a dark glass contour right at the rim + a highlight that is bright on the
-        // top edge and fades to a shadow at the bottom edge (light from above) -> reads as a lit,
-        // weighty glass slab rather than a uniform drawn inner-rim line.
-        "    float dir = clamp(-n.y, -1.0, 1.0);\n" +
-        "    float contour = 1.0 - smoothstep(0.0, 1.5 * uDensity, inside);\n" +
-        "    float bevel = smoothstep(0.8 * uDensity, 2.2 * uDensity, inside) * (1.0 - smoothstep(2.2 * uDensity, 7.0 * uDensity, inside));\n" +
-        "    float hi = clamp(0.30 + 0.70 * dir, 0.0, 1.0);\n" +
-        "    float lo = clamp(-dir, 0.0, 1.0);\n" +
-        "    col.rgb = col.rgb - half3(contour * 0.12) + half3(bevel * hi * uRim) - half3(bevel * lo * 0.10);\n" +
+        // One clean, sharp hairline rim where the light catches the glass edge. No dark contour, no
+        // wide bevel band, no inner shadow — minimal/zen: a crisp pane with slight edge refraction.
+        "    float rim = 1.0 - smoothstep(0.0, 2.0 * uDensity, inside);\n" +
+        "    col.rgb = col.rgb + half3(rim * uRim);\n" +
         "    return col;\n" +
         "}\n";
 
@@ -1144,9 +1139,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mGlassShader.setFloatUniform("uRectMin", capLeft, capTop);
             mGlassShader.setFloatUniform("uRectMax", capRight, capBottom);
             mGlassShader.setFloatUniform("uRadius", radiusPx);
-            mGlassShader.setFloatUniform("uBand", density * 22f);
-            mGlassShader.setFloatUniform("uStrength", density * 14f);
-            mGlassShader.setFloatUniform("uRim", 0.25f);
+            mGlassShader.setFloatUniform("uBand", density * 20f);
+            mGlassShader.setFloatUniform("uStrength", density * 9f);
+            mGlassShader.setFloatUniform("uRim", 0.16f);
             mGlassShader.setFloatUniform("uDensity", density);
             RenderEffect shaderEffect = RenderEffect.createRuntimeShaderEffect(mGlassShader, "content");
             if (blurPx > 0f) {
