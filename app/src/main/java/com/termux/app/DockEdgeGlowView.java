@@ -3,9 +3,11 @@ package com.termux.app;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.SweepGradient;
 import android.util.AttributeSet;
 import android.view.View;
@@ -31,7 +33,9 @@ public class DockEdgeGlowView extends View {
     private static final float MAX_TILT_DEG = 4f;
 
     private final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rimRect = new RectF();
+    private final RectF tmpRect = new RectF();
     private final Matrix sweepMatrix = new Matrix();
     private final int[] sweepColors = new int[5];
     private final float[] sweepStops = {0f, 0.28f, 0.5f, 0.72f, 1f};
@@ -60,6 +64,8 @@ public class DockEdgeGlowView extends View {
     private void init() {
         rimPaint.setStyle(Paint.Style.STROKE);
         rimPaint.setStrokeCap(Paint.Cap.ROUND);
+        rimPaint.setStrokeJoin(Paint.Join.ROUND);
+        fillPaint.setStyle(Paint.Style.FILL);
         setWillNotDraw(false);
     }
 
@@ -100,9 +106,6 @@ public class DockEdgeGlowView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (glowLevel <= 0.004f) {
-            return;
-        }
         int w = getWidth();
         int h = getHeight();
         if (w == 0 || h == 0) {
@@ -115,24 +118,27 @@ public class DockEdgeGlowView extends View {
         float inset = density * 4.5f;
         rimRect.set(inset, inset, w - inset, h - inset);
         float r = Math.max(0f, cornerRadiusPx - inset);
+        float touch = clamp01(glowLevel);
+        float presence = 1f + (touch * 1.55f);
 
-        // 1) Continuous base rim: a very faint, even sheen the whole way around (corners included).
-        //    Kept subtle so the edge reads as a soft glass refraction line, not a drawn outline.
+        drawRestingGlassPresence(canvas, w, h, r, density, presence);
+
+        // Touch adds intensity to the persistent rim instead of replacing it.
         rimPaint.setShader(null);
-        rimPaint.setStrokeWidth(density * 1.5f);
-        rimPaint.setColor(withAlpha(accentColor, Math.round(26f * glowLevel)));
+        rimPaint.setStrokeWidth(density * (1.15f + (0.55f * touch)));
+        rimPaint.setColor(withAlpha(accentColor, Math.round(18f + (58f * touch))));
         canvas.drawRoundRect(rimRect, r, r, rimPaint);
 
-        // 2) Tilt-driven specular: a soft, broad highlight that pools on the edge the glass tips
+        // Tilt/touch-driven specular: a soft, broad highlight that pools on the edge the glass tips
         //    toward — leaning white like a real edge catch-light rather than a saturated accent
         //    band. A sweep gradient centred on the dock places the highlight at the tilt direction
         //    and rotating it as the plank tips makes the catch-light glide around the perimeter.
-        if (tiltAmount > 0.02f) {
+        if (touch > 0.02f || tiltAmount > 0.02f) {
             float cx = w * 0.5f;
             float cy = h * 0.5f;
             int specular = lerpColor(accentColor, Color.WHITE, 0.6f);
-            int hot = withAlpha(specular, Math.round(118f * glowLevel * (0.35f + 0.65f * tiltAmount)));
-            int faint = withAlpha(accentColor, Math.round(22f * glowLevel * tiltAmount));
+            int hot = withAlpha(specular, Math.round(132f * touch * (0.45f + 0.55f * Math.max(tiltAmount, 0.35f))));
+            int faint = withAlpha(accentColor, Math.round(28f * touch * (0.45f + 0.55f * tiltAmount)));
             int dim = withAlpha(specular, 0);
             // Broad highlight centred at local angle 0 (positions 0 and 1 are the same angle), a
             // whisper of counter-glow on the opposite edge, transparent in between.
@@ -145,11 +151,98 @@ public class DockEdgeGlowView extends View {
             sweepMatrix.setRotate(hotAngleDeg, cx, cy);
             sweep.setLocalMatrix(sweepMatrix);
             rimPaint.setShader(sweep);
-            rimPaint.setStrokeWidth((density * 1.5f) + (density * 2.2f * tiltAmount));
+            rimPaint.setStrokeWidth((density * 1.6f) + (density * 2.4f * Math.max(tiltAmount, touch * 0.45f)));
             rimPaint.setColor(Color.WHITE); // colour comes from the shader
             canvas.drawRoundRect(rimRect, r, r, rimPaint);
             rimPaint.setShader(null);
         }
+    }
+
+    private void drawRestingGlassPresence(Canvas canvas, int w, int h, float r, float density, float presence) {
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        int brightEdge = lerpColor(accentColor, Color.WHITE, 0.78f);
+        int darkEdge = lerpColor(accentColor, Color.BLACK, 0.64f);
+
+        // Directional inner refraction: white catch-light on the upper/left edge and a darker
+        // counter-edge on the lower/right side, all inside the clipped dock shape.
+        SweepGradient refraction = new SweepGradient(
+            cx,
+            cy,
+            new int[] {
+                withAlpha(brightEdge, Math.round(54f * presence)),
+                withAlpha(accentColor, Math.round(22f * presence)),
+                withAlpha(darkEdge, Math.round(34f * presence)),
+                withAlpha(accentColor, Math.round(16f * presence)),
+                withAlpha(brightEdge, Math.round(54f * presence))
+            },
+            sweepStops
+        );
+        sweepMatrix.setRotate(-132f, cx, cy);
+        refraction.setLocalMatrix(sweepMatrix);
+        rimPaint.setShader(refraction);
+        rimPaint.setStrokeWidth(density * 1.25f);
+        canvas.drawRoundRect(rimRect, r, r, rimPaint);
+        rimPaint.setShader(null);
+
+        tmpRect.set(rimRect);
+        tmpRect.inset(density * 2.2f, density * 2.2f);
+        float innerR = Math.max(0f, r - (density * 2.2f));
+        rimPaint.setStrokeWidth(density * 0.72f);
+        rimPaint.setColor(withAlpha(Color.WHITE, Math.round(22f * presence)));
+        canvas.drawRoundRect(tmpRect, innerR, innerR, rimPaint);
+
+        // Faint top catch-light and opposite inner shadow. These are very low alpha so the dock
+        // remains transparent glass rather than an opaque card.
+        tmpRect.set(rimRect);
+        tmpRect.inset(density * 3.4f, density * 3.4f);
+        tmpRect.bottom = tmpRect.top + Math.max(density * 11f, tmpRect.height() * 0.28f);
+        fillPaint.setShader(new LinearGradient(
+            0f,
+            tmpRect.top,
+            0f,
+            tmpRect.bottom,
+            withAlpha(Color.WHITE, Math.round(20f * presence)),
+            withAlpha(Color.WHITE, 0),
+            Shader.TileMode.CLAMP
+        ));
+        canvas.drawRoundRect(tmpRect, Math.max(0f, innerR - density), Math.max(0f, innerR - density), fillPaint);
+        fillPaint.setShader(null);
+
+        tmpRect.set(rimRect);
+        tmpRect.inset(density * 3.8f, density * 3.8f);
+        tmpRect.top = tmpRect.bottom - Math.max(density * 12f, tmpRect.height() * 0.30f);
+        fillPaint.setShader(new LinearGradient(
+            0f,
+            tmpRect.top,
+            0f,
+            tmpRect.bottom,
+            withAlpha(Color.BLACK, 0),
+            withAlpha(Color.BLACK, Math.round(23f * presence)),
+            Shader.TileMode.CLAMP
+        ));
+        canvas.drawRoundRect(tmpRect, Math.max(0f, innerR - density), Math.max(0f, innerR - density), fillPaint);
+        fillPaint.setShader(null);
+
+        // Two quiet caustic lobes keep the resting glass alive on busy wallpaper without adding blur.
+        SweepGradient caustics = new SweepGradient(
+            cx,
+            cy,
+            new int[] {
+                withAlpha(accentColor, Math.round(34f * presence)),
+                withAlpha(accentColor, 0),
+                withAlpha(brightEdge, Math.round(24f * presence)),
+                withAlpha(accentColor, 0),
+                withAlpha(accentColor, Math.round(34f * presence))
+            },
+            new float[] {0f, 0.20f, 0.52f, 0.78f, 1f}
+        );
+        sweepMatrix.setRotate(24f, cx, cy);
+        caustics.setLocalMatrix(sweepMatrix);
+        rimPaint.setShader(caustics);
+        rimPaint.setStrokeWidth(density * 4.3f);
+        canvas.drawRoundRect(rimRect, r, r, rimPaint);
+        rimPaint.setShader(null);
     }
 
     private static int lerpColor(int a, int b, float t) {

@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -78,6 +79,16 @@ import com.termux.shared.theme.ThemeUtils;
  * leave the rest to the super class.
  */
 public final class ExtraKeysView extends GridLayout {
+
+    private enum KeyVisualState {
+        RESTING,
+        PRESSED,
+        REPEAT_HELD,
+        STICKY_ACTIVE,
+        STICKY_LOCKED,
+        POPUP_ARMED,
+        POPUP_SELECTED
+    }
 
     /**
      * The client for the {@link ExtraKeysView}.
@@ -560,8 +571,9 @@ public final class ExtraKeysView extends GridLayout {
                                 // Show popup on swipe up
                                 if (mPopupWindow == null && (event.getY() < 0 || upwardTravelPx >= popupSwipeThresholdPx)) {
                                     stopScheduledExecutors();
-                                    setButtonPressedVisualState(button, buttonInfo, false);
                                     showPopup(view, buttonInfo.getPopup());
+                                    setButtonVisualState(button, buttonInfo, KeyVisualState.POPUP_ARMED);
+                                    animateKeyCapDip(button, KeyVisualState.POPUP_ARMED);
                                 }
                                 if (mPopupWindow != null && event.getY() > 0 && upwardTravelPx < (popupSwipeThresholdPx * 0.35f)) {
                                     setButtonPressedVisualState(button, buttonInfo, true);
@@ -691,7 +703,10 @@ public final class ExtraKeysView extends GridLayout {
                 mLongPressCount++;
                 // Deepen the glow pill on the first repeat to signal the held/auto-repeat state.
                 if (mLongPressCount == 1) {
-                    button.post(() -> applyKeyGlowPill(button, true));
+                    button.post(() -> {
+                        setButtonVisualState(button, buttonInfo, KeyVisualState.REPEAT_HELD);
+                        animateKeyCapDip(button, KeyVisualState.REPEAT_HELD);
+                    });
                 }
                 onExtraKeyButtonClick(view, buttonInfo, button);
             }, mLongPressTimeout, mLongPressRepeatDelay, TimeUnit.MILLISECONDS);
@@ -738,9 +753,9 @@ public final class ExtraKeysView extends GridLayout {
             mState.setIsLocked(!mState.isActive);
             mState.setIsActive(!mState.isActive);
             mLongPressCount++;
-            // Deepen the glow pill to signal the key latched/locked on a long hold.
             if (mButton != null) {
-                applyKeyGlowPill(mButton, true);
+                updateSpecialButtonVisualState(mButton, mState);
+                animateKeyCapDip(mButton, KeyVisualState.REPEAT_HELD);
             }
 
             announceSpecialKeyStateChangeForAccessibility(mButtonInfo.getKey(), mState);
@@ -807,65 +822,168 @@ public final class ExtraKeysView extends GridLayout {
     private void setButtonPressedVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
                                              boolean pressed) {
         if (pressed) {
-            button.setTextColor(mButtonActiveTextColor);
-            applyKeyGlowPill(button, false);
-            animateKeyCapDip(button, true);
+            setButtonVisualState(button, buttonInfo, KeyVisualState.PRESSED);
+            animateKeyCapDip(button, KeyVisualState.PRESSED);
         } else {
             // restoreButtonVisualState repaints the rest background, which also clears the highlight.
             restoreButtonVisualState(button, buttonInfo);
-            animateKeyCapDip(button, false);
+            animateKeyCapDip(button, KeyVisualState.RESTING);
         }
     }
 
-    /**
-     * Press feedback that integrates with the launcher dock: a soft, accent-tinted highlight under
-     * the key (deeper while held) paired with a slight key-cap dip. When the dock blur is active the
-     * highlight is a feathered radial wash with no outline, so it reads as the blur brightening under
-     * the finger rather than a solid chip. With blur off it falls back to a more present rounded
-     * fill + faint rim so the press still registers against the flat surface.
-     */
-    private void applyKeyGlowPill(@NonNull MaterialButton button, boolean held) {
-        button.setBackground(buildKeyPressHighlight(held));
+    private void setButtonVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo,
+                                      @NonNull KeyVisualState state) {
+        if (state == KeyVisualState.RESTING) {
+            restoreButtonVisualState(button, buttonInfo);
+            return;
+        }
+        applyButtonVisualState(button, state, true);
+    }
+
+    void updateSpecialButtonVisualState(@NonNull MaterialButton button, @NonNull SpecialButtonState state) {
+        KeyVisualState visualState = state.isLocked
+            ? KeyVisualState.STICKY_LOCKED
+            : (state.isActive ? KeyVisualState.STICKY_ACTIVE : KeyVisualState.RESTING);
+        applyButtonVisualState(button, visualState, state.isActive);
+    }
+
+    private void applyButtonVisualState(@NonNull MaterialButton button, @NonNull KeyVisualState state,
+                                        boolean activeText) {
+        button.setTextColor(activeText ? mButtonActiveTextColor : mButtonTextColor);
+        button.setBackground(buildKeyBackground(state));
     }
 
     @NonNull
-    private Drawable buildKeyPressHighlight(boolean held) {
-        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
-        if (mKeyPressFeedbackBlurAvailable) {
-            // Feathered radial wash: bright-ish centre easing to fully transparent, so the edges are
-            // soft and melt into the dock's existing blur instead of drawing a hard pill.
-            GradientDrawable glow = new GradientDrawable();
-            glow.setShape(GradientDrawable.RECTANGLE);
-            glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-            glow.setGradientCenter(0.5f, 0.5f);
-            glow.setGradientRadius(dpToPx(27f));
-            glow.setColors(new int[] {
-                withAlpha(tint, held ? 104 : 70),
-                withAlpha(tint, held ? 40 : 26),
-                withAlpha(tint, 0)
-            });
-            glow.setDither(true);
-            return glow;
+    private Drawable buildKeyBackground(@NonNull KeyVisualState state) {
+        if (state == KeyVisualState.RESTING) {
+            return new ColorDrawable(mButtonBackgroundColor);
         }
-        // No blur backdrop: a soft rounded fill (inset so it doesn't touch neighbours) with a faint
-        // rim for definition against the flat surface.
-        GradientDrawable pill = new GradientDrawable();
-        pill.setShape(GradientDrawable.RECTANGLE);
-        pill.setCornerRadius(dpToPx(13f));
-        pill.setColor(withAlpha(tint, held ? 120 : 84));
-        pill.setStroke(Math.max(1, Math.round(dpToPx(1f))), withAlpha(tint, held ? 150 : 96));
-        int inset = Math.round(dpToPx(6f));
-        return new InsetDrawable(pill, inset, inset, inset, inset);
+        if (state == KeyVisualState.POPUP_SELECTED) {
+            return buildPopupKeyBackground(true);
+        }
+
+        int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        int centerAlpha;
+        int midAlpha;
+        int fillAlpha;
+        int rimAlpha;
+        int whiteRimAlpha;
+        switch (state) {
+            case REPEAT_HELD:
+                centerAlpha = mKeyPressFeedbackBlurAvailable ? 178 : 122;
+                midAlpha = mKeyPressFeedbackBlurAvailable ? 84 : 58;
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 64 : 134;
+                rimAlpha = 188;
+                whiteRimAlpha = 72;
+                break;
+            case STICKY_LOCKED:
+                centerAlpha = mKeyPressFeedbackBlurAvailable ? 132 : 92;
+                midAlpha = mKeyPressFeedbackBlurAvailable ? 58 : 42;
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 48 : 116;
+                rimAlpha = 210;
+                whiteRimAlpha = 86;
+                break;
+            case STICKY_ACTIVE:
+                centerAlpha = mKeyPressFeedbackBlurAvailable ? 92 : 64;
+                midAlpha = mKeyPressFeedbackBlurAvailable ? 36 : 26;
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 34 : 88;
+                rimAlpha = 138;
+                whiteRimAlpha = 42;
+                break;
+            case POPUP_ARMED:
+                centerAlpha = mKeyPressFeedbackBlurAvailable ? 126 : 88;
+                midAlpha = mKeyPressFeedbackBlurAvailable ? 52 : 36;
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 42 : 106;
+                rimAlpha = 166;
+                whiteRimAlpha = 58;
+                break;
+            case PRESSED:
+            default:
+                centerAlpha = mKeyPressFeedbackBlurAvailable ? 144 : 104;
+                midAlpha = mKeyPressFeedbackBlurAvailable ? 64 : 46;
+                fillAlpha = mKeyPressFeedbackBlurAvailable ? 52 : 118;
+                rimAlpha = 166;
+                whiteRimAlpha = 58;
+                break;
+        }
+
+        GradientDrawable glow = new GradientDrawable();
+        glow.setShape(GradientDrawable.RECTANGLE);
+        glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        glow.setGradientCenter(0.5f, 0.50f);
+        glow.setGradientRadius(dpToPx(mKeyPressFeedbackBlurAvailable ? 34f : 28f));
+        glow.setColors(new int[] {
+            withAlpha(tint, centerAlpha),
+            withAlpha(tint, midAlpha),
+            withAlpha(tint, 0)
+        });
+        glow.setDither(true);
+
+        GradientDrawable chip = new GradientDrawable();
+        chip.setShape(GradientDrawable.RECTANGLE);
+        chip.setCornerRadius(dpToPx(13f));
+        chip.setColor(withAlpha(tint, fillAlpha));
+        chip.setStroke(Math.max(1, Math.round(dpToPx(1.1f))), withAlpha(tint, rimAlpha));
+
+        GradientDrawable innerRim = new GradientDrawable();
+        innerRim.setShape(GradientDrawable.RECTANGLE);
+        innerRim.setCornerRadius(dpToPx(11f));
+        innerRim.setColor(Color.TRANSPARENT);
+        innerRim.setStroke(Math.max(1, Math.round(dpToPx(0.75f))), withAlpha(Color.WHITE, whiteRimAlpha));
+
+        int chipInset = Math.round(dpToPx(mKeyPressFeedbackBlurAvailable ? 5.5f : 5f));
+        int rimInset = chipInset + Math.round(dpToPx(2f));
+        return new LayerDrawable(new Drawable[] {
+            glow,
+            new InsetDrawable(chip, chipInset, chipInset, chipInset, chipInset),
+            new InsetDrawable(innerRim, rimInset, rimInset, rimInset, rimInset)
+        });
     }
 
-    private void animateKeyCapDip(@NonNull MaterialButton button, boolean pressed) {
+    private void animateKeyCapDip(@NonNull MaterialButton button, @NonNull KeyVisualState state) {
         button.animate().cancel();
-        float target = pressed ? 0.88f : 1f;
+        float target;
+        long duration;
+        switch (state) {
+            case REPEAT_HELD:
+                target = 0.84f;
+                duration = 70L;
+                break;
+            case PRESSED:
+                target = 0.88f;
+                duration = 55L;
+                break;
+            case POPUP_ARMED:
+                target = 0.92f;
+                duration = 70L;
+                break;
+            default:
+                target = 1f;
+                duration = 120L;
+                break;
+        }
+        if (shouldSnapKeyMotion()) {
+            button.setScaleX(target);
+            button.setScaleY(target);
+            return;
+        }
         button.animate()
             .scaleX(target)
             .scaleY(target)
-            .setDuration(pressed ? 55L : 120L)
+            .setDuration(duration)
             .start();
+    }
+
+    private boolean shouldSnapKeyMotion() {
+        try {
+            return Settings.Global.getFloat(
+                getContext().getContentResolver(),
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            ) <= 0f;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private float dpToPx(float dp) {
@@ -879,32 +997,65 @@ public final class ExtraKeysView extends GridLayout {
     private void restoreButtonVisualState(@NonNull MaterialButton button, @NonNull ExtraKeyButton buttonInfo) {
         if (isSpecialButton(buttonInfo)) {
             SpecialButtonState state = mSpecialButtons.get(SpecialButton.valueOf(buttonInfo.getKey()));
-            boolean active = state != null && state.isActive;
-            button.setTextColor(active ? mButtonActiveTextColor : mButtonTextColor);
-            button.setBackgroundColor(mButtonBackgroundColor);
+            if (state != null) {
+                updateSpecialButtonVisualState(button, state);
+            } else {
+                applyButtonVisualState(button, KeyVisualState.RESTING, false);
+            }
         } else {
-            button.setTextColor(mButtonTextColor);
-            button.setBackgroundColor(mButtonBackgroundColor);
+            applyButtonVisualState(button, KeyVisualState.RESTING, false);
         }
     }
 
     private void setPopupButtonVisualState(@NonNull MaterialButton button) {
         button.setTextColor(Color.WHITE);
-        button.setBackground(buildPopupKeyBackground());
+        button.setBackground(buildPopupKeyBackground(true));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            button.setElevation(dpToPx(4f));
+            button.setTranslationZ(dpToPx(4f));
+        }
     }
 
     @NonNull
-    private Drawable buildPopupKeyBackground() {
+    private Drawable buildPopupKeyBackground(boolean selected) {
         int tint = mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveBackgroundColor;
+        GradientDrawable glow = new GradientDrawable();
+        glow.setShape(GradientDrawable.RECTANGLE);
+        glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        glow.setGradientCenter(0.5f, 0.45f);
+        glow.setGradientRadius(dpToPx(32f));
+        glow.setColors(new int[] {
+            withAlpha(tint, selected ? 96 : 54),
+            withAlpha(tint, selected ? 36 : 18),
+            withAlpha(tint, 0)
+        });
+        glow.setDither(true);
+
         GradientDrawable key = new GradientDrawable();
         key.setShape(GradientDrawable.RECTANGLE);
         key.setCornerRadius(dpToPx(12f));
-        key.setColor(withAlpha(Color.rgb(14, 24, 30), mKeyPressFeedbackBlurAvailable ? 232 : 242));
-        key.setStroke(Math.max(1, Math.round(dpToPx(1.4f))), withAlpha(tint, 232));
-        return key;
+        key.setColor(withAlpha(Color.rgb(10, 18, 24), mKeyPressFeedbackBlurAvailable ? 228 : 242));
+        key.setStroke(Math.max(1, Math.round(dpToPx(selected ? 1.7f : 1.25f))), withAlpha(tint, selected ? 248 : 190));
+
+        GradientDrawable innerRim = new GradientDrawable();
+        innerRim.setShape(GradientDrawable.RECTANGLE);
+        innerRim.setCornerRadius(dpToPx(10f));
+        innerRim.setColor(Color.TRANSPARENT);
+        innerRim.setStroke(Math.max(1, Math.round(dpToPx(0.75f))), withAlpha(Color.WHITE, selected ? 72 : 38));
+
+        int chipInset = Math.round(dpToPx(2f));
+        int rimInset = Math.round(dpToPx(4f));
+        return new LayerDrawable(new Drawable[] {
+            glow,
+            new InsetDrawable(key, chipInset, chipInset, chipInset, chipInset),
+            new InsetDrawable(innerRim, rimInset, rimInset, rimInset, rimInset)
+        });
     }
 
     public void dismissPopup() {
+        if (mPopupWindow == null) {
+            return;
+        }
         mPopupWindow.setContentView(null);
         mPopupWindow.dismiss();
         mPopupWindow = null;
@@ -949,8 +1100,7 @@ public final class ExtraKeysView extends GridLayout {
             return null;
         state.setIsCreated(true);
         MaterialButton button = new MaterialButton(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        button.setTextColor(state.isActive ? mButtonActiveTextColor : mButtonTextColor);
-        button.setBackgroundColor(mButtonBackgroundColor);
+        updateSpecialButtonVisualState(button, state);
         if (needUpdate) {
             state.buttons.add(button);
         }

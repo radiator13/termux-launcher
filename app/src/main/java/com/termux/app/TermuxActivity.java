@@ -3623,17 +3623,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int mutedMonetShade(int color) {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
-        hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * 0.78f));
-        hsv[2] = Math.max(0f, Math.min(1f, hsv[2] * 0.68f));
-        return Color.HSVToColor(0xE6, hsv);
+        hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * 0.92f));
+        hsv[2] = Math.max(0.78f, Math.min(1f, hsv[2] * 0.86f));
+        return Color.HSVToColor(0xF4, hsv);
     }
 
     private int brightMonetShade(int color) {
         float[] hsv = new float[3];
         Color.colorToHSV(color, hsv);
-        hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * 1.18f));
-        hsv[2] = Math.max(0f, Math.min(1f, Math.max(hsv[2], 0.84f)));
-        return Color.HSVToColor(0xF0, hsv);
+        hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * 1.28f));
+        hsv[2] = Math.max(0f, Math.min(1f, Math.max(hsv[2], 0.90f)));
+        return Color.HSVToColor(0xF6, hsv);
     }
 
     private int edgeMonetVariant(int color) {

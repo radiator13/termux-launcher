@@ -117,6 +117,10 @@ public final class AzScrubRowView extends AppCompatTextView {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private float dp(float value) {
+        return value * getResources().getDisplayMetrics().density;
+    }
+
     // Letters span the full row width (no inset). Kept as a band helper so the draw and the
     // touch->letter mapping stay derived from one place.
     private float letterInsetPx() {
@@ -191,8 +195,10 @@ public final class AzScrubRowView extends AppCompatTextView {
                     : clamp01(envelope * waveStrength * 0.72f);
                 letterPaint.setColor(blendColors(baseColor, focusColor, colorProgress));
             }
+            applyLetterShadow(activeFocus, envelope);
             canvas.drawText(String.valueOf(visibleLetters[i]), x, baseline, letterPaint);
         }
+        letterPaint.clearShadowLayer();
     }
 
     @Override
@@ -559,8 +565,17 @@ public final class AzScrubRowView extends AppCompatTextView {
     }
 
     private int resolveFocusLetterColor() {
-        int vivid = boostColor(accentColor, 1.22f, 1.12f);
-        return blendColors(vivid, Color.WHITE, 0.18f);
+        int vivid = boostColor(accentColor, 1.34f, 1.18f);
+        return blendColors(vivid, Color.WHITE, 0.22f);
+    }
+
+    private void applyLetterShadow(boolean active, float envelope) {
+        float interaction = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK
+            ? (active ? 1f : 0f)
+            : clamp01(envelope * waveStrength);
+        float radius = dp(1.8f) + (dp(1.1f) * interaction);
+        int alpha = active ? 172 : Math.round(132f + (34f * interaction));
+        letterPaint.setShadowLayer(radius, 0f, dp(0.55f), withAlpha(Color.BLACK, alpha));
     }
 
     private void applyLetterWeight(float envelope, boolean active) {
@@ -601,6 +616,10 @@ public final class AzScrubRowView extends AppCompatTextView {
         hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * saturationMultiplier));
         hsv[2] = Math.max(0f, Math.min(1f, hsv[2] * valueMultiplier));
         return Color.HSVToColor(Color.alpha(color), hsv);
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (Math.max(0, Math.min(255, alpha)) << 24) | (color & 0x00FFFFFF);
     }
 
     private static float clamp01(float value) {

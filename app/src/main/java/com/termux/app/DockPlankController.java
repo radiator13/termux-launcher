@@ -74,11 +74,18 @@ final class DockPlankController implements Choreographer.FrameCallback {
 
     void setEnabled(boolean enabled) {
         if (mEnabled == enabled) {
+            if (enabled) {
+                showRestingGlow();
+                applyToViews();
+            }
             return;
         }
         mEnabled = enabled;
         if (!enabled) {
             reset();
+        } else {
+            showRestingGlow();
+            applyToViews();
         }
     }
 
@@ -138,6 +145,12 @@ final class DockPlankController implements Choreographer.FrameCallback {
         }
     }
 
+    private void showRestingGlow() {
+        if (mGlow instanceof DockEdgeGlowView) {
+            mGlow.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void aim(float nx, float ny) {
         nx = clamp01(nx);
         ny = clamp01(ny);
@@ -174,8 +187,9 @@ final class DockPlankController implements Choreographer.FrameCallback {
         if (moving) {
             kick();
         } else if (!mPressed && mGlowLevel.value < 0.002f) {
-            // Fully settled and released: drop the transient layers so they cost nothing at rest.
-            if (mGlow != null) {
+            // Fully settled and released: drop transient layers. The custom edge glow still draws a
+            // quiet resting refraction rim, so keep only that view alive.
+            if (mGlow != null && !(mGlow instanceof DockEdgeGlowView)) {
                 mGlow.setVisibility(View.GONE);
             }
             if (mSpecular != null) {
@@ -207,7 +221,13 @@ final class DockPlankController implements Choreographer.FrameCallback {
         if (mGlow instanceof DockEdgeGlowView) {
             // Drive the reactive rim: overall strength from the glow spring, and the live tilt so the
             // hot lobe sweeps around the perimeter as the plank tips (physical glass-edge light).
-            ((DockEdgeGlowView) mGlow).setGlowState(clamp01(mGlowLevel.value), mRx.value, mRy.value);
+            float glowTiltX = mMotionEnabled
+                ? mRx.value
+                : -(mLightY.value - 0.5f) * 2f * MAX_TILT_DEG;
+            float glowTiltY = mMotionEnabled
+                ? mRy.value
+                : (mLightX.value - 0.5f) * 2f * MAX_TILT_DEG;
+            ((DockEdgeGlowView) mGlow).setGlowState(clamp01(mGlowLevel.value), glowTiltX, glowTiltY);
         } else if (mGlow != null) {
             mGlow.setAlpha(clamp01(mGlowLevel.value));
         }
