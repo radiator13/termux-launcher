@@ -21,6 +21,8 @@ import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.ColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
@@ -1047,8 +1049,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /** Max alpha (of 255) the translucent dock-glass base reaches at full user opacity. Kept low so
-     *  the near-white day-theme surface colour stays a faint glass tint, not a plastic frost. */
-    private static final int DOCK_GLASS_BASE_MAX_ALPHA = 64;
+     *  the blurred wallpaper carries the glass body; the base is just a faint legibility tint. */
+    private static final int DOCK_GLASS_BASE_MAX_ALPHA = 32;
+
+    /** Cached light-scatter filter applied to the blurred wallpaper backdrop. */
+    @Nullable private ColorMatrixColorFilter mGlassFrostFilter;
+
+    /**
+     * Real frosted glass scatters light: it slightly brightens and desaturates whatever is behind it,
+     * varying with the content rather than as a flat film. Applying this content-aware scatter to the
+     * blurred backdrop image (a cheap GPU colour filter) is what makes it read as glass instead of a
+     * plastic white wash. Compresses contrast toward mid + lifts brightness + desaturates.
+     */
+    @NonNull
+    private ColorMatrixColorFilter glassFrostFilter() {
+        if (mGlassFrostFilter == null) {
+            ColorMatrix frost = new ColorMatrix();
+            frost.setSaturation(0.82f);
+            float c = 0.88f;   // contrast scale (<1 compresses toward mid grey = frosty haze)
+            float t = 16f;     // gentle brightness lift; kept low so light glyphs stay legible
+            ColorMatrix scatter = new ColorMatrix(new float[] {
+                c, 0, 0, 0, t,
+                0, c, 0, 0, t,
+                0, 0, c, 0, t,
+                0, 0, 0, 1, 0
+            });
+            frost.postConcat(scatter);
+            mGlassFrostFilter = new ColorMatrixColorFilter(frost);
+        }
+        return mGlassFrostFilter;
+    }
 
     /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
     private void setupDockPlankFx() {
@@ -2163,6 +2193,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             backdrop.setImageBitmap(blurredBackdrop);
             wallpaperBackdrop.recycle();
         }
+        // Content-aware light scatter — the frost that makes the blur read as glass, not plastic.
+        backdrop.setColorFilter(glassFrostFilter());
         backdrop.setVisibility(View.VISIBLE);
         mAccessoryBackdropDirty = false;
         mLastAccessoryBackdropBlurRadiusDp = state.blurRadiusDp;
