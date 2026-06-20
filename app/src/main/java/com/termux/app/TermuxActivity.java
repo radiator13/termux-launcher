@@ -1100,6 +1100,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         "uniform float uBand;\n" +
         "uniform float uStrength;\n" +
         "uniform float uRim;\n" +
+        "uniform float uDensity;\n" +
         "float sdRoundRect(float2 p, float2 b, float r) {\n" +
         "    float2 q = abs(p) - b + float2(r, r);\n" +
         "    return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0, 0.0))) - r;\n" +
@@ -1113,9 +1114,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         "    float e = clamp(1.0 - inside / uBand, 0.0, 1.0);\n" +
         "    e = e * e;\n" +
         "    half4 col = content.eval(fragCoord - n * (e * uStrength));\n" +
-        "    float thin = 1.0 - smoothstep(0.0, 2.5, inside);\n" +
-        "    float depth = clamp((1.0 - smoothstep(0.0, uBand, inside)) - thin, 0.0, 1.0);\n" +
-        "    col.rgb = col.rgb + half3(thin * uRim) - half3(depth * 0.06);\n" +
+        // Directional bevel: a dark glass contour right at the rim + a highlight that is bright on the
+        // top edge and fades to a shadow at the bottom edge (light from above) -> reads as a lit,
+        // weighty glass slab rather than a uniform drawn inner-rim line.
+        "    float dir = clamp(-n.y, -1.0, 1.0);\n" +
+        "    float contour = 1.0 - smoothstep(0.0, 1.5 * uDensity, inside);\n" +
+        "    float bevel = smoothstep(0.8 * uDensity, 2.2 * uDensity, inside) * (1.0 - smoothstep(2.2 * uDensity, 7.0 * uDensity, inside));\n" +
+        "    float hi = clamp(0.30 + 0.70 * dir, 0.0, 1.0);\n" +
+        "    float lo = clamp(-dir, 0.0, 1.0);\n" +
+        "    col.rgb = col.rgb - half3(contour * 0.12) + half3(bevel * hi * uRim) - half3(bevel * lo * 0.10);\n" +
         "    return col;\n" +
         "}\n";
 
@@ -1138,8 +1145,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mGlassShader.setFloatUniform("uRectMax", capRight, capBottom);
             mGlassShader.setFloatUniform("uRadius", radiusPx);
             mGlassShader.setFloatUniform("uBand", density * 22f);
-            mGlassShader.setFloatUniform("uStrength", density * 10f);
-            mGlassShader.setFloatUniform("uRim", 0.18f);
+            mGlassShader.setFloatUniform("uStrength", density * 14f);
+            mGlassShader.setFloatUniform("uRim", 0.25f);
+            mGlassShader.setFloatUniform("uDensity", density);
             RenderEffect shaderEffect = RenderEffect.createRuntimeShaderEffect(mGlassShader, "content");
             if (blurPx > 0f) {
                 RenderEffect blur = RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP);
@@ -1479,9 +1487,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         GradientDrawable outline = new GradientDrawable();
         outline.setColor(Color.TRANSPARENT);
         outline.setCornerRadius(resolveDockCapsuleCornerRadiusPx(surfaceHeightPx));
-        // Thin neutral containing stroke only; DockEdgeGlowView owns the directional top/bottom edge
-        // light, so a bright outline here would double up into the old milky edge.
-        outline.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(resolveAccessoryOutlineColor(), 40));
+        // Barely-there containing stroke; the AGSL shader draws the dark glass contour + bevel at the
+        // edge, so a visible outline here would read as a drawn border ("inside rim") over the glass.
+        outline.setStroke(Math.max(1, Math.round(dpToPx(1))), withAlphaComponent(resolveAccessoryOutlineColor(), 18));
         surface.setBackground(outline);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             surface.setOutlineProvider(ViewOutlineProvider.BACKGROUND);

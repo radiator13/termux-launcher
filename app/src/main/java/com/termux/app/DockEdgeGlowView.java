@@ -3,11 +3,9 @@ package com.termux.app;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.SweepGradient;
 import android.util.AttributeSet;
 import android.view.View;
@@ -121,14 +119,17 @@ public class DockEdgeGlowView extends View {
         rimRect.set(inset, inset, w - inset, h - inset);
         float r = Math.max(0f, cornerRadiusPx - inset);
         float touch = clamp01(glowLevel);
-        float presence = 1f + (touch * 1.55f);
 
-        drawRestingGlassPresence(canvas, w, h, r, density, presence);
-
-        // Touch adds intensity to the persistent rim instead of replacing it.
+        // The resting glass body + edge bevel are now produced by the AGSL refraction shader on the
+        // backdrop (API 33+). This view only adds the INTERACTIVE response on touch: an accent rim
+        // that swells under the finger and a specular catch-light that glides with the tilt. At rest
+        // (touch == 0) it draws nothing, so there is no static "inside rim" line over the glass.
+        if (touch <= 0.02f && tiltAmount <= 0.02f) {
+            return;
+        }
         rimPaint.setShader(null);
         rimPaint.setStrokeWidth(density * (1.15f + (0.55f * touch)));
-        rimPaint.setColor(withAlpha(accentColor, Math.round(10f + (58f * touch))));
+        rimPaint.setColor(withAlpha(accentColor, Math.round(58f * touch)));
         canvas.drawRoundRect(rimRect, r, r, rimPaint);
 
         // Tilt/touch-driven specular: a soft, broad highlight that pools on the edge the glass tips
@@ -158,60 +159,6 @@ public class DockEdgeGlowView extends View {
             canvas.drawRoundRect(rimRect, r, r, rimPaint);
             rimPaint.setShader(null);
         }
-    }
-
-    private void drawRestingGlassPresence(Canvas canvas, int w, int h, float r, float density, float presence) {
-        // Keep the bevel tint close to the accent (only slightly lifted), not white — white reads as
-        // matte polymer. The crisp glass edge comes from the AGSL shader, not this canvas bevel.
-        int brightEdge = lerpColor(accentColor, Color.WHITE, 0.42f);
-        int darkEdge = lerpColor(accentColor, Color.BLACK, 0.64f);
-
-        // (1) Full-face vertical bevel: a thin bright catch at the very top that falls off fast, a
-        //     near-clear faintly-tinted middle (the wallpaper reads through here), then a soft dark
-        //     ramp to a darker bottom edge. This single coherent light model replaces the old
-        //     sweep-refraction + white rim + caustic stack.
-        fillPaint.setShader(new LinearGradient(
-            0f, rimRect.top, 0f, rimRect.bottom,
-            new int[] {
-                withAlpha(brightEdge, Math.round(24f * presence)),
-                withAlpha(brightEdge, Math.round(10f * presence)),
-                withAlpha(accentColor, Math.round(5f * presence)),
-                withAlpha(darkEdge, Math.round(10f * presence)),
-                withAlpha(darkEdge, Math.round(40f * presence))
-            },
-            new float[] {0f, 0.06f, 0.5f, 0.92f, 1f},
-            Shader.TileMode.CLAMP
-        ));
-        canvas.drawRoundRect(rimRect, r, r, fillPaint);
-        fillPaint.setShader(null);
-
-        tmpRect.set(rimRect);
-        tmpRect.inset(density * 2.2f, density * 2.2f);
-        float innerR = Math.max(0f, r - (density * 2.2f));
-
-        // No bright top sheen band here — a wide soft highlight reads as matte polymer. The crisp
-        // glass top edge is now produced by the AGSL refraction shader on the backdrop (API 33+).
-
-        // (3) Soft dark bottom edge — taller and softer than the top, reads as the slab's thickness /
-        //     ambient occlusion grounding it.
-        tmpRect.set(rimRect);
-        tmpRect.inset(density * 2.2f, density * 2.2f);
-        tmpRect.top = tmpRect.bottom - density * 12f;
-        fillPaint.setShader(new LinearGradient(
-            0f, tmpRect.top, 0f, tmpRect.bottom,
-            withAlpha(Color.BLACK, 0),
-            withAlpha(Color.BLACK, Math.round(26f * presence)),
-            Shader.TileMode.CLAMP
-        ));
-        canvas.drawRoundRect(tmpRect, innerR, innerR, fillPaint);
-        fillPaint.setShader(null);
-
-        // (4) A single hairline accent containing rim — accent-tinted, NOT white, so the perimeter
-        //     stays saturated glass rather than a bright white outline.
-        rimPaint.setShader(null);
-        rimPaint.setStrokeWidth(density * 0.75f);
-        rimPaint.setColor(withAlpha(accentColor, Math.round(12f * presence)));
-        canvas.drawRoundRect(rimRect, r, r, rimPaint);
     }
 
     private static int lerpColor(int a, int b, float t) {

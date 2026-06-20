@@ -573,9 +573,11 @@ public final class AzScrubRowView extends AppCompatTextView {
         float interaction = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK
             ? (active ? 1f : 0f)
             : clamp01(envelope * waveStrength);
-        float radius = dp(1.8f) + (dp(1.1f) * interaction);
-        int alpha = active ? 172 : Math.round(132f + (34f * interaction));
-        letterPaint.setShadowLayer(radius, 0f, dp(0.55f), withAlpha(Color.BLACK, alpha));
+        // Stronger resting halo so light letters stay legible over bright wallpaper regions (the row
+        // sits on see-through glass, so a fixed letter colour alone can't contrast both dark & light).
+        float radius = dp(2.6f) + (dp(1.1f) * interaction);
+        int alpha = active ? 210 : Math.round(196f + (24f * interaction));
+        letterPaint.setShadowLayer(radius, 0f, dp(0.6f), withAlpha(Color.BLACK, alpha));
     }
 
     private void applyLetterWeight(float envelope, boolean active) {
