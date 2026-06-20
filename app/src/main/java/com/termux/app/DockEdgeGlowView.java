@@ -161,9 +161,9 @@ public class DockEdgeGlowView extends View {
     }
 
     private void drawRestingGlassPresence(Canvas canvas, int w, int h, float r, float density, float presence) {
-        // accent->white at 0.62 (not pure white) keeps the top edge a saturated glass highlight
-        // instead of the milky-white film the old stacked overlays produced.
-        int brightEdge = lerpColor(accentColor, Color.WHITE, 0.62f);
+        // Keep the bevel tint close to the accent (only slightly lifted), not white — white reads as
+        // matte polymer. The crisp glass edge comes from the AGSL shader, not this canvas bevel.
+        int brightEdge = lerpColor(accentColor, Color.WHITE, 0.42f);
         int darkEdge = lerpColor(accentColor, Color.BLACK, 0.64f);
 
         // (1) Full-face vertical bevel: a thin bright catch at the very top that falls off fast, a
@@ -173,9 +173,9 @@ public class DockEdgeGlowView extends View {
         fillPaint.setShader(new LinearGradient(
             0f, rimRect.top, 0f, rimRect.bottom,
             new int[] {
-                withAlpha(brightEdge, Math.round(46f * presence)),
-                withAlpha(brightEdge, Math.round(14f * presence)),
-                withAlpha(accentColor, Math.round(6f * presence)),
+                withAlpha(brightEdge, Math.round(24f * presence)),
+                withAlpha(brightEdge, Math.round(10f * presence)),
+                withAlpha(accentColor, Math.round(5f * presence)),
                 withAlpha(darkEdge, Math.round(10f * presence)),
                 withAlpha(darkEdge, Math.round(40f * presence))
             },
@@ -189,18 +189,8 @@ public class DockEdgeGlowView extends View {
         tmpRect.inset(density * 2.2f, density * 2.2f);
         float innerR = Math.max(0f, r - (density * 2.2f));
 
-        // (2) Thin crisp bright top edge — a short pill-shaped band so the slab reads as a lit glass
-        //     edge rather than a wash.
-        float topBand = density * 5f;
-        tmpRect.bottom = tmpRect.top + topBand;
-        fillPaint.setShader(new LinearGradient(
-            0f, tmpRect.top, 0f, tmpRect.bottom,
-            withAlpha(brightEdge, Math.round(60f * presence)),
-            withAlpha(brightEdge, 0),
-            Shader.TileMode.CLAMP
-        ));
-        canvas.drawRoundRect(tmpRect, innerR, innerR, fillPaint);
-        fillPaint.setShader(null);
+        // No bright top sheen band here — a wide soft highlight reads as matte polymer. The crisp
+        // glass top edge is now produced by the AGSL refraction shader on the backdrop (API 33+).
 
         // (3) Soft dark bottom edge — taller and softer than the top, reads as the slab's thickness /
         //     ambient occlusion grounding it.

@@ -29,6 +29,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RenderEffect;
+import android.graphics.RuntimeShader;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
@@ -1080,6 +1081,77 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return mGlassFrostFilter;
     }
 
+    /** Cached AGSL glass-refraction shader (API 33+). */
+    @Nullable private RuntimeShader mGlassShader;
+
+    /**
+     * AGSL glass: what separates real glass from frosted polymer is that glass <em>bends</em> light
+     * at its edges (refraction) and catches a crisp edge highlight, instead of just diffusing it.
+     * This shader samples the blurred backdrop and, within a band along the rounded-capsule edge,
+     * displaces the sample inward along the edge normal — so the wallpaper compresses/lenses at the
+     * rim like the bevel of a thick glass slab — then lays a thin sharp rim highlight and a faint
+     * inner shadow for thickness. Runs on the GPU as a one-shot RenderEffect; no per-frame re-blur.
+     */
+    private static final String GLASS_AGSL =
+        "uniform shader content;\n" +
+        "uniform float2 uRectMin;\n" +
+        "uniform float2 uRectMax;\n" +
+        "uniform float uRadius;\n" +
+        "uniform float uBand;\n" +
+        "uniform float uStrength;\n" +
+        "uniform float uRim;\n" +
+        "float sdRoundRect(float2 p, float2 b, float r) {\n" +
+        "    float2 q = abs(p) - b + float2(r, r);\n" +
+        "    return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0, 0.0))) - r;\n" +
+        "}\n" +
+        "half4 main(float2 fragCoord) {\n" +
+        "    float2 center = (uRectMin + uRectMax) * 0.5;\n" +
+        "    float2 b = (uRectMax - uRectMin) * 0.5;\n" +
+        "    float2 p = fragCoord - center;\n" +
+        "    float inside = -sdRoundRect(p, b, uRadius);\n" +
+        "    float2 n = normalize(float2(p.x / max(b.x, 1.0), p.y / max(b.y, 1.0)) + float2(1e-4, 1e-4));\n" +
+        "    float e = clamp(1.0 - inside / uBand, 0.0, 1.0);\n" +
+        "    e = e * e;\n" +
+        "    half4 col = content.eval(fragCoord - n * (e * uStrength));\n" +
+        "    float thin = 1.0 - smoothstep(0.0, 2.5, inside);\n" +
+        "    float depth = clamp((1.0 - smoothstep(0.0, uBand, inside)) - thin, 0.0, 1.0);\n" +
+        "    col.rgb = col.rgb + half3(thin * uRim) - half3(depth * 0.06);\n" +
+        "    return col;\n" +
+        "}\n";
+
+    /**
+     * Build the glass RenderEffect: refraction shader fed by a blur of the backdrop. Returns null on
+     * pre-33 devices or if the shader fails to compile, so the caller falls back to a plain blur.
+     */
+    @Nullable
+    private RenderEffect buildGlassRefractionEffect(float blurPx, float capLeft, float capTop,
+                                                    float capRight, float capBottom, float radiusPx) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return null;
+        }
+        try {
+            if (mGlassShader == null) {
+                mGlassShader = new RuntimeShader(GLASS_AGSL);
+            }
+            float density = getResources().getDisplayMetrics().density;
+            mGlassShader.setFloatUniform("uRectMin", capLeft, capTop);
+            mGlassShader.setFloatUniform("uRectMax", capRight, capBottom);
+            mGlassShader.setFloatUniform("uRadius", radiusPx);
+            mGlassShader.setFloatUniform("uBand", density * 22f);
+            mGlassShader.setFloatUniform("uStrength", density * 10f);
+            mGlassShader.setFloatUniform("uRim", 0.18f);
+            RenderEffect shaderEffect = RenderEffect.createRuntimeShaderEffect(mGlassShader, "content");
+            if (blurPx > 0f) {
+                RenderEffect blur = RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP);
+                return RenderEffect.createChainEffect(shaderEffect, blur);
+            }
+            return shaderEffect;
+        } catch (Throwable t) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Glass refraction shader failed; falling back to blur", t);
+            return null;
+        }
+    }
+
     /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
     private void setupDockPlankFx() {
         View plank = findViewById(R.id.accessory_stack_container);
@@ -1428,10 +1500,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        // DockEdgeGlowView now draws the crisp top edge highlight; keep this as only a whisper so the
-        // top doesn't read as a white film (single source of truth for the top highlight).
-        int highlight = withAlphaComponent(Color.WHITE, Math.round(12f * Math.max(0.35f, barAlpha)));
-        int shadow = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(26f * Math.max(0.40f, barAlpha)));
+        // No white top highlight band — it read as a plastic sheen. The crisp glass top edge is now
+        // produced by the AGSL refraction shader on the backdrop. Keep only a faint shadow seam.
+        int highlight = Color.TRANSPARENT;
+        int shadow = withAlphaComponent(resolveAccessoryOutlineColor(), Math.round(18f * Math.max(0.40f, barAlpha)));
         GradientDrawable edge = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] { highlight, shadow, Color.TRANSPARENT }
@@ -2178,7 +2250,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             float blurRadiusPx = ViewUtils.dpToPx(this, Math.max(0, state.blurRadiusDp));
             backdrop.setImageBitmap(wallpaperBackdrop);
-            backdrop.setRenderEffect(RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+            // The capsule sits inside the (horizontally overscanned) backdrop bitmap: left/right are
+            // inset by the overscan, top/bottom span the full height. Hand that rect to the shader so
+            // refraction happens at the real dock edge.
+            float capLeft = horizontalOverscanPx;
+            float capRight = horizontalOverscanPx + Math.max(1, surfaceHost.getWidth());
+            float capBottom = Math.max(1, surfaceHost.getHeight());
+            float radiusPx = isValarieDockStyle()
+                ? resolveDockCapsuleCornerRadiusPx(surfaceHost.getHeight())
+                : 0f;
+            RenderEffect glass = buildGlassRefractionEffect(blurRadiusPx, capLeft, 0f, capRight, capBottom, radiusPx);
+            backdrop.setRenderEffect(glass != null
+                ? glass
+                : RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
         } else {
             Bitmap blurredBackdrop = createPreBlurredWallpaperBackdropBitmap(wallpaperBackdrop, state.blurRadiusDp);
             if (blurredBackdrop == null) {
