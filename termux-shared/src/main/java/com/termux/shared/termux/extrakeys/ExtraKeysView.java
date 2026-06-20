@@ -300,19 +300,16 @@ public final class ExtraKeysView extends GridLayout {
     protected boolean mAccessibilityEnabled;
 
     /**
-     * The "liquid glass" selection bubble: a single rounded glass cap drawn in this view's
-     * {@link #getOverlay() overlay} (so it can travel past the key bounds while still being clipped
-     * by the dock's rounded capsule). It snaps onto the pressed key as instant press feedback,
-     * persists while the key is held, and on a swipe-up glides upward tracking the finger, carrying
-     * the revealed secondary glyph, until release commits it. Recreated per press to avoid
-     * add/remove races on rapid taps.
+     * Press feedback is a per-glyph glow: a coloured {@link android.graphics.Paint#setShadowLayer
+     * shadow} behind the key's text so each character gets its own material-colour halo. A tap
+     * pulses it once; a press-and-hold keeps it lit until release; a latched modifier (SHIFT/CTRL/
+     * ALT active or locked) keeps it lit while latched (driven by the sticky visual state).
+     * {@link #mKeyGlowButton} is the key currently glowing from a press gesture.
      */
-    @Nullable private GradientDrawable mBubble;
-    @Nullable private Animator mBubbleAnim;
-    @Nullable private MaterialButton mBubbleAnchor;
-    /** Base (full-scale) bounds of the on-key bubble in this view's coordinate space. */
-    private int mBubbleL, mBubbleT, mBubbleR, mBubbleB;
-    /** Swipe-up popup travel is active (finger is dragging the bubble toward the secondary slot). */
+    private static final float KEY_GLOW_RADIUS_DP = 7f;
+    @Nullable private Animator mKeyGlowAnimator;
+    @Nullable private MaterialButton mKeyGlowButton;
+    /** Swipe-up popup travel is active (finger is dragging the popup toward the secondary slot). */
     private boolean mBubbleArmed;
     /** The press has crossed into the persistent long-press/held state. */
     private boolean mBubbleHeld;
@@ -331,37 +328,22 @@ public final class ExtraKeysView extends GridLayout {
     @Nullable private TextView mTravelBubble;
     @Nullable private GradientDrawable mTravelBubbleBg;
     private int mTravelKeyScreenX, mTravelKeyScreenY, mTravelKeyW, mTravelKeyH;
+    @Nullable private CharSequence mTravelSourceText, mTravelSecondaryText;
+    private boolean mTravelShowingSecondary;
 
     /**
-     * Reports the pressed key's screen-space rect so the host (the launcher dock) can drive a glass
-     * refraction lens behind it. The dock maps the rect into its backdrop and bends the wallpaper
-     * showing through the transparent key cell; if the host ignores it, only the bubble border shows.
+     * Retained (dormant) hook from the earlier glass-refraction-lens experiment. The host may set a
+     * listener, but the glyph-glow feedback never fires it, so no refraction is driven. Kept so the
+     * host wiring still compiles and the idea can be revisited.
      */
     public interface KeyLensListener {
         void onKeyLensShow(float screenLeft, float screenTop, float screenRight, float screenBottom);
         void onKeyLensHide();
     }
     @Nullable private KeyLensListener mKeyLensListener;
-    private final int[] mKeyLensLoc = new int[2];
 
     public void setKeyLensListener(@Nullable KeyLensListener listener) {
         mKeyLensListener = listener;
-    }
-
-    private void emitKeyLensShow(@NonNull MaterialButton button, int inset) {
-        if (mKeyLensListener == null)
-            return;
-        button.getLocationOnScreen(mKeyLensLoc);
-        mKeyLensListener.onKeyLensShow(
-            mKeyLensLoc[0] + inset,
-            mKeyLensLoc[1] + inset,
-            mKeyLensLoc[0] + button.getWidth() - inset,
-            mKeyLensLoc[1] + button.getHeight() - inset);
-    }
-
-    private void emitKeyLensHide() {
-        if (mKeyLensListener != null)
-            mKeyLensListener.onKeyLensHide();
     }
 
     /** Generic long-press hold-visual for keys that don't auto-repeat or toggle (so EVERY key shows
@@ -658,8 +640,8 @@ public final class ExtraKeysView extends GridLayout {
                         case MotionEvent.ACTION_DOWN:
                             popupSwipeDownRawY[0] = event.getRawY();
                             requestParentDisallowIntercept(view, true);
-                            // Instant press feedback: the glass bubble snaps onto the key.
-                            showBubbleOnKey(button);
+                            // Instant press feedback: the key's glyphs glow up.
+                            glowKeyPress(button);
                             animateKeyCapDip(button, KeyVisualState.PRESSED);
                             // Start long press scheduled executors which will be stopped in next MotionEvent
                             startScheduledExecutors(view, buttonInfo, button);
@@ -692,17 +674,18 @@ public final class ExtraKeysView extends GridLayout {
                             requestParentDisallowIntercept(view, false);
                             stopScheduledExecutors();
                             animateKeyCapDip(button, KeyVisualState.RESTING);
-                            hideBubble(false);
                             dismissTravelPopup(false);
-                            // Re-apply the key's persistent state so a latched modifier keeps its pill.
+                            // Repaint the key's persistent state, then fade the press glow out unless
+                            // it is a latched modifier (which stays lit).
                             restoreButtonVisualState(button, buttonInfo);
+                            releaseKeyGlow(button, isSpecialLatched(buttonInfo));
                             return true;
                         case MotionEvent.ACTION_UP:
                             requestParentDisallowIntercept(view, false);
                             stopScheduledExecutors();
                             animateKeyCapDip(button, KeyVisualState.RESTING);
                             if (mBubbleArmed) {
-                                // Swipe-up: commit the secondary if the bubble reached the slot,
+                                // Swipe-up: commit the secondary if the popup reached the slot,
                                 // otherwise treat it as a normal tap of the primary key.
                                 boolean commitPopup = mBubbleFrac >= 0.5f && buttonInfo.getPopup() != null;
                                 if (commitPopup) {
@@ -711,19 +694,17 @@ public final class ExtraKeysView extends GridLayout {
                                     view.performClick();
                                 }
                                 dismissTravelPopup(commitPopup);
+                                // The source key's glow was released on arm; reflect any toggled state.
+                                restoreButtonVisualState(button, buttonInfo);
                             } else {
-                                boolean tap = !mBubbleHeld;
                                 if (mLongPressCount == 0) {
                                     view.performClick();
                                 }
-                                // A quick tap "pops" the bubble outward past the fingertip so the
-                                // feedback is visible around the finger; a held release collapses.
-                                hideBubble(tap);
+                                // performClick() may have toggled a special key's active/locked state.
+                                restoreButtonVisualState(button, buttonInfo);
+                                // Tap -> glow fades out (a single pulse). Latched modifier -> stays lit.
+                                releaseKeyGlow(button, isSpecialLatched(buttonInfo));
                             }
-                            // performClick() above may have toggled a special key's active/locked
-                            // state — repaint so a now-latched modifier shows its persistent pill
-                            // ("hold/tap to keep pressed"), or a deactivated one clears it.
-                            restoreButtonVisualState(button, buttonInfo);
                             return true;
                         default:
                             return true;
@@ -827,7 +808,7 @@ public final class ExtraKeysView extends GridLayout {
                 if (mLongPressCount == 1) {
                     button.post(() -> {
                         animateKeyCapDip(button, KeyVisualState.REPEAT_HELD);
-                        holdBubble();
+                        glowKeyHold();
                     });
                 }
                 onExtraKeyButtonClick(view, buttonInfo, button);
@@ -867,7 +848,7 @@ public final class ExtraKeysView extends GridLayout {
         cancelGenericHoldVisual();
         mGenericHoldVisualRunnable = () -> {
             animateKeyCapDip(button, KeyVisualState.REPEAT_HELD);
-            holdBubble();
+            glowKeyHold();
         };
         mHandler.postDelayed(mGenericHoldVisualRunnable, mLongPressTimeout);
     }
@@ -899,7 +880,7 @@ public final class ExtraKeysView extends GridLayout {
             if (mButton != null) {
                 updateSpecialButtonVisualState(mButton, mState);
                 animateKeyCapDip(mButton, KeyVisualState.REPEAT_HELD);
-                holdBubble();
+                glowKeyHold();
             }
 
             announceSpecialKeyStateChangeForAccessibility(mButtonInfo.getKey(), mState);
@@ -920,12 +901,19 @@ public final class ExtraKeysView extends GridLayout {
             ? KeyVisualState.STICKY_LOCKED
             : (state.isActive ? KeyVisualState.STICKY_ACTIVE : KeyVisualState.RESTING);
         applyButtonVisualState(button, visualState, state.isActive);
+        // A latched modifier keeps its glyphs glowing (persists across rebuilds). Inactive: leave the
+        // glow alone so a release-fade can play out; it is cleared explicitly when the key resets.
+        if (state.isActive || state.isLocked) {
+            applyKeyGlow(button, 1f);
+        }
     }
 
     private void applyButtonVisualState(@NonNull MaterialButton button, @NonNull KeyVisualState state,
                                         boolean activeText) {
+        // Feedback is now the glyph glow, not a pill: keep the background flat in every state and let
+        // the glow (plus the active text colour) carry the pressed / latched indication.
         button.setTextColor(activeText ? mButtonActiveTextColor : mButtonTextColor);
-        button.setBackground(buildKeyBackground(state));
+        button.setBackground(new ColorDrawable(mButtonBackgroundColor));
     }
 
     @NonNull
@@ -1017,97 +1005,95 @@ public final class ExtraKeysView extends GridLayout {
             .start();
     }
 
-    /**
-     * Snap the liquid-glass bubble onto {@code button} as instant press feedback. It is a rounded
-     * glass cap drawn in this view's overlay, sized to the key cell via {@link Drawable#setBounds}
-     * (a View added to a ViewGroupOverlay gets re-laid-out to wrap-content, so a Drawable is used to
-     * keep the cap exactly key-shaped). Recreated per press.
-     */
-    private void showBubbleOnKey(@NonNull MaterialButton button) {
-        // Drop any previous bubble (e.g. from a key released a frame ago) without animation.
-        removeBubbleNow();
+    /** The glyph-glow colour: a luminous, slightly whitened accent halo around the key's characters. */
+    private int keyGlowColor() {
+        return lerpColor(feedbackTint(), Color.WHITE, 0.15f);
+    }
 
-        int inset = Math.round(dpToPx(3f)); // a little breathing room from the cell edges
-        mBubbleL = Math.round(button.getX()) + inset;
-        mBubbleT = Math.round(button.getY()) + inset;
-        mBubbleR = Math.round(button.getX() + button.getWidth()) - inset;
-        mBubbleB = Math.round(button.getY() + button.getHeight()) - inset;
+    /** Set a key's glyph glow to {@code level} (0..1) via a coloured text shadow. */
+    private void applyKeyGlow(@NonNull MaterialButton button, float level) {
+        if (level <= 0.01f) {
+            button.setShadowLayer(0f, 0f, 0f, 0);
+            return;
+        }
+        button.setShadowLayer(dpToPx(KEY_GLOW_RADIUS_DP), 0f, 0f,
+            withAlpha(keyGlowColor(), Math.round(255 * clamp01(level))));
+    }
 
-        GradientDrawable g = new GradientDrawable();
-        g.setShape(GradientDrawable.RECTANGLE);
-        g.setDither(true);
-        // Fully-rounded stadium ends -> a glass pill matching the dock capsule's rounded language.
-        g.setCornerRadius(Math.min(mBubbleR - mBubbleL, mBubbleB - mBubbleT) * 0.5f);
-
-        mBubble = g;
-        mBubbleAnchor = button;
+    /** Glow the pressed key's glyphs up (a tap reads as a single pulse once it releases). */
+    private void glowKeyPress(@NonNull MaterialButton button) {
+        if (mKeyGlowAnimator != null) {
+            mKeyGlowAnimator.cancel();
+            mKeyGlowAnimator = null;
+        }
+        mKeyGlowButton = button;
         mBubbleArmed = false;
         mBubbleHeld = false;
         mBubbleFrac = 0f;
-        mBubbleTravelDistPx = (mBubbleB - mBubbleT) + dpToPx(10f);
-        paintBubble(false);
-        getOverlay().add(g);
-        emitKeyLensShow(button, inset); // drive the host's glass refraction lens behind the key
-
         if (shouldSnapKeyMotion()) {
-            applyBubbleFrame(1f, 1f);
+            applyKeyGlow(button, 1f);
             return;
         }
-        applyBubbleFrame(0.82f, 0f);
         ValueAnimator in = ValueAnimator.ofFloat(0f, 1f);
-        in.setDuration(80L);
+        in.setDuration(120L);
         in.setInterpolator(new DecelerateInterpolator());
-        in.addUpdateListener(a -> {
-            float f = (float) a.getAnimatedValue();
-            applyBubbleFrame(0.82f + 0.18f * f, f);
-        });
-        mBubbleAnim = in;
+        in.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue()));
+        mKeyGlowAnimator = in;
         in.start();
     }
 
-    /** Position+scale+fade one frame of the on-key bubble about the key centre. */
-    private void applyBubbleFrame(float scale, float alpha) {
-        if (mBubble == null)
-            return;
-        float cx = (mBubbleL + mBubbleR) / 2f;
-        float cy = (mBubbleT + mBubbleB) / 2f;
-        float hw = (mBubbleR - mBubbleL) / 2f * scale;
-        float hh = (mBubbleB - mBubbleT) / 2f * scale;
-        mBubble.setBounds(Math.round(cx - hw), Math.round(cy - hh),
-            Math.round(cx + hw), Math.round(cy + hh));
-        mBubble.setAlpha(Math.round(255 * clamp01(alpha)));
-        mBubble.invalidateSelf();
-    }
-
-    /** Promote the bubble to the persistent held state (long-press / auto-repeat / sticky-lock). */
-    private void holdBubble() {
-        if (mBubble == null)
+    /** Keep the glow steady at full for a press-and-hold / auto-repeat. */
+    private void glowKeyHold() {
+        if (mKeyGlowButton == null)
             return;
         mBubbleHeld = true;
-        paintBubble(true);
-        if (shouldSnapKeyMotion()) {
-            applyBubbleFrame(1f, 1f);
-            return;
+        if (mKeyGlowAnimator != null) {
+            mKeyGlowAnimator.cancel();
+            mKeyGlowAnimator = null;
         }
-        // A small "settle" pulse (1 -> 1.06 -> 1) signals the press has locked into a hold.
-        if (mBubbleAnim != null) mBubbleAnim.cancel();
-        ValueAnimator pulse = ValueAnimator.ofFloat(0f, 1f);
-        pulse.setDuration(190L);
-        pulse.addUpdateListener(a -> {
-            float f = (float) a.getAnimatedValue();
-            applyBubbleFrame(1f + 0.06f * (float) Math.sin(f * Math.PI), 1f);
-        });
-        mBubbleAnim = pulse;
-        pulse.start();
+        applyKeyGlow(mKeyGlowButton, 1f);
     }
 
     /**
-     * Begin swipe-up travel. Hands the on-key overlay bubble off to a {@link PopupWindow} of the
-     * same look (so it can rise above the clipped row), carrying the revealed secondary glyph.
+     * Release the press glow. {@code keepLit} true (a now-latched modifier) leaves the glow on;
+     * otherwise it fades out — a quick tap therefore reads as a single glow pulse.
+     */
+    private void releaseKeyGlow(@NonNull MaterialButton button, boolean keepLit) {
+        if (mKeyGlowAnimator != null) {
+            mKeyGlowAnimator.cancel();
+            mKeyGlowAnimator = null;
+        }
+        mKeyGlowButton = null;
+        if (keepLit) {
+            applyKeyGlow(button, 1f);
+            return;
+        }
+        if (shouldSnapKeyMotion()) {
+            applyKeyGlow(button, 0f);
+            return;
+        }
+        ValueAnimator out = ValueAnimator.ofFloat(1f, 0f);
+        out.setDuration(240L);
+        out.setInterpolator(new AccelerateInterpolator());
+        out.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue()));
+        out.start();
+    }
+
+    /** True if {@code info} is a modifier currently latched on (active or locked). */
+    private boolean isSpecialLatched(@NonNull ExtraKeyButton info) {
+        if (!isSpecialButton(info))
+            return false;
+        SpecialButtonState st = mSpecialButtons.get(SpecialButton.valueOf(info.getKey()));
+        return st != null && (st.isActive || st.isLocked);
+    }
+
+    /**
+     * Begin swipe-up travel. The source key dims back to resting and a floating glyph rises with the
+     * finger: it shows the source glyph near the key and swaps to the (glowing) secondary glyph once
+     * past the midpoint, so the user always sees which key a release will commit.
      */
     private void armBubbleTravel(@NonNull MaterialButton button, @NonNull ExtraKeyButton popup) {
-        removeBubbleNow(); // hand off from the on-key overlay bubble to the travel popup
-        emitKeyLensHide(); // lens follows the on-key bubble only; the popup is opaque
+        releaseKeyGlow(button, false); // source key returns to its resting colours
         dismissTravelPopup(false);
         mBubbleArmed = true;
         mBubbleHeld = true;
@@ -1120,21 +1106,17 @@ public final class ExtraKeysView extends GridLayout {
         mTravelKeyW = Math.max(1, button.getWidth());
         mTravelKeyH = Math.max(1, button.getHeight());
         mBubbleTravelDistPx = mTravelKeyH + dpToPx(10f);
+        mTravelSourceText = button.getText();
+        mTravelSecondaryText = popup.getDisplay();
+        mTravelShowingSecondary = false;
 
-        int tint = feedbackTint();
+        // A soft dark backing keeps the floating glyph legible over the row/wallpaper; no bright
+        // border — the glyph itself glows (matching the on-key glow language).
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setDither(true);
-        bg.setCornerRadius(Math.min(mTravelKeyW, mTravelKeyH) * 0.5f); // stadium pill, like the dock
-        bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-        // Travel popup floats free of the dock blur, so it gets a present, readable dark fill (opaque
-        // enough that the source key doesn't bleed through) with a thin accent rim like the dock.
-        bg.setColors(new int[] {
-            withAlpha(Color.rgb(20, 24, 32), mKeyPressFeedbackBlurAvailable ? 208 : 236),
-            withAlpha(Color.rgb(10, 12, 18), mKeyPressFeedbackBlurAvailable ? 208 : 236)
-        });
-        bg.setStroke(Math.max(1, Math.round(dpToPx(1.4f))),
-            withAlpha(lerpColor(tint, Color.WHITE, 0.10f), 230));
+        bg.setCornerRadius(Math.min(mTravelKeyW, mTravelKeyH) * 0.5f);
+        bg.setColor(withAlpha(Color.rgb(14, 17, 23), mKeyPressFeedbackBlurAvailable ? 190 : 224));
 
         TextView tv = new TextView(getContext());
         tv.setGravity(Gravity.CENTER);
@@ -1144,8 +1126,8 @@ public final class ExtraKeysView extends GridLayout {
         tv.setAllCaps(mButtonTextAllCaps);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, button.getTextSize());
         tv.setTypeface(button.getTypeface());
-        tv.setText(popup.getDisplay());
         tv.setTextColor(activeTextColor());
+        tv.setText(mTravelSourceText);
         tv.setBackground(bg);
 
         mTravelBubble = tv;
@@ -1184,18 +1166,22 @@ public final class ExtraKeysView extends GridLayout {
     private void updateBubbleTravel(float frac) {
         frac = clamp01(frac);
         mBubbleFrac = frac;
-        if (mTravelPopup == null || mTravelBubble == null || mTravelBubbleBg == null)
+        if (mTravelPopup == null || mTravelBubble == null)
             return;
         int y = Math.round(mTravelKeyScreenY - mBubbleTravelDistPx * frac);
         try {
             mTravelPopup.update(mTravelKeyScreenX, y, mTravelKeyW, mTravelKeyH);
         } catch (Exception ignored) {
         }
-        // Border brightens to "selected" as the bubble reaches the secondary slot.
-        boolean selected = frac >= 0.5f;
-        int tint = feedbackTint();
-        mTravelBubbleBg.setStroke(Math.max(1, Math.round(dpToPx(selected ? 1.8f : 1.4f))),
-            withAlpha(lerpColor(tint, Color.WHITE, selected ? 0.25f : 0.10f), selected ? 255 : 230));
+        // Swap the glyph at the midpoint: source glyph low (a release taps the primary), secondary
+        // glyph high (a release commits it) — and the secondary glows to read as the active choice.
+        boolean secondary = frac >= 0.5f;
+        if (secondary != mTravelShowingSecondary) {
+            mTravelShowingSecondary = secondary;
+            mTravelBubble.setText(secondary ? mTravelSecondaryText : mTravelSourceText);
+        }
+        mTravelBubble.setShadowLayer(secondary ? dpToPx(KEY_GLOW_RADIUS_DP) : 0f, 0f, 0f,
+            secondary ? withAlpha(keyGlowColor(), 255) : 0);
         mTravelBubble.invalidate();
     }
 
@@ -1226,85 +1212,6 @@ public final class ExtraKeysView extends GridLayout {
             popup.dismiss();
         } catch (Exception ignored) {
         }
-    }
-
-    /**
-     * Animate the bubble away. {@code expand} true (a quick tap) pops it outward past the fingertip
-     * so the feedback is visible around the finger; false (a held release / swipe commit) collapses.
-     */
-    private void hideBubble(boolean expand) {
-        emitKeyLensHide();
-        final GradientDrawable g = mBubble;
-        final int l = mBubbleL, t = mBubbleT, r = mBubbleR, b = mBubbleB;
-        mBubble = null;
-        mBubbleAnchor = null;
-        mBubbleArmed = false;
-        mBubbleHeld = false;
-        mBubbleFrac = 0f;
-        if (mBubbleAnim != null) {
-            mBubbleAnim.cancel();
-            mBubbleAnim = null;
-        }
-        if (g == null)
-            return;
-        if (shouldSnapKeyMotion()) {
-            getOverlay().remove(g);
-            return;
-        }
-        final float endScale = expand ? 1.16f : 0.9f;
-        ValueAnimator out = ValueAnimator.ofFloat(0f, 1f);
-        out.setDuration(expand ? 170L : 130L);
-        out.setInterpolator(expand ? new DecelerateInterpolator() : new AccelerateInterpolator());
-        out.addUpdateListener(a -> {
-            float f = (float) a.getAnimatedValue();
-            float s = 1f + (endScale - 1f) * f;
-            float cx = (l + r) / 2f, cy = (t + b) / 2f;
-            float hw = (r - l) / 2f * s, hh = (b - t) / 2f * s;
-            g.setBounds(Math.round(cx - hw), Math.round(cy - hh),
-                Math.round(cx + hw), Math.round(cy + hh));
-            g.setAlpha(Math.round(255 * (1f - f)));
-            g.invalidateSelf();
-        });
-        out.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                getOverlay().remove(g);
-            }
-        });
-        out.start();
-    }
-
-    /** Drop the current bubble immediately with no animation (before starting a fresh one). */
-    private void removeBubbleNow() {
-        if (mBubbleAnim != null) {
-            mBubbleAnim.cancel();
-            mBubbleAnim = null;
-        }
-        if (mBubble != null) {
-            getOverlay().remove(mBubble);
-            mBubble = null;
-            mBubbleAnchor = null;
-        }
-    }
-
-    /**
-     * Paint the bubble's glass fill + accent rim. {@code strong} for the held look. The border is
-     * the feature (a crisp, bright accent rim matching the dock); the fill is a faint accent tint so
-     * the key glyph and wallpaper read through it as glass — no white sheen (that read as milky).
-     */
-    private void paintBubble(boolean strong) {
-        if (mBubble == null)
-            return;
-        int tint = feedbackTint();
-        mBubble.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-        mBubble.setColors(new int[] {
-            withAlpha(tint, strong ? 44 : 30),
-            withAlpha(tint, strong ? 22 : 14)
-        });
-        // Thin hairline rim matching the dock's own edge (the dock leans on refraction, not a heavy
-        // border), brightened a touch off pure accent so it reads cleanly without going stark white.
-        mBubble.setStroke(Math.max(1, Math.round(dpToPx(strong ? 1.5f : 1.25f))),
-            withAlpha(lerpColor(tint, Color.WHITE, 0.10f), strong ? 235 : 210));
     }
 
     private int feedbackTint() {
@@ -1399,7 +1306,9 @@ public final class ExtraKeysView extends GridLayout {
     }
 
     public void dismissPopup() {
-        hideBubble(false);
+        if (mKeyGlowButton != null) {
+            releaseKeyGlow(mKeyGlowButton, false);
+        }
         dismissTravelPopup(false);
     }
 
