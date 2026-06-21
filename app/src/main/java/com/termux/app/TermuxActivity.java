@@ -1594,7 +1594,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float progress = mPreferences != null
             ? resolveDockSizeProgress(mPreferences.getAppLauncherBarHeightScale())
             : 1f;
-        return Math.round(dpToPx(7f + progress * 7f));
+        float dp = 7f + progress * 7f;
+        return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 
     private int resolveDockCapsuleAppsBottomPaddingPx() {
