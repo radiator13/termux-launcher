@@ -47,9 +47,14 @@ public final class TaiRuntimeServiceClient {
 
     @NonNull
     public JSONObject request(@NonNull String operation, @Nullable String body) throws JSONException {
+        return request(operation, body, REQUEST_TIMEOUT_MS);
+    }
+
+    @NonNull
+    public JSONObject request(@NonNull String operation, @Nullable String body, long timeoutMs) throws JSONException {
         PendingRequest request = send(operation, body, false, null);
         try {
-            if (!request.done.await(REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            if (!request.done.await(timeoutMs, TimeUnit.MILLISECONDS)) {
                 pending.remove(request.requestId);
                 return runtimeUnavailable("tai_runtime_timeout", "TAI runtime service timed out.");
             }

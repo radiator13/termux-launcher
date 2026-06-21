@@ -1084,10 +1084,12 @@ public final class ExtraKeysView extends GridLayout {
         // Fall back to a sane dp radius if the button isn't laid out yet (e.g. a latched modifier
         // restyled during a reload) so the bloom is never zero-sized / invisible.
         int span = Math.max(button.getWidth(), button.getHeight());
-        float radius = (span > 0 ? span * 0.6f : dpToPx(26f));
+        float radius = (span > 0 ? span * 0.72f : dpToPx(30f));
         bloom.setGradientRadius(radius);
         int accent = glowAccent();
-        bloom.setColors(new int[]{withAlpha(accent, 165), withAlpha(accent, 70), withAlpha(accent, 0)});
+        int core = lerpColor(accent, Color.WHITE, 0.22f);
+        // Hot, present halo: a near-opaque whitened-accent core fading through the accent to nothing.
+        bloom.setColors(new int[]{withAlpha(core, 240), withAlpha(accent, 150), withAlpha(accent, 0)});
         bloom.setDither(true);
         return bloom;
     }

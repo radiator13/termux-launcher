@@ -91,10 +91,19 @@ public final class TaiManager {
         return !runtimeProcess && runtime != null;
     }
 
+    /** Status queries should return quickly; cap them so a busy/hung runtime can't stall callers. */
+    private static final long RUNTIME_STATUS_TIMEOUT_MS = 8_000L;
+
     @NonNull
     private JSONObject runtimeRequest(@NonNull String operation, @Nullable String body) throws JSONException {
         if (runtimeClient == null) return error(500, "runtime_client_unavailable", "TAI runtime service client is unavailable.");
         return runtimeClient.request(operation, body == null ? "{}" : body);
+    }
+
+    @NonNull
+    private JSONObject runtimeRequest(@NonNull String operation, @Nullable String body, long timeoutMs) throws JSONException {
+        if (runtimeClient == null) return error(500, "runtime_client_unavailable", "TAI runtime service client is unavailable.");
+        return runtimeClient.request(operation, body == null ? "{}" : body, timeoutMs);
     }
 
     @NonNull
@@ -389,7 +398,7 @@ public final class TaiManager {
     public TaiRuntimeState getRuntimeState() {
         if (!shouldDelegateRuntime()) return localRuntime().getState();
         try {
-            JSONObject status = runtimeRequest(TaiRuntimeIpc.OP_RUNTIME_STATUS, "{}");
+            JSONObject status = runtimeRequest(TaiRuntimeIpc.OP_RUNTIME_STATUS, "{}", RUNTIME_STATUS_TIMEOUT_MS);
             JSONObject runtimeJson = status.optJSONObject("runtime");
             if (runtimeJson == null) runtimeJson = status.optJSONObject("state");
             return TaiRuntimeState.fromJson(runtimeJson);

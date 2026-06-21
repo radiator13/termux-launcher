@@ -932,7 +932,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         try {
             WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
             Rect frameRect = getSystemWallpaperFrameRect();
-            wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+            // suggestDesiredDimensions needs SET_WALLPAPER_HINTS; guard it on its own so a missing
+            // permission (or OEM restriction) can't skip the actual offset-centering below it.
+            try {
+                wallpaperManager.suggestDesiredDimensions(frameRect.width(), frameRect.height());
+            } catch (Exception ignored) {
+            }
             wallpaperManager.setWallpaperOffsetSteps(1f, 1f);
             wallpaperManager.setWallpaperOffsets(windowToken, 0.5f, 0.5f);
         } catch (Exception e) {
@@ -4295,7 +4300,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // steps below and headroom above. The default dock shifts its render curve so the current
         // Large size becomes the visual Default without changing the shared preference buckets.
         float heightFactor = isValarieDockStyle()
-            ? (0.99f + (normalizedScale * 0.59f))
+            ? (1.12f + (normalizedScale * 0.60f))
             : (1.00f + (defaultDockProgress * 0.52f));
         int appsBarHeightPx = appsRowEnabled
             ? Math.max(0, Math.round(getDockBaseToolbarHeightPx() * heightFactor) + Math.max(0, additionalAppsBarHeightPx))
@@ -4326,9 +4331,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float barHeightScale = mPreferences.getAppLauncherBarHeightScale();
         float normalized = resolveDockSizeProgress(barHeightScale);
         if (isValarieDockStyle()) {
-            // Capsule rides its own (larger) icon curve so its presets span a usable range: the old
-            // capsule "large" (~1.78) is now the "default", with real steps below and headroom above.
-            return 1.31f + (normalized * 0.71f);
+            // Capsule rides its own larger, wider icon curve. The default preset (~0.73 progress) now
+            // lands near the old capsule "largest" icon size, the top preset adds real headroom, and
+            // the smaller presets step down gently — so every capsule size is comfortably sized.
+            return 1.52f + (normalized * 0.76f);
         }
         // The default edge-to-edge dock has a page-indicator band directly below the icons and a
         // 1.08x press lift. Shift only this style so the current Large icon size becomes Default,

@@ -125,13 +125,24 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private final Runnable refreshRuntimeRunnable = new Runnable() {
         @Override
         public void run() {
-            Context context = getContext();
-            if (context != null) {
-                refreshTaiPage(context);
-                if (shouldContinueRefreshing(context)) {
-                    handler.postDelayed(this, 2000L);
-                }
-            }
+            final Runnable self = this;
+            final Context context = getContext();
+            if (context == null || runtimeActionExecutor.isShutdown())
+                return;
+            // The runtime status is a blocking IPC; fetch it off the main thread, then apply the UI
+            // update and decide whether to keep polling back on the main thread.
+            runtimeActionExecutor.execute(() -> {
+                final JSONObject status = fetchRuntimeStatusQuietly(context);
+                handler.post(() -> {
+                    if (!isAdded()) return;
+                    Context ctx = getContext();
+                    if (ctx == null) return;
+                    applyTaiPage(ctx, status);
+                    if (shouldContinueRefreshing(ctx, status)) {
+                        handler.postDelayed(self, 2000L);
+                    }
+                });
+            });
         }
     };
 
@@ -223,12 +234,39 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void refreshTaiPage(Context context) {
-        updateRuntimeStatus(context);
+        if (runtimeActionExecutor.isShutdown())
+            return;
+        // The runtime status is a blocking IPC (it can wait on the TAI runtime process). Fetch it on
+        // a background thread so the UI thread never stalls — that hang was ANR-ing the settings page.
+        runtimeActionExecutor.execute(() -> {
+            final JSONObject status = fetchRuntimeStatusQuietly(context);
+            handler.post(() -> {
+                if (!isAdded()) return;
+                Context ctx = getContext();
+                if (ctx == null) return;
+                applyTaiPage(ctx, status);
+            });
+        });
+    }
+
+    /** Apply a (possibly null) pre-fetched runtime status plus the non-blocking page bits, on the UI thread. */
+    private void applyTaiPage(Context context, @Nullable JSONObject runtimeStatus) {
+        updateRuntimeStatus(context, runtimeStatus);
         refreshOverrides();
         refreshEndpointPreferences(context);
         populateModelRows(context);
-        refreshDeviceEngineInfo(context);
+        refreshDeviceEngineInfo(context, runtimeStatus);
         refreshLanToggle(context);
+    }
+
+    /** Blocking runtime-status fetch; returns null instead of throwing/blocking the caller's UI. */
+    @Nullable
+    private JSONObject fetchRuntimeStatusQuietly(Context context) {
+        try {
+            return TaiManager.getInstance(context).runtimeStatus();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void configureRuntimeControls(Context context) {
@@ -565,14 +603,15 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         }
     }
 
-    private void refreshDeviceEngineInfo(Context context) {
+    private void refreshDeviceEngineInfo(Context context, @Nullable JSONObject runtimeStatus) {
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
         Preference info = findPreference("tai_device_engine_info");
         if (info == null) return;
         String backend = "none";
         String model = new TaiSettings(context).getDefaultAssistantModel();
         try {
-            JSONObject runtime = TaiManager.getInstance(context).runtimeStatus().getJSONObject("runtime");
+            if (runtimeStatus == null) throw new JSONException("runtime status unavailable");
+            JSONObject runtime = runtimeStatus.getJSONObject("runtime");
             backend = runtime.optString("backend", backend);
             model = runtime.optString("loadedModelId", model);
         } catch (JSONException ignored) {
@@ -717,12 +756,12 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         return baseSummary + " · " + backendLabel;
     }
 
-    private void updateRuntimeStatus(Context context) {
+    private void updateRuntimeStatus(Context context, @Nullable JSONObject runtimeStatus) {
         Preference status = findPreference("tai_runtime_status");
         TaiRuntimeActionsPreference actions = findPreference("tai_runtime_actions");
         if (status == null && actions == null) return;
         try {
-            JSONObject runtimeStatus = TaiManager.getInstance(context).runtimeStatus();
+            if (runtimeStatus == null) throw new JSONException("runtime status unavailable");
             JSONObject runtime = runtimeStatus.getJSONObject("runtime");
             boolean activeGeneration = runtime.optBoolean("activeGeneration", false);
             boolean loaded = runtime.optBoolean("loaded", false);
@@ -1417,18 +1456,33 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void showRuntimeLogs(Context context) {
-        try {
-            String status = TaiManager.getInstance(context).runtimeStatus().toString(2);
-            new MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.termux_ai_runtime_logs_title)
-                .setMessage(status)
-                .setPositiveButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
-                    copyToClipboard(context, status, R.string.termux_ai_runtime_logs_copied))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-        } catch (JSONException e) {
-            Toast.makeText(context, R.string.termux_ai_runtime_action_failed, Toast.LENGTH_LONG).show();
-        }
+        if (runtimeActionExecutor.isShutdown())
+            return;
+        // runtimeStatus() blocks on the runtime IPC — fetch off the main thread, show the dialog on it.
+        runtimeActionExecutor.execute(() -> {
+            String status;
+            try {
+                status = TaiManager.getInstance(context).runtimeStatus().toString(2);
+            } catch (Exception e) {
+                status = null;
+            }
+            final String body = status;
+            handler.post(() -> {
+                if (!isAdded() || getContext() == null) return;
+                Context ctx = getContext();
+                if (body == null) {
+                    Toast.makeText(ctx, R.string.termux_ai_runtime_action_failed, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                new MaterialAlertDialogBuilder(ctx)
+                    .setTitle(R.string.termux_ai_runtime_logs_title)
+                    .setMessage(body)
+                    .setPositiveButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
+                        copyToClipboard(ctx, body, R.string.termux_ai_runtime_logs_copied))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        });
     }
 
     private void startCatalogDownload(Context context, TaiModelCatalog.CatalogEntry entry) {
@@ -1727,10 +1781,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         return false;
     }
 
-    private boolean shouldContinueRefreshing(Context context) {
+    private boolean shouldContinueRefreshing(Context context, @Nullable JSONObject runtimeStatus) {
         if (hasActiveDownloads(context)) return true;
         try {
-            JSONObject runtime = TaiManager.getInstance(context).runtimeStatus().getJSONObject("runtime");
+            if (runtimeStatus == null) return false;
+            JSONObject runtime = runtimeStatus.getJSONObject("runtime");
             return runtime.optBoolean("activeGeneration", false)
                 || runtime.optBoolean("loaded", false)
                 || runtime.optLong("keepWarmRemainingMs", 0L) > 0L
