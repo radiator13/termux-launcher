@@ -5,7 +5,11 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -594,6 +598,7 @@ public final class ExtraKeysView extends GridLayout {
         if (extraKeysInfo == null)
             return;
         for (SpecialButtonState state : mSpecialButtons.values()) state.buttons = new ArrayList<>();
+        mGlowLevels.clear();
         removeAllViews();
         ExtraKeyButton[][] buttons = extraKeysInfo.getMatrix();
         setRowCount(buttons.length);
@@ -926,11 +931,14 @@ public final class ExtraKeysView extends GridLayout {
             ? KeyVisualState.STICKY_LOCKED
             : (state.isActive ? KeyVisualState.STICKY_ACTIVE : KeyVisualState.RESTING);
         applyButtonVisualState(button, visualState, state.isActive);
-        // A latched modifier keeps its glyphs glowing (persists across rebuilds). Inactive: leave the
-        // glow alone so a release-fade can play out; it is cleared explicitly when the key resets.
+        // A latched modifier keeps its glyphs glowing (persists across rebuilds). When it goes
+        // inactive, clear its glow so a consumed one-shot modifier doesn't leave a stale halo
+        // (a tap-to-toggle-off still plays its release fade via the following releaseKeyGlow call).
         if (state.isActive || state.isLocked) {
             // A latch is a sustained state — show it at the hold tier (wider, whiter halo).
             applyKeyGlow(button, 1f, glowRadiusDp(KEY_GLOW_RADIUS_HOLD_DP), KEY_GLOW_WHITE_MIX_HOLD);
+        } else if (mGlowLevels.containsKey(button)) {
+            applyKeyGlow(button, 0f);
         }
     }
 
@@ -1068,57 +1076,58 @@ public final class ExtraKeysView extends GridLayout {
         applyKeyGlow(button, level, glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP), KEY_GLOW_WHITE_MIX_TAP);
     }
 
-    /** Our own pressed/held key background, so we can tell it apart from the flat resting one. */
-    private static class GlowBloomDrawable extends GradientDrawable {}
+    // The glow is drawn by THIS view (see dispatchDraw) rather than as a MaterialButton background:
+    // MaterialButton manages its own background and silently overwrites/ignores a custom setBackground,
+    // which is why earlier bloom attempts never showed. Drawing on our own canvas always renders.
+    // Keyed per button so a latched modifier keeps its halo while another key is pressed.
+    private final Map<MaterialButton, Float> mGlowLevels = new HashMap<>();
+    private final Paint mGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     /**
-     * A soft, feathered radial bloom in the accent colour — brightest behind the glyph, fading to
-     * nothing well before the key edges. No border or hard fill (not a pill); it reads as a glow.
-     */
-    @NonNull
-    private GlowBloomDrawable buildGlowBloom(@NonNull MaterialButton button) {
-        GlowBloomDrawable bloom = new GlowBloomDrawable();
-        bloom.setShape(GradientDrawable.RECTANGLE);
-        bloom.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        bloom.setGradientCenter(0.5f, 0.5f);
-        // Fall back to a sane dp radius if the button isn't laid out yet (e.g. a latched modifier
-        // restyled during a reload) so the bloom is never zero-sized / invisible.
-        int span = Math.max(button.getWidth(), button.getHeight());
-        float radius = (span > 0 ? span * 0.72f : dpToPx(30f));
-        bloom.setGradientRadius(radius);
-        int accent = glowAccent();
-        int core = lerpColor(accent, Color.WHITE, 0.22f);
-        // Hot, present halo: a near-opaque whitened-accent core fading through the accent to nothing.
-        bloom.setColors(new int[]{withAlpha(core, 240), withAlpha(accent, 150), withAlpha(accent, 0)});
-        bloom.setDither(true);
-        return bloom;
-    }
-
-    /**
-     * Set a key's glow to {@code level} (0..1): a soft accent bloom behind the glyph (the part that
-     * actually reads over the wallpaper), plus a shift of the glyph itself toward the bright accent
-     * and a faint text-shadow halo. Resting glyphs are already white, so the bloom + colour shift are
-     * what make a pressed/held/locked key unmistakable.
+     * Set a key's glow to {@code level} (0..1): a luminous accent bloom drawn behind the glyph (see
+     * {@link #dispatchDraw}) plus a shift of the glyph itself toward the bright accent and a text
+     * shadow. Resting glyphs are already white, so the bloom + colour shift are what make a
+     * pressed/held/locked key unmistakable.
      */
     private void applyKeyGlow(@NonNull MaterialButton button, float level, float radiusDp, float whiteMix) {
-        if (level <= 0.01f) {
+        float l = clamp01(level);
+        if (l <= 0.01f) {
+            mGlowLevels.remove(button);
             button.setShadowLayer(0f, 0f, 0f, 0);
             button.setTextColor(mButtonTextColor);
-            button.setBackground(new ColorDrawable(mButtonBackgroundColor));
-            return;
+        } else {
+            mGlowLevels.put(button, l);
+            button.setShadowLayer(dpToPx(radiusDp), 0f, 0f,
+                withAlpha(keyGlowColor(whiteMix), Math.round(255 * l)));
+            int hot = lerpColor(glowAccent(), Color.WHITE, 0.30f);
+            button.setTextColor(lerpColor(mButtonTextColor, hot, l));
         }
-        float l = clamp01(level);
-        GlowBloomDrawable bloom = (button.getBackground() instanceof GlowBloomDrawable)
-            ? (GlowBloomDrawable) button.getBackground()
-            : buildGlowBloom(button);
-        if (button.getBackground() != bloom) {
-            button.setBackground(bloom);
+        invalidate(); // repaint the glow layer
+    }
+
+    @Override
+    protected void dispatchDraw(@NonNull Canvas canvas) {
+        // Draw each lit key's glow behind the keys so it haloes the glyph (children draw on top).
+        if (!mGlowLevels.isEmpty()) {
+            int accent = glowAccent();
+            int core = lerpColor(accent, Color.WHITE, 0.35f);
+            for (Map.Entry<MaterialButton, Float> entry : mGlowLevels.entrySet()) {
+                MaterialButton b = entry.getKey();
+                float l = clamp01(entry.getValue());
+                if (b.getParent() != this || b.getWidth() <= 0 || l <= 0.01f) continue;
+                float cx = b.getLeft() + b.getWidth() * 0.5f;
+                float cy = b.getTop() + b.getHeight() * 0.5f;
+                float radius = Math.max(b.getWidth(), b.getHeight()) * 0.85f;
+                if (radius <= 0f) continue;
+                RadialGradient shader = new RadialGradient(cx, cy, radius,
+                    new int[]{withAlpha(core, Math.round(235 * l)), withAlpha(accent, Math.round(150 * l)), withAlpha(accent, 0)},
+                    new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+                mGlowPaint.setShader(shader);
+                canvas.drawCircle(cx, cy, radius, mGlowPaint);
+            }
+            mGlowPaint.setShader(null);
         }
-        bloom.setAlpha(Math.round(255 * l));
-        button.setShadowLayer(dpToPx(radiusDp), 0f, 0f,
-            withAlpha(keyGlowColor(whiteMix), Math.round(255 * l)));
-        int hot = lerpColor(glowAccent(), Color.WHITE, 0.30f);
-        button.setTextColor(lerpColor(mButtonTextColor, hot, l));
+        super.dispatchDraw(canvas);
     }
 
     /** Glow the pressed key's glyphs up (a tap reads as a single tight pulse once it releases). */
