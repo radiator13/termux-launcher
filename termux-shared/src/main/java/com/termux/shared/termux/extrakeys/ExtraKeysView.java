@@ -311,8 +311,8 @@ public final class ExtraKeysView extends GridLayout {
     // Two glow tiers so a quick tap and a sustained press-and-hold read differently: a tap pulses a
     // tighter halo, a hold escalates to a wider, whiter, breathing halo. KEY_GLOW_RADIUS_DP is kept
     // as the tap tier alias for existing callers.
-    private static final float KEY_GLOW_RADIUS_TAP_DP = 9f;
-    private static final float KEY_GLOW_RADIUS_HOLD_DP = 15f;
+    private static final float KEY_GLOW_RADIUS_TAP_DP = 11f;
+    private static final float KEY_GLOW_RADIUS_HOLD_DP = 17f;
     private static final float KEY_GLOW_RADIUS_DP = KEY_GLOW_RADIUS_TAP_DP;
     private static final float KEY_GLOW_WHITE_MIX_TAP = 0.22f;
     private static final float KEY_GLOW_WHITE_MIX_HOLD = 0.45f;
@@ -1003,12 +1003,12 @@ public final class ExtraKeysView extends GridLayout {
         switch (state) {
             // The glyph pops UP on press/hold (lifting toward the glow) rather than receding.
             case REPEAT_HELD:
-                target = 1.10f;
+                target = 1.16f;
                 duration = 120L;
                 overshoot = true;
                 break;
             case PRESSED:
-                target = 1.06f;
+                target = 1.12f;
                 duration = 90L;
                 overshoot = true;
                 break;
@@ -1040,9 +1040,18 @@ public final class ExtraKeysView extends GridLayout {
         return keyGlowColor(0.15f);
     }
 
+    /**
+     * The accent a lit key glows with: the dock accent if the host set one, else the active-text
+     * accent. (Not the active *background*, which is a muted grey and reads as nothing over the
+     * wallpaper.)
+     */
+    private int glowAccent() {
+        return mKeyPressFeedbackColor != 0 ? mKeyPressFeedbackColor : mButtonActiveTextColor;
+    }
+
     /** Glow colour mixed {@code whiteMix} toward white — a hotter, whiter halo reads as "held". */
     private int keyGlowColor(float whiteMix) {
-        return lerpColor(feedbackTint(), Color.WHITE, whiteMix);
+        return lerpColor(glowAccent(), Color.WHITE, whiteMix);
     }
 
     /**
@@ -1059,14 +1068,23 @@ public final class ExtraKeysView extends GridLayout {
         applyKeyGlow(button, level, glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP), KEY_GLOW_WHITE_MIX_TAP);
     }
 
-    /** Set a key's glyph glow to {@code level} (0..1) via a coloured text shadow of {@code radiusDp}. */
+    /**
+     * Set a key's glyph glow to {@code level} (0..1): a coloured text shadow of {@code radiusDp} AND
+     * a shift of the glyph itself from its resting colour toward the bright accent. Resting glyphs
+     * are already white, so the colour shift (white → accent) is what actually makes a pressed/held
+     * key read as distinct; the halo alone is too faint over the wallpaper.
+     */
     private void applyKeyGlow(@NonNull MaterialButton button, float level, float radiusDp, float whiteMix) {
         if (level <= 0.01f) {
             button.setShadowLayer(0f, 0f, 0f, 0);
+            button.setTextColor(mButtonTextColor);
             return;
         }
+        float l = clamp01(level);
         button.setShadowLayer(dpToPx(radiusDp), 0f, 0f,
-            withAlpha(keyGlowColor(whiteMix), Math.round(255 * clamp01(level))));
+            withAlpha(keyGlowColor(whiteMix), Math.round(255 * l)));
+        int hot = lerpColor(glowAccent(), Color.WHITE, 0.30f);
+        button.setTextColor(lerpColor(mButtonTextColor, hot, l));
     }
 
     /** Glow the pressed key's glyphs up (a tap reads as a single tight pulse once it releases). */
@@ -1208,7 +1226,8 @@ public final class ExtraKeysView extends GridLayout {
         mBubbleTravelDistPx = mTravelKeyH + dpToPx(16f);
         mTravelSourceText = button.getText();
         mTravelSecondaryText = popup.getDisplay();
-        mTravelShowingSecondary = false;
+        // The popup always previews the SECONDARY (revealed) key — that's what the swipe selects.
+        mTravelShowingSecondary = true;
 
         // A soft dark backing keeps the floating glyph legible over the row/wallpaper; no bright
         // border — the glyph itself glows (matching the on-key glow language).
@@ -1227,7 +1246,7 @@ public final class ExtraKeysView extends GridLayout {
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, button.getTextSize() * 1.45f);
         tv.setTypeface(button.getTypeface());
         tv.setTextColor(activeTextColor());
-        tv.setText(mTravelSourceText);
+        tv.setText(mTravelSecondaryText);
         tv.setBackground(bg);
 
         mTravelBubble = tv;
@@ -1273,15 +1292,14 @@ public final class ExtraKeysView extends GridLayout {
             mTravelPopup.update(mTravelKeyScreenX, y, mBubbleW, mBubbleH);
         } catch (Exception ignored) {
         }
-        // Swap the glyph at the midpoint: source glyph low (a release taps the primary), secondary
-        // glyph high (a release commits it) — and the secondary glows to read as the active choice.
-        boolean secondary = frac >= 0.5f;
-        if (secondary != mTravelShowingSecondary) {
-            mTravelShowingSecondary = secondary;
-            mTravelBubble.setText(secondary ? mTravelSecondaryText : mTravelSourceText);
+        // Always preview the SECONDARY glyph, glowing — the bubble shows the key the swipe selects,
+        // never the source glyph (regardless of how far up/down the finger has travelled).
+        if (!mTravelShowingSecondary) {
+            mTravelShowingSecondary = true;
+            mTravelBubble.setText(mTravelSecondaryText);
         }
-        mTravelBubble.setShadowLayer(secondary ? dpToPx(KEY_GLOW_RADIUS_HOLD_DP) : 0f, 0f, 0f,
-            secondary ? withAlpha(keyGlowColor(KEY_GLOW_WHITE_MIX_HOLD), 255) : 0);
+        mTravelBubble.setShadowLayer(dpToPx(KEY_GLOW_RADIUS_HOLD_DP), 0f, 0f,
+            withAlpha(keyGlowColor(KEY_GLOW_WHITE_MIX_HOLD), 255));
         mTravelBubble.invalidate();
     }
 
