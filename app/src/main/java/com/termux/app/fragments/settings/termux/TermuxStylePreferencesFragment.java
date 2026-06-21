@@ -248,6 +248,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "app_launcher_unify_icons":
+                mPreferences.setAppLauncherUnifyIconsEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "app_launcher_apps_row_enabled":
                 mPreferences.setAppLauncherAppsRowEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -290,6 +294,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isTerminalDynamicColorsEnabled();
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
+            case "app_launcher_unify_icons":
+                return mPreferences.isAppLauncherUnifyIconsEnabled();
             case "app_launcher_apps_row_enabled":
                 return mPreferences.isAppLauncherAppsRowEnabled();
             case "app_launcher_display_app_names":

@@ -19,14 +19,18 @@ import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ShortcutInfo;
 import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
+import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -138,6 +142,7 @@ public final class SuggestionBarView extends GridLayout {
     private int maxButtonCount = 7;
     private float textSize = 12f;
     private boolean bandW = false;
+    private boolean unifyIcons = true;
     private int searchTolerance = 70;
     private float iconScale = 1.0f;
     private int appBarOpacity = 80;
@@ -356,11 +361,19 @@ public final class SuggestionBarView extends GridLayout {
         }
         if (swipePageDragging && Math.abs(swipeVisualOffsetX) > 0.5f) {
             int currentAlpha = clamp(Math.round(255f * (1f - (0.10f * swipeDragProgress))), 0, 255);
+            // Horizontal-only clip: contain the page-swap to this row's own width so the capsule
+            // dock's inset interior is respected (incoming/outgoing pages don't slide over the
+            // rounded border). Y stays generous so vertical badge / A-Z label overflow still draws
+            // (clipChildren is intentionally false). On the edge-to-edge default dock the row spans
+            // the screen, so this clip is a no-op.
+            int clipSave = canvas.save();
+            canvas.clipRect(0f, (float) -getHeight(), (float) getWidth(), (float) (getHeight() * 2));
             canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), currentAlpha);
             canvas.translate(swipeVisualOffsetX, 0f);
             super.dispatchDraw(canvas);
             canvas.restore();
             drawSwipePreviewPage(canvas);
+            canvas.restoreToCount(clipSave);
             return;
         }
         super.dispatchDraw(canvas);
@@ -387,6 +400,12 @@ public final class SuggestionBarView extends GridLayout {
     public void setBandW(boolean bandW) {
         if (this.bandW == bandW) return;
         this.bandW = bandW;
+        lastSurfaceRenderSignature = 0;
+    }
+
+    public void setUnifyIcons(boolean unifyIcons) {
+        if (this.unifyIcons == unifyIcons) return;
+        this.unifyIcons = unifyIcons;
         lastSurfaceRenderSignature = 0;
     }
 
@@ -1622,6 +1641,7 @@ public final class SuggestionBarView extends GridLayout {
         signature = (31 * signature) + (azPreview ? 1 : 0);
         signature = (31 * signature) + (pinnedSurface ? 1 : 0);
         signature = (31 * signature) + (bandW ? 1 : 0);
+        signature = (31 * signature) + (unifyIcons ? 1 : 0);
         signature = (31 * signature) + Math.max(1, buttonCount);
         signature = (31 * signature) + pinnedPageIndex;
         signature = (31 * signature) + activeAzPageIndex;
@@ -1751,6 +1771,54 @@ public final class SuggestionBarView extends GridLayout {
         }
     }
 
+    /**
+     * Light-touch harmonization so default (non-icon-pack) icons read as a cohesive set on the glass
+     * dock WITHOUT reshaping them: each icon keeps its native silhouette but gets a consistent
+     * footprint/scale, a slight saturation nudge toward the dock's vibrancy, and a soft drop shadow
+     * (derived from the icon's own alpha) that lifts it off the glass. Returns {@code src} unchanged
+     * when the feature is off. The B&W color filter, if enabled, still stacks on top of the result.
+     */
+    private Drawable normalizeIcon(@Nullable Drawable src, int sizePx) {
+        if (!unifyIcons || src == null || sizePx <= 0) {
+            return src;
+        }
+        Bitmap out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+
+        // Consistent footprint: ~80% of the cell, centered and nudged up a hair to leave shadow room.
+        float inset = sizePx * 0.10f;
+        int left = Math.round(inset);
+        int top = Math.round(inset - sizePx * 0.015f);
+        int right = Math.round(sizePx - inset);
+        int bottom = Math.round(sizePx - inset - sizePx * 0.015f);
+        Rect iconRect = new Rect(left, top, Math.max(left + 1, right), Math.max(top + 1, bottom));
+
+        // Render the source at the footprint size so we can derive a silhouette shadow that follows
+        // its native shape (adaptive icons draw their own masked bg+fg here, so shape is preserved).
+        Bitmap iconBmp = Bitmap.createBitmap(iconRect.width(), iconRect.height(), Bitmap.Config.ARGB_8888);
+        Canvas iconCanvas = new Canvas(iconBmp);
+        src.setBounds(0, 0, iconBmp.getWidth(), iconBmp.getHeight());
+        src.draw(iconCanvas);
+
+        // Soft drop shadow from the icon's own alpha → lifts it off the glass.
+        Bitmap alpha = iconBmp.extractAlpha();
+        Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shadowPaint.setColor(0x66000000);
+        shadowPaint.setMaskFilter(new BlurMaskFilter(Math.max(1f, sizePx * 0.06f), BlurMaskFilter.Blur.NORMAL));
+        canvas.drawBitmap(alpha, iconRect.left, iconRect.top + (sizePx * 0.03f), shadowPaint);
+        alpha.recycle();
+
+        // Saturation nudge toward the glass vibrancy (match, not grey), then draw the icon.
+        Paint iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        ColorMatrix saturate = new ColorMatrix();
+        saturate.setSaturation(0.92f);
+        iconPaint.setColorFilter(new ColorMatrixColorFilter(saturate));
+        canvas.drawBitmap(iconBmp, null, iconRect, iconPaint);
+        iconBmp.recycle();
+
+        return new BitmapDrawable(getResources(), out);
+    }
+
     private View createEntryButton(@NonNull LauncherAppEntry entry) {
         NotificationBadgeFrame shell = new NotificationBadgeFrame(getContext());
         shell.setBadgePackages(Collections.singleton(entry.appRef.packageName));
@@ -1759,9 +1827,10 @@ public final class SuggestionBarView extends GridLayout {
         shell.setClipToPadding(false);
 
         ImageButton imageButton = new ImageButton(getContext());
-        Drawable icon = entry.icon != null ? entry.icon : getContext().getPackageManager().getDefaultActivityIcon();
-        imageButton.setImageDrawable(icon);
         int size = iconSizePx();
+        Drawable icon = entry.icon != null ? entry.icon : getContext().getPackageManager().getDefaultActivityIcon();
+        icon = normalizeIcon(icon, size);
+        imageButton.setImageDrawable(icon);
         imageButton.setScaleType(ImageButton.ScaleType.CENTER_INSIDE);
         imageButton.setAdjustViewBounds(true);
         imageButton.setPadding(0, 0, 0, 0);
@@ -6010,6 +6079,7 @@ public final class SuggestionBarView extends GridLayout {
     private View createPopupEntryButton(@NonNull LauncherAppEntry entry, int sizePx, @NonNull PinnedFolderItem sourceFolder) {
         ImageButton button = new ImageButton(getContext());
         Drawable icon = entry.icon != null ? entry.icon : getContext().getPackageManager().getDefaultActivityIcon();
+        icon = normalizeIcon(icon, sizePx);
         button.setImageDrawable(icon);
         button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         button.setAdjustViewBounds(true);

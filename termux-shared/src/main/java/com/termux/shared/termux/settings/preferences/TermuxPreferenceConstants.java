@@ -196,6 +196,15 @@ public final class TermuxPreferenceConstants {
 
         public static final boolean DEFAULT_APP_LAUNCHER_BW_ICONS = false;
 
+
+        /**
+         * Defines the key for harmonizing app icons with the dock (consistent footprint, soft
+         * shadow, slight saturation match) without requiring a custom icon pack.
+         */
+        public static final String KEY_APP_LAUNCHER_UNIFY_ICONS = "app_launcher_unify_icons";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_UNIFY_ICONS = true;
+
         /**
          * Defines the selected launcher icon-pack package.
          */

@@ -3191,6 +3191,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setTextSize(10f);
         mSuggestionBarView.setSearchTolerance(mPreferences.getAppLauncherSearchTolerance());
         mSuggestionBarView.setBandW(mPreferences.isAppLauncherBwIconsEnabled());
+        mSuggestionBarView.setUnifyIcons(mPreferences.isAppLauncherUnifyIconsEnabled());
         mSuggestionBarView.setIconScale(resolveDerivedDockIconScale());
         mSuggestionBarView.setDockRowHeightHintPx(resolveDockAppsBarHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx));
         mSuggestionBarView.setAppBarOpacity(mPreferences.getAppBarOpacity());
@@ -3236,6 +3237,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherIconPackPackage());
         signature = (31 * signature) + stringSignature(mPreferences.getAppLauncherPinnedIconPackPackage());
         signature = (31 * signature) + (mPreferences.isAppLauncherBwIconsEnabled() ? 1 : 0);
+        signature = (31 * signature) + (mPreferences.isAppLauncherUnifyIconsEnabled() ? 1 : 0);
         return signature;
     }
 

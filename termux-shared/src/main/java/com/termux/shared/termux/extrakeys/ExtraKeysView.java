@@ -35,8 +35,10 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewPropertyAnimator;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.GridLayout;
@@ -306,7 +308,14 @@ public final class ExtraKeysView extends GridLayout {
      * ALT active or locked) keeps it lit while latched (driven by the sticky visual state).
      * {@link #mKeyGlowButton} is the key currently glowing from a press gesture.
      */
-    private static final float KEY_GLOW_RADIUS_DP = 7f;
+    // Two glow tiers so a quick tap and a sustained press-and-hold read differently: a tap pulses a
+    // tighter halo, a hold escalates to a wider, whiter, breathing halo. KEY_GLOW_RADIUS_DP is kept
+    // as the tap tier alias for existing callers.
+    private static final float KEY_GLOW_RADIUS_TAP_DP = 9f;
+    private static final float KEY_GLOW_RADIUS_HOLD_DP = 15f;
+    private static final float KEY_GLOW_RADIUS_DP = KEY_GLOW_RADIUS_TAP_DP;
+    private static final float KEY_GLOW_WHITE_MIX_TAP = 0.22f;
+    private static final float KEY_GLOW_WHITE_MIX_HOLD = 0.45f;
     @Nullable private Animator mKeyGlowAnimator;
     @Nullable private MaterialButton mKeyGlowButton;
     /** Swipe-up popup travel is active (finger is dragging the popup toward the secondary slot). */
@@ -328,6 +337,8 @@ public final class ExtraKeysView extends GridLayout {
     @Nullable private TextView mTravelBubble;
     @Nullable private GradientDrawable mTravelBubbleBg;
     private int mTravelKeyScreenX, mTravelKeyScreenY, mTravelKeyW, mTravelKeyH;
+    /** Bubble (popup) dimensions — larger than the key so the secondary glyph reads prominently. */
+    private int mBubbleW, mBubbleH;
     @Nullable private CharSequence mTravelSourceText, mTravelSecondaryText;
     private boolean mTravelShowingSecondary;
 
@@ -635,11 +646,15 @@ public final class ExtraKeysView extends GridLayout {
                     getResources().getDisplayMetrics().density * 8f
                 );
                 final float[] popupSwipeDownRawY = new float[1];
+                final float[] popupSwipeDownRawX = new float[1];
                 button.setOnTouchListener((view, event) -> {
                     switch(event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
                             popupSwipeDownRawY[0] = event.getRawY();
-                            requestParentDisallowIntercept(view, true);
+                            popupSwipeDownRawX[0] = event.getRawX();
+                            // Do NOT claim the gesture from the parent ViewPager here: a horizontal
+                            // drag must still page over to the text-input field. We only disallow
+                            // interception once a deliberate VERTICAL swipe-up (the popup) is detected.
                             // Instant press feedback: the key's glyphs glow up.
                             glowKeyPress(button);
                             animateKeyCapDip(button, KeyVisualState.PRESSED);
@@ -652,12 +667,22 @@ public final class ExtraKeysView extends GridLayout {
                             }
                             return true;
                         case MotionEvent.ACTION_MOVE:
-                            requestParentDisallowIntercept(view, true);
+                            float upwardTravelPx = popupSwipeDownRawY[0] - event.getRawY();
+                            float horizontalTravelPx = Math.abs(event.getRawX() - popupSwipeDownRawX[0]);
+                            // A vertical-dominant swipe past the threshold is the popup gesture; only
+                            // then do we claim the touch from the ViewPager. A horizontal-dominant drag
+                            // is left for the pager to intercept (→ swipe to the text-input page), and
+                            // the button receives ACTION_CANCEL.
+                            boolean verticalPopupGesture = buttonInfo.getPopup() != null
+                                && upwardTravelPx >= popupSwipeThresholdPx
+                                && upwardTravelPx > horizontalTravelPx;
+                            if (mBubbleArmed || verticalPopupGesture) {
+                                requestParentDisallowIntercept(view, true);
+                            }
                             if (buttonInfo.getPopup() != null) {
-                                float upwardTravelPx = popupSwipeDownRawY[0] - event.getRawY();
                                 // Arm the swipe-up travel only on a DELIBERATE upward swipe past the
                                 // threshold; below that a plain press-and-hold stays a hold.
-                                if (!mBubbleArmed && upwardTravelPx >= popupSwipeThresholdPx) {
+                                if (!mBubbleArmed && verticalPopupGesture) {
                                     stopScheduledExecutors();
                                     armBubbleTravel(button, buttonInfo.getPopup());
                                     animateKeyCapDip(button, KeyVisualState.POPUP_ARMED);
@@ -904,7 +929,8 @@ public final class ExtraKeysView extends GridLayout {
         // A latched modifier keeps its glyphs glowing (persists across rebuilds). Inactive: leave the
         // glow alone so a release-fade can play out; it is cleared explicitly when the key resets.
         if (state.isActive || state.isLocked) {
-            applyKeyGlow(button, 1f);
+            // A latch is a sustained state — show it at the hold tier (wider, whiter halo).
+            applyKeyGlow(button, 1f, glowRadiusDp(KEY_GLOW_RADIUS_HOLD_DP), KEY_GLOW_WHITE_MIX_HOLD);
         }
     }
 
@@ -973,18 +999,21 @@ public final class ExtraKeysView extends GridLayout {
         button.animate().cancel();
         float target;
         long duration;
+        boolean overshoot = false;
         switch (state) {
-            // Gentle — the glass bubble is the primary feedback now; the glyph only nudges so it
-            // stays legible under the bubble rather than visibly receding.
+            // The glyph pops UP on press/hold (lifting toward the glow) rather than receding.
             case REPEAT_HELD:
-                target = 0.94f;
-                duration = 70L;
+                target = 1.10f;
+                duration = 120L;
+                overshoot = true;
                 break;
             case PRESSED:
-                target = 0.96f;
-                duration = 55L;
+                target = 1.06f;
+                duration = 90L;
+                overshoot = true;
                 break;
             case POPUP_ARMED:
+                // Source key still recedes while the floating bubble carries the gesture above it.
                 target = 0.97f;
                 duration = 70L;
                 break;
@@ -1002,25 +1031,45 @@ public final class ExtraKeysView extends GridLayout {
             .scaleX(target)
             .scaleY(target)
             .setDuration(duration)
+            .setInterpolator(overshoot ? new OvershootInterpolator(2.0f) : new DecelerateInterpolator())
             .start();
     }
 
     /** The glyph-glow colour: a luminous, slightly whitened accent halo around the key's characters. */
     private int keyGlowColor() {
-        return lerpColor(feedbackTint(), Color.WHITE, 0.15f);
+        return keyGlowColor(0.15f);
     }
 
-    /** Set a key's glyph glow to {@code level} (0..1) via a coloured text shadow. */
+    /** Glow colour mixed {@code whiteMix} toward white — a hotter, whiter halo reads as "held". */
+    private int keyGlowColor(float whiteMix) {
+        return lerpColor(feedbackTint(), Color.WHITE, whiteMix);
+    }
+
+    /**
+     * Without the backdrop refraction lens (pre-API33 / live wallpaper / blur off) the glow is the
+     * only feedback, so widen it a touch to keep it legible.
+     */
+    private float glowRadiusDp(float baseDp) {
+        if (mKeyPressFeedbackBlurAvailable) return baseDp;
+        return baseDp + (baseDp >= KEY_GLOW_RADIUS_HOLD_DP ? 3f : 2f);
+    }
+
+    /** Tap-tier glow (default for existing callers). */
     private void applyKeyGlow(@NonNull MaterialButton button, float level) {
+        applyKeyGlow(button, level, glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP), KEY_GLOW_WHITE_MIX_TAP);
+    }
+
+    /** Set a key's glyph glow to {@code level} (0..1) via a coloured text shadow of {@code radiusDp}. */
+    private void applyKeyGlow(@NonNull MaterialButton button, float level, float radiusDp, float whiteMix) {
         if (level <= 0.01f) {
             button.setShadowLayer(0f, 0f, 0f, 0);
             return;
         }
-        button.setShadowLayer(dpToPx(KEY_GLOW_RADIUS_DP), 0f, 0f,
-            withAlpha(keyGlowColor(), Math.round(255 * clamp01(level))));
+        button.setShadowLayer(dpToPx(radiusDp), 0f, 0f,
+            withAlpha(keyGlowColor(whiteMix), Math.round(255 * clamp01(level))));
     }
 
-    /** Glow the pressed key's glyphs up (a tap reads as a single pulse once it releases). */
+    /** Glow the pressed key's glyphs up (a tap reads as a single tight pulse once it releases). */
     private void glowKeyPress(@NonNull MaterialButton button) {
         if (mKeyGlowAnimator != null) {
             mKeyGlowAnimator.cancel();
@@ -1030,33 +1079,75 @@ public final class ExtraKeysView extends GridLayout {
         mBubbleArmed = false;
         mBubbleHeld = false;
         mBubbleFrac = 0f;
+        final float r = glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP);
         if (shouldSnapKeyMotion()) {
-            applyKeyGlow(button, 1f);
+            applyKeyGlow(button, 1f, r, KEY_GLOW_WHITE_MIX_TAP);
             return;
         }
         ValueAnimator in = ValueAnimator.ofFloat(0f, 1f);
-        in.setDuration(120L);
+        in.setDuration(140L);
         in.setInterpolator(new DecelerateInterpolator());
-        in.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue()));
+        in.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue(), r, KEY_GLOW_WHITE_MIX_TAP));
         mKeyGlowAnimator = in;
         in.start();
     }
 
-    /** Keep the glow steady at full for a press-and-hold / auto-repeat. */
+    /**
+     * Press-and-hold / auto-repeat: escalate the halo to the wider, whiter hold tier and then breathe
+     * it, so a sustained hold is unmistakably different from a quick tap.
+     */
     private void glowKeyHold() {
-        if (mKeyGlowButton == null)
+        final MaterialButton button = mKeyGlowButton;
+        if (button == null)
             return;
         mBubbleHeld = true;
         if (mKeyGlowAnimator != null) {
             mKeyGlowAnimator.cancel();
             mKeyGlowAnimator = null;
         }
-        applyKeyGlow(mKeyGlowButton, 1f);
+        final float tapR = glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP);
+        final float holdR = glowRadiusDp(KEY_GLOW_RADIUS_HOLD_DP);
+        if (shouldSnapKeyMotion()) {
+            applyKeyGlow(button, 1f, holdR, KEY_GLOW_WHITE_MIX_HOLD);
+            return;
+        }
+        final ValueAnimator ramp = ValueAnimator.ofFloat(0f, 1f);
+        ramp.setDuration(180L);
+        ramp.setInterpolator(new DecelerateInterpolator());
+        // cancel() dispatches onAnimationEnd synchronously, so a release mid-escalation would
+        // otherwise start (and orphan) the infinite pulse. Track cancellation to suppress that.
+        final boolean[] rampCancelled = { false };
+        ramp.addUpdateListener(a -> {
+            float t = (float) a.getAnimatedValue();
+            applyKeyGlow(button, 1f, tapR + (holdR - tapR) * t,
+                KEY_GLOW_WHITE_MIX_TAP + (KEY_GLOW_WHITE_MIX_HOLD - KEY_GLOW_WHITE_MIX_TAP) * t);
+        });
+        ramp.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationCancel(Animator a) {
+                rampCancelled[0] = true;
+            }
+            @Override
+            public void onAnimationEnd(Animator a) {
+                if (rampCancelled[0] || mKeyGlowButton != button) return;
+                ValueAnimator pulse = ValueAnimator.ofFloat(1f, 0.72f);
+                pulse.setDuration(520L);
+                pulse.setRepeatMode(ValueAnimator.REVERSE);
+                pulse.setRepeatCount(ValueAnimator.INFINITE);
+                pulse.setInterpolator(new AccelerateDecelerateInterpolator());
+                pulse.addUpdateListener(an ->
+                    applyKeyGlow(button, (float) an.getAnimatedValue(), holdR, KEY_GLOW_WHITE_MIX_HOLD));
+                mKeyGlowAnimator = pulse;
+                pulse.start();
+            }
+        });
+        mKeyGlowAnimator = ramp;
+        ramp.start();
     }
 
     /**
-     * Release the press glow. {@code keepLit} true (a now-latched modifier) leaves the glow on;
-     * otherwise it fades out — a quick tap therefore reads as a single glow pulse.
+     * Release the press glow. {@code keepLit} true (a now-latched modifier) leaves the glow on at the
+     * hold tier; otherwise it fades out — a quick tap therefore reads as a single glow pulse.
      */
     private void releaseKeyGlow(@NonNull MaterialButton button, boolean keepLit) {
         if (mKeyGlowAnimator != null) {
@@ -1065,17 +1156,18 @@ public final class ExtraKeysView extends GridLayout {
         }
         mKeyGlowButton = null;
         if (keepLit) {
-            applyKeyGlow(button, 1f);
+            applyKeyGlow(button, 1f, glowRadiusDp(KEY_GLOW_RADIUS_HOLD_DP), KEY_GLOW_WHITE_MIX_HOLD);
             return;
         }
         if (shouldSnapKeyMotion()) {
             applyKeyGlow(button, 0f);
             return;
         }
+        final float r = glowRadiusDp(KEY_GLOW_RADIUS_TAP_DP);
         ValueAnimator out = ValueAnimator.ofFloat(1f, 0f);
         out.setDuration(240L);
         out.setInterpolator(new AccelerateInterpolator());
-        out.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue()));
+        out.addUpdateListener(a -> applyKeyGlow(button, (float) a.getAnimatedValue(), r, KEY_GLOW_WHITE_MIX_TAP));
         out.start();
     }
 
@@ -1101,11 +1193,19 @@ public final class ExtraKeysView extends GridLayout {
 
         int[] loc = new int[2];
         button.getLocationOnScreen(loc);
-        mTravelKeyScreenX = loc[0];
-        mTravelKeyScreenY = loc[1];
         mTravelKeyW = Math.max(1, button.getWidth());
         mTravelKeyH = Math.max(1, button.getHeight());
-        mBubbleTravelDistPx = mTravelKeyH + dpToPx(10f);
+        // The bubble is larger than the key so the secondary glyph reads prominently. Recenter the
+        // popup origin (its top-left) so the enlarged bubble stays centred over the key, and clamp
+        // X so it never runs off-screen.
+        mBubbleW = Math.round(mTravelKeyW * 1.4f);
+        mBubbleH = Math.round(mTravelKeyH * 1.4f);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int centeredX = loc[0] - (mBubbleW - mTravelKeyW) / 2;
+        mTravelKeyScreenX = Math.max(0, Math.min(centeredX, Math.max(0, screenW - mBubbleW)));
+        mTravelKeyScreenY = loc[1] - (mBubbleH - mTravelKeyH) / 2;
+        // Clear the row: the enlarged bubble rises a full key-height plus a little more.
+        mBubbleTravelDistPx = mTravelKeyH + dpToPx(16f);
         mTravelSourceText = button.getText();
         mTravelSecondaryText = popup.getDisplay();
         mTravelShowingSecondary = false;
@@ -1115,8 +1215,8 @@ public final class ExtraKeysView extends GridLayout {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
         bg.setDither(true);
-        bg.setCornerRadius(Math.min(mTravelKeyW, mTravelKeyH) * 0.5f);
-        bg.setColor(withAlpha(Color.rgb(14, 17, 23), mKeyPressFeedbackBlurAvailable ? 190 : 224));
+        bg.setCornerRadius(Math.min(mBubbleW, mBubbleH) * 0.5f);
+        bg.setColor(withAlpha(Color.rgb(14, 17, 23), mKeyPressFeedbackBlurAvailable ? 200 : 230));
 
         TextView tv = new TextView(getContext());
         tv.setGravity(Gravity.CENTER);
@@ -1124,7 +1224,7 @@ public final class ExtraKeysView extends GridLayout {
         tv.setSingleLine(true);
         tv.setMaxLines(1);
         tv.setAllCaps(mButtonTextAllCaps);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, button.getTextSize());
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, button.getTextSize() * 1.45f);
         tv.setTypeface(button.getTypeface());
         tv.setTextColor(activeTextColor());
         tv.setText(mTravelSourceText);
@@ -1132,7 +1232,7 @@ public final class ExtraKeysView extends GridLayout {
 
         mTravelBubble = tv;
         mTravelBubbleBg = bg;
-        mTravelPopup = new PopupWindow(tv, mTravelKeyW, mTravelKeyH, false);
+        mTravelPopup = new PopupWindow(tv, mBubbleW, mBubbleH, false);
         mTravelPopup.setClippingEnabled(false);
         mTravelPopup.setFocusable(false);
         mTravelPopup.setOutsideTouchable(false);
@@ -1151,8 +1251,8 @@ public final class ExtraKeysView extends GridLayout {
             return;
         }
         if (!shouldSnapKeyMotion()) {
-            tv.setPivotX(mTravelKeyW / 2f);
-            tv.setPivotY(mTravelKeyH / 2f);
+            tv.setPivotX(mBubbleW / 2f);
+            tv.setPivotY(mBubbleH / 2f);
             tv.setAlpha(0f);
             tv.setScaleX(0.85f);
             tv.setScaleY(0.85f);
@@ -1168,9 +1268,9 @@ public final class ExtraKeysView extends GridLayout {
         mBubbleFrac = frac;
         if (mTravelPopup == null || mTravelBubble == null)
             return;
-        int y = Math.round(mTravelKeyScreenY - mBubbleTravelDistPx * frac);
+        int y = Math.max(0, Math.round(mTravelKeyScreenY - mBubbleTravelDistPx * frac));
         try {
-            mTravelPopup.update(mTravelKeyScreenX, y, mTravelKeyW, mTravelKeyH);
+            mTravelPopup.update(mTravelKeyScreenX, y, mBubbleW, mBubbleH);
         } catch (Exception ignored) {
         }
         // Swap the glyph at the midpoint: source glyph low (a release taps the primary), secondary
@@ -1180,8 +1280,8 @@ public final class ExtraKeysView extends GridLayout {
             mTravelShowingSecondary = secondary;
             mTravelBubble.setText(secondary ? mTravelSecondaryText : mTravelSourceText);
         }
-        mTravelBubble.setShadowLayer(secondary ? dpToPx(KEY_GLOW_RADIUS_DP) : 0f, 0f, 0f,
-            secondary ? withAlpha(keyGlowColor(), 255) : 0);
+        mTravelBubble.setShadowLayer(secondary ? dpToPx(KEY_GLOW_RADIUS_HOLD_DP) : 0f, 0f, 0f,
+            secondary ? withAlpha(keyGlowColor(KEY_GLOW_WHITE_MIX_HOLD), 255) : 0);
         mTravelBubble.invalidate();
     }
 
