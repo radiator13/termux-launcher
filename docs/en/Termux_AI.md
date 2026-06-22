@@ -38,6 +38,8 @@ TAI keeps one default model assignment for requests that omit `model`:
 
 Open Settings -> TAI / Termux AI to change the default model and runtime overrides.
 
+Multimodal models are listed in `/v1/models` as modality-scoped ids that share one downloaded file: the canonical id (e.g. `gemma-4-e2b-it-litert-lm`) loads text-only chat, `<id>-vision` adds image input, and `<id>-audio` adds audio input. Pick the id matching what you want to send; only one modality loads at a time (matching Google AI Edge Gallery), which keeps the GPU load small enough to fit. See [Termux_AI_Backends.md](Termux_AI_Backends.md#per-modality-model-ids).
+
 TAI does not bundle model files in the APK. Downloads and imports must be explicit user actions, with license/terms awareness for gated or restricted models. Hugging Face tokens are never bundled; an optional user token can be saved in app-private settings for Hugging Face downloads.
 
 ## Runtime Defaults

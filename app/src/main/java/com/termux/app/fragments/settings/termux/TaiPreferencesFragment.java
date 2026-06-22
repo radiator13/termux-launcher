@@ -1145,7 +1145,25 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             if (profile.minDeviceMemoryInGb != null) minMemGb = profile.minDeviceMemoryInGb;
         } catch (Exception ignored) {
         }
-        return buildMetaLine(context, model.sizeBytes, accel, minMemGb);
+        CharSequence meta = buildMetaLine(context, model.sizeBytes, accel, minMemGb);
+        // Multimodal LiteRT models are exposed over the API as modality-scoped ids
+        // (<id>, <id>-vision, <id>-audio); surface which modes the shell can select.
+        boolean image = model.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)
+            || model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+        boolean audio = model.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)
+            || model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+        if (TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend) && (image || audio)
+            && meta instanceof SpannableStringBuilder) {
+            StringBuilder modes = new StringBuilder("chat");
+            if (image) modes.append(" · vision");
+            if (audio) modes.append(" · audio");
+            SpannableStringBuilder builder = (SpannableStringBuilder) meta;
+            int keyColor = resolveAttrColor(context, com.termux.shared.R.attr.termuxColorOnSurfaceVariant);
+            int valueColor = resolveAttrColor(context, com.termux.shared.R.attr.termuxColorOnSurface);
+            builder.append("   ");
+            appendMeta(builder, "modes ", modes.toString(), keyColor, valueColor);
+        }
+        return meta;
     }
 
     private CharSequence buildMetaLine(Context context, long sizeBytes, String accel, Integer minMemGb) {

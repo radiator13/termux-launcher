@@ -99,10 +99,34 @@ Gemma 4 LiteRT defaults follow Google AI Edge Gallery defaults:
 Gemma 4 uses a multimodal LiteRT engine configuration:
 
 - main text backend: selected accelerator, usually GPU
-- vision backend: selected accelerator, usually GPU
-- audio backend: CPU
+- vision backend: selected accelerator, usually GPU (only when an image-capable model id is loaded)
+- audio backend: CPU (only when an audio-capable model id is loaded)
 
-This matches the LiteRT-LM Android pattern used by Google AI Edge Gallery: GPU can run text and vision while audio decoding uses CPU. If `accelerator` is omitted or set to `auto`, TAI defaults to CPU until the same model/device has a successful GPU load history. You can force GPU for validation:
+This matches the LiteRT-LM Android pattern used by Google AI Edge Gallery: GPU can run text and vision while audio decoding uses CPU. If `accelerator` is omitted or set to `auto`, TAI defaults to CPU until the same model/device has a successful GPU load history.
+
+#### Per-modality model ids
+
+To keep each load's GPU/OpenCL footprint small enough to fit (mirroring Edge Gallery's per-task
+loading, which enables exactly one modality per screen), a multimodal model is advertised on
+`/v1/models` as **three ids that share one downloaded file**:
+
+| Model id | Modality loaded | Encoders initialized |
+| --- | --- | --- |
+| `gemma-4-e4b-it-litert-lm` | text chat only | none |
+| `gemma-4-e4b-it-litert-lm-vision` | text + image | vision (GPU) |
+| `gemma-4-e4b-it-litert-lm-audio` | text + audio | audio (CPU) |
+
+Select the id from the shell exactly like any other model (`-m`/`"model"`). Switching ids reloads
+the runtime scoped to that modality, the same way switching Gallery sections does. The canonical id
+is text-only — send images with the `-vision` id and audio with the `-audio` id. There is no
+combined image+audio id, matching Gallery (every task enables a single modality). The same file is
+downloaded once; the variants only narrow the advertised capabilities.
+
+The isolated `:tai_runtime` process is bound with `BIND_IMPORTANT`, so while a model is loaded it
+inherits the launcher's foreground priority and Android's low-memory killer reaps other background
+apps before the runtime — preventing the GPU load from being SIGKILLed mid initialization.
+
+You can force GPU for validation:
 
 ```sh
 tai load gemma-4-e2b-it-litert-lm --gpu
@@ -116,13 +140,13 @@ Backend: GPU
 
 ### Image Input
 
-Use OpenAI chat content parts with `image_url`. Data URLs, `file://` URLs, absolute paths, and HTTP(S) URLs are accepted.
+Use OpenAI chat content parts with `image_url`. Data URLs, `file://` URLs, absolute paths, and HTTP(S) URLs are accepted. Image input requires the `-vision` model id (see [Per-modality model ids](#per-modality-model-ids)); the canonical id is text-only and rejects images with `capability_not_supported`.
 
 Example:
 
 ```json
 {
-  "model": "gemma-4-e2b-it-litert-lm",
+  "model": "gemma-4-e2b-it-litert-lm-vision",
   "messages": [
     {
       "role": "user",
@@ -144,11 +168,11 @@ For large images, prefer `file://` or absolute local paths from the Android app'
 
 ### Audio Input
 
-Use OpenAI-style `input_audio` content parts:
+Use OpenAI-style `input_audio` content parts. Audio input requires the `-audio` model id (see [Per-modality model ids](#per-modality-model-ids)); the canonical id is text-only and rejects audio with `capability_not_supported`.
 
 ```json
 {
-  "model": "gemma-4-e2b-it-litert-lm",
+  "model": "gemma-4-e2b-it-litert-lm-audio",
   "messages": [
     {
       "role": "user",

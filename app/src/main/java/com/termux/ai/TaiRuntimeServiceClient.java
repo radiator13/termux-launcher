@@ -136,7 +136,13 @@ public final class TaiRuntimeServiceClient {
                 binding = true;
                 connectingLatch = new CountDownLatch(1);
                 Intent intent = new Intent(appContext, TaiRuntimeService.class);
-                boolean bound = appContext.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+                // BIND_IMPORTANT raises the isolated :tai_runtime process to the launcher's own
+                // oom_score_adj while a model is loaded, so Android's low-memory killer reaps other
+                // background apps before the runtime (a large GPU load otherwise gets SIGKILLed mid
+                // OpenCL init). This keeps crash isolation while matching Edge Gallery's effective
+                // top-app priority, which is single-process and gets that for free.
+                boolean bound = appContext.bindService(intent, connection,
+                    Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT);
                 if (!bound) {
                     binding = false;
                     if (connectingLatch != null) connectingLatch.countDown();

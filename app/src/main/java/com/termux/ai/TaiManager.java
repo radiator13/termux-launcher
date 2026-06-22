@@ -716,7 +716,11 @@ public final class TaiManager {
         availableModels.putAll(modelStore.getInstalledUserModels());
         for (TaiModelSpec spec : availableModels.values()) {
             if (TaiModelSpec.BACKEND_MNN_LLM.equals(spec.backend) && !mnnSupported) continue;
-            models.put(spec.toJson());
+            // Advertise multimodal LiteRT models as separate modality-scoped ids (chat / -vision /
+            // -audio), matching Edge Gallery's per-task loading. See TaiModelVariants.
+            for (TaiModelSpec variant : TaiModelVariants.expand(spec)) {
+                models.put(variant.toJson());
+            }
         }
         installed.put("models", models);
         return applyAudioHistoryGates(openAiModelsFromTaiModels(installed), device);
@@ -1066,8 +1070,18 @@ public final class TaiManager {
     @Nullable
     private TaiModelSpec resolveModel(@Nullable String modelId) {
         String migratedId = modelId == null ? null : TaiSettings.migrateBuiltInModelId(modelId);
-        TaiModelSpec spec = modelStore.getUserModel(migratedId);
-        if (spec == null) spec = registry.getModel(migratedId);
+        TaiModelSpec direct = lookupBaseModel(migratedId);
+        // A multimodal model's canonical id loads text-only (Gallery's chat task); the modality
+        // encoders are reached through the explicit "-vision"/"-audio" virtual ids instead.
+        if (direct != null) return TaiModelVariants.chatScopedOrSelf(direct);
+        return TaiModelVariants.resolve(migratedId, this::lookupBaseModel);
+    }
+
+    @Nullable
+    private TaiModelSpec lookupBaseModel(@Nullable String modelId) {
+        if (modelId == null) return null;
+        TaiModelSpec spec = modelStore.getUserModel(modelId);
+        if (spec == null) spec = registry.getModel(modelId);
         return spec;
     }
 
