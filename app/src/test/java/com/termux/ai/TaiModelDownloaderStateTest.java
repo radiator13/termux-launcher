@@ -51,6 +51,9 @@ public class TaiModelDownloaderStateTest {
         store.deleteUserModel("cancel-test");
         store.deleteUserModel("retry-test");
         store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
+        store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
+        store.deleteUserModel("Qwen2.5-Coder-1.5B-GGUF");
+        store.deleteUserModel("resolvable-test");
     }
 
     @Test
@@ -144,6 +147,95 @@ public class TaiModelDownloaderStateTest {
         assertEquals(TaiModelSpec.BACKEND_LITERT_LM, advertised.backend);
         assertTrue(advertised.capabilities.contains("image_input"));
         assertTrue(advertised.capabilities.contains("audio_input"));
+        assertFalse(advertised.capabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertTrue(advertised.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertEquals(4096, advertised.endpointContextWindow);
+        assertEquals(32768, advertised.sourceContextWindow);
+        assertEquals(4000, advertised.defaultMaxOutputTokens);
+        assertEquals(output.length(), advertised.sizeBytes);
+    }
+
+    @Test
+    public void completedGgufDownloadRecordIsNotEndpointVisible() throws Exception {
+        File output = output("Qwen2.5-Coder-1.5B-GGUF", "qwen2.5-coder-1.5b.gguf");
+        assertTrue(output.getParentFile().mkdirs() || output.getParentFile().isDirectory());
+        java.nio.file.Files.write(output.toPath(), modelBytes('q'));
+        store.upsertDownload(new JSONObject()
+            .put("id", "legacy-gguf-download")
+            .put("modelId", "Qwen2.5-Coder-1.5B-GGUF")
+            .put("path", output.getAbsolutePath())
+            .put("status", "complete")
+            .put("bytesRead", output.length())
+            .put("totalBytes", output.length()));
+
+        assertFalse(store.getDownloadedReadableModels().containsKey("Qwen2.5-Coder-1.5B-GGUF"));
+    }
+
+    @Test
+    public void installedAndDownloadedReadableModels_areResolvableBySameId() throws Exception {
+        byte[] model = modelBytes('r');
+        String url = serve(new FixedBytesHandler(model));
+        File output = output("resolvable-test", "model.litertlm");
+        run("resolvable-test", url, output, new ArrayList<>());
+
+        // After a real install, both the installed-user-model store and the download record
+        // must resolve the same id, so /v1/models listings can never 404 on resolveModel.
+        assertNotNull("installed download must be resolvable via getUserModel", store.getUserModel("resolvable-test"));
+        assertTrue("installed download must be in getDownloadedReadableModels",
+            store.getDownloadedReadableModels().containsKey("resolvable-test"));
+        java.util.Map<String, TaiModelSpec> readable = store.getDownloadedReadableModels();
+        for (String id : readable.keySet()) {
+            assertTrue("every /v1/models item must be a supported backend/format or excluded",
+                TaiModelSpec.isSupportedBackendFormat(readable.get(id).backend, readable.get(id).format));
+        }
+        store.deleteUserModel("resolvable-test");
+    }
+
+    @Test
+    public void staleInstalledE4bMetadata_isRebuiltFromCatalogFacts() throws Exception {
+        File output = output(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT, "gemma-4-E4B-it.litertlm");
+        assertTrue(output.getParentFile().mkdirs() || output.getParentFile().isDirectory());
+        byte[] bytes = modelBytes('e');
+        java.nio.file.Files.write(output.toPath(), bytes);
+
+        // Stale installed record that drops audio and never declared llm_thinking.
+        JSONObject stale = new JSONObject()
+            .put("id", TaiModelRegistry.MODEL_GEMMA_4_E4B_IT)
+            .put("displayName", "Old E4B Name")
+            .put("roleHint", "old role")
+            .put("source", "imported")
+            .put("localPath", output.getAbsolutePath())
+            .put("license", "stale")
+            .put("sizeBytes", 999L)
+            .put("builtInCatalogEntry", false)
+            .put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+            .put("format", TaiModelSpec.FORMAT_LITERTLM)
+            .put("endpointContextWindow", 2048)
+            .put("sourceContextWindow", 2048)
+            .put("defaultMaxOutputTokens", 512)
+            .put("recommendedRamGb", 0)
+            .put("sourceCapabilities", new org.json.JSONArray()
+                .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                .put(TaiModelSpec.CAPABILITY_IMAGE_INPUT))
+            .put("endpointCapabilities", new org.json.JSONArray()
+                .put(TaiModelSpec.CAPABILITY_TEXT_CHAT));
+        android.content.SharedPreferences prefs =
+            context.getSharedPreferences(TaiSettings.PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        prefs.edit().putString("tai_user_models_json", new org.json.JSONArray().put(stale).toString()).apply();
+
+        TaiModelSpec rebuilt = store.getUserModels().get(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
+
+        assertNotNull(rebuilt);
+        assertTrue("stale installed metadata must not suppress catalog audio",
+            rebuilt.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertTrue(rebuilt.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(rebuilt.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertTrue(rebuilt.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertEquals(4096, rebuilt.endpointContextWindow);
+        assertEquals(32768, rebuilt.sourceContextWindow);
+        assertEquals(4000, rebuilt.defaultMaxOutputTokens);
+        assertEquals(output.length(), rebuilt.sizeBytes);
+        store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
     }
 
     private void run(String modelId, String url, File output, List<String> states) {

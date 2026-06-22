@@ -74,6 +74,59 @@ public class MnnTaiRuntimeConfigTest {
     }
 
     @Test
+    public void mergedConfig_injectsMaxContextAndMaxNewTokenDefaultsFromModelSpec() throws Exception {
+        File dir = new File(context.getCacheDir(), "mnn-config-defaults");
+        dir.mkdirs();
+        File config = new File(dir, "config.json");
+        // Minimal config: no max_context_len, no max_new_tokens, only model paths + chat template.
+        write(config, "{\"llm_model\":\"llm.mnn\",\"llm_weight\":\"llm.mnn.weight\","
+            + "\"tokenizer_file\":\"tokenizer.mtok\",\"jinja\":{\"chat_template\":\"template\"}}");
+        touch(new File(dir, "llm.mnn"));
+        touch(new File(dir, "llm.mnn.weight"));
+        touch(new File(dir, "tokenizer.mtok"));
+
+        MnnTaiRuntime runtime = new MnnTaiRuntime(context);
+        TaiRuntimeOptions options = new TaiRuntimeOptions(null, null, null, null,
+            null, null, null, null, null, null, null, null);
+        TaiModelSpec spec = model(config);
+        JSONObject merged = new JSONObject((String) invokeMergedConfig(runtime, config, spec, options));
+
+        assertEquals("cpu", merged.getString("backend_type"));
+        assertEquals(4, merged.getInt("thread_num"));
+        assertEquals("low", merged.getString("precision"));
+        assertEquals("low", merged.getString("memory"));
+        assertEquals(spec.endpointContextWindow, merged.getInt("max_context_len"));
+        assertEquals(spec.defaultMaxOutputTokens, merged.getInt("max_new_tokens"));
+        assertEquals(0.8d, merged.getDouble("temperature"), 0.0d);
+        assertEquals(40, merged.getInt("top_k"));
+        assertEquals(0.9d, merged.getDouble("top_p"), 0.0d);
+    }
+
+    @Test
+    public void mergedConfig_clampsConfigMaxContextToEndpointContextWindow() throws Exception {
+        File dir = new File(context.getCacheDir(), "mnn-config-clamp");
+        dir.mkdirs();
+        File config = new File(dir, "config.json");
+        // Upstream config advertises a larger context than the endpoint cap.
+        write(config, "{\"llm_model\":\"llm.mnn\",\"llm_weight\":\"llm.mnn.weight\","
+            + "\"tokenizer_file\":\"tokenizer.mtok\",\"max_context_len\":32768,"
+            + "\"max_new_tokens\":8192,\"jinja\":{\"chat_template\":\"template\"}}");
+        touch(new File(dir, "llm.mnn"));
+        touch(new File(dir, "llm.mnn.weight"));
+        touch(new File(dir, "tokenizer.mtok"));
+
+        MnnTaiRuntime runtime = new MnnTaiRuntime(context);
+        TaiRuntimeOptions options = new TaiRuntimeOptions(null, null, null, null,
+            null, null, null, null, null, null, null, null);
+        TaiModelSpec spec = model(config);
+        JSONObject merged = new JSONObject((String) invokeMergedConfig(runtime, config, spec, options));
+
+        assertEquals(spec.endpointContextWindow, merged.getInt("max_context_len"));
+        assertTrue(merged.getInt("max_context_len") <= spec.endpointContextWindow);
+        assertEquals(8192, merged.getInt("max_new_tokens"));
+    }
+
+    @Test
     public void settingsAutoLeavesMnnConfigValuesNull() {
         TaiRuntimeOptions options = new TaiSettings(context).getRuntimeOptions(TaiModelSpec.BACKEND_MNN_LLM, "mnn-auto");
 

@@ -46,7 +46,7 @@ public final class TaiCatalogFilterPreference extends Preference {
 
     public void setIncludeAllOption(boolean includeAllOption) {
         this.includeAllOption = includeAllOption;
-        if (!includeAllOption && "all".equals(selectedValue)) {
+        if (!includeAllOption && ("all".equals(selectedValue) || "installed".equals(selectedValue) || "usable".equals(selectedValue))) {
             selectedValue = TaiModelSpec.BACKEND_LITERT_LM;
         }
         notifyChanged();
@@ -62,13 +62,19 @@ public final class TaiCatalogFilterPreference extends Preference {
         TextView all = (TextView) holder.findViewById(R.id.tai_catalog_filter_all);
         TextView liteRt = (TextView) holder.findViewById(R.id.tai_catalog_filter_litert);
         TextView mnn = (TextView) holder.findViewById(R.id.tai_catalog_filter_mnn);
+        TextView installed = (TextView) holder.findViewById(R.id.tai_catalog_filter_installed);
+        TextView usable = (TextView) holder.findViewById(R.id.tai_catalog_filter_usable);
         View indicator = holder.findViewById(R.id.tai_backend_segment_indicator);
         LinearLayout labels = (LinearLayout) holder.findViewById(R.id.tai_backend_segment_labels);
         if (all != null) all.setVisibility(includeAllOption ? View.VISIBLE : View.GONE);
+        if (installed != null) installed.setVisibility(includeAllOption ? View.VISIBLE : View.GONE);
+        if (usable != null) usable.setVisibility(includeAllOption ? View.VISIBLE : View.GONE);
         bindPill(all, "all");
         bindPill(liteRt, TaiModelSpec.BACKEND_LITERT_LM);
         bindPill(mnn, TaiModelSpec.BACKEND_MNN_LLM);
-        positionIndicator(labels, indicator, selectedPill(all, liteRt, mnn), false);
+        bindPill(installed, "installed");
+        bindPill(usable, "usable");
+        positionIndicator(labels, indicator, selectedPill(all, liteRt, mnn, installed, usable), false);
     }
 
     private void bindPill(@Nullable TextView pill, @NonNull String value) {
@@ -98,7 +104,9 @@ public final class TaiCatalogFilterPreference extends Preference {
         TextView selected = selectedPill(
             labels.findViewById(R.id.tai_catalog_filter_all),
             labels.findViewById(R.id.tai_catalog_filter_litert),
-            labels.findViewById(R.id.tai_catalog_filter_mnn));
+            labels.findViewById(R.id.tai_catalog_filter_mnn),
+            labels.findViewById(R.id.tai_catalog_filter_installed),
+            labels.findViewById(R.id.tai_catalog_filter_usable));
         positionIndicator(labels, indicator, selected, true);
     }
 
@@ -106,9 +114,13 @@ public final class TaiCatalogFilterPreference extends Preference {
         TextView all = labels.findViewById(R.id.tai_catalog_filter_all);
         TextView liteRt = labels.findViewById(R.id.tai_catalog_filter_litert);
         TextView mnn = labels.findViewById(R.id.tai_catalog_filter_mnn);
+        TextView installed = labels.findViewById(R.id.tai_catalog_filter_installed);
+        TextView usable = labels.findViewById(R.id.tai_catalog_filter_usable);
         refreshPillColor(all, "all");
         refreshPillColor(liteRt, TaiModelSpec.BACKEND_LITERT_LM);
         refreshPillColor(mnn, TaiModelSpec.BACKEND_MNN_LLM);
+        refreshPillColor(installed, "installed");
+        refreshPillColor(usable, "usable");
     }
 
     private void refreshPillColor(@Nullable TextView pill, @NonNull String value) {
@@ -122,9 +134,12 @@ public final class TaiCatalogFilterPreference extends Preference {
     }
 
     @Nullable
-    private TextView selectedPill(@Nullable TextView all, @Nullable TextView liteRt, @Nullable TextView mnn) {
+    private TextView selectedPill(@Nullable TextView all, @Nullable TextView liteRt, @Nullable TextView mnn,
+                                  @Nullable TextView installed, @Nullable TextView usable) {
         if ("all".equals(selectedValue) && includeAllOption) return all;
         if (TaiModelSpec.BACKEND_MNN_LLM.equals(selectedValue)) return mnn;
+        if ("installed".equals(selectedValue) && includeAllOption) return installed;
+        if ("usable".equals(selectedValue) && includeAllOption) return usable;
         return liteRt;
     }
 

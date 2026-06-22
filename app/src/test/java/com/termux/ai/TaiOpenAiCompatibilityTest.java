@@ -97,7 +97,7 @@ public class TaiOpenAiCompatibilityTest {
     }
 
     @Test
-    public void openAiModels_filtersMnnToolUseUntilStructuredNativeBridgeIsPresent() throws Exception {
+    public void openAiModels_marksMnnToolUseAsPromptFallbackAndFiltersMedia() throws Exception {
         JSONObject taiModels = new JSONObject()
             .put("ok", true)
             .put("models", new JSONArray().put(new JSONObject()
@@ -112,10 +112,69 @@ public class TaiOpenAiCompatibilityTest {
         JSONObject response = TaiManager.openAiModelsFromTaiModels(taiModels);
 
         JSONArray capabilities = response.getJSONArray("data").getJSONObject(0).getJSONArray("_capabilities");
-        assertTrue(capabilities.toString().contains("text_chat"));
-        assertFalse(capabilities.toString().contains("tool_use"));
-        assertFalse(capabilities.toString().contains("image_input"));
-        assertFalse(capabilities.toString().contains("audio_input"));
+        JSONObject model = response.getJSONArray("data").getJSONObject(0);
+        assertTrue(contains(capabilities, TaiModelSpec.CAPABILITY_TEXT_CHAT));
+        assertTrue(contains(capabilities, TaiModelSpec.CAPABILITY_TOOL_USE));
+        assertFalse(contains(capabilities, TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertFalse(contains(capabilities, TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertEquals(TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK, model.getString("_tool_mode"));
+    }
+
+    @Test
+    public void openAiModels_capabilitiesEqualEndpointCapabilitiesNotSourceClaims() throws Exception {
+        JSONObject taiModels = new JSONObject()
+            .put("ok", true)
+            .put("models", new JSONArray().put(new JSONObject()
+                .put("id", "gemma-claimed-thinking")
+                .put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+                .put("format", TaiModelSpec.FORMAT_LITERTLM)
+                .put("sourceCapabilities", new JSONArray()
+                    .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                    .put(TaiModelSpec.CAPABILITY_IMAGE_INPUT)
+                    .put(TaiModelSpec.CAPABILITY_LLM_THINKING))
+                .put("endpointCapabilities", new JSONArray()
+                    .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                    .put(TaiModelSpec.CAPABILITY_IMAGE_INPUT))));
+
+        JSONObject model = TaiManager.openAiModelsFromTaiModels(taiModels)
+            .getJSONArray("data").getJSONObject(0);
+
+        assertEquals(model.getJSONArray("_endpoint_capabilities").toString(),
+            model.getJSONArray("_capabilities").toString());
+        assertTrue(contains(model.getJSONArray("_source_capabilities"), TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertFalse(contains(model.getJSONArray("_capabilities"), TaiModelSpec.CAPABILITY_LLM_THINKING));
+    }
+
+    @Test
+    public void pruneAudioInputFromResponse_hidesAudioForFailedModelOnly() throws Exception {
+        JSONObject response = TaiManager.openAiModelsFromTaiModels(new JSONObject()
+            .put("ok", true)
+            .put("models", new JSONArray()
+                .put(new JSONObject().put("id", "gemma-e4b-failed").put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+                    .put("format", TaiModelSpec.FORMAT_LITERTLM)
+                    .put("endpointCapabilities", new JSONArray()
+                        .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                        .put(TaiModelSpec.CAPABILITY_AUDIO_INPUT)
+                        .put(TaiModelSpec.CAPABILITY_IMAGE_INPUT)))
+                .put(new JSONObject().put("id", "gemma-e2b-ok").put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+                    .put("format", TaiModelSpec.FORMAT_LITERTLM)
+                    .put("endpointCapabilities", new JSONArray()
+                        .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                        .put(TaiModelSpec.CAPABILITY_AUDIO_INPUT)))));
+
+        LinkedHashSet<String> failed = new LinkedHashSet<>();
+        failed.add("gemma-e4b-failed");
+        JSONObject pruned = TaiManager.pruneAudioInputFromResponse(response, failed);
+
+        JSONArray data = pruned.getJSONArray("data");
+        JSONObject e4b = data.getJSONObject(0);
+        JSONObject e2b = data.getJSONObject(1);
+        assertFalse(contains(e4b.getJSONArray("_capabilities"), TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(contains(e4b.getJSONArray("_endpoint_capabilities"), TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertTrue(contains(e4b.getJSONArray("_capabilities"), TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertTrue(contains(e2b.getJSONArray("_capabilities"), TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertEquals(e2b.getJSONArray("_endpoint_capabilities").toString(),
+            e2b.getJSONArray("_capabilities").toString());
     }
 
     @Test
@@ -186,5 +245,12 @@ public class TaiOpenAiCompatibilityTest {
             0,
             null
         );
+    }
+
+    private static boolean contains(JSONArray array, String value) {
+        for (int i = 0; i < array.length(); i++) {
+            if (value.equals(array.optString(i))) return true;
+        }
+        return false;
     }
 }

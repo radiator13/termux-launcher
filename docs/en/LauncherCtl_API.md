@@ -60,6 +60,7 @@ Common routes:
 - `POST /v1/chat/completions`
 - `POST /v1/completions`
 - `POST /v1/embeddings`
+- `POST /v1/audio/speech`
 
 `/v1/chat/completions` and `/v1/completions` support `stream: true` and return `text/event-stream` chunks ending with `data: [DONE]`.
 
@@ -72,17 +73,25 @@ metadata prefixed with an underscore so existing OpenAI clients ignore it:
 
 - `_backend`: backend routing for the model, currently `litert-lm` (default
   LiteRT-LM runtime) or `mnn-llm` (bundled MNN backend).
-- `_capabilities`: ordered list of capability strings, for example
-  `text_chat` and `text_embeddings`. Use this to decide which endpoints are
-  meaningful for a given model id before calling `/v1/chat/completions`,
-  `/v1/completions`, or `/v1/embeddings`.
+- `_capabilities`: ordered list of endpoint capability strings, for example
+  `text_chat`, `image_input`, `audio_input`, `tool_use`, or `code`. This is
+  what the installed APK can currently serve and is identical to
+  `_endpoint_capabilities`.
+- `_source_capabilities`: informational upstream/package capabilities. Clients
+  should not treat these as enabled endpoint features.
+- `_default_max_output_tokens`, `_endpoint_context_window`, and
+  `_source_context_window`: runtime default, TAI endpoint cap, and
+  upstream/package context metadata.
+- `_tool_mode`: present for tool-capable models. MNN tool support is
+  `prompt_fallback`; LiteRT tool support is native when advertised.
 
 #### `POST /v1/embeddings`
 
-OpenAI-compatible embeddings endpoint. Embeddings support is
-model-capability dependent: only models that advertise `text_embeddings` in
-their `/v1/models` `_capabilities` array are accepted. Other models return a
-`capability_not_supported` error.
+OpenAI-compatible embeddings endpoint. Embeddings support is model-capability
+dependent: only models that advertise `text_embeddings` in their `/v1/models`
+`_capabilities` array are accepted. The current LiteRT/MNN catalog does not
+advertise embeddings unless a loadable local model explicitly supports them.
+Other models return `capability_not_supported`.
 
 ### `GET /v1/status`
 Returns backend + LauncherCtl runtime status.
@@ -242,7 +251,10 @@ call time or storing it in a credentials manager.
   `_capabilities` metadata.
 - `POST /v1/chat/completions` — OpenAI chat completion.
 - `POST /v1/completions` — OpenAI legacy completion.
-- `POST /v1/embeddings` — OpenAI embeddings (model-capability dependent).
+- `POST /v1/embeddings` — OpenAI embeddings only when `_capabilities`
+  includes `text_embeddings`.
+- `POST /v1/audio/speech` — returns `unsupported_audio_output` until a local
+  runner exposes generated audio.
 
 `/v1/embeddings` is model-capability dependent. Not all models support
 embeddings. Check each model's `_capabilities` field returned by
@@ -280,20 +292,20 @@ curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" 
 ### MNN Backend Example
 
 MNN models route through the bundled MNN backend. Only models whose
-`_backend` field equals `mnn-llm` should be requested via MNN; LiteRT models
-return `capability_not_supported` for MNN-only endpoints such as
-`/v1/embeddings` (when the model lacks `text_embeddings`).
+`_backend` field equals `mnn-llm` should be requested via MNN. Current MNN
+catalog models are chat/code models; image, audio, and embeddings requests are
+rejected unless the model advertises that endpoint capability.
 
 ```sh
 MODEL=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
-  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="mnn-llm" and (._capabilities | index("text_embeddings"))) | .id' | head -n1)
+  "$OPENAI_BASE_URL/models" | jq -r '.data[] | select(._backend=="mnn-llm" and (._capabilities | index("text_chat"))) | .id' | head -n1)
 [ -n "$MODEL" ] && curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"model\":\"$MODEL\",\"input\":\"hello world\"}" \
-  "$OPENAI_BASE_URL/embeddings"
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply exactly OK\"}]}" \
+  "$OPENAI_BASE_URL/chat/completions"
 ```
 
 Inspect `/v1/models` first to confirm both `_backend == "mnn-llm"` and the
-`text_embeddings` capability are present for the model you intend to use.
+endpoint capability you intend to use are present.
 
 ### `launcherctl update-scripts`
 

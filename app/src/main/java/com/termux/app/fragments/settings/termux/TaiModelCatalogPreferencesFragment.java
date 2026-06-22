@@ -103,6 +103,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         super.onResume();
         if (getActivity() != null) {
             getActivity().setTitle(R.string.termux_ai_models_browse_catalog_title);
+            getActivity().getWindow().setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
         }
         Context context = getContext();
         if (context != null) {
@@ -114,6 +117,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     @Override
     public void onPause() {
         handler.removeCallbacks(refreshRunnable);
+        if (getActivity() != null) {
+            getActivity().getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        }
         super.onPause();
     }
 
@@ -163,7 +169,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
 
         Map<String, List<TaiModelCatalog.CatalogEntry>> groups = groupByJobGroup(
-            filterEntries(TaiModelCatalog.entries().values(), backendFilter, searchQuery));
+            filterEntries(TaiModelCatalog.entries().values(), backendFilter, searchQuery, installed, capabilities));
         if (groups.isEmpty()) {
             Preference empty = new Preference(context);
             empty.setTitle(R.string.termux_ai_catalog_empty_title);
@@ -200,7 +206,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         configureProgress(row, download);
         row.setTuneAction(installed == null ? null : getString(R.string.termux_ai_model_tune_action),
             view -> openParameterScreen(installed));
-        row.setPrimaryAction(actionText(context, state), state.enabled, state.type == CatalogActionType.ACTIVE,
+        row.setPrimaryAction(actionText(context, state), state.enabled, false,
             view -> handlePrimaryAction(context, entry, installed, state));
         row.setPersistent(false);
         row.setOnPreferenceClickListener(preference -> {
@@ -223,7 +229,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
                 setActiveModel(context, entry.modelId);
                 break;
             case ACTIVE:
-                if (installed != null) confirmDeleteModel(context, installed);
                 break;
             case IMPORT_ONLY:
                 showImportOnlyGuidance(context, entry);
@@ -240,6 +245,16 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         message.append(buildSummary(entry)).append('\n').append(buildMetaLine(entry));
         message.append("\n\nID: ").append(entry.modelId);
         message.append("\nProvider: ").append(entry.repositoryId);
+        String endpointCaps = joinTags(new LinkedHashSet<>(entry.endpointCapabilities));
+        String sourceCaps = joinTags(new LinkedHashSet<>(entry.sourceCapabilities));
+        message.append("\nEndpoint capabilities: ").append(endpointCaps.isEmpty() ? "—" : endpointCaps);
+        if (!sourceCaps.isEmpty() && !sourceCaps.equals(endpointCaps)) {
+            message.append("\nSource capabilities: ").append(sourceCaps);
+        }
+        message.append("\nEndpoint context: ").append(entry.endpointContextWindow);
+        if (entry.sourceContextWindow != entry.endpointContextWindow) {
+            message.append(" · source ").append(entry.sourceContextWindow);
+        }
         if (!entry.downloadAvailable) message.append("\n\n").append(entry.unavailableReason);
         if (download != null) message.append("\n\nDownload: ").append(download.optString("status", "unknown"));
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(context)
@@ -312,14 +327,37 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
 
     static List<TaiModelCatalog.CatalogEntry> filterEntries(Iterable<TaiModelCatalog.CatalogEntry> entries,
                                                             BackendFilter filter, @Nullable String query) {
+        return filterEntries(entries, filter, query, null, null);
+    }
+
+    static List<TaiModelCatalog.CatalogEntry> filterEntries(Iterable<TaiModelCatalog.CatalogEntry> entries,
+                                                            BackendFilter filter, @Nullable String query,
+                                                            @Nullable Map<String, TaiModelSpec> installed,
+                                                            @Nullable TaiDeviceCapabilities device) {
         ArrayList<TaiModelCatalog.CatalogEntry> result = new ArrayList<>();
         String normalizedQuery = normalize(query);
         for (TaiModelCatalog.CatalogEntry entry : entries) {
-            if (filter != BackendFilter.ALL && !filter.backend.equals(entry.backend)) continue;
+            if (!matchesFilter(entry, filter, installed, device)) continue;
             if (!normalizedQuery.isEmpty() && !matchesSearch(entry, normalizedQuery)) continue;
             result.add(entry);
         }
         return result;
+    }
+
+    private static boolean matchesFilter(TaiModelCatalog.CatalogEntry entry, BackendFilter filter,
+                                         @Nullable Map<String, TaiModelSpec> installed,
+                                         @Nullable TaiDeviceCapabilities device) {
+        if (filter == BackendFilter.ALL) return true;
+        if (filter == BackendFilter.INSTALLED) return installed != null && installed.containsKey(entry.modelId);
+        if (filter == BackendFilter.USABLE) return isUsableOnDevice(entry, device);
+        return filter.backend.equals(entry.backend);
+    }
+
+    private static boolean isUsableOnDevice(TaiModelCatalog.CatalogEntry entry, @Nullable TaiDeviceCapabilities device) {
+        if (!TaiModelSpec.isSupportedBackendFormat(entry.backend, entry.format)) return false;
+        if (device == null) return true;
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(entry.backend)) return device.mnnSupported;
+        return device.liteRtLmAbiSupported && device.liteRtLmNativeLibrariesAvailable;
     }
 
     static Map<String, List<TaiModelCatalog.CatalogEntry>> groupByJobGroup(List<TaiModelCatalog.CatalogEntry> entries) {
@@ -341,7 +379,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         if (installed) {
             boolean active = entry.modelId.equals(activeModelId);
             return active
-                ? CatalogActionState.of(CatalogActionType.ACTIVE, "● Active", true, true, null, "")
+                ? CatalogActionState.of(CatalogActionType.ACTIVE, "Default", true, false, null, "")
                 : CatalogActionState.of(CatalogActionType.INSTALLED, "Installed ✓", true, true, null, "");
         }
         if (download != null && isActiveDownload(download.optString("status", ""))) {
@@ -769,7 +807,11 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     }
 
     enum BackendFilter {
-        ALL("all", ""), LITERT(TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.BACKEND_LITERT_LM), MNN(TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.BACKEND_MNN_LLM);
+        ALL("all", ""),
+        LITERT(TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.BACKEND_LITERT_LM),
+        MNN(TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.BACKEND_MNN_LLM),
+        INSTALLED("installed", ""),
+        USABLE("usable", "");
         final String value;
         final String backend;
         BackendFilter(String value, String backend) { this.value = value; this.backend = backend; }

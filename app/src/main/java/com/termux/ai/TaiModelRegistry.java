@@ -29,16 +29,20 @@ public final class TaiModelRegistry {
                 null,
                 entry.license,
                 entry.sizeBytes,
-                entry.capabilities,
+                entry.sourceCapabilities,
                 true,
                 null,
                 entry.backend,
                 entry.format,
                 entry.architecture,
                 entry.quantization,
-                entry.contextWindow,
+                entry.endpointContextWindow,
+                entry.sourceContextWindow,
+                entry.defaultMaxOutputTokens,
                 entry.recommendedRamGb,
-                entry.sha256
+                entry.sha256,
+                entry.endpointCapabilities,
+                entry.toolMode
             ));
         }
     }

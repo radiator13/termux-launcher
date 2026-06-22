@@ -474,6 +474,9 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
             TaiRuntimeHistory.recordFailure(appContext, modelSpec, deviceCapabilities,
                 TaiModelSpec.BACKEND_LITERT_LM, acceleratorFromBackendName(initializedBackendName, requestedAccelerator),
                 e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            if (modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) {
+                TaiRuntimeHistory.recordAudioInputOutcome(appContext, modelSpec.id, deviceCapabilities, false);
+            }
             synchronized (this) {
                 boolean cancelled = loadCancellationRequested;
                 finishLoadingLocked();
@@ -502,6 +505,9 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                 TaiRuntimeCrashMarker.clear(appContext);
                 TaiRuntimeHistory.recordSuccess(appContext, modelSpec, deviceCapabilities,
                     TaiModelSpec.BACKEND_LITERT_LM, acceleratorFromBackendName(backendName, requestedAccelerator));
+                if (modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) {
+                    TaiRuntimeHistory.recordAudioInputOutcome(appContext, modelSpec.id, deviceCapabilities, true);
+                }
                 finishLoadingLocked();
                 statusMessage = keepWarmUntilMs > 0L ? "Model loaded and warm." : "Model loaded.";
                 maybeRefreshStateLocked();
@@ -603,8 +609,10 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         applyExperimentalFlags(options, modelPath);
         String cacheDir = modelPath.startsWith("/data/local/tmp")
             ? appContext.getCacheDir().getAbsolutePath() : null;
-        boolean imageInput = modelSpec.capabilities.contains("image_input");
-        boolean audioInput = modelSpec.capabilities.contains("audio_input");
+        boolean imageInput = modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)
+            || modelSpec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+        boolean audioInput = modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)
+            || modelSpec.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
         EngineConfig config = new EngineConfig(
             modelPath,
             backend,

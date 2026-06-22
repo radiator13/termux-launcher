@@ -107,16 +107,20 @@ public final class TaiModelImporter {
                 baseSpec.localPath,
                 baseSpec.license,
                 baseSpec.sizeBytes,
-                baseSpec.capabilities,
+                baseSpec.sourceCapabilities,
                 false,
                 TaiModelProfile.forModel(baseSpec),
                 TaiModelSpec.inferBackend(output.getAbsolutePath()),
                 format,
                 null,
                 null,
-                4096,
+                TaiModelSpec.defaultEndpointContextWindowFor(baseSpec.id, TaiModelSpec.inferBackend(output.getAbsolutePath())),
+                baseSpec.sourceContextWindow,
+                baseSpec.defaultMaxOutputTokens,
                 0,
-                null
+                null,
+                baseSpec.endpointCapabilities,
+                baseSpec.toolMode
             );
             store.upsertUserModel(spec);
 

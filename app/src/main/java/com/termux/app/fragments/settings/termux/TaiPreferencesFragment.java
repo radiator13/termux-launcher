@@ -117,6 +117,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         new ActivityResultContracts.OpenDocument(),
         this::onModelDocumentSelected);
     private ImportDraft pendingImportDraft;
+    @Nullable private volatile JSONObject lastRuntimeStatus;
     private final ExecutorService runtimeActionExecutor = Executors.newFixedThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "tai-settings-runtime");
         thread.setDaemon(true);
@@ -206,6 +207,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         super.onResume();
         if (getActivity() != null) {
             getActivity().setTitle(R.string.termux_ai_preferences_title);
+            getActivity().getWindow().setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
         }
         Context context = getContext();
         if (context != null) {
@@ -217,6 +221,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     @Override
     public void onPause() {
         handler.removeCallbacks(refreshRuntimeRunnable);
+        if (getActivity() != null) {
+            getActivity().getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        }
         super.onPause();
     }
 
@@ -251,6 +258,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
     /** Apply a (possibly null) pre-fetched runtime status plus the non-blocking page bits, on the UI thread. */
     private void applyTaiPage(Context context, @Nullable JSONObject runtimeStatus) {
+        lastRuntimeStatus = runtimeStatus;
         updateRuntimeStatus(context, runtimeStatus);
         refreshOverrides();
         refreshEndpointPreferences(context);
@@ -360,7 +368,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         Preference endpointCopy = findPreference("tai_endpoint_copy");
         if (endpointCopy != null) {
             endpointCopy.setOnPreferenceClickListener(preference -> {
-                copyEndpointInfo(context);
+                showApiAccessDialog(context);
                 return true;
             });
         }
@@ -417,7 +425,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private void configureApiTokenPreference(Context context) {
         EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
         if (token == null) return;
-        token.setText(new TaiSettings(context).getOrCreateApiToken());
+        String currentToken = new TaiSettings(context).getOrCreateApiToken();
+        token.setText(currentToken);
+        token.setSummary(TaiSettings.redactToken(currentToken));
         token.setOnPreferenceClickListener(preference -> {
             copyApiToken(context);
             return true;
@@ -463,16 +473,52 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             currentToken = new TaiSettings(context).getOrCreateApiToken();
         }
         EditText input = buildDialogEditText(context, currentToken,
-            InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, false);
+            InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD, false);
+        final boolean[] revealed = {false};
         new MaterialAlertDialogBuilder(context)
             .setTitle(R.string.termux_ai_api_token_title)
             .setView(wrapDialogView(context, null, input))
-            .setNeutralButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
-                copyToClipboard(context, input.getText().toString(), R.string.termux_ai_api_token_copied))
+            .setNeutralButton(R.string.termux_ai_dialog_reveal, (dialog, which) -> {
+                revealed[0] = !revealed[0];
+                int selection = input.getSelectionStart();
+                input.setInputType(InputType.TYPE_CLASS_TEXT
+                    | (revealed[0] ? InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD : InputType.TYPE_TEXT_VARIATION_PASSWORD));
+                if (selection >= 0 && selection <= input.length()) input.setSelection(selection);
+            })
             .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
                 saveApiToken(context, preference, input.getText().toString()))
             .setNegativeButton(android.R.string.cancel, null)
             .show();
+    }
+
+    private void showApiAccessDialog(Context context) {
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            String baseUrl = endpoint.optString("baseUrl", "");
+            String openAiBaseUrl = endpoint.optString("openAiBaseUrl", baseUrl.isEmpty() ? "" : baseUrl + "/v1");
+            String endpointFile = endpoint.optString("endpointFile", "~/.launcherctl/endpoint.json");
+            String tokenFile = endpoint.optString("tokenFile", "~/.launcherctl/token");
+            String token = endpoint.optString("token", "");
+            String redacted = TaiSettings.redactToken(token);
+            String summary = getString(R.string.termux_ai_endpoint_detail_message_dynamic,
+                baseUrl, openAiBaseUrl, redacted, endpointFile, tokenFile);
+            new MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.termux_ai_endpoint_detail_title)
+                .setMessage(summary)
+                .setNeutralButton(R.string.termux_ai_dialog_reveal, (dialog, which) ->
+                    new MaterialAlertDialogBuilder(context)
+                        .setTitle(R.string.termux_ai_endpoint_detail_title)
+                        .setMessage(getString(R.string.termux_ai_endpoint_detail_message_dynamic,
+                            baseUrl, openAiBaseUrl, token, endpointFile, tokenFile))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show())
+                .setPositiveButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
+                    copyToClipboard(context, openAiBaseUrl, R.string.termux_ai_endpoint_copied))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } catch (JSONException e) {
+            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void saveApiToken(Context context, EditTextPreference preference, String rawValue) {
@@ -589,8 +635,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             }
             EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
             if (token != null) {
-                token.setText(endpoint.optString("token", new TaiSettings(context).getOrCreateApiToken()));
-                token.setSummary(endpoint.optString("token", ""));
+                String endpointToken = endpoint.optString("token", new TaiSettings(context).getOrCreateApiToken());
+                token.setText(endpointToken);
+                token.setSummary(TaiSettings.redactToken(endpointToken));
             }
             Preference endpointCopy = findPreference("tai_endpoint_copy");
             if (endpointCopy != null) {
@@ -847,7 +894,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             String baseUrl = endpoint.optString("openAiBaseUrl", "");
             String token = endpoint.optString("token", "");
             if (!baseUrl.isEmpty()) appendKv(body, "endpoint", baseUrl);
-            if (!token.isEmpty()) appendKv(body, "token", token);
+            if (!token.isEmpty()) appendKv(body, "token", TaiSettings.redactToken(token));
         } catch (JSONException ignored) {
         }
         return body.toString().trim();
@@ -1020,6 +1067,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         Preference empty = findPreference("tai_models_empty");
         if (empty != null) empty.setVisible(installedModels.isEmpty());
         String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
+        String loadedId = loadedModelId();
 
         for (TaiModelSpec model : installedModels.values()) {
             TaiModelPreference row = new TaiModelPreference(context);
@@ -1027,8 +1075,19 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             row.setTitle(model.displayName);
             row.setSummary(buildModelRowSummary(model.roleHint, model.backend));
             row.setMetaLine(buildInstalledMetaLine(context, model));
-            row.setPill(model.id.equals(activeModelId) ? getString(R.string.termux_ai_model_pill_active) : null,
-                model.id.equals(activeModelId));
+            boolean modelLoaded = model.id.equals(loadedId);
+            boolean companion = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(model.id);
+            String pill;
+            if (modelLoaded) {
+                pill = getString(R.string.termux_ai_model_state_loaded);
+            } else if (companion) {
+                pill = getString(R.string.termux_ai_model_state_companion);
+            } else if (model.id.equals(activeModelId)) {
+                pill = getString(R.string.termux_ai_model_pill_active);
+            } else {
+                pill = getString(R.string.termux_ai_model_pill_installed);
+            }
+            row.setPill(pill, model.id.equals(activeModelId));
             row.setBackendTone(TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)
                 ? TaiModelPreference.BackendTone.MNN : TaiModelPreference.BackendTone.LITERT);
             configureProgress(row, null);
@@ -1206,14 +1265,21 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             summary.append("\nInstalled: ").append(formatBytes(model.sizeBytes));
             summary.append("\n").append(model.localPath);
         }
-        summary.append("\nCapabilities: ").append(model.capabilities.toString());
+        summary.append("\nEndpoint capabilities: ").append(model.endpointCapabilities.toString());
+        if (!model.sourceCapabilities.equals(model.endpointCapabilities)) {
+            summary.append("\nSource capabilities: ").append(model.sourceCapabilities.toString());
+        }
+        summary.append("\nEndpoint context: ").append(model.endpointContextWindow);
+        if (model.sourceContextWindow != model.endpointContextWindow) {
+            summary.append(" · source ").append(model.sourceContextWindow);
+        }
         try {
             TaiModelProfile profile = TaiModelProfile.forModel(model);
             summary.append("\nAccelerators: ").append(profile.compatibleAccelerators.toString());
             if (profile.minDeviceMemoryInGb != null) {
                 summary.append(" - minimum memory ").append(profile.minDeviceMemoryInGb).append(" GiB");
             }
-            summary.append("\nDefaults: ").append(profile.defaultMaxTokens).append(" tokens, temperature ")
+            summary.append("\nDefaults: ").append(model.defaultMaxOutputTokens).append(" max output tokens, temperature ")
                 .append(profile.defaultTemperature);
         } catch (Exception ignored) {
         }
@@ -1263,20 +1329,57 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             .show();
     }
 
+    @Nullable
+    private String loadedModelId() {
+        JSONObject status = lastRuntimeStatus;
+        if (status == null) return null;
+        try {
+            JSONObject runtime = status.getJSONObject("runtime");
+            if (runtime.optBoolean("loaded", false) || "loading".equals(runtime.optString("state", ""))) {
+                String id = runtime.optString("loadedModelId", "");
+                return id.isEmpty() ? null : id;
+            }
+        } catch (JSONException ignored) {
+        }
+        return null;
+    }
+
+    private boolean isModelLoaded(@Nullable String modelId) {
+        if (modelId == null) return false;
+        return modelId.equals(loadedModelId());
+    }
+
     private void showInstalledModelActions(Context context, TaiModelSpec model) {
         boolean active = model.id.equals(new TaiSettings(context).getDefaultAssistantModel());
+        boolean loaded = isModelLoaded(model.id);
+        boolean companion = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(model.id);
+        String stateLine = loaded
+            ? getString(R.string.termux_ai_model_state_loaded)
+            : companion
+                ? getString(R.string.termux_ai_model_state_companion)
+                : active
+                    ? getString(R.string.termux_ai_model_pill_active)
+                    : getString(R.string.termux_ai_model_pill_installed);
         CharSequence[] actions = new CharSequence[] {
+            getString(R.string.termux_ai_model_load_action),
             active ? getString(R.string.termux_ai_model_active_action) : getString(R.string.termux_ai_model_set_active_action),
             getString(R.string.termux_ai_model_tune_action),
-            getString(R.string.termux_ai_model_delete_action)
+            loaded ? getString(R.string.termux_ai_model_delete_action_loaded) : getString(R.string.termux_ai_model_delete_action)
         };
         new MaterialAlertDialogBuilder(context)
             .setTitle(model.displayName)
-            .setMessage(buildInstalledModelSummary(model))
+            .setMessage(buildInstalledModelSummary(model) + "\n" + getString(R.string.termux_ai_model_state_label, stateLine))
             .setItems(actions, (dialog, which) -> {
-                if (which == 0 && !active) setActiveModel(context, model.id);
-                else if (which == 1) openParameterScreen(model);
-                else if (which == 2) confirmDeleteModel(context, model);
+                if (which == 0) loadModel(context, model.id);
+                else if (which == 1 && !active) setActiveModel(context, model.id);
+                else if (which == 2) openParameterScreen(model);
+                else if (which == 3) {
+                    if (loaded) {
+                        Toast.makeText(context, R.string.termux_ai_model_delete_loaded_warning, Toast.LENGTH_LONG).show();
+                    } else {
+                        confirmDeleteModel(context, model);
+                    }
+                }
             })
             .setNegativeButton(android.R.string.cancel, null)
             .show();
@@ -1462,7 +1565,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         runtimeActionExecutor.execute(() -> {
             String status;
             try {
-                status = TaiManager.getInstance(context).runtimeStatus().toString(2);
+                status = redactRuntimeDebugJson(context, TaiManager.getInstance(context).runtimeStatus().toString(2));
             } catch (Exception e) {
                 status = null;
             }
@@ -1483,6 +1586,19 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                     .show();
             });
         });
+    }
+
+    private String redactRuntimeDebugJson(Context context, String body) {
+        String redacted = body == null ? "" : body;
+        try {
+            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
+            String token = endpoint.optString("token", "");
+            if (!token.isEmpty()) redacted = redacted.replace(token, TaiSettings.redactToken(token));
+        } catch (JSONException ignored) {
+        }
+        String hfToken = new TaiSettings(context).getHuggingFaceToken();
+        if (!hfToken.trim().isEmpty()) redacted = redacted.replace(hfToken, TaiSettings.redactToken(hfToken));
+        return redacted;
     }
 
     private void startCatalogDownload(Context context, TaiModelCatalog.CatalogEntry entry) {

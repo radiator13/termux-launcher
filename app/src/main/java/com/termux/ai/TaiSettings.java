@@ -294,6 +294,11 @@ public final class TaiSettings {
         return !normalizeApiToken(token).isEmpty();
     }
 
+    @NonNull
+    public static String redactToken(@Nullable String token) {
+        return TaiModelSpec.redactToken(token);
+    }
+
     public static int normalizeApiPort(@Nullable String port) {
         if (port == null) return DEFAULT_API_PORT;
         try {

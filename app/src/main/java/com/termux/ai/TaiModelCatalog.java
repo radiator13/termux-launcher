@@ -31,14 +31,26 @@ public final class TaiModelCatalog {
                 LinkedHashSet<String> capabilities = new LinkedHashSet<>();
                 JSONArray values = item.optJSONArray("capabilities");
                 if (values != null) for (int j = 0; j < values.length(); j++) capabilities.add(values.getString(j));
+                LinkedHashSet<String> sourceCapabilities = new LinkedHashSet<>();
+                JSONArray sourceValues = item.optJSONArray("sourceCapabilities");
+                if (sourceValues != null) for (int j = 0; j < sourceValues.length(); j++) sourceCapabilities.add(sourceValues.getString(j));
+                if (sourceCapabilities.isEmpty()) sourceCapabilities.addAll(capabilities);
+                LinkedHashSet<String> endpointCapabilities = new LinkedHashSet<>();
+                JSONArray endpointValues = item.optJSONArray("endpointCapabilities");
+                if (endpointValues != null) for (int j = 0; j < endpointValues.length(); j++) endpointCapabilities.add(endpointValues.getString(j));
                 CatalogEntry entry = new CatalogEntry(item.getString("modelId"), item.getString("displayName"),
                     item.optString("roleHint", "Curated model"), item.getString("repositoryId"),
                     item.getString("revision"), item.isNull("artifactPath") ? null : item.optString("artifactPath"),
                     item.getString("license"), item.getLong("sizeBytes"), item.optBoolean("gated", false),
                     item.getString("backend"), item.getString("format"), item.optString("architecture", ""),
-                    item.isNull("quantization") ? null : item.optString("quantization"), item.optInt("contextWindow", 4096),
+                    item.isNull("quantization") ? null : item.optString("quantization"),
+                    item.optInt("endpointContextWindow", item.optInt("contextWindow", 4096)),
+                    item.optInt("sourceContextWindow", item.optInt("contextWindow", 4096)),
+                    item.optInt("defaultMaxOutputTokens", TaiModelSpec.defaultMaxOutputTokensFor(item.getString("modelId"), item.getString("backend"))),
                     item.optInt("recommendedRamGb", 0), item.isNull("sha256") ? null : item.optString("sha256"),
-                    capabilities, item.optString("jobGroup", "remote"), item.optString("priority", "remote"),
+                    sourceCapabilities, endpointCapabilities.isEmpty() ? null : endpointCapabilities,
+                    item.isNull("toolMode") ? null : item.optString("toolMode", null),
+                    item.optString("jobGroup", "remote"), item.optString("priority", "remote"),
                     displayTags(item.optJSONArray("displayCapabilityTags")), item.optString("sizeEstimate", ""),
                     item.optString("ramTier", ""), item.optBoolean("recommended", false),
                     item.optBoolean("downloadAvailable", true), item.optString("unavailableReason", ""));
@@ -60,15 +72,12 @@ public final class TaiModelCatalog {
         entries.put(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT, liteRtAvailable(
             TaiModelRegistry.MODEL_GEMMA_4_E4B_IT, "Gemma 4 E4B IT", "general_multimodal", "premium_default", false,
             "Coding and reasoning", "litert-community/gemma-4-E4B-it-litert-lm", "28299f30ee4d43294517a4ac93abd6163412f07f",
-            "gemma-4-E4B-it.litertlm", "Apache-2.0", 3_659_530_240L, "8.4 GB", "12GB+", false,
+            "gemma-4-E4B-it.litertlm", "Apache-2.0", 3_659_530_240L, "3.7 GB", "12GB+", false,
             tags("Text", "Vision", "Audio", "Reasoning"), setOf("text_chat", "image_input", "audio_input", "llm_thinking")));
-        entries.put("qwen2.5-1.5b-instruct-litert-lm", liteRtAvailable(
+        entries.put("qwen2.5-1.5b-instruct-litert-lm", liteRtImportOnly(
             "qwen2.5-1.5b-instruct-litert-lm", "Qwen2.5 1.5B Instruct", "lightweight_text", "lightweight_alternative", false,
             "Lightweight text, code, and multilingual", "litert-community/Qwen2.5-1.5B-Instruct",
-            "19edb84c69a0212f29a6ef17ba0d6f278b6a1614",
-            "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm", "Apache-2.0",
-            1_597_931_520L, "1.5 GB", "6GB+", false, "qwen2.5", "q8",
-            "faa60663b333290c1496c499828b21d3e3254a788cacd8cce917ce0f761a2dc9",
+            1_597_931_520L, "1.5 GB", "6GB+", "q8",
             tags("Text", "Code", "Multilingual"), setOf("text_chat", "code", "multilingual")));
         entries.put("deepseek-r1-distill-qwen-1.5b-litert-lm", liteRtAvailable(
             "deepseek-r1-distill-qwen-1.5b-litert-lm", "DeepSeek-R1 Distill 1.5B", "reasoning", "reasoning_small", false,
@@ -80,14 +89,14 @@ public final class TaiModelCatalog {
             tags("Reasoning", "Text"), setOf("text_chat", "reasoning")));
         entries.put(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M, liteRtAvailable(
             TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M, "FunctionGemma 270M", "tool_calling", "experimental_launcher_agent", false,
-            "Mobile actions", "litert-community/functiongemma-270m-ft-mobile-actions", "38942192c9b723af836d489074823ff33d4a3e7a",
+            "Mobile actions tool-call model", "litert-community/functiongemma-270m-ft-mobile-actions", "38942192c9b723af836d489074823ff33d4a3e7a",
             "mobile_actions_q8_ekv1024.litertlm", "Gemma Terms of Use", 288_964_608L, "0.3 GB", "4GB+", true,
             tags("Tools"), setOf("text_chat", "tool_use", "mobile_actions")));
 
         entries.put("qwen2.5-coder-1.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-1.5b-instruct-mnn", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,
             "Code and terminal assistant", "taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", 1_343_595_873L,
-            "1.3 GB", "4GB-6GB+", "qwen2.5-coder", "int4", tags("Code", "Text"), setOf("text_chat", "code")));
+            "1.3 GB", "4GB-6GB+", "qwen2.5-coder", "int4", tags("Code", "Text", "Tools"), setOf("text_chat", "code", "tool_use")));
         entries.put("qwen2.5-coder-7b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-7b-instruct-mnn", "Qwen2.5-Coder 7B", "coding", "advanced_coder", false,
             "Higher quality code model", "taobao-mnn/Qwen2.5-Coder-7B-Instruct-MNN", 5_079_861_358L,
@@ -126,7 +135,9 @@ public final class TaiModelCatalog {
                                                  @Nullable String quantization, @Nullable String sha256,
                                                  LinkedHashSet<String> displayTags, LinkedHashSet<String> capabilities) {
         return entry(id, name, role, repo, revision, file, license, size, gated, TaiModelSpec.BACKEND_LITERT_LM,
-            TaiModelSpec.FORMAT_LITERTLM, architecture, quantization, 4096, ramGb(ramTier), sha256, capabilities,
+            TaiModelSpec.FORMAT_LITERTLM, architecture, quantization,
+            TaiModelSpec.defaultEndpointContextWindowFor(id, TaiModelSpec.BACKEND_LITERT_LM),
+            ramGb(ramTier), sha256, capabilities,
             jobGroup, priority, displayTags, sizeEstimate, ramTier, recommended, true, "");
     }
 
@@ -144,7 +155,7 @@ public final class TaiModelCatalog {
                                              String architecture, String quantization, LinkedHashSet<String> displayTags,
                                              LinkedHashSet<String> capabilities) {
         return entry(id, name, role, repo, "main", "config.json", "Apache-2.0", size, false,
-            TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, architecture, quantization, 4096,
+            TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, architecture, quantization, 8192,
             ramGb(ramTier), null, capabilities, jobGroup, priority, displayTags, sizeEstimate, ramTier,
             recommended, true, "");
     }
@@ -156,8 +167,17 @@ public final class TaiModelCatalog {
                                       LinkedHashSet<String> displayTags, String sizeEstimate, String ramTier,
                                       boolean recommended, boolean downloadAvailable, String unavailableReason) {
         return new CatalogEntry(id, name, role, repo, revision, file, license, size, gated, backend, format, architecture,
-            quantization, contextWindow, ramGb, sha256, capabilities, jobGroup, priority, displayTags, sizeEstimate,
+            quantization, contextWindow, sourceContextWindowFor(id, backend, contextWindow),
+            TaiModelSpec.defaultMaxOutputTokensFor(id, backend), ramGb, sha256,
+            capabilities, null, null, jobGroup, priority, displayTags, sizeEstimate,
             ramTier, recommended, downloadAvailable, unavailableReason);
+    }
+
+    private static int sourceContextWindowFor(String id, String backend, int endpointContextWindow) {
+        if (TaiModelRegistry.MODEL_GEMMA_4_E2B_IT.equals(id) || TaiModelRegistry.MODEL_GEMMA_4_E4B_IT.equals(id)) return 32_768;
+        if (TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(id)) return 1024;
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend) && id.startsWith("qwen2.5-")) return 32_768;
+        return endpointContextWindow;
     }
 
     private static LinkedHashSet<String> setOf(String... values) { return new LinkedHashSet<>(Arrays.asList(values)); }
@@ -185,25 +205,37 @@ public final class TaiModelCatalog {
         public final boolean gated;
         public final String backend, format, architecture, quantization;
         public final String jobGroup, priority, sizeEstimate, ramTier, unavailableReason;
-        public final int contextWindow, recommendedRamGb;
+        public final int contextWindow, endpointContextWindow, sourceContextWindow, defaultMaxOutputTokens, recommendedRamGb;
         public final boolean recommended, downloadAvailable;
         @Nullable public final String sha256;
-        public final LinkedHashSet<String> capabilities, displayCapabilityTags;
+        @Nullable public final String toolMode;
+        public final LinkedHashSet<String> capabilities, endpointCapabilities, sourceCapabilities, displayCapabilityTags;
         public final String providerPageUrl, downloadUrl;
 
         private CatalogEntry(String modelId, String displayName, String roleHint, String repositoryId,
                              String revision, @Nullable String artifactPath, String license, long sizeBytes,
                              boolean gated, String backend, String format, String architecture,
-                             @Nullable String quantization, int contextWindow, int recommendedRamGb,
-                             @Nullable String sha256, LinkedHashSet<String> capabilities, String jobGroup, String priority,
+                             @Nullable String quantization, int endpointContextWindow, int sourceContextWindow,
+                             int defaultMaxOutputTokens, int recommendedRamGb, @Nullable String sha256,
+                             LinkedHashSet<String> sourceCapabilities,
+                             @Nullable LinkedHashSet<String> endpointCapabilities, @Nullable String toolMode,
+                             String jobGroup, String priority,
                              LinkedHashSet<String> displayCapabilityTags, String sizeEstimate, String ramTier,
                              boolean recommended, boolean downloadAvailable, String unavailableReason) {
             this.modelId = modelId; this.displayName = displayName; this.roleHint = roleHint;
             this.repositoryId = repositoryId; this.revision = revision; this.artifactPath = artifactPath;
             this.license = license; this.sizeBytes = sizeBytes; this.gated = gated; this.backend = backend;
             this.format = format; this.architecture = architecture; this.quantization = quantization;
-            this.contextWindow = contextWindow; this.recommendedRamGb = recommendedRamGb;
-            this.sha256 = sha256; this.capabilities = capabilities; this.jobGroup = jobGroup; this.priority = priority;
+            this.endpointContextWindow = endpointContextWindow; this.sourceContextWindow = sourceContextWindow;
+            this.contextWindow = endpointContextWindow; this.defaultMaxOutputTokens = defaultMaxOutputTokens;
+            this.recommendedRamGb = recommendedRamGb; this.sha256 = sha256;
+            this.sourceCapabilities = sourceCapabilities;
+            this.endpointCapabilities = endpointCapabilities == null
+                ? TaiModelSpec.endpointCapabilitiesFor(modelId, backend, format, sourceCapabilities, null)
+                : endpointCapabilities;
+            this.capabilities = this.endpointCapabilities;
+            this.toolMode = toolMode == null ? TaiModelSpec.toolModeFor(backend, this.endpointCapabilities) : toolMode;
+            this.jobGroup = jobGroup; this.priority = priority;
             this.displayCapabilityTags = displayCapabilityTags; this.sizeEstimate = sizeEstimate; this.ramTier = ramTier;
             this.recommended = recommended; this.downloadAvailable = downloadAvailable; this.unavailableReason = unavailableReason;
             this.providerPageUrl = "https://huggingface.co/" + repositoryId;

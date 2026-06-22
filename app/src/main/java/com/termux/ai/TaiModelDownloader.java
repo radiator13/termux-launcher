@@ -62,8 +62,8 @@ public final class TaiModelDownloader {
     public JSONObject startCatalogDownload(@NonNull TaiModelCatalog.CatalogEntry entry,
                                            @Nullable String authToken) throws JSONException {
         return startDownload(entry.modelId, entry.downloadUrl, entry.displayName, entry.license,
-            entry.capabilities, entry.backend, entry.format, entry.architecture, entry.quantization,
-            entry.contextWindow, entry.recommendedRamGb, entry.sha256, entry.sizeBytes, authToken);
+            entry.sourceCapabilities, entry.backend, entry.format, entry.architecture, entry.quantization,
+            entry.endpointContextWindow, entry.recommendedRamGb, entry.sha256, entry.sizeBytes, authToken);
     }
 
     @NonNull

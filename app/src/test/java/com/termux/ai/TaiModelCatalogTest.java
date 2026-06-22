@@ -42,6 +42,13 @@ public class TaiModelCatalogTest {
         assertEquals("8GB+", recommended.ramTier);
         assertTrue(recommended.recommended);
         assertTrue(recommended.displayCapabilityTags.contains("Vision"));
+        assertTrue(recommended.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertTrue(recommended.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(recommended.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertTrue(recommended.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+        assertEquals(4096, recommended.endpointContextWindow);
+        assertEquals(32768, recommended.sourceContextWindow);
+        assertEquals(4000, recommended.defaultMaxOutputTokens);
 
         assertNotNull(coder);
         assertEquals("coding", coder.jobGroup);
@@ -49,6 +56,37 @@ public class TaiModelCatalogTest {
         assertEquals("4GB-6GB+", coder.ramTier);
         assertTrue(coder.recommended);
         assertTrue(coder.displayCapabilityTags.contains("Code"));
+        assertTrue(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
+        assertTrue(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_CODE));
+        assertTrue(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE));
+        assertFalse(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertFalse(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(coder.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertEquals(TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK, coder.toolMode);
+        assertEquals(8192, coder.endpointContextWindow);
+        assertEquals(32768, coder.sourceContextWindow);
+        assertEquals(1024, coder.defaultMaxOutputTokens);
+    }
+
+    @Test
+    public void builtInCatalog_correctsModelSpecificEndpointMetadata() {
+        TaiModelCatalog.CatalogEntry e4b = TaiModelCatalog.get(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
+        TaiModelCatalog.CatalogEntry mobileActions = TaiModelCatalog.get(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
+
+        assertNotNull(e4b);
+        assertEquals("3.7 GB", e4b.sizeEstimate);
+        assertTrue(e4b.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertTrue(e4b.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(e4b.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_LLM_THINKING));
+
+        assertNotNull(mobileActions);
+        assertEquals("Mobile actions tool-call model", mobileActions.roleHint);
+        assertEquals(1024, mobileActions.endpointContextWindow);
+        assertEquals(1024, mobileActions.sourceContextWindow);
+        assertEquals(1024, mobileActions.defaultMaxOutputTokens);
+        assertTrue(mobileActions.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE));
+        assertTrue(mobileActions.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_MOBILE_ACTIONS));
+        assertEquals(TaiModelSpec.TOOL_MODE_NATIVE, mobileActions.toolMode);
     }
 
     @Test

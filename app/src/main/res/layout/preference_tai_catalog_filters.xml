@@ -61,6 +61,26 @@
                 android:text="@string/termux_ai_backend_label_mnn"
                 android:textSize="12sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tai_catalog_filter_installed"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="@string/termux_ai_catalog_filter_installed"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tai_catalog_filter_usable"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="@string/termux_ai_catalog_filter_usable"
+                android:textSize="12sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </FrameLayout>
 </LinearLayout>

@@ -7,6 +7,7 @@ The short version:
 - The AI runs on your device. Native model runtime work is isolated in the Android `:tai_runtime` process so launcher UI survives native runtime crashes.
 - It exposes an OpenAI-compatible API for tools such as `aichat`.
 - It supports LiteRT-LM and MNN model backends.
+- It does not run GGUF/raw weight files.
 - It does not bundle model files inside the APK. You download or import models yourself.
 - The API is protected by a bearer token stored on your device.
 
@@ -104,6 +105,8 @@ POST /v1/audio/speech
 
 `/v1/audio/speech` returns a clear `unsupported_audio_output` error because the local runners do not currently generate audio output.
 
+`/v1/embeddings` is accepted only for installed models whose `/v1/models` `_capabilities` include `text_embeddings`. The current LiteRT/MNN catalog models are chat/completion models unless a local model explicitly advertises embeddings.
+
 Most OpenAI-compatible CLI tools expect a base URL ending in `/v1`, so use:
 
 ```text
@@ -131,7 +134,7 @@ qwen2.5-coder-1.5b-instruct-mnn
 
 `gemma-4-e4b-it-litert-lm` is the larger assistant model.
 
-`functiongemma-270m-mobile-actions-litert-lm` is a smaller model intended for mobile action-style tasks. It is CPU-only.
+`functiongemma-270m-mobile-actions-litert-lm` is a smaller model intended for mobile action-style tool calls. It is CPU-only. TAI does not automatically execute Android actions from these calls.
 
 `qwen2.5-coder-1.5b-instruct-mnn` is the default installed MNN code model.
 
@@ -197,7 +200,7 @@ From there you can:
 - choose the default assistant model
 - download catalog models
 - import a local `.litertlm` or `.task` model with Android's file picker; the selected file is copied into app-private model storage
-- change generation defaults such as max tokens and temperature
+- change generation defaults such as max output tokens and temperature
 - choose Auto, GPU, or CPU acceleration where supported
 - enable or disable OpenAI-compatible auto-load
 - opt into FunctionGemma/MobileActions companion auto-load
@@ -238,13 +241,15 @@ You can download supported catalog models from the settings page, or use the CLI
 tai download gemma-4-e2b-it-litert-lm <model-url> --accept-terms
 ```
 
-You can import an existing local LiteRT-LM file:
+You can import an existing local LiteRT-LM `.litertlm` or `.task` file:
 
 ```sh
 tai import /absolute/path/to/model.litertlm MyModelName
 ```
 
 For catalog models, use the official model ID so OpenAI-compatible tools can request it directly.
+
+MNN models should be installed from the catalog/download flow so TAI can fetch `config.json` and required sidecar files. GGUF, safetensors, PyTorch, ONNX, and other raw weight files are rejected by import/load paths because this APK does not include a GGUF/llama.cpp backend.
 
 ## tmux Status Indicator
 

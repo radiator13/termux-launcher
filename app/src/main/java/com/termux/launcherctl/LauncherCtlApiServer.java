@@ -1313,8 +1313,9 @@ public class LauncherCtlApiServer {
         supportedEndpoints.put("/v1/events/tail");
         supportedEndpoints.put("/v1/events/stream");
         data.put("supportedEndpoints", supportedEndpoints);
-        data.put("embeddingsNote", "Embeddings support is model-capability dependent.");
+        data.put("embeddingsNote", "Embeddings support is model-capability dependent; check /v1/models _capabilities for text_embeddings.");
         data.put("audioOutputNote", "Audio output returns an explicit unsupported_audio_output error until a local runner exposes generated audio.");
+        data.put("modelFormatNote", "TAI supports LiteRT-LM and MNN model packages only; GGUF/raw weights are not supported by this APK.");
         if (includeToken) {
             data.put("token", settings.getOrCreateApiToken());
         }
@@ -1700,6 +1701,7 @@ public class LauncherCtlApiServer {
             "TAI is authenticated through ~/.launcherctl and runs native AI in the isolated :tai_runtime process.\n" +
             "LiteRT-LM and MNN load in :tai_runtime after ABI/API/library/model/memory preflight.\n" +
             "MNN models route through the bundled MNN backend when supported by the installed APK.\n" +
+            "GGUF/raw weight files are not supported by this APK.\n" +
             "Auto defaults to CPU on unknown devices; GPU is used automatically only after a successful device/model history.\n" +
             "OpenAI-compatible endpoints (default bind mode is localhost):\n" +
             "  /v1/models\n" +

@@ -5,6 +5,8 @@ TAI supports two local LLM runners behind the same authenticated localhost API:
 - LiteRT-LM for Gemma 4 and MobileActions `.litertlm` packages.
 - MNN-LLM for downloaded MNN `config.json` packages.
 
+TAI does not include a GGUF/llama.cpp backend. GGUF, safetensors, PyTorch, ONNX, and other raw weight files are not listed by `/v1/models` and are rejected by import/load paths.
+
 Both runners are exposed through OpenAI-compatible endpoints so CLI tools can use the device as a local model backend:
 
 ```sh
@@ -48,11 +50,16 @@ qwen2.5-coder-1.5b-instruct-mnn
   "id": "gemma-4-e2b-it-litert-lm",
   "object": "model",
   "_backend": "litert-lm",
-  "_capabilities": ["text_chat", "image_input", "audio_input", "tool_use"]
+  "_capabilities": ["text_chat", "image_input", "audio_input", "tool_use"],
+  "_endpoint_capabilities": ["text_chat", "image_input", "audio_input", "tool_use"],
+  "_source_capabilities": ["text_chat", "image_input", "audio_input", "tool_use", "llm_thinking"],
+  "_default_max_output_tokens": 4000,
+  "_endpoint_context_window": 4096,
+  "_source_context_window": 32768
 }
 ```
 
-Clients should not assume every model supports every content part. Check `_backend` and `_capabilities`.
+Endpoint truth wins: `_capabilities` always equals `_endpoint_capabilities`, meaning what this APK currently serves for that installed model. `_source_capabilities` and `_source_context_window` are informational upstream/package metadata and must not be used to decide whether to send media, embeddings, tools, or other requests.
 
 ## Load Preflight And Isolation
 
@@ -84,7 +91,7 @@ Unsupported content parts return explicit OpenAI-shaped errors, such as `unsuppo
 
 Gemma 4 LiteRT defaults follow Google AI Edge Gallery defaults:
 
-| Model | Accelerator | Max tokens | TopK | TopP | Temperature |
+| Model | Accelerator | Max output tokens | TopK | TopP | Temperature |
 | --- | --- | ---: | ---: | ---: | ---: |
 | `gemma-4-e2b-it-litert-lm` | GPU, CPU fallback | 4000 | 64 | 0.95 | 1.0 |
 | `gemma-4-e4b-it-litert-lm` | GPU, CPU fallback | 4000 | 64 | 0.95 | 1.0 |
@@ -166,7 +173,7 @@ The runner passes audio bytes to LiteRT-LM. The local API does not implement `/v
 
 MobileActions uses the LiteRT-LM runner but has its own profile:
 
-| Model | Accelerator | Max tokens | TopK | TopP | Temperature |
+| Model | Accelerator | Max output tokens | TopK | TopP | Temperature |
 | --- | --- | ---: | ---: | ---: | ---: |
 | `functiongemma-270m-mobile-actions-litert-lm` | CPU only | 1024 | 64 | 0.95 | 0.0 |
 
@@ -198,6 +205,8 @@ The tested `qwen2.5-coder-1.5b-instruct-mnn` defaults are:
 | `thread_num` | `4` |
 | `precision` | `low` |
 | `memory` | `low` |
+| `max_context_len` | `8192` |
+| `max_new_tokens` | `1024` |
 | `temperature` | `0.8` |
 | `top_k` | `40` |
 | `top_p` | `0.9` |
@@ -227,9 +236,9 @@ If `accelerator` is `auto` or omitted, TAI uses CPU for safety before native loa
 
 ### MNN Tools
 
-MNN supports OpenAI function tool requests through `/v1/chat/completions`.
+MNN models that advertise `tool_use` support OpenAI function tool requests through `/v1/chat/completions`.
 
-The preferred path is a structured-chat native bridge. The current bundled prebuilt MNN native library does not export that bridge, so TAI falls back to a Java-rendered tool prompt and parses common tool-call outputs back into OpenAI `tool_calls`.
+The current bundled prebuilt MNN native library does not export a native structured-tool bridge, so TAI marks MNN tool mode as `_tool_mode: "prompt_fallback"`. TAI renders a Java tool prompt and parses common tool-call outputs back into OpenAI `tool_calls`.
 
 For required or named tool choice, TAI guarantees an OpenAI-compatible result:
 
@@ -299,6 +308,8 @@ TAI rejects unsupported media instead of dropping it.
 Examples:
 
 - MNN image input: `capability_not_supported`
+- MNN audio input: `capability_not_supported`
+- embeddings for models without `text_embeddings`: `capability_not_supported`
 - text-only LiteRT model image input: `capability_not_supported`
 - unknown content part type: `unsupported_content_part`
 - chat audio output through `modalities:["audio"]`: `unsupported_audio_output`, HTTP 501

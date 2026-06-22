@@ -8,11 +8,13 @@ import com.termux.ai.TaiModelStore;
 import org.json.JSONObject;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class TaiModelCatalogPreferencesFragmentTest {
@@ -32,6 +34,40 @@ public class TaiModelCatalogPreferencesFragmentTest {
         for (TaiModelCatalog.CatalogEntry entry : mnn) {
             assertEquals(TaiModelSpec.BACKEND_MNN_LLM, entry.backend);
         }
+    }
+
+    @Test
+    public void filterEntries_supportsInstalledAndUsableFilters() {
+        TaiModelCatalog.CatalogEntry installedEntry = TaiModelCatalog.get(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
+        assertNotNull(installedEntry);
+        TaiModelSpec installedSpec = new TaiModelSpec(
+            installedEntry.modelId,
+            installedEntry.displayName,
+            installedEntry.roleHint,
+            "downloaded",
+            "/models/gemma/model.litertlm",
+            installedEntry.license,
+            installedEntry.sizeBytes,
+            installedEntry.sourceCapabilities,
+            false
+        );
+
+        List<TaiModelCatalog.CatalogEntry> installed = TaiModelCatalogPreferencesFragment.filterEntries(
+            TaiModelCatalog.entries().values(),
+            TaiModelCatalogPreferencesFragment.BackendFilter.INSTALLED,
+            "",
+            Collections.singletonMap(installedEntry.modelId, installedSpec),
+            null);
+        List<TaiModelCatalog.CatalogEntry> usable = TaiModelCatalogPreferencesFragment.filterEntries(
+            TaiModelCatalog.entries().values(),
+            TaiModelCatalogPreferencesFragment.BackendFilter.USABLE,
+            "",
+            Collections.emptyMap(),
+            null);
+
+        assertEquals(1, installed.size());
+        assertEquals(installedEntry.modelId, installed.get(0).modelId);
+        assertEquals(TaiModelCatalog.entries().size(), usable.size());
     }
 
     @Test
@@ -85,6 +121,9 @@ public class TaiModelCatalogPreferencesFragmentTest {
             TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, "other").type);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.ACTIVE,
             TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, installable.modelId).type);
+        assertFalse(TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, installable.modelId).enabled);
+        assertEquals("Default",
+            TaiModelCatalogPreferencesFragment.actionStateFor(installable, true, null, installable.modelId).pill);
         assertEquals(TaiModelCatalogPreferencesFragment.CatalogActionType.IMPORT_ONLY,
             TaiModelCatalogPreferencesFragment.actionStateFor(importOnly, false, null, "other").type);
 

@@ -224,7 +224,10 @@ public final class TaiModelStore {
         if (TaiModelSpec.BACKEND_MNN_LLM.equals(spec.backend)) {
             return mnnPackageReadable(modelFile);
         }
-        return modelFile.isFile() && modelFile.canRead();
+        String lowerName = modelFile.getName().toLowerCase(java.util.Locale.ROOT);
+        return modelFile.isFile()
+            && modelFile.canRead()
+            && (lowerName.endsWith(".litertlm") || lowerName.endsWith(".task"));
     }
 
     private boolean mnnPackageReadable(@NonNull File modelFile) {
@@ -265,36 +268,45 @@ public final class TaiModelStore {
         String displayName = modelId;
         String roleHint = "Downloaded model";
         String license = "User accepted provider terms externally";
-        long sizeBytes = item.optLong("bytesRead", item.optLong("totalBytes", 0L));
+        long sizeBytes = localModelSize(new File(path));
         String backend = TaiModelSpec.inferBackend(path);
         String format = TaiModelSpec.inferFormat(path);
         String architecture = null;
         String quantization = null;
-        int contextWindow = 4096;
+        int endpointContextWindow = TaiModelSpec.defaultEndpointContextWindowFor(modelId, backend);
+        int sourceContextWindow = endpointContextWindow;
+        int defaultMaxOutputTokens = TaiModelSpec.defaultMaxOutputTokensFor(modelId, backend);
         int recommendedRamGb = 0;
         String sha256 = null;
+        LinkedHashSet<String> endpointCapabilities = null;
+        String toolMode = null;
         if (entry != null) {
             displayName = entry.displayName;
             roleHint = entry.roleHint;
             license = entry.license;
-            sizeBytes = entry.sizeBytes > 0L ? entry.sizeBytes : sizeBytes;
-            capabilities.addAll(entry.capabilities);
+            capabilities.addAll(entry.sourceCapabilities);
+            endpointCapabilities = new LinkedHashSet<>(TaiModelSpec.endpointCapabilitiesFor(
+                entry.modelId, entry.backend, entry.format, entry.sourceCapabilities, path));
             backend = entry.backend;
             format = entry.format;
             architecture = entry.architecture;
             quantization = entry.quantization;
-            contextWindow = entry.contextWindow;
+            endpointContextWindow = entry.endpointContextWindow;
+            sourceContextWindow = entry.sourceContextWindow;
+            defaultMaxOutputTokens = entry.defaultMaxOutputTokens;
             recommendedRamGb = entry.recommendedRamGb;
             sha256 = entry.sha256;
+            toolMode = TaiModelSpec.toolModeFor(entry.backend, endpointCapabilities);
         }
         JSONArray capabilityArray = item.optJSONArray("capabilities");
-        if (capabilityArray != null) {
+        if (entry == null && capabilityArray != null) {
             capabilities.clear();
             for (int i = 0; i < capabilityArray.length(); i++) {
                 String capability = capabilityArray.optString(i, "");
                 if (!capability.isEmpty()) capabilities.add(capability);
             }
         }
+        if (sizeBytes <= 0L) sizeBytes = item.optLong("bytesRead", item.optLong("totalBytes", entry == null ? 0L : entry.sizeBytes));
         if (capabilities.isEmpty()) capabilities.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
         try {
             return new TaiModelSpec(
@@ -312,9 +324,13 @@ public final class TaiModelStore {
                 format,
                 architecture,
                 quantization,
-                contextWindow,
+                endpointContextWindow,
+                sourceContextWindow,
+                defaultMaxOutputTokens,
                 recommendedRamGb,
-                sha256
+                sha256,
+                endpointCapabilities,
+                toolMode
             );
         } catch (IllegalArgumentException e) {
             return null;
@@ -335,27 +351,70 @@ public final class TaiModelStore {
     @NonNull
     private TaiModelSpec normalizeLegacyModelSpec(@NonNull TaiModelSpec spec) {
         String migratedId = TaiSettings.migrateBuiltInModelId(spec.id);
-        if (migratedId.equals(spec.id)) return spec;
         TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(migratedId);
+        if (entry == null && migratedId.equals(spec.id)) return spec;
+        if (entry == null) {
+            return new TaiModelSpec(
+                migratedId,
+                spec.displayName,
+                spec.roleHint,
+                spec.source,
+                spec.localPath,
+                spec.license,
+                spec.sizeBytes,
+                spec.sourceCapabilities,
+                spec.builtInCatalogEntry,
+                spec.runtimeProfile,
+                spec.backend,
+                spec.format,
+                spec.architecture,
+                spec.quantization,
+                spec.endpointContextWindow,
+                spec.sourceContextWindow,
+                spec.defaultMaxOutputTokens,
+                spec.recommendedRamGb,
+                spec.sha256,
+                spec.endpointCapabilities,
+                spec.toolMode
+            );
+        }
+        long localSize = spec.localPath == null ? 0L : localModelSize(new File(spec.localPath));
+        LinkedHashSet<String> endpointCapabilities = TaiModelSpec.endpointCapabilitiesFor(
+            entry.modelId, entry.backend, entry.format, entry.sourceCapabilities, spec.localPath);
         return new TaiModelSpec(
             migratedId,
-            entry == null ? spec.displayName : entry.displayName,
-            spec.roleHint,
+            entry.displayName,
+            entry.roleHint,
             spec.source,
             spec.localPath,
-            spec.license,
-            spec.sizeBytes,
-            spec.capabilities,
+            entry.license,
+            localSize > 0L ? localSize : spec.sizeBytes,
+            entry.sourceCapabilities,
             spec.builtInCatalogEntry,
             spec.runtimeProfile,
-            spec.backend,
-            spec.format,
-            spec.architecture,
-            spec.quantization,
-            spec.contextWindow,
-            spec.recommendedRamGb,
-            spec.sha256
+            entry.backend,
+            entry.format,
+            entry.architecture,
+            entry.quantization,
+            entry.endpointContextWindow,
+            entry.sourceContextWindow,
+            entry.defaultMaxOutputTokens,
+            entry.recommendedRamGb,
+            entry.sha256,
+            endpointCapabilities,
+            TaiModelSpec.toolModeFor(entry.backend, endpointCapabilities)
         );
+    }
+
+    private long localModelSize(@NonNull File file) {
+        if (file.isFile()) return file.length();
+        if (!file.isDirectory()) return 0L;
+        long total = 0L;
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) total += localModelSize(child);
+        }
+        return total;
     }
 
     private void deleteRecursively(@Nullable File file) {

@@ -47,6 +47,44 @@ public final class TaiRuntimeHistory {
         return entry != null && entry.optBoolean("success", false);
     }
 
+    public static void recordAudioInputOutcome(
+        @NonNull Context context,
+        @NonNull String modelId,
+        @NonNull TaiDeviceCapabilities device,
+        boolean success
+    ) {
+        try {
+            JSONObject history = history(context);
+            JSONObject entry = new JSONObject();
+            entry.put("modelId", modelId);
+            entry.put("device", deviceKey(device));
+            entry.put("feature", "audio_input");
+            entry.put("success", success);
+            entry.put("updatedAtMs", System.currentTimeMillis());
+            history.put("audio_input|" + modelId + "|" + deviceKey(device), entry);
+            prefs(context).edit().putString(KEY_HISTORY, history.toString()).apply();
+        } catch (JSONException ignored) {
+        }
+    }
+
+    @Nullable
+    public static JSONObject audioInputEntry(
+        @NonNull Context context,
+        @NonNull String modelId,
+        @NonNull TaiDeviceCapabilities device
+    ) {
+        return history(context).optJSONObject("audio_input|" + modelId + "|" + deviceKey(device));
+    }
+
+    public static boolean hasFailedAudioInput(
+        @NonNull Context context,
+        @NonNull String modelId,
+        @NonNull TaiDeviceCapabilities device
+    ) {
+        JSONObject entry = audioInputEntry(context, modelId, device);
+        return entry != null && !entry.optBoolean("success", false);
+    }
+
     @Nullable
     public static JSONObject failedEntry(
         @NonNull Context context,

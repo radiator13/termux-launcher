@@ -54,6 +54,10 @@ public final class TaiModelProfile {
 
         String id = normalizedIdentity(modelSpec.id);
         String path = modelSpec.localPath == null ? "" : modelSpec.localPath.toLowerCase(Locale.ROOT);
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(modelSpec.backend)) {
+            return new TaiModelProfile(Collections.singletonList("cpu"), 1024, 40, 0.90d, 0.80d,
+                modelSpec.recommendedRamGb > 0 ? modelSpec.recommendedRamGb : null, "tai-mnn-config-default");
+        }
         if ("gemma4e2bit".equals(id) || "gemma4e2bitlitertlm".equals(id) || path.contains("gemma-4-e2b-it.litertlm")) {
             return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4000, 1.0d, 8);
         }

@@ -889,6 +889,15 @@ public final class MnnTaiRuntime implements TaiRuntime {
     private String mergedConfigJson(@NonNull File config, @NonNull TaiModelSpec modelSpec, @NonNull TaiRuntimeOptions options) throws JSONException {
         JSONObject json = readJsonFile(config);
         if (!json.has("backend_type")) json.put("backend_type", "cpu");
+        if (!json.has("thread_num")) json.put("thread_num", 4);
+        if (!json.has("precision")) json.put("precision", "low");
+        if (!json.has("memory")) json.put("memory", "low");
+        if (!json.has("max_context_len")) json.put("max_context_len", modelSpec.endpointContextWindow);
+        else json.put("max_context_len", Math.min(json.optInt("max_context_len", modelSpec.endpointContextWindow), modelSpec.endpointContextWindow));
+        if (!json.has("max_new_tokens")) json.put("max_new_tokens", modelSpec.defaultMaxOutputTokens);
+        if (!json.has("temperature")) json.put("temperature", 0.8d);
+        if (!json.has("top_p")) json.put("top_p", 0.9d);
+        if (!json.has("top_k")) json.put("top_k", 40);
         if (hasExplicitAccelerator(options)) json.put("backend_type", backendName(options));
         if (options.threadCount != null) json.put("thread_num", Math.max(1, options.threadCount));
         if (options.precision != null) json.put("precision", mnnMode(options.precision, json.optString("precision", "low")));
@@ -929,7 +938,7 @@ public final class MnnTaiRuntime implements TaiRuntime {
     @NonNull
     private String backendName(@Nullable TaiRuntimeOptions options) {
         String accelerator = options == null ? null : options.accelerator;
-        if (accelerator == null || accelerator.trim().isEmpty() || "auto".equalsIgnoreCase(accelerator)) return "auto";
+        if (accelerator == null || accelerator.trim().isEmpty() || "auto".equalsIgnoreCase(accelerator)) return "cpu";
         if ("opencl".equalsIgnoreCase(accelerator) || "gpu".equalsIgnoreCase(accelerator)) return "opencl";
         return "cpu";
     }

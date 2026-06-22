@@ -13,6 +13,7 @@ import org.robolectric.RobolectricTestRunner;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -31,7 +32,7 @@ public class TaiModelSchemaTest {
     }
 
     @Test
-    public void mnnJson_deserializesAndSerializesBackendFormatAndCapabilities() throws Exception {
+    public void mnnJson_deserializesAndSerializesEndpointAndSourceCapabilities() throws Exception {
         JSONObject json = baseModelJson("mnn-chat", "/models/mnn-chat/model.mnn");
         json.put("backend", TaiModelSpec.BACKEND_MNN_LLM);
         json.put("format", TaiModelSpec.FORMAT_MNN);
@@ -45,10 +46,13 @@ public class TaiModelSchemaTest {
         assertEquals(TaiModelSpec.BACKEND_MNN_LLM, spec.backend);
         assertEquals(TaiModelSpec.FORMAT_MNN, spec.format);
         assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
-        assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertFalse(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertTrue(spec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
         assertEquals(TaiModelSpec.BACKEND_MNN_LLM, roundTrip.getString("backend"));
         assertEquals(TaiModelSpec.FORMAT_MNN, roundTrip.getString("format"));
-        assertEquals(2, roundTrip.getJSONArray("capabilities").length());
+        assertEquals(1, roundTrip.getJSONArray("capabilities").length());
+        assertEquals(2, roundTrip.getJSONArray("sourceCapabilities").length());
+        assertEquals(1, roundTrip.getJSONArray("endpointCapabilities").length());
     }
 
     @Test
@@ -78,6 +82,41 @@ public class TaiModelSchemaTest {
             baseModelJson("bad-backend", "/models/bad/model.litertlm").put("backend", "custom-backend"));
         assertIllegalArgument("unsupported_format",
             baseModelJson("bad-format", "/models/bad/model.litertlm").put("format", "custom-format"));
+        assertIllegalArgument("unsupported_format",
+            baseModelJson("bad-gguf", "/models/bad/model.gguf"));
+    }
+
+    @Test
+    public void modelSpec_roundTripsEndpointSourceContextAndToolMode() throws Exception {
+        JSONObject json = baseModelJson("mnn-tools", "/models/mnn-tools/config.json")
+            .put("backend", TaiModelSpec.BACKEND_MNN_LLM)
+            .put("format", TaiModelSpec.FORMAT_MNN)
+            .put("endpointContextWindow", 8192)
+            .put("sourceContextWindow", 32768)
+            .put("defaultMaxOutputTokens", 1024)
+            .put("sourceCapabilities", new JSONArray()
+                .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                .put(TaiModelSpec.CAPABILITY_CODE)
+                .put(TaiModelSpec.CAPABILITY_TOOL_USE)
+                .put(TaiModelSpec.CAPABILITY_AUDIO_INPUT))
+            .put("endpointCapabilities", new JSONArray()
+                .put(TaiModelSpec.CAPABILITY_TEXT_CHAT)
+                .put(TaiModelSpec.CAPABILITY_CODE)
+                .put(TaiModelSpec.CAPABILITY_TOOL_USE))
+            .put("toolMode", TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK);
+
+        TaiModelSpec spec = TaiModelSpec.fromJson(json);
+        JSONObject roundTrip = spec.toJson();
+
+        assertEquals(8192, spec.endpointContextWindow);
+        assertEquals(32768, spec.sourceContextWindow);
+        assertEquals(1024, spec.defaultMaxOutputTokens);
+        assertTrue(spec.endpointCapabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE));
+        assertTrue(spec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(spec.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertEquals(TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK, spec.toolMode);
+        assertEquals(roundTrip.getJSONArray("endpointCapabilities").toString(),
+            roundTrip.getJSONArray("capabilities").toString());
     }
 
     @Test
@@ -113,7 +152,8 @@ public class TaiModelSchemaTest {
         assertEquals(1, reloaded.size());
         assertEquals(TaiModelSpec.BACKEND_MNN_LLM, reloaded.get("user-mnn").backend);
         assertEquals(TaiModelSpec.FORMAT_MNN, reloaded.get("user-mnn").format);
-        assertTrue(reloaded.get("user-mnn").capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertFalse(reloaded.get("user-mnn").capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertTrue(reloaded.get("user-mnn").sourceCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
     }
 
     private static JSONObject baseModelJson(String id, String localPath) throws Exception {

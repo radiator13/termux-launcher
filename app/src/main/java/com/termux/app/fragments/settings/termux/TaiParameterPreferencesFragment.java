@@ -21,6 +21,9 @@ import androidx.preference.PreferenceScreen;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.ai.TaiModelCatalog;
+import com.termux.ai.TaiModelRegistry;
+import com.termux.ai.TaiModelStore;
 import com.termux.ai.TaiModelSpec;
 import com.termux.ai.TaiSettings;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
@@ -77,11 +80,63 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
             getActivity().setTitle(modelScreen
                 ? getString(R.string.termux_ai_model_tune_title, modelName == null ? modelId : modelName)
                 : getString(R.string.termux_ai_parameters_defaults_title));
+            getActivity().getWindow().setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
         }
+    }
+
+    @Override
+    public void onPause() {
+        if (getActivity() != null) {
+            getActivity().getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        }
+        super.onPause();
+    }
+
+    @NonNull
+    private String buildModelHeaderSummary(@NonNull Context context) {
+        TaiModelSpec model = currentModelSpec(context);
+        String format = TaiModelSpec.BACKEND_MNN_LLM.equals(backend) ? TaiModelSpec.FORMAT_MNN : TaiModelSpec.FORMAT_LITERTLM;
+        boolean runtimeSupported = TaiModelSpec.isSupportedBackendFormat(backend, format);
+        StringBuilder summary = new StringBuilder();
+        summary.append(TaiModelSpec.BACKEND_MNN_LLM.equals(backend)
+                ? getString(R.string.termux_ai_backend_label_mnn)
+                : getString(R.string.termux_ai_backend_label_litert));
+        summary.append(" · ").append(backend);
+        summary.append("\n").append(getString(R.string.termux_ai_parameters_header_runtime_support,
+            runtimeSupported
+                ? getString(R.string.termux_ai_parameters_runtime_supported)
+                : getString(R.string.termux_ai_parameters_runtime_unsupported)));
+        if (model != null) {
+            summary.append("\n").append(getString(R.string.termux_ai_parameters_header_endpoint_capabilities,
+                model.endpointCapabilities.toString()));
+            if (!model.sourceCapabilities.equals(model.endpointCapabilities)) {
+                summary.append("\n").append(getString(R.string.termux_ai_parameters_header_source_capabilities,
+                    model.sourceCapabilities.toString()));
+            }
+            summary.append("\n").append(getString(R.string.termux_ai_parameters_header_context,
+                model.endpointContextWindow, model.sourceContextWindow));
+            try {
+                com.termux.ai.TaiModelProfile profile = com.termux.ai.TaiModelProfile.forModel(model);
+                summary.append("\n").append(getString(R.string.termux_ai_parameters_header_accelerator,
+                    profile.compatibleAccelerators.toString()));
+            } catch (Exception ignored) {
+            }
+        }
+        return summary.toString();
     }
 
     private void buildModelScreen(@NonNull Context context, @NonNull PreferenceScreen screen) {
         TaiSettings.ParameterSchema schema = TaiSettings.getParameterSchema(backend);
+        Preference header = new Preference(context);
+        header.setKey("tai_model_parameter_header");
+        header.setTitle(modelName == null ? modelId : modelName);
+        header.setSummary(buildModelHeaderSummary(context));
+        header.setPersistent(false);
+        header.setSelectable(false);
+        screen.addPreference(header);
+
         PreferenceCategory configs = category(context, R.string.termux_ai_parameters_model_configs_title);
         screen.addPreference(configs);
         addParameterRows(context, configs, schema.backend, schema.fields(), true);
@@ -153,6 +208,7 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
         boolean modelRows
     ) {
         for (TaiSettings.ParameterSpec spec : specs.values()) {
+            if (!shouldShowParameter(context, rowBackend, spec.field, modelRows)) continue;
             Preference preference = new Preference(context);
             preference.setKey(parameterPreferenceKey(rowBackend, spec.field, modelRows));
             preference.setTitle(parameterLabel(spec.field));
@@ -164,6 +220,35 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
             });
             category.addPreference(preference);
         }
+    }
+
+    private boolean shouldShowParameter(@NonNull Context context, @NonNull String rowBackend,
+                                        @NonNull String field, boolean modelRows) {
+        TaiModelSpec model = modelRows ? currentModelSpec(context) : null;
+        return shouldShowParameter(model, modelId, field, modelRows);
+    }
+
+    static boolean shouldShowParameter(@Nullable TaiModelSpec model, @Nullable String modelId,
+                                        @NonNull String field, boolean modelRows) {
+        if (TaiSettings.FIELD_ENABLE_THINKING.equals(field)) return false;
+        if (TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING.equals(field)) {
+            return model != null && model.capabilities.contains(TaiModelSpec.CAPABILITY_SPECULATIVE_DECODING);
+        }
+        if (modelRows && TaiSettings.FIELD_ACCELERATOR.equals(field)
+            && TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(modelId)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Nullable
+    private TaiModelSpec currentModelSpec(@NonNull Context context) {
+        if (modelId == null || modelId.isEmpty()) return null;
+        TaiModelSpec model = new TaiModelStore(context).getUserModel(modelId);
+        if (model != null) return model;
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
+        if (entry == null) return null;
+        return new TaiModelRegistry().getModel(entry.modelId);
     }
 
     @NonNull

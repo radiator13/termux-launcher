@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class TaiManager {
@@ -184,17 +185,23 @@ public final class TaiManager {
 
         String modelId = sanitizeModelId(request.optString("modelId", request.optString("model", modelFile.getName())));
         if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
-        TaiModelSpec baseSpec = new TaiModelSpec(
-            modelId,
-            request.optString("displayName", modelId),
-            request.optString("roleHint", "Imported local model"),
-            "imported",
-            modelFile.getAbsolutePath(),
-            request.optString("license", "User-provided model; license accepted externally"),
-            modelFile.length(),
-            capabilitiesFromRequest(request),
-            false
-        );
+        TaiModelSpec baseSpec;
+        try {
+            baseSpec = new TaiModelSpec(
+                modelId,
+                request.optString("displayName", modelId),
+                request.optString("roleHint", "Imported local model"),
+                "imported",
+                modelFile.getAbsolutePath(),
+                request.optString("license", "User-provided model; license accepted externally"),
+                modelFile.length(),
+                capabilitiesFromRequest(request),
+                false
+            );
+        } catch (IllegalArgumentException e) {
+            return error(400, "unsupported_model_format",
+                "TAI can import LiteRT-LM packages and MNN config packages only. GGUF/raw weights require a backend this APK does not include.");
+        }
         TaiModelProfile runtimeProfile = TaiModelProfile.fromRequest(request, TaiModelProfile.forModel(baseSpec));
         TaiModelSpec spec = new TaiModelSpec(
             baseSpec.id,
@@ -204,9 +211,20 @@ public final class TaiManager {
             baseSpec.localPath,
             baseSpec.license,
             baseSpec.sizeBytes,
-            baseSpec.capabilities,
+            baseSpec.sourceCapabilities,
             false,
-            runtimeProfile
+            runtimeProfile,
+            baseSpec.backend,
+            baseSpec.format,
+            baseSpec.architecture,
+            baseSpec.quantization,
+            baseSpec.endpointContextWindow,
+            baseSpec.sourceContextWindow,
+            baseSpec.defaultMaxOutputTokens,
+            baseSpec.recommendedRamGb,
+            baseSpec.sha256,
+            baseSpec.endpointCapabilities,
+            baseSpec.toolMode
         );
         modelStore.upsertUserModel(spec);
 
@@ -387,11 +405,7 @@ public final class TaiManager {
      * Does not load the model.
      */
     public boolean isModelAvailable(@NonNull String modelId) {
-        TaiModelSpec spec = resolveModel(modelId);
-        if (spec == null || spec.localPath == null || spec.localPath.trim().isEmpty()) {
-            return false;
-        }
-        return new File(spec.localPath).canRead();
+        return modelStore.getInstalledUserModels().containsKey(TaiSettings.migrateBuiltInModelId(modelId));
     }
 
     @NonNull
@@ -417,6 +431,10 @@ public final class TaiManager {
         String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
         TaiModelSpec spec = resolveModel(modelId);
         if (spec == null) return openAiError(error(404, "model_not_found", "Unknown TAI model: " + modelId));
+        if (!modelSupportsRequestedTools(request, spec)) {
+            return openAiError(error(400, "capability_not_supported",
+                "Model " + spec.id + " does not support tool use through this endpoint."));
+        }
         JSONObject audioOutputError = unsupportedAudioOutputRequest(request);
         if (audioOutputError != null) return openAiError(audioOutputError);
         OpenAiChatRequest chatRequest;
@@ -528,6 +546,11 @@ public final class TaiManager {
         TaiModelSpec spec = resolveModel(modelId);
         if (spec == null) {
             emitOpenAiError(sink, error(404, "model_not_found", "Unknown TAI model: " + modelId));
+            return;
+        }
+        if (!modelSupportsRequestedTools(request, spec)) {
+            emitOpenAiError(sink, error(400, "capability_not_supported",
+                "Model " + spec.id + " does not support tool use through this endpoint."));
             return;
         }
         JSONObject audioOutputError = unsupportedAudioOutputRequest(request);
@@ -686,7 +709,8 @@ public final class TaiManager {
     public JSONObject openAiModels() throws JSONException {
         JSONObject installed = new JSONObject();
         JSONArray models = new JSONArray();
-        boolean mnnSupported = TaiDeviceCapabilities.detect(appContext).mnnSupported;
+        TaiDeviceCapabilities device = TaiDeviceCapabilities.detect(appContext);
+        boolean mnnSupported = device.mnnSupported;
         LinkedHashMap<String, TaiModelSpec> availableModels = new LinkedHashMap<>();
         availableModels.putAll(modelStore.getDownloadedReadableModels());
         availableModels.putAll(modelStore.getInstalledUserModels());
@@ -695,7 +719,49 @@ public final class TaiManager {
             models.put(spec.toJson());
         }
         installed.put("models", models);
-        return openAiModelsFromTaiModels(installed);
+        return applyAudioHistoryGates(openAiModelsFromTaiModels(installed), device);
+    }
+
+    @NonNull
+    private JSONObject applyAudioHistoryGates(@NonNull JSONObject response, @NonNull TaiDeviceCapabilities device) throws JSONException {
+        JSONArray data = response.optJSONArray("data");
+        if (data == null) return response;
+        LinkedHashSet<String> failedAudioIds = new LinkedHashSet<>();
+        for (int i = 0; i < data.length(); i++) {
+            JSONObject item = data.optJSONObject(i);
+            if (item == null) continue;
+            if (!TaiModelSpec.BACKEND_LITERT_LM.equals(item.optString("_backend", ""))) continue;
+            String id = item.optString("id", "");
+            if (id.isEmpty()) continue;
+            if (TaiRuntimeHistory.hasFailedAudioInput(appContext, id, device)) failedAudioIds.add(id);
+        }
+        return pruneAudioInputFromResponse(response, failedAudioIds);
+    }
+
+    @NonNull
+    static JSONObject pruneAudioInputFromResponse(@NonNull JSONObject response, @NonNull Set<String> failedAudioModelIds) throws JSONException {
+        if (failedAudioModelIds.isEmpty()) return response;
+        JSONArray data = response.optJSONArray("data");
+        if (data == null) return response;
+        for (int i = 0; i < data.length(); i++) {
+            JSONObject item = data.optJSONObject(i);
+            if (item == null) continue;
+            if (!failedAudioModelIds.contains(item.optString("id", ""))) continue;
+            item.put("_capabilities", stripCapability(item.optJSONArray("_capabilities"), TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+            item.put("_endpoint_capabilities", stripCapability(item.optJSONArray("_endpoint_capabilities"), TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        }
+        return response;
+    }
+
+    @NonNull
+    private static JSONArray stripCapability(@Nullable JSONArray capabilities, @NonNull String capability) {
+        JSONArray filtered = new JSONArray();
+        if (capabilities == null) return filtered;
+        for (int i = 0; i < capabilities.length(); i++) {
+            String value = capabilities.optString(i, "");
+            if (!capability.equals(value)) filtered.put(value);
+        }
+        return filtered;
     }
 
     @NonNull
@@ -708,7 +774,8 @@ public final class TaiManager {
                 if (model == null) continue;
                 String id = model.optString("id", "");
                 if (id.isEmpty()) continue;
-                dedupedModels.put(id, model);
+                JSONObject existing = dedupedModels.get(id);
+                dedupedModels.put(id, existing == null ? model : mergeModelMetadata(existing, model));
             }
         }
         JSONArray data = new JSONArray();
@@ -720,12 +787,29 @@ public final class TaiManager {
             item.put("owned_by", "termux-launcher");
             String backend = model.optString("backend", TaiModelSpec.BACKEND_LITERT_LM);
             item.put("_backend", backend);
-            JSONArray capabilities = model.optJSONArray("capabilities");
-            if (capabilities == null || capabilities.length() == 0) {
-                capabilities = new JSONArray();
-                capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+            item.put("_format", model.optString("format", ""));
+            JSONArray sourceCapabilities = model.optJSONArray("sourceCapabilities");
+            JSONArray declaredEndpointCapabilities = model.optJSONArray("endpointCapabilities");
+            JSONArray capabilities = declaredEndpointCapabilities == null ? model.optJSONArray("capabilities") : declaredEndpointCapabilities;
+            if (capabilities == null || capabilities.length() == 0) capabilities = new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+            JSONArray endpointCapabilities = declaredEndpointCapabilities == null
+                ? openAiEndpointCapabilities(model.optString("id", ""), capabilities, backend,
+                    model.optString("format", TaiModelSpec.FORMAT_LITERTLM))
+                : capabilities;
+            item.put("_capabilities", endpointCapabilities);
+            item.put("_endpoint_capabilities", endpointCapabilities);
+            item.put("_source_capabilities", sourceCapabilities == null ? capabilities : sourceCapabilities);
+            item.put("_default_max_output_tokens", model.optInt("defaultMaxOutputTokens", TaiModelSpec.defaultMaxOutputTokensFor(model.optString("id", ""), backend)));
+            item.put("_endpoint_context_window", model.optInt("endpointContextWindow", model.optInt("contextWindow", TaiModelSpec.defaultEndpointContextWindowFor(model.optString("id", ""), backend))));
+            item.put("_source_context_window", model.optInt("sourceContextWindow", model.optInt("contextWindow", TaiModelSpec.defaultEndpointContextWindowFor(model.optString("id", ""), backend))));
+            String toolMode = model.optString("toolMode", "");
+            if (toolMode.isEmpty()) {
+                LinkedHashSet<String> endpointSet = new LinkedHashSet<>();
+                appendArrayValues(endpointSet, endpointCapabilities);
+                String inferredToolMode = TaiModelSpec.toolModeFor(backend, endpointSet);
+                toolMode = inferredToolMode == null ? "" : inferredToolMode;
             }
-            item.put("_capabilities", openAiEndpointCapabilities(capabilities, backend));
+            if (!toolMode.isEmpty()) item.put("_tool_mode", toolMode);
             data.put(item);
         }
 
@@ -733,6 +817,34 @@ public final class TaiManager {
         response.put("object", "list");
         response.put("data", data);
         return response;
+    }
+
+    @NonNull
+    private static JSONObject mergeModelMetadata(@NonNull JSONObject existing, @NonNull JSONObject next) throws JSONException {
+        JSONObject merged = new JSONObject(next.toString());
+        mergeArrayField(merged, existing, next, "capabilities");
+        mergeArrayField(merged, existing, next, "endpointCapabilities");
+        mergeArrayField(merged, existing, next, "sourceCapabilities");
+        return merged;
+    }
+
+    private static void mergeArrayField(@NonNull JSONObject output, @NonNull JSONObject existing,
+                                        @NonNull JSONObject next, @NonNull String field) throws JSONException {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        appendArrayValues(values, existing.optJSONArray(field));
+        appendArrayValues(values, next.optJSONArray(field));
+        if (values.isEmpty()) return;
+        JSONArray array = new JSONArray();
+        for (String value : values) array.put(value);
+        output.put(field, array);
+    }
+
+    private static void appendArrayValues(@NonNull LinkedHashSet<String> output, @Nullable JSONArray values) {
+        if (values == null) return;
+        for (int i = 0; i < values.length(); i++) {
+            String value = values.optString(i, "");
+            if (!value.isEmpty()) output.add(value);
+        }
     }
 
     @NonNull
@@ -753,7 +865,7 @@ public final class TaiManager {
             response.put("_statusCode", 404);
             return response;
         }
-        if (TaiModelSpec.BACKEND_LITERT_LM.equals(spec.backend)) {
+        if (!spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)) {
             JSONObject error = new JSONObject();
             error.put("message", "Embeddings are not supported for model '" + modelId + "'.");
             error.put("type", "invalid_request_error");
@@ -947,13 +1059,15 @@ public final class TaiManager {
     @NonNull
     private String requestedModelId(@NonNull JSONObject request, @NonNull String fallback) {
         String model = request.optString("model", request.optString("modelId", fallback));
-        return model == null || model.trim().isEmpty() ? fallback : model.trim();
+        String resolved = model == null || model.trim().isEmpty() ? fallback : model.trim();
+        return TaiSettings.migrateBuiltInModelId(resolved);
     }
 
     @Nullable
     private TaiModelSpec resolveModel(@Nullable String modelId) {
-        TaiModelSpec spec = modelStore.getUserModel(modelId);
-        if (spec == null) spec = registry.getModel(modelId);
+        String migratedId = modelId == null ? null : TaiSettings.migrateBuiltInModelId(modelId);
+        TaiModelSpec spec = modelStore.getUserModel(migratedId);
+        if (spec == null) spec = registry.getModel(migratedId);
         return spec;
     }
 
@@ -1020,6 +1134,12 @@ public final class TaiManager {
     private void emitOpenAiError(@NonNull OpenAiStreamSink sink, @NonNull JSONObject source) throws JSONException, IOException {
         sink.onEvent(openAiError(source));
         sink.onDone();
+    }
+
+    private boolean modelSupportsRequestedTools(@NonNull JSONObject request, @NonNull TaiModelSpec spec) {
+        JSONArray tools = request.optJSONArray("tools");
+        if (tools == null || tools.length() == 0 || "none".equals(String.valueOf(request.opt("tool_choice")))) return true;
+        return spec.capabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE);
     }
 
     private void emitChatChunk(
@@ -1110,6 +1230,8 @@ public final class TaiManager {
         limitations.put("Auto defaults to CPU on unknown devices; GPU is used automatically only after a successful model/device history.");
         limitations.put("Streaming text responses, cancellation, and keep-warm lifecycle controls are available through the localhost API.");
         limitations.put("LiteRT-LM image and audio input are accepted for models that declare those capabilities.");
+        limitations.put("/v1/models lists endpoint capabilities for loadable LiteRT-LM/MNN models only; source model-card capabilities are informational.");
+        limitations.put("GGUF/raw weight files are not supported because this APK does not include a GGUF/llama.cpp backend.");
         limitations.put("Audio output is not available from the local LiteRT-LM or MNN runners.");
         limitations.put("OpenAI function tools are returned for client-side execution; TAI does not automatically execute shell commands or device actions.");
         return limitations;
@@ -1353,13 +1475,13 @@ public final class TaiManager {
                     contents.add(new Content.Text(object.optString("text", "")));
                 } else if ("image_url".equals(type) || "input_image".equals(type)) {
                     if (!TaiModelSpec.BACKEND_LITERT_LM.equals(spec.backend)
-                        || !spec.capabilities.contains("image_input")) {
+                        || !spec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)) {
                         throw new JSONException("capability_not_supported:Model " + spec.id + " does not support image input through this endpoint.");
                     }
                     contents.add(imageContent(object));
                 } else if ("input_audio".equals(type) || "audio".equals(type)) {
                     if (!TaiModelSpec.BACKEND_LITERT_LM.equals(spec.backend)
-                        || !spec.capabilities.contains("audio_input")) {
+                        || !spec.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) {
                         throw new JSONException("capability_not_supported:Model " + spec.id + " does not support audio input through this endpoint.");
                     }
                     contents.add(audioContent(object));
@@ -1483,16 +1605,20 @@ public final class TaiManager {
     }
 
     @NonNull
-    private static JSONArray openAiEndpointCapabilities(@NonNull JSONArray capabilities, @NonNull String backend) {
-        JSONArray filtered = new JSONArray();
+    private static JSONArray openAiEndpointCapabilities(
+        @NonNull String id,
+        @NonNull JSONArray capabilities,
+        @NonNull String backend,
+        @NonNull String format
+    ) {
+        LinkedHashSet<String> source = new LinkedHashSet<>();
         for (int i = 0; i < capabilities.length(); i++) {
             String capability = capabilities.optString(i, "");
-            if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)
-                && ("tool_use".equals(capability) || "image_input".equals(capability) || "audio_input".equals(capability))) {
-                continue;
-            }
-            filtered.put(capability);
+            if (!capability.isEmpty()) source.add(capability);
         }
+        LinkedHashSet<String> endpoint = TaiModelSpec.endpointCapabilitiesFor(id, backend, format, source, null);
+        JSONArray filtered = new JSONArray();
+        for (String capability : endpoint) filtered.put(capability);
         if (filtered.length() == 0) filtered.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
         return filtered;
     }
@@ -1541,14 +1667,24 @@ public final class TaiManager {
             json.put("architecture", entry.architecture);
             json.put("quantization", entry.quantization == null ? JSONObject.NULL : entry.quantization);
             json.put("contextWindow", entry.contextWindow);
+            json.put("endpointContextWindow", entry.endpointContextWindow);
+            json.put("sourceContextWindow", entry.sourceContextWindow);
+            json.put("defaultMaxOutputTokens", entry.defaultMaxOutputTokens);
             json.put("recommendedRamGb", entry.recommendedRamGb);
             json.put("revision", entry.revision);
             json.put("sha256", entry.sha256 == null ? JSONObject.NULL : entry.sha256);
+            json.put("toolMode", entry.toolMode == null ? JSONObject.NULL : entry.toolMode);
             TaiModelSpec catalogSpec = registry.getModel(entry.modelId);
             if (catalogSpec != null) json.put("runtimeProfile", TaiModelProfile.forModel(catalogSpec).toJson());
             JSONArray capabilities = new JSONArray();
             for (String capability : entry.capabilities) capabilities.put(capability);
             json.put("capabilities", capabilities);
+            JSONArray endpointCapabilities = new JSONArray();
+            for (String capability : entry.endpointCapabilities) endpointCapabilities.put(capability);
+            json.put("endpointCapabilities", endpointCapabilities);
+            JSONArray sourceCapabilities = new JSONArray();
+            for (String capability : entry.sourceCapabilities) sourceCapabilities.put(capability);
+            json.put("sourceCapabilities", sourceCapabilities);
             JSONArray displayCapabilityTags = new JSONArray();
             for (String tag : entry.displayCapabilityTags) displayCapabilityTags.put(tag);
             json.put("displayCapabilityTags", displayCapabilityTags);

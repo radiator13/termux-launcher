@@ -1,6 +1,6 @@
 # TAI / Termux AI
 
-TAI is the local on-device model endpoint for Termux Launcher. The localhost API stays in the launcher process, while native LiteRT-LM/MNN model loading and generation run in an isolated Android `:tai_runtime` process.
+TAI is the local on-device model endpoint for Termux Launcher. The localhost API stays in the launcher process, while native LiteRT-LM/MNN model loading and generation run in an isolated Android `:tai_runtime` process. This APK is a LiteRT-LM/MNN host; it is not a GGUF or llama.cpp runner.
 
 TAI is intentionally not a shell agent. Use established shell/coding clients such as `aichat` or `tmuxai` for terminal workflows, pane context, command review, and coding UX. TAI provides the local model runtime those tools can call.
 
@@ -24,9 +24,11 @@ TAI does not currently:
 - plan or execute shell commands
 - summarize notifications
 - generate audio output
+- run GGUF/raw weight files
+- expose embeddings unless a local model advertises `text_embeddings` in `/v1/models`
 - expose Gallery skills or benchmark UI
 
-Android/device actions are exposed separately through LauncherCtl capability, agent, and MCP APIs instead of being hidden inside the `tai` shell helper or the OpenAI-compatible model endpoints.
+Android/device actions are exposed separately through LauncherCtl capability, agent, and MCP APIs instead of being hidden inside the `tai` shell helper or the OpenAI-compatible model endpoints. FunctionGemma can return mobile-action tool calls, but TAI does not automatically execute Android actions.
 
 ## Model Roles
 
@@ -42,7 +44,7 @@ TAI does not bundle model files in the APK. Downloads and imports must be explic
 
 TAI stores user overrides separately from model metadata. Runtime tunables default to `Auto / Gallery default`:
 
-- max tokens
+- max output tokens
 - TopK
 - TopP
 - temperature
@@ -57,9 +59,9 @@ Device memory detection matches Gallery for advertised/total RAM and also checks
 
 Known profiles are synchronized with Edge Gallery 1.0.15:
 
-- `gemma-4-e2b-it-litert-lm`: GPU, CPU; 8 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- `gemma-4-e4b-it-litert-lm`: GPU, CPU; 12 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- `functiongemma-270m-mobile-actions-litert-lm`: CPU only; 6 GiB minimum; 1024 max tokens; TopK 64; TopP 0.95; temperature 0.0.
+- `gemma-4-e2b-it-litert-lm`: GPU, CPU; 8 GiB minimum; 4000 max output tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `gemma-4-e4b-it-litert-lm`: GPU, CPU; 12 GiB minimum; 4000 max output tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `functiongemma-270m-mobile-actions-litert-lm`: CPU only; 6 GiB minimum; 1024 max output tokens; TopK 64; TopP 0.95; temperature 0.0.
 
 Unknown imported models default to CPU, matching Gallery's import dialog. The import API accepts `runtimeProfile.compatibleAccelerators`, `defaultMaxTokens`, `defaultTopK`, `defaultTopP`, `defaultTemperature`, and `minDeviceMemoryInGb` when the user knows the package's requirements.
 
@@ -122,7 +124,7 @@ Implemented endpoints:
 - `POST /v1/embeddings`
 - `POST /v1/audio/speech`
 
-Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the isolated Android LiteRT-LM adapter when preflight passes.
+Model import and download registry persistence is implemented. Downloaded or imported `.litertlm`/`.task` models can be loaded through the isolated Android LiteRT-LM adapter when preflight passes. Downloaded MNN catalog models load from their repository `config.json` package. GGUF, safetensors, PyTorch, ONNX, and other raw weight formats are rejected because this APK does not include a GGUF/llama.cpp backend.
 
 The runtime supports non-streaming JSON responses and streaming `text/event-stream` responses. Streaming emits OpenAI-style chunks and finishes with `data: [DONE]`. The app manifest declares the same optional native libraries as Edge Gallery: `libvndksupport.so`, `libOpenCL.so`, `libcdsprpc.so`, and `libedgetpu_litert.so`. LiteRT-LM's `Capabilities` API is checked inside `:tai_runtime` before speculative decoding is enabled. If native initialization crashes the runtime process, the launcher survives and reports the last attempted model/backend plus CPU/smaller-model fallback guidance.
 
@@ -161,7 +163,7 @@ tai download MyDownloadedModel https://provider.example/model.litertlm --accept-
 tai downloads
 ```
 
-Import registers a readable local file path. It does not copy the file into app-private storage yet.
+Import registers a readable local LiteRT-LM `.litertlm` or `.task` file path. It does not copy the file into app-private storage yet. MNN models should be installed from catalog/download URLs so TAI can fetch the `config.json` package and sidecar files.
 
 Download starts a foreground app-process transfer into app-private storage under `files/tai/models/`. Settings shows progress while the page is open, and Android shows a progress notification while the transfer runs. Downloads require:
 
