@@ -172,12 +172,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         if (context != null && key != null && preference instanceof EditTextPreference) {
             EditTextPreference editText = (EditTextPreference) preference;
             switch (key) {
-                case TaiSettings.KEY_API_PORT:
-                    showApiPortDialog(context, editText);
-                    return;
-                case TaiSettings.KEY_API_TOKEN:
-                    showApiTokenDialog(context, editText);
-                    return;
                 case TaiSettings.KEY_SYSTEM_PROMPT_GENERAL:
                     showGeneralPromptDialog(context, editText);
                     return;
@@ -263,7 +257,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         refreshOverrides();
         refreshEndpointPreferences(context);
         populateModelRows(context);
-        refreshDeviceEngineInfo(context, runtimeStatus);
         refreshLanToggle(context);
     }
 
@@ -363,8 +356,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private void configureEndpointPreferences(Context context) {
-        configureApiPortPreference(context);
-        configureApiTokenPreference(context);
+        // Port/token editing, randomize and recreate all live inside the OpenAI endpoint dialog now.
         Preference endpointCopy = findPreference("tai_endpoint_copy");
         if (endpointCopy != null) {
             endpointCopy.setOnPreferenceClickListener(preference -> {
@@ -372,38 +364,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 return true;
             });
         }
-        Preference randomizePort = findPreference("tai_api_port_randomize");
-        if (randomizePort != null) {
-            randomizePort.setOnPreferenceClickListener(preference -> {
-                try {
-                    LauncherCtlApiServer.getInstance().randomizeApiPortFromSettings(context);
-                    refreshEndpointPreferences(context);
-                    Toast.makeText(context, R.string.termux_ai_api_port_randomized, Toast.LENGTH_SHORT).show();
-                } catch (JSONException e) {
-                    Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-                }
-                return true;
-            });
-        }
-
-        Preference rotateToken = findPreference("tai_api_token_rotate");
-        if (rotateToken != null) {
-            rotateToken.setOnPreferenceClickListener(preference -> {
-                try {
-                    JSONObject endpoint = LauncherCtlApiServer.getInstance().rotateAuthTokenFromSettings(context)
-                        .optJSONObject("endpoint");
-                    EditTextPreference tokenPreference = findPreference(TaiSettings.KEY_API_TOKEN);
-                    if (endpoint != null && tokenPreference != null) {
-                        tokenPreference.setText(endpoint.optString("token", ""));
-                    }
-                    refreshEndpointPreferences(context);
-                    Toast.makeText(context, R.string.termux_ai_api_token_rotated, Toast.LENGTH_SHORT).show();
-                } catch (JSONException e) {
-                    Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-                }
-                return true;
-            });
-        }
+        refreshEndpointPreferences(context);
     }
 
     private void configureAdvancedSection(Context context) {
@@ -414,76 +375,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 return true;
             });
         }
-    }
-
-    private void configureApiPortPreference(Context context) {
-        EditTextPreference port = findPreference(TaiSettings.KEY_API_PORT);
-        if (port == null) return;
-        port.setText(String.valueOf(new TaiSettings(context).getApiPort()));
-    }
-
-    private void configureApiTokenPreference(Context context) {
-        EditTextPreference token = findPreference(TaiSettings.KEY_API_TOKEN);
-        if (token == null) return;
-        String currentToken = new TaiSettings(context).getOrCreateApiToken();
-        token.setText(currentToken);
-        token.setSummary(TaiSettings.redactToken(currentToken));
-        // Tapping the row opens the edit dialog; copying the token lives in the endpoint dialog.
-    }
-
-    private void showApiPortDialog(Context context, EditTextPreference preference) {
-        String baseUrl = currentOpenAiBaseUrl(context);
-        EditText input = buildDialogEditText(context, preference.getText(), InputType.TYPE_CLASS_NUMBER, false);
-        LinearLayout view = wrapDialogView(context,
-            getString(R.string.termux_ai_api_port_dialog_header, baseUrl), input);
-        new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_api_port_title)
-            .setView(view)
-            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
-                saveApiPort(context, preference, input.getText().toString()))
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
-    }
-
-    private void saveApiPort(Context context, EditTextPreference preference, String rawValue) {
-        if (!TaiSettings.isValidApiPort(rawValue)) {
-            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-            return;
-        }
-        int normalized = TaiSettings.normalizeApiPort(rawValue);
-        new TaiSettings(context).setApiPort(normalized);
-        preference.setText(String.valueOf(normalized));
-        try {
-            LauncherCtlApiServer.getInstance().applyEndpointSettings(context);
-            refreshEndpointPreferences(context);
-            Toast.makeText(context, R.string.termux_ai_api_port_saved, Toast.LENGTH_SHORT).show();
-        } catch (JSONException e) {
-            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void showApiTokenDialog(Context context, EditTextPreference preference) {
-        String currentToken = preference.getText();
-        if (currentToken == null || currentToken.isEmpty()) {
-            currentToken = new TaiSettings(context).getOrCreateApiToken();
-        }
-        EditText input = buildDialogEditText(context, currentToken,
-            InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD, false);
-        final boolean[] revealed = {false};
-        new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_api_token_title)
-            .setView(wrapDialogView(context, null, input))
-            .setNeutralButton(R.string.termux_ai_dialog_reveal, (dialog, which) -> {
-                revealed[0] = !revealed[0];
-                int selection = input.getSelectionStart();
-                input.setInputType(InputType.TYPE_CLASS_TEXT
-                    | (revealed[0] ? InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD : InputType.TYPE_TEXT_VARIATION_PASSWORD));
-                if (selection >= 0 && selection <= input.length()) input.setSelection(selection);
-            })
-            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
-                saveApiToken(context, preference, input.getText().toString()))
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
     }
 
     /**
@@ -500,12 +391,14 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             return;
         }
         String baseUrl = endpoint.optString("baseUrl", "");
-        final String openAiBaseUrl = endpoint.optString("openAiBaseUrl", baseUrl.isEmpty() ? "" : baseUrl + "/v1");
         String endpointFile = endpoint.optString("endpointFile", "~/.launcherctl/endpoint.json");
         String tokenFile = endpoint.optString("tokenFile", "~/.launcherctl/token");
-        String tokenValue = endpoint.optString("token", "");
-        if (tokenValue.isEmpty()) tokenValue = new TaiSettings(context).getOrCreateApiToken();
-        final String token = tokenValue;
+        String initialToken = endpoint.optString("token", "");
+        if (initialToken.isEmpty()) initialToken = new TaiSettings(context).getOrCreateApiToken();
+        // Mutable holders so the Randomize/Recreate actions can update the values shown in place.
+        final String[] url = { endpoint.optString("openAiBaseUrl", baseUrl.isEmpty() ? "" : baseUrl + "/v1") };
+        final String[] token = { initialToken };
+        final boolean[] revealed = {false};
 
         float density = context.getResources().getDisplayMetrics().density;
         LinearLayout layout = new LinearLayout(context);
@@ -513,23 +406,51 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         int padH = Math.round(24 * density);
         layout.setPadding(padH, Math.round(8 * density), padH, 0);
 
-        TextView urlView = endpointValueView(context, openAiBaseUrl);
+        TextView urlView = endpointValueView(context, url[0]);
         layout.addView(endpointRow(context, getString(R.string.termux_ai_endpoint_field_base_url), urlView,
             endpointButton(context, R.string.termux_ai_dialog_copy,
-                () -> copyToClipboard(context, openAiBaseUrl, R.string.termux_ai_base_url_copied))));
+                () -> copyToClipboard(context, url[0], R.string.termux_ai_base_url_copied))));
 
-        TextView tokenView = endpointValueView(context, TaiSettings.redactToken(token));
-        final boolean[] revealed = {false};
+        TextView tokenView = endpointValueView(context, TaiSettings.redactToken(token[0]));
         Button revealButton = endpointButton(context, R.string.termux_ai_dialog_reveal, null);
         revealButton.setOnClickListener(v -> {
             revealed[0] = !revealed[0];
-            tokenView.setText(revealed[0] ? token : TaiSettings.redactToken(token));
+            tokenView.setText(revealed[0] ? token[0] : TaiSettings.redactToken(token[0]));
             revealButton.setText(revealed[0] ? R.string.termux_ai_dialog_hide : R.string.termux_ai_dialog_reveal);
         });
         Button tokenCopy = endpointButton(context, R.string.termux_ai_dialog_copy,
-            () -> copyToClipboard(context, token, R.string.termux_ai_api_token_copied));
+            () -> copyToClipboard(context, token[0], R.string.termux_ai_api_token_copied));
         layout.addView(endpointRow(context, getString(R.string.termux_ai_endpoint_field_token), tokenView,
             revealButton, tokenCopy));
+
+        Button randomizePort = endpointButton(context, R.string.termux_ai_endpoint_randomize_port, () -> {
+            try {
+                LauncherCtlApiServer.getInstance().randomizeApiPortFromSettings(context);
+                JSONObject ep = LauncherCtlApiServer.getInstance().endpointSettings(context);
+                String b = ep.optString("baseUrl", "");
+                url[0] = ep.optString("openAiBaseUrl", b.isEmpty() ? "" : b + "/v1");
+                urlView.setText(url[0]);
+                refreshEndpointPreferences(context);
+                Toast.makeText(context, R.string.termux_ai_api_port_randomized, Toast.LENGTH_SHORT).show();
+            } catch (JSONException e) {
+                Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+            }
+        });
+        Button recreateToken = endpointButton(context, R.string.termux_ai_endpoint_recreate_token, () -> {
+            try {
+                JSONObject ep = LauncherCtlApiServer.getInstance().rotateAuthTokenFromSettings(context)
+                    .optJSONObject("endpoint");
+                String fresh = ep == null ? "" : ep.optString("token", "");
+                token[0] = fresh.isEmpty() ? new TaiSettings(context).getOrCreateApiToken() : fresh;
+                tokenView.setText(revealed[0] ? token[0] : TaiSettings.redactToken(token[0]));
+                refreshEndpointPreferences(context);
+                Toast.makeText(context, R.string.termux_ai_api_token_rotated, Toast.LENGTH_SHORT).show();
+            } catch (JSONException e) {
+                Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+            }
+        });
+        layout.addView(endpointRow(context, getString(R.string.termux_ai_endpoint_manage_label), null,
+            randomizePort, recreateToken));
 
         TextView files = new TextView(context);
         files.setText(getString(R.string.termux_ai_endpoint_files_footnote, endpointFile, tokenFile));
@@ -567,7 +488,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         return button;
     }
 
-    private LinearLayout endpointRow(Context context, String label, TextView valueView, Button... buttons) {
+    private LinearLayout endpointRow(Context context, String label, @Nullable TextView valueView, Button... buttons) {
         float density = context.getResources().getDisplayMetrics().density;
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
@@ -577,7 +498,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         labelView.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant));
         column.addView(labelView);
-        column.addView(valueView);
+        if (valueView != null) column.addView(valueView);
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.END);
@@ -592,31 +513,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             return value.data;
         }
         return 0xFF000000;
-    }
-
-    private void saveApiToken(Context context, EditTextPreference preference, String rawValue) {
-        String normalized = TaiSettings.normalizeApiToken(rawValue);
-        if (normalized.isEmpty()) {
-            Toast.makeText(context, R.string.termux_ai_api_token_invalid, Toast.LENGTH_LONG).show();
-            return;
-        }
-        new TaiSettings(context).setApiToken(normalized);
-        preference.setText(normalized);
-        try {
-            LauncherCtlApiServer.getInstance().applyEndpointSettings(context);
-            refreshEndpointPreferences(context);
-            Toast.makeText(context, R.string.termux_ai_api_token_saved, Toast.LENGTH_SHORT).show();
-        } catch (JSONException e) {
-            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private String currentOpenAiBaseUrl(Context context) {
-        try {
-            return LauncherCtlApiServer.getInstance().endpointSettings(context).optString("openAiBaseUrl", "");
-        } catch (JSONException e) {
-            return "";
-        }
     }
 
     private void copyToClipboard(Context context, String text, int toastResId) {
@@ -702,28 +598,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         }
     }
 
-    private void refreshDeviceEngineInfo(Context context, @Nullable JSONObject runtimeStatus) {
-        TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
-        Preference info = findPreference("tai_device_engine_info");
-        if (info == null) return;
-        String backend = "none";
-        String model = new TaiSettings(context).getDefaultAssistantModel();
-        try {
-            if (runtimeStatus == null) throw new JSONException("runtime status unavailable");
-            JSONObject runtime = runtimeStatus.getJSONObject("runtime");
-            backend = runtime.optString("backend", backend);
-            model = runtime.optString("loadedModelId", model);
-        } catch (JSONException ignored) {
-        }
-        String mnn = capabilities.mnnSupported
-            ? getString(R.string.termux_ai_mnn_support_status_supported)
-            : getString(R.string.termux_ai_mnn_support_status_unsupported);
-        String reason = capabilities.mnnSupported || capabilities.mnnUnsupportedReason == null
-            ? ""
-            : "\n" + capabilities.mnnUnsupportedReason;
-        info.setSummary(getString(R.string.termux_ai_device_engine_info_summary,
-            model, backend, mnn) + reason);
-    }
 
     private void configureLanToggle(Context context) {
         SwitchPreferenceCompat lanToggle = findPreference("tai_lan_enabled");
@@ -905,6 +779,17 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             appendKv(body, "device", deviceLine.toString());
             appendKv(body, "accel", join(device.optJSONArray("phase1Accelerators")));
         }
+        // Engine availability (folded in from the former standalone "Device & engine info" row).
+        TaiDeviceCapabilities caps = TaiDeviceCapabilities.detect(context);
+        boolean liteRtOk = caps.liteRtLmAbiSupported && caps.liteRtLmNativeLibrariesAvailable;
+        StringBuilder engine = new StringBuilder("litert-lm ")
+            .append(liteRtOk ? "ok" : "unavailable")
+            .append(" · mnn-llm ")
+            .append(caps.mnnSupported ? "ok" : "unavailable");
+        if (!caps.mnnSupported && caps.mnnUnsupportedReason != null) {
+            engine.append(" (").append(caps.mnnUnsupportedReason).append(')');
+        }
+        appendKv(body, "engine", engine.toString());
         appendKv(body, "model", nullable(runtime, "loadedModelId", "none"));
         appendKv(body, "backend", runtime.optString("backend", "none"));
         String fallback = nullable(runtime, "backendFallbackReason", "");

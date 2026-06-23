@@ -50,25 +50,6 @@
             app:title="@string/termux_ai_endpoint_copy_title"
             app:summary="@string/termux_ai_endpoint_notice_summary"
             app:persistent="false"/>
-        <EditTextPreference
-            app:key="tai_api_port"
-            app:title="@string/termux_ai_api_port_title"
-            app:dialogTitle="@string/termux_ai_api_port_title"
-            app:defaultValue="41237"/>
-        <Preference
-            app:key="tai_api_port_randomize"
-            app:title="@string/termux_ai_api_port_randomize_title"
-            app:summary="@string/termux_ai_api_port_randomize_summary"
-            app:persistent="false"/>
-        <EditTextPreference
-            app:key="tai_api_token"
-            app:title="@string/termux_ai_api_token_title"
-            app:dialogTitle="@string/termux_ai_api_token_title"/>
-        <Preference
-            app:key="tai_api_token_rotate"
-            app:title="@string/termux_ai_api_token_rotate_title"
-            app:summary="@string/termux_ai_api_token_rotate_summary"
-            app:persistent="false"/>
         <androidx.preference.SwitchPreferenceCompat
             app:key="tai_lan_enabled"
             app:title="@string/termux_ai_lan_enabled_title"
@@ -99,11 +80,6 @@
             app:defaultValue="false"/>
         <com.termux.app.fragments.settings.termux.TaiOverridesPreference
             app:key="tai_runtime_overrides"
-            app:persistent="false"
-            app:selectable="false"/>
-        <Preference
-            app:key="tai_device_engine_info"
-            app:title="@string/termux_ai_device_engine_info_title"
             app:persistent="false"
             app:selectable="false"/>
     </PreferenceCategory>

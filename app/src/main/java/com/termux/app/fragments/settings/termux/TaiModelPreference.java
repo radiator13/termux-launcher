@@ -37,7 +37,6 @@ public final class TaiModelPreference extends Preference {
     private CharSequence primaryActionText = "";
     private boolean primaryActionEnabled = true;
     private boolean primaryActionDestructive;
-    private int primaryActionIconRes;
     private boolean recommended;
     private View.OnClickListener primaryActionClickListener;
     private CharSequence tuneActionText = "";
@@ -93,12 +92,6 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
     public void setTuneAction(@Nullable CharSequence text, @Nullable View.OnClickListener listener) {
         this.tuneActionText = text == null ? "" : text;
         this.tuneActionClickListener = listener;
-        notifyChanged();
-    }
-
-    /** Drawable shown at the end of the primary action button (0 for none). */
-    public void setPrimaryActionIcon(int iconRes) {
-        this.primaryActionIconRes = iconRes;
         notifyChanged();
     }
 
@@ -193,8 +186,6 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         button.setText(text);
         button.setEnabled(enabled);
         button.setOnClickListener(listener);
-        button.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, primaryActionIconRes, 0);
-        button.setCompoundDrawablePadding(primaryActionIconRes == 0 ? 0 : dp(4));
         return true;
     }
 
@@ -217,7 +208,6 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         }
         button.setBackgroundTintList(ColorStateList.valueOf(resolveAttrColor(backgroundAttr)));
         button.setTextColor(resolveAttrColor(textAttr));
-        button.setCompoundDrawableTintList(ColorStateList.valueOf(resolveAttrColor(textAttr)));
     }
 
     private boolean bindTuneButton(@Nullable ImageButton button, @NonNull CharSequence text,

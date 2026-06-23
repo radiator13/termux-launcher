@@ -17,8 +17,6 @@ import android.widget.Toast;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.preference.EditTextPreference;
-import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceManager;
@@ -75,6 +73,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     private static final long POLL_INTERVAL_MS = 700L;
 
     private BackendFilter backendFilter = BackendFilter.ALL;
+    private String installFilter = TaiCatalogControlsPreference.INSTALL_ALL;
     private String searchQuery = "";
 
     @Override
@@ -94,9 +93,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         super.onResume();
         if (getActivity() != null) {
             getActivity().setTitle(R.string.termux_ai_models_browse_catalog_title);
-            getActivity().getWindow().setFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SECURE,
-                android.view.WindowManager.LayoutParams.FLAG_SECURE);
         }
         Context context = getContext();
         if (context != null) {
@@ -108,32 +104,31 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     @Override
     public void onPause() {
         handler.removeCallbacks(refreshRunnable);
-        if (getActivity() != null) {
-            getActivity().getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
-        }
         super.onPause();
     }
 
     private void configureControls(Context context) {
-        ListPreference filter = findPreference("tai_catalog_filter_mode");
-        if (filter != null) {
-            if (filter.getValue() == null) filter.setValue(backendFilter.value);
-            backendFilter = BackendFilter.fromValue(filter.getValue());
-            filter.setOnPreferenceChangeListener((preference, newValue) -> {
-                backendFilter = BackendFilter.fromValue(String.valueOf(newValue));
+        TaiCatalogControlsPreference controls = findPreference("tai_catalog_controls");
+        if (controls == null) return;
+        controls.setOnControlsListener(new TaiCatalogControlsPreference.OnControlsListener() {
+            @Override
+            public void onBackendSelected(@NonNull String backend) {
+                backendFilter = BackendFilter.fromValue(backend);
                 refreshCatalogRows(context);
-                return true;
-            });
-        }
-        EditTextPreference search = findPreference("tai_catalog_search");
-        if (search != null) {
-            search.setText(searchQuery);
-            search.setOnPreferenceChangeListener((preference, newValue) -> {
-                searchQuery = newValue == null ? "" : String.valueOf(newValue).trim();
+            }
+
+            @Override
+            public void onInstallSelected(@NonNull String install) {
+                installFilter = install;
                 refreshCatalogRows(context);
-                return true;
-            });
-        }
+            }
+
+            @Override
+            public void onSearchSubmitted(@NonNull String query) {
+                searchQuery = query;
+                refreshCatalogRows(context);
+            }
+        });
     }
 
     private void refreshCatalogRows(Context context) {
@@ -148,7 +143,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
 
         List<TaiModelCatalog.CatalogEntry> entries = sortForDisplay(
-            filterEntries(TaiModelCatalog.entries().values(), backendFilter, searchQuery, installed, capabilities));
+            filterByInstallStatus(
+                filterEntries(TaiModelCatalog.entries().values(), backendFilter, searchQuery, installed, capabilities),
+                installed));
         if (entries.isEmpty()) {
             Preference empty = new Preference(context);
             empty.setIconSpaceReserved(false);
@@ -176,6 +173,18 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             }
         });
         return sorted;
+    }
+
+    /** Applies the install-status dropdown (All / Installed / Not installed) after backend+search. */
+    private List<TaiModelCatalog.CatalogEntry> filterByInstallStatus(
+            List<TaiModelCatalog.CatalogEntry> entries, Map<String, TaiModelSpec> installed) {
+        if (TaiCatalogControlsPreference.INSTALL_ALL.equals(installFilter)) return entries;
+        boolean wantInstalled = TaiCatalogControlsPreference.INSTALL_INSTALLED.equals(installFilter);
+        List<TaiModelCatalog.CatalogEntry> kept = new ArrayList<>();
+        for (TaiModelCatalog.CatalogEntry entry : entries) {
+            if (installed.containsKey(entry.modelId) == wantInstalled) kept.add(entry);
+        }
+        return kept;
     }
 
     private TaiModelPreference buildRow(Context context, TaiModelCatalog.CatalogEntry entry,
@@ -210,7 +219,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             tuneSpec == null ? null : view -> openParameterScreen(tuneSpec));
         row.setPrimaryAction(actionText(context, state), state.enabled, false,
             view -> handlePrimaryAction(context, entry, tuneSpec, state));
-        row.setPrimaryActionIcon(state.type == CatalogActionType.INSTALL ? R.drawable.ic_download_18 : 0);
     }
 
     /** Refreshes the live rows already on screen in place (no add/remove) — used while a download

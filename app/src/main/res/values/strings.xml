@@ -293,26 +293,14 @@
         <string name="termux_ai_catalog_results_title">Catalog models</string>
         <string name="termux_ai_catalog_backend_filter_title">Backend</string>
         <string name="termux_ai_catalog_backend_all">All</string>
+        <string name="termux_ai_catalog_backend_both">Both</string>
+        <string name="termux_ai_catalog_install_all">All</string>
         <string name="termux_ai_catalog_filter_installed">Installed</string>
+        <string name="termux_ai_catalog_filter_not_installed">Not installed</string>
         <string name="termux_ai_catalog_filter_usable">Usable</string>
         <string name="termux_ai_catalog_search_title">Search catalog</string>
         <string name="termux_ai_catalog_empty_title">No catalog matches</string>
         <string name="termux_ai_catalog_empty_summary">Try a different filter or clear the search field.</string>
-        <string name="termux_ai_catalog_filter_mode_title">Show</string>
-        <string-array name="tai_catalog_filter_mode_entries">
-            <item>All models</item>
-            <item>Installed</item>
-            <item>Usable on this device</item>
-            <item>LiteRT-LM only</item>
-            <item>MNN-LLM only</item>
-        </string-array>
-        <string-array name="tai_catalog_filter_mode_values">
-            <item>all</item>
-            <item>installed</item>
-            <item>usable</item>
-            <item>litert-lm</item>
-            <item>mnn-llm</item>
-        </string-array>
         <string name="termux_ai_catalog_action_install">Install</string>
         <string name="termux_ai_catalog_action_downloading">Downloading %1$s · Cancel</string>
         <string name="termux_ai_catalog_action_installed">Installed · Set default</string>
@@ -349,8 +337,8 @@
         <string name="termux_ai_model_set_active_action">Set default</string>
         <string name="termux_ai_model_active_action">Default</string>
         <string name="termux_ai_model_active_saved">Default model updated</string>
-        <string name="termux_ai_model_tune_action">Tune</string>
-        <string name="termux_ai_model_tune_title">Tune %1$s</string>
+        <string name="termux_ai_model_tune_action">Parameters</string>
+        <string name="termux_ai_model_tune_title">%1$s parameters</string>
         <string name="termux_ai_model_tune_reset_action">Reset all to global defaults</string>
         <string name="termux_ai_model_tune_reset_one_action">Use global</string>
         <string name="termux_ai_model_tune_reset_done">Model overrides reset</string>
@@ -433,6 +421,9 @@
         <string name="termux_ai_endpoint_access_title">Endpoint &amp; access</string>
         <string name="termux_ai_endpoint_field_base_url">OpenAI base URL</string>
         <string name="termux_ai_endpoint_field_token">Bearer token</string>
+        <string name="termux_ai_endpoint_manage_label">Manage</string>
+        <string name="termux_ai_endpoint_randomize_port">Randomize port</string>
+        <string name="termux_ai_endpoint_recreate_token">Recreate token</string>
         <string name="termux_ai_endpoint_files_footnote">Endpoint file: %1$s\nToken file: %2$s\n\nOpenAI-compatible clients use the base URL and send the bearer token as their API key.</string>
         <string name="termux_ai_backend_header">Backend</string>
         <string name="termux_ai_active_backend_title">Active backend</string>
