@@ -339,10 +339,22 @@ public final class TaiModelStore {
             JSONObject json = new JSONObject(readUtf8(config));
             return sidecarReadable(modelDir, json.optString("llm_model", "llm.mnn"))
                 && sidecarReadable(modelDir, json.optString("llm_weight", "llm.mnn.weight"))
-                && sidecarReadable(modelDir, json.optString("tokenizer_file", ""));
+                && sidecarReadable(modelDir, mnnTokenizerFile(modelDir, json));
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** Qwen3-VL/eagle MNN packages omit tokenizer_file and ship the conventional tokenizer.txt;
+     *  fall back to it (or tokenizer.mtok) so those packages are still recognised. */
+    @NonNull
+    static String mnnTokenizerFile(@NonNull File modelDir, @NonNull JSONObject config) {
+        String declared = config.optString("tokenizer_file", "");
+        if (declared != null && !declared.trim().isEmpty()) return declared;
+        for (String name : new String[] {"tokenizer.txt", "tokenizer.mtok"}) {
+            if (new File(modelDir, name).isFile()) return name;
+        }
+        return "tokenizer.txt";
     }
 
     private boolean sidecarReadable(@NonNull File modelDir, @Nullable String fileName) {

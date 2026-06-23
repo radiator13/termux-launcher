@@ -962,6 +962,10 @@ public final class MnnTaiRuntime implements TaiRuntime {
     @NonNull
     private String mergedConfigJson(@NonNull File config, @NonNull TaiModelSpec modelSpec, @NonNull TaiRuntimeOptions options) throws JSONException {
         JSONObject json = readJsonFile(config);
+        File modelDir = config.getParentFile();
+        if (modelDir != null && json.optString("tokenizer_file", "").trim().isEmpty()) {
+            json.put("tokenizer_file", TaiModelStore.mnnTokenizerFile(modelDir, json));
+        }
         if (!json.has("backend_type")) json.put("backend_type", "cpu");
         if (!json.has("thread_num")) json.put("thread_num", 4);
         if (!json.has("precision")) json.put("precision", "low");
@@ -1087,7 +1091,8 @@ public final class MnnTaiRuntime implements TaiRuntime {
         if (missing != null) return missing;
         missing = missingMnnSidecar(modelDir, json, "llm_weight", "llm.mnn.weight");
         if (missing != null) return missing;
-        String tokenizer = json.optString("tokenizer_file", "");
+        // Qwen3-VL/eagle packages omit tokenizer_file and ship the conventional tokenizer.txt.
+        String tokenizer = TaiModelStore.mnnTokenizerFile(modelDir, json);
         if (tokenizer.trim().isEmpty()) {
             JSONObject error = error(404, "model_file_not_readable", "MNN config is missing tokenizer_file.");
             error.put("missingFilename", "tokenizer_file");
