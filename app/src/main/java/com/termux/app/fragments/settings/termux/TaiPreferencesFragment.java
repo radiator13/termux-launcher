@@ -58,6 +58,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1359,7 +1360,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private void showCatalogBrowser(Context context) {
         ArrayList<TaiModelCatalog.CatalogEntry> entries = new ArrayList<>(TaiModelCatalog.entries().values());
         TaiModelStore store = new TaiModelStore(context);
-        Map<String, TaiModelSpec> installed = store.getInstalledUserModels();
+        // Same union /v1/models advertises: registered user models plus completed downloads. Either
+        // source can hold a custom model, so the browser must check both or it goes missing.
+        LinkedHashMap<String, TaiModelSpec> installed = new LinkedHashMap<>();
+        installed.putAll(store.getDownloadedReadableModels());
+        installed.putAll(store.getInstalledUserModels());
         JSONArray downloads = store.getDownloads();
         // Imported/URL-downloaded models that aren't catalog entries also belong here, with the same
         // Parameters/Delete actions as installed catalog models.
@@ -1389,7 +1394,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                     return;
                 }
                 TaiModelCatalog.CatalogEntry entry = entries.get(which);
-                TaiModelSpec installedSpec = new TaiModelStore(context).getInstalledUserModels().get(entry.modelId);
+                TaiModelSpec installedSpec = installed.get(entry.modelId);
                 if (installedSpec != null) {
                     showInstalledModelActions(context, installedSpec);
                 } else {
