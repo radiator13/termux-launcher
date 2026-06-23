@@ -318,7 +318,7 @@
         <string name="termux_ai_model_import_title">Import file</string>
         <string name="termux_ai_model_import_summary">Import a local LiteRT .litertlm or .task file into app-private storage</string>
         <string name="termux_ai_model_import_dialog_title">Local import</string>
-        <string name="termux_ai_model_import_dialog_message">Choose one local SAF model file. MNN folder packages should be downloaded from the catalog. Imported as text-only — enable vision/audio/tools afterward in the model\'s Parameters.</string>
+        <string name="termux_ai_model_import_dialog_message">Choose one local SAF model file. MNN folder packages should be downloaded from the catalog. Tick the modalities this model supports — you can change them later in the model\'s Parameters.</string>
         <string name="termux_ai_model_import_hf_url_hint">Hugging Face HTTPS URL</string>
         <string name="termux_ai_model_import_hf_token_hint">Optional Hugging Face token</string>
         <string name="termux_ai_model_import_id_hint">Model id (optional)</string>
@@ -446,8 +446,12 @@
         <string name="termux_ai_caps_title">Modalities &amp; capabilities</string>
         <string name="termux_ai_caps_vision">Image input (vision)</string>
         <string name="termux_ai_caps_audio">Audio input</string>
+        <string name="termux_ai_caps_video">Video input (no runtime yet)</string>
+        <string name="termux_ai_caps_video_summary">Declared as model intent and listed under source capabilities; no runtime processes video yet.</string>
+        <string name="termux_ai_caps_mnn_vision">Best-effort on MNN VL models (Qwen-VL, SmolVLM, MiniCPM-V)</string>
         <string name="termux_ai_caps_tools">Tool calling</string>
-        <string name="termux_ai_caps_litert_only">Vision/audio input is available on LiteRT models</string>
+        <string name="termux_ai_caps_litert_only">Audio input is available on LiteRT models</string>
+        <string name="termux_ai_model_import_modalities_label">Modalities this model supports (changeable later in Parameters):</string>
         <string name="termux_ai_caps_exposure_title">Endpoint exposure</string>
         <string name="termux_ai_exposure_split">Split — separate text/vision/audio ids (lower RAM)</string>
         <string name="termux_ai_exposure_combined">Combined — one id loads all modalities</string>

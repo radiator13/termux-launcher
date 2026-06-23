@@ -97,7 +97,7 @@ public class TaiOpenAiCompatibilityTest {
     }
 
     @Test
-    public void openAiModels_marksMnnToolUseAsPromptFallbackAndFiltersMedia() throws Exception {
+    public void openAiModels_marksMnnToolUseAsPromptFallbackAllowsImageFiltersAudioVideo() throws Exception {
         JSONObject taiModels = new JSONObject()
             .put("ok", true)
             .put("models", new JSONArray().put(new JSONObject()
@@ -107,7 +107,8 @@ public class TaiOpenAiCompatibilityTest {
                     .put("text_chat")
                     .put("tool_use")
                     .put("image_input")
-                    .put("audio_input"))));
+                    .put("audio_input")
+                    .put("video_input"))));
 
         JSONObject response = TaiManager.openAiModelsFromTaiModels(taiModels);
 
@@ -115,8 +116,10 @@ public class TaiOpenAiCompatibilityTest {
         JSONObject model = response.getJSONArray("data").getJSONObject(0);
         assertTrue(contains(capabilities, TaiModelSpec.CAPABILITY_TEXT_CHAT));
         assertTrue(contains(capabilities, TaiModelSpec.CAPABILITY_TOOL_USE));
-        assertFalse(contains(capabilities, TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        // MNN VL models advertise image; audio/video have no MNN runtime path so they stay filtered.
+        assertTrue(contains(capabilities, TaiModelSpec.CAPABILITY_IMAGE_INPUT));
         assertFalse(contains(capabilities, TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        assertFalse(contains(capabilities, TaiModelSpec.CAPABILITY_VIDEO_INPUT));
         assertEquals(TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK, model.getString("_tool_mode"));
     }
 
@@ -220,6 +223,38 @@ public class TaiOpenAiCompatibilityTest {
 
         assertTrue(LiteRtTaiRuntime.isCancellation(error));
         assertFalse(LiteRtTaiRuntime.isCancellation(new RuntimeException("GPU initialization failed")));
+    }
+
+    @Test
+    public void messageContentToContents_acceptsImageForMnnVlModel() throws Exception {
+        TaiModelSpec spec = spec("qwen-vl-mnn", TaiModelSpec.BACKEND_MNN_LLM, "image_input");
+        assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        JSONArray parts = new JSONArray()
+            .put(new JSONObject().put("type", "text").put("text", "describe"))
+            .put(new JSONObject().put("type", "image_url")
+                .put("image_url", new JSONObject().put("url", "data:image/png;base64,AQID")));
+
+        Contents contents = TaiManager.messageContentToContents(parts, spec);
+
+        assertEquals(2, contents.getContents().size());
+        assertTrue(contents.getContents().get(1) instanceof Content.ImageBytes);
+    }
+
+    @Test
+    public void endpointCapabilities_videoStaysSourceOnlyForBothBackends() {
+        LinkedHashSet<String> declared = new LinkedHashSet<>();
+        declared.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        declared.add(TaiModelSpec.CAPABILITY_VIDEO_INPUT);
+        declared.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+
+        LinkedHashSet<String> liteRt = TaiModelSpec.endpointCapabilitiesFor(
+            "v", TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.FORMAT_LITERTLM, declared, null);
+        LinkedHashSet<String> mnn = TaiModelSpec.endpointCapabilitiesFor(
+            "v", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, declared, null);
+
+        assertFalse(liteRt.contains(TaiModelSpec.CAPABILITY_VIDEO_INPUT));
+        assertFalse(mnn.contains(TaiModelSpec.CAPABILITY_VIDEO_INPUT));
+        assertTrue(mnn.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
     }
 
     private static TaiModelSpec spec(String id, String backend, String... capabilities) {

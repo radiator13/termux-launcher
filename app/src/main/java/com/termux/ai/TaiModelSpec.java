@@ -26,6 +26,9 @@ public final class TaiModelSpec {
     public static final String CAPABILITY_TEXT_EMBEDDINGS = "text_embeddings";
     public static final String CAPABILITY_IMAGE_INPUT = "image_input";
     public static final String CAPABILITY_AUDIO_INPUT = "audio_input";
+    // Declared-only intent: no runtime processes video yet, so this rides on sourceCapabilities
+    // (informational) and is deliberately kept out of endpointCapabilitiesFor.
+    public static final String CAPABILITY_VIDEO_INPUT = "video_input";
     public static final String CAPABILITY_TOOL_USE = "tool_use";
     public static final String CAPABILITY_MOBILE_ACTIONS = "mobile_actions";
     public static final String CAPABILITY_CODE = "code";
@@ -295,6 +298,9 @@ public final class TaiModelSpec {
 
         if (BACKEND_MNN_LLM.equals(backend)) {
             addIfPresent(endpoint, source, CAPABILITY_TEXT_CHAT, source.isEmpty());
+            // MNN VL models (Qwen-VL, SmolVLM, MiniCPM-V) take images; the runtime injects them as
+            // inline <img> markup. Audio/video have no MNN runtime path, so they stay source-only.
+            addIfPresent(endpoint, source, CAPABILITY_IMAGE_INPUT, false);
             addIfPresent(endpoint, source, CAPABILITY_CODE, false);
             addIfPresent(endpoint, source, "multilingual", false);
             addIfPresent(endpoint, source, "reasoning", false);

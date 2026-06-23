@@ -1,6 +1,8 @@
 package com.termux.ai;
 
 import android.content.Context;
+import android.net.Uri;
+import android.util.Base64;
 import android.util.Pair;
 
 import androidx.annotation.NonNull;
@@ -18,6 +20,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -569,7 +572,12 @@ public final class MnnTaiRuntime implements TaiRuntime {
                 Object item = array.opt(i);
                 if (item instanceof JSONObject) {
                     JSONObject object = (JSONObject) item;
-                    if ("text".equals(object.optString("type", ""))) builder.append(object.optString("text", ""));
+                    String type = object.optString("type", "");
+                    if ("text".equals(type)) {
+                        builder.append(object.optString("text", ""));
+                    } else if ("image_url".equals(type) || "input_image".equals(type)) {
+                        builder.append(mnnImageMarkup(object));
+                    }
                 } else if (item != null && !JSONObject.NULL.equals(item)) {
                     builder.append(String.valueOf(item));
                 }
@@ -577,6 +585,57 @@ public final class MnnTaiRuntime implements TaiRuntime {
             return builder.toString();
         }
         return String.valueOf(content);
+    }
+
+    /**
+     * Best-effort image input for MNN VL models (Qwen-VL, SmolVLM, MiniCPM-V): MNN-LLM consumes
+     * images as inline {@code <img>path</img>} markup in the prompt text. Data-URL/base64 images are
+     * materialised to a cache file; local paths pass straight through.
+     * ponytail: the {@code <img>} convention is MNN's documented multimodal prompt format but is
+     * unverified against every MNN VL build — a non-VL model just ignores the tag. Upgrade to a
+     * native setImages bridge if a build needs a different placeholder. http(s) URLs are skipped to
+     * keep this minimal (clients send base64 data URLs in practice).
+     */
+    @NonNull
+    private String mnnImageMarkup(@NonNull JSONObject part) {
+        Object value = part.opt("image_url");
+        String url = "";
+        if (value instanceof JSONObject) url = ((JSONObject) value).optString("url", "");
+        else if (value != null && !JSONObject.NULL.equals(value)) url = String.valueOf(value);
+        if (url.trim().isEmpty()) url = part.optString("image_url", "");
+        url = url.trim();
+        if (url.isEmpty()) return "";
+        String path = "";
+        if (url.startsWith("/")) {
+            path = url;
+        } else if (url.startsWith("file://")) {
+            String parsed = Uri.parse(url).getPath();
+            path = parsed == null ? "" : parsed;
+        } else if (url.startsWith("data:")) {
+            int comma = url.indexOf(',');
+            if (comma >= 0) {
+                try {
+                    path = writeImageCache(Base64.decode(url.substring(comma + 1), Base64.DEFAULT));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
+        return path.isEmpty() ? "" : "<img>" + path + "</img>";
+    }
+
+    @NonNull
+    private String writeImageCache(@NonNull byte[] bytes) {
+        try {
+            File dir = new File(appContext.getCacheDir(), "tai-mnn-images");
+            if (!dir.isDirectory() && !dir.mkdirs()) return "";
+            File file = new File(dir, "img-" + System.currentTimeMillis() + "-" + bytes.length + ".bin");
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(bytes);
+            }
+            return file.getAbsolutePath();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     @NonNull

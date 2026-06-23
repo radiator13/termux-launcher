@@ -19,8 +19,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Set;
 
 public final class TaiModelImporter {
     private static final long MIN_MODEL_BYTES = 1024L * 1024L;
@@ -40,12 +41,19 @@ public final class TaiModelImporter {
 
     @NonNull
     public JSONObject importDocument(@NonNull Uri uri, @Nullable String requestedModelId) throws JSONException {
-        return importDocument(uri, requestedModelId, null);
+        return importDocument(uri, requestedModelId, null, null);
     }
 
     @NonNull
     public JSONObject importDocument(@NonNull Uri uri, @Nullable String requestedModelId,
                                      @Nullable String backend) throws JSONException {
+        return importDocument(uri, requestedModelId, backend, null);
+    }
+
+    @NonNull
+    public JSONObject importDocument(@NonNull Uri uri, @Nullable String requestedModelId,
+                                     @Nullable String backend,
+                                     @Nullable Set<String> declaredCapabilities) throws JSONException {
         DocumentMetadata metadata = readMetadata(uri);
         String fileName = sanitizeFileName(metadata.displayName);
         ValidationResult fileValidation = backend == null || backend.trim().isEmpty()
@@ -95,7 +103,7 @@ public final class TaiModelImporter {
                 output.getAbsolutePath(),
                 "User-provided model; license accepted externally",
                 output.length(),
-                Collections.singleton("text_chat"),
+                sourceCapabilities(declaredCapabilities),
                 false
             );
             String format = TaiModelSpec.inferFormat(output.getAbsolutePath());
@@ -264,6 +272,19 @@ public final class TaiModelImporter {
         if (lower.endsWith(".litertlm")) return value.substring(0, value.length() - ".litertlm".length());
         if (lower.endsWith(".task")) return value.substring(0, value.length() - ".task".length());
         return value;
+    }
+
+    /** Always-text-chat plus whatever modalities the user ticked at import time. */
+    @NonNull
+    private static Set<String> sourceCapabilities(@Nullable Set<String> declared) {
+        LinkedHashSet<String> caps = new LinkedHashSet<>();
+        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        if (declared != null) {
+            for (String capability : declared) {
+                if (capability != null && !capability.trim().isEmpty()) caps.add(capability.trim());
+            }
+        }
+        return caps;
     }
 
     private static boolean isRawWeightFileName(@NonNull String lowerFileName) {

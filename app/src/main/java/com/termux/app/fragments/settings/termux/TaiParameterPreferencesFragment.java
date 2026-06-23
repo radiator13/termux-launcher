@@ -163,7 +163,8 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
     }
 
     /** Lets the user declare which modalities/tools a model supports; drives the split/combined
-     *  variants on /v1/models. Vision/audio are LiteRT-only for now (the endpoint gates them). */
+     *  variants on /v1/models. Vision is enabled on both backends (real on LiteRT, best-effort on
+     *  MNN VL models); audio is LiteRT-only; video is declared-only intent with no runtime yet. */
     private void addCapabilitySection(@NonNull Context context, @NonNull PreferenceScreen screen) {
         TaiModelSpec model = currentModelSpec(context);
         if (model == null) return;
@@ -171,14 +172,20 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
         PreferenceCategory caps = category(context, R.string.termux_ai_caps_title);
         screen.addPreference(caps);
 
+        // Vision is real on LiteRT and best-effort on MNN VL models, so it is enabled on both.
+        // Audio has only a LiteRT runtime path. Video is declared-only intent (no runtime yet) and
+        // rides on source capabilities, so it stays out of the endpoint capability set.
         SwitchPreferenceCompat vision = capabilitySwitch(context, "vision", R.string.termux_ai_caps_vision,
-            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT), liteRt);
+            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT), true);
         SwitchPreferenceCompat audio = capabilitySwitch(context, "audio", R.string.termux_ai_caps_audio,
             model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT), liteRt);
+        SwitchPreferenceCompat video = capabilitySwitch(context, "video", R.string.termux_ai_caps_video,
+            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_VIDEO_INPUT), true);
+        video.setSummary(R.string.termux_ai_caps_video_summary);
         SwitchPreferenceCompat tools = capabilitySwitch(context, "tools", R.string.termux_ai_caps_tools,
             model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE), true);
         if (!liteRt) {
-            vision.setSummary(R.string.termux_ai_caps_litert_only);
+            vision.setSummary(R.string.termux_ai_caps_mnn_vision);
             audio.setSummary(R.string.termux_ai_caps_litert_only);
         }
         Runnable persist = () -> {
@@ -186,6 +193,7 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
             set.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
             if (vision.isChecked()) set.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
             if (audio.isChecked()) set.add(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+            if (video.isChecked()) set.add(TaiModelSpec.CAPABILITY_VIDEO_INPUT);
             if (tools.isChecked()) set.add(TaiModelSpec.CAPABILITY_TOOL_USE);
             new TaiModelStore(context).setCapabilityOverride(modelId, set);
         };
@@ -196,9 +204,11 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
         };
         vision.setOnPreferenceChangeListener(onChange);
         audio.setOnPreferenceChangeListener(onChange);
+        video.setOnPreferenceChangeListener(onChange);
         tools.setOnPreferenceChangeListener(onChange);
         caps.addPreference(vision);
         caps.addPreference(audio);
+        caps.addPreference(video);
         caps.addPreference(tools);
 
         if (!liteRt) return; // MNN has no modality variants; exposure choice is LiteRT-only

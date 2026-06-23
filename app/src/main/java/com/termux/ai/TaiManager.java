@@ -1499,8 +1499,9 @@ public final class TaiManager {
                 if ("text".equals(type)) {
                     contents.add(new Content.Text(object.optString("text", "")));
                 } else if ("image_url".equals(type) || "input_image".equals(type)) {
-                    if (!TaiModelSpec.BACKEND_LITERT_LM.equals(spec.backend)
-                        || !spec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)) {
+                    // Image is real on LiteRT and best-effort on MNN VL models; the endpoint
+                    // capability gate (set in endpointCapabilitiesFor) is the single source of truth.
+                    if (!spec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)) {
                         throw new JSONException("capability_not_supported:Model " + spec.id + " does not support image input through this endpoint.");
                     }
                     contents.add(imageContent(object));

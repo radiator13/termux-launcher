@@ -18,6 +18,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
@@ -92,6 +93,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         String modelId = "";
         Uri documentUri;
         TaiModelImporter.DocumentMetadata documentMetadata;
+        // Modalities the user ticked at import time; survives the file-picker round-trip.
+        final java.util.LinkedHashSet<String> capabilities = new java.util.LinkedHashSet<>();
     }
 
     private static final OverrideSpec[] OVERRIDE_SPECS = {
@@ -1627,6 +1630,33 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         backendGroup.check(IMPORT_BACKEND_MNN.equals(draft.backend) ? mnn.getId() : litert.getId());
         layout.addView(backendGroup);
 
+        TextView modalityLabel = new TextView(context);
+        modalityLabel.setText(R.string.termux_ai_model_import_modalities_label);
+        modalityLabel.setPadding(0, padding / 2, 0, 0);
+        layout.addView(modalityLabel);
+
+        CheckBox vision = new CheckBox(context);
+        vision.setText(R.string.termux_ai_caps_vision);
+        vision.setChecked(draft.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        CheckBox audio = new CheckBox(context);
+        audio.setText(R.string.termux_ai_caps_audio);
+        audio.setChecked(draft.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+        CheckBox video = new CheckBox(context);
+        video.setText(R.string.termux_ai_caps_video);
+        video.setChecked(draft.capabilities.contains(TaiModelSpec.CAPABILITY_VIDEO_INPUT));
+        layout.addView(vision);
+        layout.addView(audio);
+        layout.addView(video);
+
+        // Audio input only has a LiteRT runtime path; vision is real on LiteRT and best-effort on
+        // MNN VL models; video is declared-only (advertised as intent, no runtime yet).
+        Runnable applyModalityGates = () -> {
+            boolean liteRt = IMPORT_BACKEND_LITERT.equals(draft.backend);
+            audio.setEnabled(liteRt);
+            if (!liteRt) audio.setChecked(false);
+        };
+        applyModalityGates.run();
+
         EditText modelIdInput = new EditText(context);
         modelIdInput.setSingleLine(true);
         modelIdInput.setHint(R.string.termux_ai_model_import_id_hint);
@@ -1642,8 +1672,16 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         backendGroup.setOnCheckedChangeListener((group, checkedId) -> {
             draft.backend = checkedId == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
+            applyModalityGates.run();
             selectedFile.setText(importSelectionText(context, draft));
         });
+
+        Runnable captureModalities = () -> {
+            draft.capabilities.clear();
+            if (vision.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+            if (audio.isEnabled() && audio.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+            if (video.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_VIDEO_INPUT);
+        };
 
         androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(context)
             .setTitle(R.string.termux_ai_model_import_dialog_title)
@@ -1659,6 +1697,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             draft.hfUrl = "";
             draft.hfToken = "";
             draft.modelId = modelIdInput.getText().toString().trim();
+            captureModalities.run();
             if (startImportDraft(context, draft)) dialog.dismiss();
         });
         Button neutral = dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
@@ -1667,6 +1706,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             draft.hfUrl = "";
             draft.hfToken = "";
             draft.modelId = modelIdInput.getText().toString().trim();
+            captureModalities.run();
             pendingImportDraft = draft;
             modelPicker.launch(new String[]{"application/octet-stream", "application/json", "*/*"});
             dialog.dismiss();
@@ -1713,7 +1753,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
             return false;
         }
-        importModelDocument(context, draft.documentUri, draft.modelId, draft.backend);
+        importModelDocument(context, draft.documentUri, draft.modelId, draft.backend, draft.capabilities);
         pendingImportDraft = null;
         return true;
     }
@@ -1738,6 +1778,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                     ? TaiModelSpec.FORMAT_MNN : TaiModelSpec.FORMAT_LITERTLM);
                 JSONArray capabilities = new JSONArray();
                 capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+                for (String capability : draft.capabilities) capabilities.put(capability);
                 request.put("capabilities", capabilities);
                 if (draft.hfToken != null && !draft.hfToken.trim().isEmpty()) {
                     request.put("huggingFaceToken", draft.hfToken.trim());
@@ -1765,7 +1806,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         });
     }
 
-    private void importModelDocument(Context context, Uri uri, String modelId, String backend) {
+    private void importModelDocument(Context context, Uri uri, String modelId, String backend,
+                                     java.util.Set<String> capabilities) {
         Context appContext = context.getApplicationContext();
         Preference importPreference = findPreference("tai_model_import");
         if (importPreference != null) {
@@ -1776,7 +1818,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             JSONObject result = null;
             try {
                 result = new TaiModelImporter(appContext, new TaiModelStore(appContext))
-                    .importDocument(uri, modelId, backend);
+                    .importDocument(uri, modelId, backend, capabilities);
             } catch (JSONException | RuntimeException ignored) {
             }
             JSONObject finalResult = result;
