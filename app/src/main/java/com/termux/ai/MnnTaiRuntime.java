@@ -615,8 +615,23 @@ public final class MnnTaiRuntime implements TaiRuntime {
             }
             offset = end + "</tool_call>".length();
         }
-        if (calls.length() == 0) appendJsonToolCall(response, generationId, calls);
+        if (calls.length() == 0) appendJsonToolCall(stripJsonCodeFence(response), generationId, calls);
         return calls;
+    }
+
+    /**
+     * Qwen and other MNN models often emit a tool call as a fenced ```json {...}``` block rather
+     * than inside &lt;tool_call&gt; tags. Unwrap a single leading code fence so the JSON tool-call
+     * parser can see the object. Returns the trimmed input unchanged when there is no fence.
+     */
+    @NonNull
+    private String stripJsonCodeFence(@NonNull String response) {
+        String trimmed = response.trim();
+        if (!trimmed.startsWith("```")) return trimmed;
+        int firstNewline = trimmed.indexOf('\n');
+        int closingFence = trimmed.lastIndexOf("```");
+        if (firstNewline < 0 || closingFence <= firstNewline) return trimmed;
+        return trimmed.substring(firstNewline + 1, closingFence).trim();
     }
 
     private void appendJsonToolCall(
@@ -658,7 +673,7 @@ public final class MnnTaiRuntime implements TaiRuntime {
     }
 
     private boolean responseLooksLikeToolCallJson(@NonNull String response) {
-        String trimmed = response.trim();
+        String trimmed = stripJsonCodeFence(response);
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
         try {
             JSONObject parsed = new JSONObject(trimmed);
