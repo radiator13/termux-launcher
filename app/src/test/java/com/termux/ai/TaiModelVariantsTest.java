@@ -77,6 +77,28 @@ public class TaiModelVariantsTest {
     }
 
     @Test
+    public void expand_combinedIsSingleAllModalityId_bothAddsSplits() {
+        List<TaiModelSpec> combined = TaiModelVariants.expand(multimodal(BASE_ID), TaiModelVariants.Exposure.COMBINED);
+        assertEquals(1, combined.size());
+        assertEquals(BASE_ID, combined.get(0).id);
+        assertTrue(combined.get(0).capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertTrue(combined.get(0).capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+
+        List<TaiModelSpec> both = TaiModelVariants.expand(multimodal(BASE_ID), TaiModelVariants.Exposure.BOTH);
+        assertEquals(4, both.size()); // combined + -text + -vision + -audio
+        assertEquals(BASE_ID, both.get(0).id);
+        assertEquals(BASE_ID + "-text", both.get(1).id);
+        assertFalse(both.get(1).capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
+        assertEquals(BASE_ID + "-vision", both.get(2).id);
+        assertEquals(BASE_ID + "-audio", both.get(3).id);
+
+        TaiModelVariants.Lookup lookup = id -> BASE_ID.equals(id) ? multimodal(BASE_ID) : null;
+        TaiModelSpec text = TaiModelVariants.resolve(BASE_ID + "-text", lookup);
+        assertNotNull(text);
+        assertFalse(text.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT));
+    }
+
+    @Test
     public void expand_textOnlyModelIsUnchanged() {
         List<TaiModelSpec> variants = TaiModelVariants.expand(textOnly("coder"));
         assertEquals(1, variants.size());

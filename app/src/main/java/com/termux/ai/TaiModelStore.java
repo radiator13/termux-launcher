@@ -29,6 +29,11 @@ public final class TaiModelStore {
 
     private static final String KEY_USER_MODELS = "tai_user_models_json";
     private static final String KEY_DOWNLOADS = "tai_downloads_json";
+    private static final String KEY_CAPS_PREFIX = "tai_model_caps.";
+    private static final String KEY_EXPOSURE_PREFIX = "tai_model_exposure.";
+    public static final String EXPOSURE_SPLIT = "split";
+    public static final String EXPOSURE_COMBINED = "combined";
+    public static final String EXPOSURE_BOTH = "both";
 
     private final Context appContext;
     private final SharedPreferences preferences;
@@ -56,7 +61,7 @@ public final class TaiModelStore {
             } catch (IllegalArgumentException e) {
                 continue;
             }
-            spec = normalizeLegacyModelSpec(spec);
+            spec = applyCapabilityOverride(normalizeLegacyModelSpec(spec));
             if (!spec.id.isEmpty()
                 && TaiModelSpec.isSupportedBackendFormat(spec.backend, spec.format)) {
                 models.put(spec.id, spec);
@@ -69,6 +74,42 @@ public final class TaiModelStore {
     public synchronized TaiModelSpec getUserModel(@Nullable String modelId) {
         if (modelId == null) return null;
         return getUserModels().get(modelId);
+    }
+
+    /** User-declared capability set for a model (e.g. enable vision/audio/tools on an import). */
+    public synchronized void setCapabilityOverride(@NonNull String modelId, @NonNull java.util.Set<String> capabilities) {
+        LinkedHashSet<String> caps = new LinkedHashSet<>(capabilities);
+        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        preferences.edit().putString(KEY_CAPS_PREFIX + modelId, android.text.TextUtils.join(",", caps)).apply();
+    }
+
+    /** How a multimodal model is advertised: split / combined / both. Defaults to split. */
+    @NonNull
+    public synchronized String getExposure(@NonNull String modelId) {
+        return preferences.getString(KEY_EXPOSURE_PREFIX + modelId, EXPOSURE_SPLIT);
+    }
+
+    public synchronized void setExposure(@NonNull String modelId, @NonNull String exposure) {
+        preferences.edit().putString(KEY_EXPOSURE_PREFIX + modelId, exposure).apply();
+    }
+
+    @NonNull
+    private TaiModelSpec applyCapabilityOverride(@NonNull TaiModelSpec spec) {
+        String raw = preferences.getString(KEY_CAPS_PREFIX + spec.id, null);
+        if (raw == null || raw.trim().isEmpty()) return spec;
+        LinkedHashSet<String> source = new LinkedHashSet<>();
+        source.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        for (String capability : raw.split(",")) {
+            String trimmed = capability.trim();
+            if (!trimmed.isEmpty()) source.add(trimmed);
+        }
+        LinkedHashSet<String> endpoint = TaiModelSpec.endpointCapabilitiesFor(
+            spec.id, spec.backend, spec.format, source, spec.localPath);
+        return new TaiModelSpec(spec.id, spec.displayName, spec.roleHint, spec.source, spec.localPath,
+            spec.license, spec.sizeBytes, source, spec.builtInCatalogEntry, spec.runtimeProfile,
+            spec.backend, spec.format, spec.architecture, spec.quantization, spec.endpointContextWindow,
+            spec.sourceContextWindow, spec.defaultMaxOutputTokens, spec.recommendedRamGb, spec.sha256,
+            endpoint, TaiModelSpec.toolModeFor(spec.backend, endpoint));
     }
 
     @NonNull

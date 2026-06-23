@@ -718,7 +718,8 @@ public final class TaiManager {
             if (TaiModelSpec.BACKEND_MNN_LLM.equals(spec.backend) && !mnnSupported) continue;
             // Advertise multimodal LiteRT models as separate modality-scoped ids (chat / -vision /
             // -audio), matching Edge Gallery's per-task loading. See TaiModelVariants.
-            for (TaiModelSpec variant : TaiModelVariants.expand(spec)) {
+            for (TaiModelSpec variant : TaiModelVariants.expand(spec,
+                    TaiModelVariants.Exposure.fromValue(modelStore.getExposure(spec.id)))) {
                 models.put(variant.toJson());
             }
         }
@@ -1071,9 +1072,14 @@ public final class TaiManager {
     private TaiModelSpec resolveModel(@Nullable String modelId) {
         String migratedId = modelId == null ? null : TaiSettings.migrateBuiltInModelId(modelId);
         TaiModelSpec direct = lookupBaseModel(migratedId);
-        // A multimodal model's canonical id loads text-only (Gallery's chat task); the modality
-        // encoders are reached through the explicit "-vision"/"-audio" virtual ids instead.
-        if (direct != null) return TaiModelVariants.chatScopedOrSelf(direct);
+        // Split exposure: the canonical id loads text-only (Gallery's chat task) and the encoders
+        // are reached through "-vision"/"-audio". Combined/Both: the canonical id loads every
+        // enabled modality at once.
+        if (direct != null) {
+            return TaiModelStore.EXPOSURE_SPLIT.equals(modelStore.getExposure(direct.id))
+                ? TaiModelVariants.chatScopedOrSelf(direct)
+                : direct;
+        }
         return TaiModelVariants.resolve(migratedId, this::lookupBaseModel);
     }
 

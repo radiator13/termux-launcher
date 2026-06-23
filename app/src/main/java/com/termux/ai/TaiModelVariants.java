@@ -35,8 +35,22 @@ import java.util.Set;
 final class TaiModelVariants {
     static final String SUFFIX_VISION = "-vision";
     static final String SUFFIX_AUDIO = "-audio";
+    static final String SUFFIX_TEXT = "-text";
 
     enum Scope { TEXT, IMAGE, AUDIO }
+
+    /** How a multimodal model is advertised on /v1/models. */
+    enum Exposure {
+        SPLIT,    // bare id = text; plus -vision/-audio (lowest RAM; default)
+        COMBINED, // bare id = all enabled modalities at once
+        BOTH;     // bare id = combined; plus -text/-vision/-audio splits
+        @NonNull
+        static Exposure fromValue(@Nullable String value) {
+            if (TaiModelStore.EXPOSURE_COMBINED.equals(value)) return COMBINED;
+            if (TaiModelStore.EXPOSURE_BOTH.equals(value)) return BOTH;
+            return SPLIT;
+        }
+    }
 
     /** Resolves a base (physical) model id to its installed spec, or {@code null} when unknown. */
     interface Lookup {
@@ -68,9 +82,23 @@ final class TaiModelVariants {
      */
     @NonNull
     static List<TaiModelSpec> expand(@NonNull TaiModelSpec spec) {
+        return expand(spec, Exposure.SPLIT);
+    }
+
+    @NonNull
+    static List<TaiModelSpec> expand(@NonNull TaiModelSpec spec, @NonNull Exposure exposure) {
         if (!isVariantCapable(spec)) return Collections.singletonList(spec);
         List<TaiModelSpec> out = new ArrayList<>();
-        out.add(scoped(spec, spec.id, Scope.TEXT));
+        if (exposure == Exposure.COMBINED) {
+            out.add(spec);                                  // bare id loads every enabled modality
+            return out;
+        }
+        if (exposure == Exposure.BOTH) {
+            out.add(spec);                                  // bare id = combined
+            out.add(scoped(spec, spec.id + SUFFIX_TEXT, Scope.TEXT));
+        } else {
+            out.add(scoped(spec, spec.id, Scope.TEXT));     // SPLIT: bare id = text
+        }
         if (supportsImage(spec)) out.add(scoped(spec, spec.id + SUFFIX_VISION, Scope.IMAGE));
         if (supportsAudio(spec)) out.add(scoped(spec, spec.id + SUFFIX_AUDIO, Scope.AUDIO));
         return out;
@@ -94,6 +122,10 @@ final class TaiModelVariants {
     @Nullable
     static TaiModelSpec resolve(@Nullable String requestedId, @NonNull Lookup lookup) {
         if (requestedId == null) return null;
+        if (requestedId.endsWith(SUFFIX_TEXT)) {
+            TaiModelSpec base = lookup.find(baseId(requestedId, SUFFIX_TEXT));
+            return base != null && isVariantCapable(base) ? scoped(base, requestedId, Scope.TEXT) : null;
+        }
         if (requestedId.endsWith(SUFFIX_VISION)) {
             TaiModelSpec base = lookup.find(baseId(requestedId, SUFFIX_VISION));
             if (base != null && isVariantCapable(base) && supportsImage(base)) {
@@ -126,6 +158,7 @@ final class TaiModelVariants {
     static String baseModelId(@NonNull String id) {
         if (id.endsWith(SUFFIX_VISION)) return baseId(id, SUFFIX_VISION);
         if (id.endsWith(SUFFIX_AUDIO)) return baseId(id, SUFFIX_AUDIO);
+        if (id.endsWith(SUFFIX_TEXT)) return baseId(id, SUFFIX_TEXT);
         return id;
     }
 

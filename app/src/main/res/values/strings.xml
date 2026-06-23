@@ -318,7 +318,7 @@
         <string name="termux_ai_model_import_title">Import file</string>
         <string name="termux_ai_model_import_summary">Import a local LiteRT .litertlm or .task file into app-private storage</string>
         <string name="termux_ai_model_import_dialog_title">Local import</string>
-        <string name="termux_ai_model_import_dialog_message">Choose one local SAF model file. MNN folder packages should be downloaded from the catalog.</string>
+        <string name="termux_ai_model_import_dialog_message">Choose one local SAF model file. MNN folder packages should be downloaded from the catalog. Imported as text-only — enable vision/audio/tools afterward in the model\'s Parameters.</string>
         <string name="termux_ai_model_import_hf_url_hint">Hugging Face HTTPS URL</string>
         <string name="termux_ai_model_import_hf_token_hint">Optional Hugging Face token</string>
         <string name="termux_ai_model_import_id_hint">Model id (optional)</string>
@@ -443,6 +443,15 @@
         <string name="termux_ai_companion_auto_load_summary_off">Assistant loads do not automatically load the MobileActions companion model.</string>
         <string name="termux_ai_companion_auto_load_summary_on">Assistant loads may also load MobileActions after its own preflight passes.</string>
         <string name="termux_ai_parameters_model_configs_title">Model configs</string>
+        <string name="termux_ai_caps_title">Modalities &amp; capabilities</string>
+        <string name="termux_ai_caps_vision">Image input (vision)</string>
+        <string name="termux_ai_caps_audio">Audio input</string>
+        <string name="termux_ai_caps_tools">Tool calling</string>
+        <string name="termux_ai_caps_litert_only">Vision/audio input is available on LiteRT models</string>
+        <string name="termux_ai_caps_exposure_title">Endpoint exposure</string>
+        <string name="termux_ai_exposure_split">Split — separate text/vision/audio ids (lower RAM)</string>
+        <string name="termux_ai_exposure_combined">Combined — one id loads all modalities</string>
+        <string name="termux_ai_exposure_both">Both — combined id plus splits</string>
         <string name="termux_ai_parameters_system_prompt_title">System prompt</string>
         <string name="termux_ai_parameters_litert_title">LiteRT defaults</string>
         <string name="termux_ai_parameters_mnn_title">MNN defaults</string>

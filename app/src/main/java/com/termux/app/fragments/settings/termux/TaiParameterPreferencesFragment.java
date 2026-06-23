@@ -14,10 +14,12 @@ import android.widget.Toast;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceManager;
 import androidx.preference.PreferenceScreen;
+import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
@@ -137,6 +139,8 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
         header.setSelectable(false);
         screen.addPreference(header);
 
+        addCapabilitySection(context, screen);
+
         PreferenceCategory configs = category(context, R.string.termux_ai_parameters_model_configs_title);
         screen.addPreference(configs);
         addParameterRows(context, configs, schema.backend, schema.fields(), true);
@@ -156,6 +160,78 @@ public class TaiParameterPreferencesFragment extends MaterialPreferenceFragment 
             return true;
         });
         screen.addPreference(reset);
+    }
+
+    /** Lets the user declare which modalities/tools a model supports; drives the split/combined
+     *  variants on /v1/models. Vision/audio are LiteRT-only for now (the endpoint gates them). */
+    private void addCapabilitySection(@NonNull Context context, @NonNull PreferenceScreen screen) {
+        TaiModelSpec model = currentModelSpec(context);
+        if (model == null) return;
+        boolean liteRt = TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend);
+        PreferenceCategory caps = category(context, R.string.termux_ai_caps_title);
+        screen.addPreference(caps);
+
+        SwitchPreferenceCompat vision = capabilitySwitch(context, "vision", R.string.termux_ai_caps_vision,
+            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT), liteRt);
+        SwitchPreferenceCompat audio = capabilitySwitch(context, "audio", R.string.termux_ai_caps_audio,
+            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT), liteRt);
+        SwitchPreferenceCompat tools = capabilitySwitch(context, "tools", R.string.termux_ai_caps_tools,
+            model.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE), true);
+        if (!liteRt) {
+            vision.setSummary(R.string.termux_ai_caps_litert_only);
+            audio.setSummary(R.string.termux_ai_caps_litert_only);
+        }
+        Runnable persist = () -> {
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+            set.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+            if (vision.isChecked()) set.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+            if (audio.isChecked()) set.add(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+            if (tools.isChecked()) set.add(TaiModelSpec.CAPABILITY_TOOL_USE);
+            new TaiModelStore(context).setCapabilityOverride(modelId, set);
+        };
+        Preference.OnPreferenceChangeListener onChange = (preference, newValue) -> {
+            ((SwitchPreferenceCompat) preference).setChecked(Boolean.TRUE.equals(newValue));
+            persist.run();
+            return false;
+        };
+        vision.setOnPreferenceChangeListener(onChange);
+        audio.setOnPreferenceChangeListener(onChange);
+        tools.setOnPreferenceChangeListener(onChange);
+        caps.addPreference(vision);
+        caps.addPreference(audio);
+        caps.addPreference(tools);
+
+        if (!liteRt) return; // MNN has no modality variants; exposure choice is LiteRT-only
+        ListPreference exposure = new ListPreference(context);
+        exposure.setKey("tai_caps_exposure_" + modelId);
+        exposure.setPersistent(false);
+        exposure.setTitle(R.string.termux_ai_caps_exposure_title);
+        exposure.setDialogTitle(R.string.termux_ai_caps_exposure_title);
+        exposure.setEntries(new CharSequence[]{
+            getString(R.string.termux_ai_exposure_split),
+            getString(R.string.termux_ai_exposure_combined),
+            getString(R.string.termux_ai_exposure_both)});
+        exposure.setEntryValues(new CharSequence[]{
+            TaiModelStore.EXPOSURE_SPLIT, TaiModelStore.EXPOSURE_COMBINED, TaiModelStore.EXPOSURE_BOTH});
+        exposure.setValue(new TaiModelStore(context).getExposure(modelId));
+        exposure.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        exposure.setOnPreferenceChangeListener((preference, newValue) -> {
+            new TaiModelStore(context).setExposure(modelId, String.valueOf(newValue));
+            return true;
+        });
+        caps.addPreference(exposure);
+    }
+
+    @NonNull
+    private SwitchPreferenceCompat capabilitySwitch(@NonNull Context context, @NonNull String key,
+                                                    int titleRes, boolean checked, boolean enabled) {
+        SwitchPreferenceCompat preference = new SwitchPreferenceCompat(context);
+        preference.setKey("tai_caps_" + key + "_" + modelId);
+        preference.setPersistent(false);
+        preference.setTitle(titleRes);
+        preference.setChecked(checked);
+        preference.setEnabled(enabled);
+        return preference;
     }
 
     private void buildGlobalScreen(@NonNull Context context, @NonNull PreferenceScreen screen) {
