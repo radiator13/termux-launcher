@@ -13,12 +13,12 @@ Termux Launcher is a terminal-first Android home launcher inspired by [TEL](http
 
 ## About
 
-Designed to be a mix of Terminal and android home launcher. What started out as me just wanting sixel image drawing in TEL spiralled out of scope to what this project is today. All credits go to the amazing developers and maintainers of Termux, TEL  & Termux:Monet.
+Designed to be a Terminal/ TUI android home launcher. What started out as me just wanting sixel image drawing in TEL spiralled out of scope to what this project is today. All credits go to the amazing developers and maintainers of Termux, TEL & Termux:Monet.
 
 ## Features
 
 - Termux as the actual Android home launcher
-- Sixel image drawing in terminal (don't attempt gif's
+- Sixel image drawing in terminal (don't attempt gif's)
 - App Dock with terminal app search
 - Integration with Android system material themes for both Termux-launcher surfaces as well as exposed inside termux shell so you can use it for theming your shell/prompt or tmux.
 - `launcherctl` shell bridge for launching apps and reading launcher/system data, read more at [LauncherCtl API](docs/en/LauncherCtl_API.md)
