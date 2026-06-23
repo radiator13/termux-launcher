@@ -37,6 +37,8 @@ public final class TaiModelPreference extends Preference {
     private CharSequence primaryActionText = "";
     private boolean primaryActionEnabled = true;
     private boolean primaryActionDestructive;
+    private int primaryActionIconRes;
+    private boolean recommended;
     private View.OnClickListener primaryActionClickListener;
     private CharSequence tuneActionText = "";
     private View.OnClickListener tuneActionClickListener;
@@ -94,9 +96,34 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         notifyChanged();
     }
 
+    /** Drawable shown at the end of the primary action button (0 for none). */
+    public void setPrimaryActionIcon(int iconRes) {
+        this.primaryActionIconRes = iconRes;
+        notifyChanged();
+    }
+
+    /** Shows a small star before the model name for recommended models. */
+    public void setRecommended(boolean recommended) {
+        this.recommended = recommended;
+        notifyChanged();
+    }
+
     @Override
     public void onBindViewHolder(@NonNull PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
+
+        TextView title = (TextView) holder.findViewById(android.R.id.title);
+        if (title != null) {
+            if (recommended) {
+                title.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_star_16, 0, 0, 0);
+                title.setCompoundDrawablePadding(dp(5));
+                title.setCompoundDrawableTintList(ColorStateList.valueOf(
+                    resolveAttrColor(com.termux.shared.R.attr.termuxColorPrimary)));
+            } else {
+                title.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0);
+            }
+        }
+
         View view = holder.findViewById(R.id.tai_download_progress);
         if (view instanceof ProgressBar) {
             ProgressBar progressBar = (ProgressBar) view;
@@ -166,7 +193,13 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         button.setText(text);
         button.setEnabled(enabled);
         button.setOnClickListener(listener);
+        button.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, primaryActionIconRes, 0);
+        button.setCompoundDrawablePadding(primaryActionIconRes == 0 ? 0 : dp(4));
         return true;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getContext().getResources().getDisplayMetrics().density);
     }
 
     private void tintPrimaryAction(@NonNull Button button) {
@@ -184,6 +217,7 @@ public void setPrimaryAction(@Nullable CharSequence text, boolean enabled,
         }
         button.setBackgroundTintList(ColorStateList.valueOf(resolveAttrColor(backgroundAttr)));
         button.setTextColor(resolveAttrColor(textAttr));
+        button.setCompoundDrawableTintList(ColorStateList.valueOf(resolveAttrColor(textAttr)));
     }
 
     private boolean bindTuneButton(@Nullable ImageButton button, @NonNull CharSequence text,

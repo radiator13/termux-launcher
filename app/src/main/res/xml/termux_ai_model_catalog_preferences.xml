@@ -3,19 +3,20 @@
     <PreferenceCategory
         app:key="tai_catalog_controls_category"
         app:title="@string/termux_ai_catalog_controls_title">
-        <com.termux.app.fragments.settings.termux.TaiCatalogFilterPreference
-            app:key="tai_catalog_backend_filter"
+        <ListPreference
+            app:key="tai_catalog_filter_mode"
+            app:title="@string/termux_ai_catalog_filter_mode_title"
+            app:dialogTitle="@string/termux_ai_catalog_filter_mode_title"
+            app:entries="@array/tai_catalog_filter_mode_entries"
+            app:entryValues="@array/tai_catalog_filter_mode_values"
+            app:defaultValue="all"
+            app:useSimpleSummaryProvider="true"
             app:persistent="false" />
         <EditTextPreference
             app:key="tai_catalog_search"
             app:title="@string/termux_ai_catalog_search_title"
             app:dialogTitle="@string/termux_ai_catalog_search_title"
             app:useSimpleSummaryProvider="true"
-            app:persistent="false" />
-        <Preference
-            app:key="tai_catalog_import"
-            app:title="@string/termux_ai_model_import_title"
-            app:summary="@string/termux_ai_model_import_summary"
             app:persistent="false" />
     </PreferenceCategory>
 

@@ -10,7 +10,6 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -80,15 +79,35 @@ public class TaiModelCatalogPreferencesFragmentTest {
     }
 
     @Test
-    public void groupByJobGroup_preservesCatalogJobGroups() {
-        Map<String, List<TaiModelCatalog.CatalogEntry>> groups = TaiModelCatalogPreferencesFragment.groupByJobGroup(
+    public void sortForDisplay_ordersRecommendedFirstThenSmallest() {
+        List<TaiModelCatalog.CatalogEntry> sorted = TaiModelCatalogPreferencesFragment.sortForDisplay(
             TaiModelCatalogPreferencesFragment.filterEntries(TaiModelCatalog.entries().values(),
                 TaiModelCatalogPreferencesFragment.BackendFilter.ALL, ""));
 
-        assertTrue(groups.containsKey("general_multimodal"));
-        assertTrue(groups.containsKey("coding"));
-        assertTrue(groups.containsKey("reasoning"));
-        assertEquals("general_multimodal", groups.get("general_multimodal").get(0).jobGroup);
+        assertEquals(TaiModelCatalog.entries().size(), sorted.size());
+
+        // Recommended models are grouped at the front.
+        int firstNonRecommended = sorted.size();
+        for (int i = 0; i < sorted.size(); i++) {
+            if (!sorted.get(i).recommended) {
+                firstNonRecommended = i;
+                break;
+            }
+        }
+        assertTrue("at least one recommended model should sort first", firstNonRecommended > 0);
+        for (int i = firstNonRecommended; i < sorted.size(); i++) {
+            assertFalse(sorted.get(i).recommended);
+        }
+
+        // Within each partition the download size is non-decreasing.
+        assertNonDecreasingSizes(sorted.subList(0, firstNonRecommended));
+        assertNonDecreasingSizes(sorted.subList(firstNonRecommended, sorted.size()));
+    }
+
+    private void assertNonDecreasingSizes(List<TaiModelCatalog.CatalogEntry> entries) {
+        for (int i = 1; i < entries.size(); i++) {
+            assertTrue(entries.get(i - 1).sizeBytes <= entries.get(i).sizeBytes);
+        }
     }
 
     @Test

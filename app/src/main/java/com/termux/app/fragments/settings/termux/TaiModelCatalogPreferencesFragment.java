@@ -10,28 +10,24 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
-import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.EditTextPreference;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceManager;
-import androidx.preference.PreferenceScreen;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.ai.TaiDeviceCapabilities;
 import com.termux.ai.TaiManager;
 import com.termux.ai.TaiModelCatalog;
-import com.termux.ai.TaiModelImporter;
 import com.termux.ai.TaiModelSpec;
 import com.termux.ai.TaiModelStore;
 import com.termux.ai.TaiSettings;
@@ -44,47 +40,42 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Keep
 public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragment {
-    private static final String DYNAMIC_GROUP_PREFIX = "tai_catalog_group_";
+    private static final String ROW_KEY_PREFIX = "tai_catalog_model_";
     private static final LinkedHashSet<String> ALLOWED_CAPABILITY_TAGS = new LinkedHashSet<>(Arrays.asList(
         "Text", "Code", "Vision", "Audio", "Reasoning", "Tools", "Multilingual"));
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService actionExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "tai-catalog-settings");
-        thread.setDaemon(true);
-        return thread;
-    });
     private final Runnable refreshRunnable = new Runnable() {
         @Override
         public void run() {
             Context context = getContext();
             if (context == null) return;
-            JSONArray downloads = new TaiModelStore(context).getDownloads();
-            String signature = downloadStatusSignature(downloads);
-            if (!signature.equals(lastDownloadStatusSignature)) {
-                refreshCatalogRows(context);
+            // Update only the live rows in place so the progress bar animates smoothly without
+            // tearing down and rebuilding the whole list (which caused the visible screen flash).
+            updateRowsInPlace(context);
+            if (hasActiveDownloads(context)) {
+                handler.postDelayed(this, POLL_INTERVAL_MS);
             } else {
-                updateDownloadRows(downloads);
+                // Downloads finished: do one settling rebuild so completed models appear/disappear
+                // correctly under the Installed/Usable filters.
+                refreshCatalogRows(context);
             }
-            if (hasActiveDownloads(context)) handler.postDelayed(this, 1000L);
         }
     };
-    private final ActivityResultLauncher<String[]> modelPicker = registerForActivityResult(
-        new ActivityResultContracts.OpenDocument(), this::onModelDocumentSelected);
+
+    private static final long POLL_INTERVAL_MS = 700L;
 
     private BackendFilter backendFilter = BackendFilter.ALL;
     private String searchQuery = "";
-    private String lastDownloadStatusSignature = "";
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -123,19 +114,15 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         super.onPause();
     }
 
-    @Override
-    public void onDestroy() {
-        actionExecutor.shutdownNow();
-        super.onDestroy();
-    }
-
     private void configureControls(Context context) {
-        TaiCatalogFilterPreference backend = findPreference("tai_catalog_backend_filter");
-        if (backend != null) {
-            backend.setSelectedValue(backendFilter.value);
-            backend.setOnFilterSelectedListener(value -> {
-                backendFilter = BackendFilter.fromValue(value);
+        ListPreference filter = findPreference("tai_catalog_filter_mode");
+        if (filter != null) {
+            if (filter.getValue() == null) filter.setValue(backendFilter.value);
+            backendFilter = BackendFilter.fromValue(filter.getValue());
+            filter.setOnPreferenceChangeListener((preference, newValue) -> {
+                backendFilter = BackendFilter.fromValue(String.valueOf(newValue));
                 refreshCatalogRows(context);
+                return true;
             });
         }
         EditTextPreference search = findPreference("tai_catalog_search");
@@ -144,13 +131,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             search.setOnPreferenceChangeListener((preference, newValue) -> {
                 searchQuery = newValue == null ? "" : String.valueOf(newValue).trim();
                 refreshCatalogRows(context);
-                return true;
-            });
-        }
-        Preference importModel = findPreference("tai_catalog_import");
-        if (importModel != null) {
-            importModel.setOnPreferenceClickListener(preference -> {
-                modelPicker.launch(new String[]{"application/octet-stream", "application/zip", "*/*"});
                 return true;
             });
         }
@@ -164,56 +144,95 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         TaiModelStore store = new TaiModelStore(context);
         Map<String, TaiModelSpec> installed = store.getInstalledUserModels();
         JSONArray downloads = store.getDownloads();
-        lastDownloadStatusSignature = downloadStatusSignature(downloads);
         String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
         TaiDeviceCapabilities capabilities = TaiDeviceCapabilities.detect(context);
 
-        Map<String, List<TaiModelCatalog.CatalogEntry>> groups = groupByJobGroup(
+        List<TaiModelCatalog.CatalogEntry> entries = sortForDisplay(
             filterEntries(TaiModelCatalog.entries().values(), backendFilter, searchQuery, installed, capabilities));
-        if (groups.isEmpty()) {
+        if (entries.isEmpty()) {
             Preference empty = new Preference(context);
+            empty.setIconSpaceReserved(false);
             empty.setTitle(R.string.termux_ai_catalog_empty_title);
             empty.setSummary(R.string.termux_ai_catalog_empty_summary);
             empty.setSelectable(false);
             results.addPreference(empty);
             return;
         }
-
-        for (Map.Entry<String, List<TaiModelCatalog.CatalogEntry>> group : groups.entrySet()) {
-            PreferenceCategory category = new PreferenceCategory(context);
-            category.setKey(DYNAMIC_GROUP_PREFIX + group.getKey());
-            category.setTitle(labelForJobGroup(group.getKey()));
-            results.addPreference(category);
-            for (TaiModelCatalog.CatalogEntry entry : group.getValue()) {
-                category.addPreference(buildRow(context, entry, installed.get(entry.modelId),
-                    findDownload(downloads, entry.modelId), activeModelId, capabilities));
-            }
+        for (TaiModelCatalog.CatalogEntry entry : entries) {
+            results.addPreference(buildRow(context, entry, installed.get(entry.modelId),
+                findDownload(downloads, entry.modelId), activeModelId));
         }
+    }
+
+    /** Recommended models first, then smallest download first; name as a stable tiebreaker. */
+    static List<TaiModelCatalog.CatalogEntry> sortForDisplay(List<TaiModelCatalog.CatalogEntry> entries) {
+        List<TaiModelCatalog.CatalogEntry> sorted = new ArrayList<>(entries);
+        Collections.sort(sorted, new Comparator<TaiModelCatalog.CatalogEntry>() {
+            @Override
+            public int compare(TaiModelCatalog.CatalogEntry a, TaiModelCatalog.CatalogEntry b) {
+                if (a.recommended != b.recommended) return a.recommended ? -1 : 1;
+                if (a.sizeBytes != b.sizeBytes) return Long.compare(a.sizeBytes, b.sizeBytes);
+                return a.displayName.compareToIgnoreCase(b.displayName);
+            }
+        });
+        return sorted;
     }
 
     private TaiModelPreference buildRow(Context context, TaiModelCatalog.CatalogEntry entry,
                                        @Nullable TaiModelSpec installed, @Nullable JSONObject download,
-                                       String activeModelId, TaiDeviceCapabilities capabilities) {
+                                       String activeModelId) {
         TaiModelPreference row = new TaiModelPreference(context);
-        row.setKey("tai_catalog_model_" + entry.modelId);
-        row.setTitle((entry.recommended ? "★ " : "") + entry.displayName + "  [" + backendLabel(entry.backend) + "]");
+        row.setKey(ROW_KEY_PREFIX + entry.modelId);
+        row.setTitle(entry.displayName + "  [" + backendLabel(entry.backend) + "]");
+        row.setRecommended(entry.recommended);
         row.setSummary(buildSummary(entry));
         row.setMetaLine(buildMetaLine(entry));
-        CatalogActionState state = actionStateFor(entry, installed != null, download, activeModelId);
-        row.setPill(state.pill, state.accentPill);
         row.setBackendTone(TaiModelSpec.BACKEND_MNN_LLM.equals(entry.backend)
             ? TaiModelPreference.BackendTone.MNN : TaiModelPreference.BackendTone.LITERT);
-        configureProgress(row, download);
-        row.setTuneAction(installed == null ? null : getString(R.string.termux_ai_model_tune_action),
-            view -> openParameterScreen(installed));
-        row.setPrimaryAction(actionText(context, state), state.enabled, false,
-            view -> handlePrimaryAction(context, entry, installed, state));
         row.setPersistent(false);
         row.setOnPreferenceClickListener(preference -> {
-            showCatalogDetails(context, entry, installed, download, state);
+            showCatalogDetails(context, entry);
             return true;
         });
+        applyRowState(context, row, entry, installed, download, activeModelId);
         return row;
+    }
+
+    /** Sets the state-dependent bits of a row (pill, progress, actions) so it can be rebuilt or
+     *  refreshed in place without tearing down the whole list. */
+    private void applyRowState(Context context, TaiModelPreference row, TaiModelCatalog.CatalogEntry entry,
+                               @Nullable TaiModelSpec installed, @Nullable JSONObject download, String activeModelId) {
+        CatalogActionState state = actionStateFor(entry, installed != null, download, activeModelId);
+        row.setPill(state.pill, state.accentPill);
+        configureProgress(row, download);
+        final TaiModelSpec tuneSpec = installed;
+        row.setTuneAction(tuneSpec == null ? null : getString(R.string.termux_ai_model_tune_action),
+            tuneSpec == null ? null : view -> openParameterScreen(tuneSpec));
+        row.setPrimaryAction(actionText(context, state), state.enabled, false,
+            view -> handlePrimaryAction(context, entry, tuneSpec, state));
+        row.setPrimaryActionIcon(state.type == CatalogActionType.INSTALL ? R.drawable.ic_download_18 : 0);
+    }
+
+    /** Refreshes the live rows already on screen in place (no add/remove) — used while a download
+     *  is in flight so the progress bar animates smoothly instead of flashing the whole list. */
+    private void updateRowsInPlace(Context context) {
+        PreferenceCategory results = findPreference("tai_catalog_results_category");
+        if (results == null) return;
+        TaiModelStore store = new TaiModelStore(context);
+        Map<String, TaiModelSpec> installed = store.getInstalledUserModels();
+        JSONArray downloads = store.getDownloads();
+        String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
+        int count = results.getPreferenceCount();
+        for (int i = 0; i < count; i++) {
+            Preference preference = results.getPreference(i);
+            if (!(preference instanceof TaiModelPreference)) continue;
+            String key = preference.getKey();
+            if (key == null || !key.startsWith(ROW_KEY_PREFIX)) continue;
+            TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(key.substring(ROW_KEY_PREFIX.length()));
+            if (entry == null) continue;
+            applyRowState(context, (TaiModelPreference) preference, entry,
+                installed.get(entry.modelId), findDownload(downloads, entry.modelId), activeModelId);
+        }
     }
 
     private void handlePrimaryAction(Context context, TaiModelCatalog.CatalogEntry entry,
@@ -238,9 +257,10 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         }
     }
 
-    private void showCatalogDetails(Context context, TaiModelCatalog.CatalogEntry entry,
-                                    @Nullable TaiModelSpec installed, @Nullable JSONObject download,
-                                    CatalogActionState state) {
+    private void showCatalogDetails(Context context, TaiModelCatalog.CatalogEntry entry) {
+        TaiModelStore store = new TaiModelStore(context);
+        TaiModelSpec installed = store.getInstalledUserModels().get(entry.modelId);
+        JSONObject download = findDownload(store.getDownloads(), entry.modelId);
         StringBuilder message = new StringBuilder();
         message.append(buildSummary(entry)).append('\n').append(buildMetaLine(entry));
         message.append("\n\nID: ").append(entry.modelId);
@@ -360,27 +380,13 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         return device.liteRtLmAbiSupported && device.liteRtLmNativeLibrariesAvailable;
     }
 
-    static Map<String, List<TaiModelCatalog.CatalogEntry>> groupByJobGroup(List<TaiModelCatalog.CatalogEntry> entries) {
-        LinkedHashMap<String, List<TaiModelCatalog.CatalogEntry>> groups = new LinkedHashMap<>();
-        for (TaiModelCatalog.CatalogEntry entry : entries) {
-            String key = entry.jobGroup == null || entry.jobGroup.isEmpty() ? "other" : entry.jobGroup;
-            List<TaiModelCatalog.CatalogEntry> group = groups.get(key);
-            if (group == null) {
-                group = new ArrayList<>();
-                groups.put(key, group);
-            }
-            group.add(entry);
-        }
-        return groups;
-    }
-
     static CatalogActionState actionStateFor(TaiModelCatalog.CatalogEntry entry, boolean installed,
                                              @Nullable JSONObject download, @Nullable String activeModelId) {
         if (installed) {
             boolean active = entry.modelId.equals(activeModelId);
             return active
                 ? CatalogActionState.of(CatalogActionType.ACTIVE, "Default", true, false, null, "")
-                : CatalogActionState.of(CatalogActionType.INSTALLED, "Installed ✓", true, true, null, "");
+                : CatalogActionState.of(CatalogActionType.INSTALLED, "Installed", true, true, null, "");
         }
         if (download != null && isActiveDownload(download.optString("status", ""))) {
             return CatalogActionState.of(CatalogActionType.DOWNLOADING, "Downloading", false, true,
@@ -456,35 +462,16 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             totalBytes > 0L ? (int) (bytesRead * 10000L / totalBytes) : 0);
     }
 
-    private void updateDownloadRows(@Nullable JSONArray downloads) {
-        if (downloads == null) return;
-        String activeModelId = "";
-        Context context = getContext();
-        if (context != null) activeModelId = new TaiSettings(context).getDefaultAssistantModel();
-        for (int i = 0; i < downloads.length(); i++) {
-            JSONObject download = downloads.optJSONObject(i);
-            if (download == null || !isActiveDownload(download.optString("status", ""))) continue;
-            String modelId = download.optString("modelId", "");
-            Preference preference = findPreference("tai_catalog_model_" + modelId);
-            if (!(preference instanceof TaiModelPreference)) continue;
-            TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
-            if (entry == null) continue;
-            TaiModelPreference row = (TaiModelPreference) preference;
-            CatalogActionState state = actionStateFor(entry, false, download, activeModelId);
-            row.setPill(state.pill, state.accentPill);
-            configureProgress(row, download);
-        }
-    }
-
     private void startCatalogDownload(Context context, TaiModelCatalog.CatalogEntry entry) {
         try {
             JSONObject result = TaiManager.getInstance(context).downloadCatalogModel(entry.modelId);
             Toast.makeText(context, result.optBoolean("ok", false)
                 ? R.string.termux_ai_model_download_started : R.string.termux_ai_model_action_failed,
                 Toast.LENGTH_SHORT).show();
-            refreshCatalogRows(context);
+            // Flip just this row to its downloading state in place (no full rebuild → no flash).
+            updateRowsInPlace(context);
             handler.removeCallbacks(refreshRunnable);
-            handler.postDelayed(refreshRunnable, 1000L);
+            handler.postDelayed(refreshRunnable, POLL_INTERVAL_MS);
         } catch (JSONException e) {
             Toast.makeText(context, R.string.termux_ai_model_action_failed, Toast.LENGTH_LONG).show();
         }
@@ -497,7 +484,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             Toast.makeText(context, result.optBoolean("ok", false)
                 ? R.string.termux_ai_model_download_cancelled : R.string.termux_ai_model_action_failed,
                 Toast.LENGTH_SHORT).show();
-            refreshCatalogRows(context);
+            updateRowsInPlace(context);
         } catch (JSONException e) {
             Toast.makeText(context, R.string.termux_ai_model_action_failed, Toast.LENGTH_LONG).show();
         }
@@ -516,7 +503,7 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         if (preferences == null) return;
         preferences.edit().putString(TaiSettings.KEY_ROLE_DEFAULT_ASSISTANT, modelId).apply();
         Toast.makeText(context, R.string.termux_ai_model_active_saved, Toast.LENGTH_SHORT).show();
-        refreshCatalogRows(context);
+        updateRowsInPlace(context);
     }
 
     private void confirmDeleteModel(Context context, TaiModelSpec model) {
@@ -643,67 +630,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         Toast.makeText(context, R.string.termux_ai_model_tune_saved, Toast.LENGTH_SHORT).show();
     }
 
-    private void onModelDocumentSelected(Uri uri) {
-        if (uri == null) return;
-        Context context = getContext();
-        if (context == null) return;
-        TaiModelImporter.DocumentMetadata metadata = TaiManager.getInstance(context).modelDocumentMetadata(uri);
-        if (!TaiModelImporter.isSupportedFileName(metadata.displayName)) {
-            Toast.makeText(context, R.string.termux_ai_model_import_invalid_file, Toast.LENGTH_LONG).show();
-            return;
-        }
-        showImportDialog(context, uri, metadata);
-    }
-
-    private void showImportDialog(Context context, Uri uri, TaiModelImporter.DocumentMetadata metadata) {
-        LinearLayout layout = new LinearLayout(context);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        int padding = Math.round(20 * context.getResources().getDisplayMetrics().density);
-        layout.setPadding(padding, 0, padding, 0);
-        EditText modelIdInput = new EditText(context);
-        modelIdInput.setSingleLine(true);
-        modelIdInput.setHint(R.string.termux_ai_model_import_id_hint);
-        modelIdInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        modelIdInput.setText(TaiModelImporter.sanitizeModelId(
-            TaiModelImporter.stripModelExtension(metadata.displayName)));
-        modelIdInput.setSelectAllOnFocus(true);
-        layout.addView(modelIdInput);
-        new MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.termux_ai_model_import_title)
-            .setMessage(context.getString(R.string.termux_ai_model_import_selected,
-                metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size"))
-            .setView(layout)
-            .setPositiveButton(R.string.termux_ai_model_import_title, (dialog, which) ->
-                importModelDocument(context, uri, modelIdInput.getText().toString()))
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
-    }
-
-    private void importModelDocument(Context context, Uri uri, String modelId) {
-        Context appContext = context.getApplicationContext();
-        actionExecutor.execute(() -> {
-            JSONObject result = null;
-            try {
-                result = TaiManager.getInstance(appContext).importModelDocument(uri, modelId);
-            } catch (JSONException | RuntimeException ignored) {
-            }
-            JSONObject finalResult = result;
-            handler.post(() -> {
-                Context currentContext = getContext();
-                if (currentContext == null) return;
-                if (finalResult != null && finalResult.optBoolean("ok", false)) {
-                    Toast.makeText(currentContext, R.string.termux_ai_model_imported, Toast.LENGTH_SHORT).show();
-                } else {
-                    String message = finalResult == null
-                        ? currentContext.getString(R.string.termux_ai_model_action_failed)
-                        : finalResult.optString("message", currentContext.getString(R.string.termux_ai_model_action_failed));
-                    Toast.makeText(currentContext, message, Toast.LENGTH_LONG).show();
-                }
-                refreshCatalogRows(currentContext);
-            });
-        });
-    }
-
     private boolean hasActiveDownloads(Context context) {
         JSONArray downloads = new TaiModelStore(context).getDownloads();
         for (int i = 0; i < downloads.length(); i++) {
@@ -711,20 +637,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             if (item != null && isActiveDownload(item.optString("status", ""))) return true;
         }
         return false;
-    }
-
-    private static String downloadStatusSignature(@Nullable JSONArray downloads) {
-        if (downloads == null) return "";
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < downloads.length(); i++) {
-            JSONObject item = downloads.optJSONObject(i);
-            if (item == null) continue;
-            builder.append(item.optString("modelId", ""))
-                .append(':')
-                .append(item.optString("status", ""))
-                .append(';');
-        }
-        return builder.toString();
     }
 
     private void copyToClipboard(Context context, String text) {
@@ -745,17 +657,6 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
     private String backendLabel(String backend) {
         if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) return getString(R.string.termux_ai_backend_label_mnn);
         return getString(R.string.termux_ai_backend_label_litert);
-    }
-
-    private static String labelForJobGroup(String jobGroup) {
-        String[] parts = jobGroup.split("_");
-        StringBuilder label = new StringBuilder();
-        for (String part : parts) {
-            if (part.isEmpty()) continue;
-            if (label.length() > 0) label.append(' ');
-            label.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
-        }
-        return label.length() == 0 ? "Other" : label.toString();
     }
 
     private static String joinTags(LinkedHashSet<String> tags) {

@@ -368,7 +368,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         Preference endpointCopy = findPreference("tai_endpoint_copy");
         if (endpointCopy != null) {
             endpointCopy.setOnPreferenceClickListener(preference -> {
-                showApiAccessDialog(context);
+                showEndpointAccessDialog(context);
                 return true;
             });
         }
@@ -428,10 +428,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         String currentToken = new TaiSettings(context).getOrCreateApiToken();
         token.setText(currentToken);
         token.setSummary(TaiSettings.redactToken(currentToken));
-        token.setOnPreferenceClickListener(preference -> {
-            copyApiToken(context);
-            return true;
-        });
+        // Tapping the row opens the edit dialog; copying the token lives in the endpoint dialog.
     }
 
     private void showApiPortDialog(Context context, EditTextPreference preference) {
@@ -442,8 +439,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         new MaterialAlertDialogBuilder(context)
             .setTitle(R.string.termux_ai_api_port_title)
             .setView(view)
-            .setNeutralButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
-                copyToClipboard(context, baseUrl, R.string.termux_ai_base_url_copied))
             .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) ->
                 saveApiPort(context, preference, input.getText().toString()))
             .setNegativeButton(android.R.string.cancel, null)
@@ -491,34 +486,112 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             .show();
     }
 
-    private void showApiAccessDialog(Context context) {
+    /**
+     * Single cohesive endpoint dialog: OpenAI base URL and bearer token, each with its own copy
+     * affordance (the token also reveals/hides in place), plus the on-disk file locations. Replaces
+     * the previous nested reveal dialog and the scattered copy-from-row/copy-from-port-dialog paths.
+     */
+    private void showEndpointAccessDialog(Context context) {
+        JSONObject endpoint;
         try {
-            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
-            String baseUrl = endpoint.optString("baseUrl", "");
-            String openAiBaseUrl = endpoint.optString("openAiBaseUrl", baseUrl.isEmpty() ? "" : baseUrl + "/v1");
-            String endpointFile = endpoint.optString("endpointFile", "~/.launcherctl/endpoint.json");
-            String tokenFile = endpoint.optString("tokenFile", "~/.launcherctl/token");
-            String token = endpoint.optString("token", "");
-            String redacted = TaiSettings.redactToken(token);
-            String summary = getString(R.string.termux_ai_endpoint_detail_message_dynamic,
-                baseUrl, openAiBaseUrl, redacted, endpointFile, tokenFile);
-            new MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.termux_ai_endpoint_detail_title)
-                .setMessage(summary)
-                .setNeutralButton(R.string.termux_ai_dialog_reveal, (dialog, which) ->
-                    new MaterialAlertDialogBuilder(context)
-                        .setTitle(R.string.termux_ai_endpoint_detail_title)
-                        .setMessage(getString(R.string.termux_ai_endpoint_detail_message_dynamic,
-                            baseUrl, openAiBaseUrl, token, endpointFile, tokenFile))
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show())
-                .setPositiveButton(R.string.termux_ai_dialog_copy, (dialog, which) ->
-                    copyToClipboard(context, openAiBaseUrl, R.string.termux_ai_endpoint_copied))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+            endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
         } catch (JSONException e) {
             Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
+            return;
         }
+        String baseUrl = endpoint.optString("baseUrl", "");
+        final String openAiBaseUrl = endpoint.optString("openAiBaseUrl", baseUrl.isEmpty() ? "" : baseUrl + "/v1");
+        String endpointFile = endpoint.optString("endpointFile", "~/.launcherctl/endpoint.json");
+        String tokenFile = endpoint.optString("tokenFile", "~/.launcherctl/token");
+        String tokenValue = endpoint.optString("token", "");
+        if (tokenValue.isEmpty()) tokenValue = new TaiSettings(context).getOrCreateApiToken();
+        final String token = tokenValue;
+
+        float density = context.getResources().getDisplayMetrics().density;
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int padH = Math.round(24 * density);
+        layout.setPadding(padH, Math.round(8 * density), padH, 0);
+
+        TextView urlView = endpointValueView(context, openAiBaseUrl);
+        layout.addView(endpointRow(context, getString(R.string.termux_ai_endpoint_field_base_url), urlView,
+            endpointButton(context, R.string.termux_ai_dialog_copy,
+                () -> copyToClipboard(context, openAiBaseUrl, R.string.termux_ai_base_url_copied))));
+
+        TextView tokenView = endpointValueView(context, TaiSettings.redactToken(token));
+        final boolean[] revealed = {false};
+        Button revealButton = endpointButton(context, R.string.termux_ai_dialog_reveal, null);
+        revealButton.setOnClickListener(v -> {
+            revealed[0] = !revealed[0];
+            tokenView.setText(revealed[0] ? token : TaiSettings.redactToken(token));
+            revealButton.setText(revealed[0] ? R.string.termux_ai_dialog_hide : R.string.termux_ai_dialog_reveal);
+        });
+        Button tokenCopy = endpointButton(context, R.string.termux_ai_dialog_copy,
+            () -> copyToClipboard(context, token, R.string.termux_ai_api_token_copied));
+        layout.addView(endpointRow(context, getString(R.string.termux_ai_endpoint_field_token), tokenView,
+            revealButton, tokenCopy));
+
+        TextView files = new TextView(context);
+        files.setText(getString(R.string.termux_ai_endpoint_files_footnote, endpointFile, tokenFile));
+        files.setTextIsSelectable(true);
+        files.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        files.setPadding(0, Math.round(10 * density), 0, Math.round(4 * density));
+        layout.addView(files);
+
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_endpoint_access_title)
+            .setView(layout)
+            .setPositiveButton(android.R.string.ok, null)
+            .show();
+    }
+
+    private TextView endpointValueView(Context context, String text) {
+        TextView view = new TextView(context);
+        view.setText(text);
+        view.setTextIsSelectable(true);
+        view.setTypeface(Typeface.MONOSPACE);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        return view;
+    }
+
+    private Button endpointButton(Context context, int textRes, @Nullable Runnable action) {
+        Button button = new Button(context, null, android.R.attr.borderlessButtonStyle);
+        button.setText(textRes);
+        button.setAllCaps(false);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        int padH = Math.round(8 * context.getResources().getDisplayMetrics().density);
+        button.setPadding(padH, 0, padH, 0);
+        button.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorPrimary));
+        if (action != null) button.setOnClickListener(v -> action.run());
+        return button;
+    }
+
+    private LinearLayout endpointRow(Context context, String label, TextView valueView, Button... buttons) {
+        float density = context.getResources().getDisplayMetrics().density;
+        LinearLayout column = new LinearLayout(context);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setPadding(0, Math.round(8 * density), 0, 0);
+        TextView labelView = new TextView(context);
+        labelView.setText(label);
+        labelView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        labelView.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant));
+        column.addView(labelView);
+        column.addView(valueView);
+        LinearLayout actions = new LinearLayout(context);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.END);
+        for (Button button : buttons) actions.addView(button);
+        column.addView(actions);
+        return column;
+    }
+
+    private int resolveAttrColor(int attr) {
+        TypedValue value = new TypedValue();
+        if (getContext() != null && getContext().getTheme().resolveAttribute(attr, value, true)) {
+            return value.data;
+        }
+        return 0xFF000000;
     }
 
     private void saveApiToken(Context context, EditTextPreference preference, String rawValue) {
@@ -551,27 +624,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         if (clipboard == null) return;
         clipboard.setPrimaryClip(ClipData.newPlainText("Termux Launcher", text));
         Toast.makeText(context, toastResId, Toast.LENGTH_SHORT).show();
-    }
-
-    private void copyEndpointInfo(Context context) {
-        try {
-            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
-            copyToClipboard(context, endpoint.optString("openAiBaseUrl", endpoint.optString("baseUrl", "")),
-                R.string.termux_ai_endpoint_copied);
-        } catch (JSONException e) {
-            Toast.makeText(context, R.string.termux_ai_endpoint_update_failed, Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void copyApiToken(Context context) {
-        try {
-            JSONObject endpoint = LauncherCtlApiServer.getInstance().endpointSettings(context);
-            String token = endpoint.optString("token", "");
-            if (token.isEmpty()) token = new TaiSettings(context).getOrCreateApiToken();
-            copyToClipboard(context, token, R.string.termux_ai_api_token_copied);
-        } catch (JSONException e) {
-            copyToClipboard(context, new TaiSettings(context).getOrCreateApiToken(), R.string.termux_ai_api_token_copied);
-        }
     }
 
     private void showGlobalParametersDialog(Context context) {
