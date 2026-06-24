@@ -27,7 +27,7 @@ To recreate my shell configs which includes;
 - tmux
 - eza
 - zoxide
-- btop (without root, uses local adb bridge `rish` provided by shizuku, more information [here](https://github.com/PickleHik3/termux-launcher/edit/dev/docs/en/Launcher_Getting_Started.md#btop with Real Android System Usage)
+- btop (without root, uses local adb bridge `rish` provided by shizuku, more information [here](https://github.com/PickleHik3/termux-launcher/blob/dev/docs/en/Launcher_Getting_Started.md#btop-with-real-android-system-usage)
 
 ### One shot yolo
 
