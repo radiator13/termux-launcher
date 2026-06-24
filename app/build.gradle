@@ -59,7 +59,7 @@ android {
                 enable ((gradle.startParameter.taskNames.any { it.contains("Debug") } && splitAPKsForDebugBuilds == "1") ||
                     (gradle.startParameter.taskNames.any { it.contains("Release") } && splitAPKsForReleaseBuilds == "1"))
                 reset()
-                include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+                include 'arm64-v8a'
                 universalApk true
             }
         }
@@ -288,19 +288,11 @@ task downloadBootstraps() {
         }
         def packageVariant = project.ext.packageVariant
         if (packageVariant == "apt-android-7") {
-            // Checksums are populated automatically by the build_bootstrap CI workflow
-            // after bootstraps are published. Update these when releasing new bootstraps.
             def aarch64Checksum = System.getenv("BOOTSTRAP_CHECKSUM_AARCH64") ?: ""
-            def armChecksum     = System.getenv("BOOTSTRAP_CHECKSUM_ARM")     ?: ""
-            def i686Checksum    = System.getenv("BOOTSTRAP_CHECKSUM_I686")    ?: ""
-            def x86_64Checksum  = System.getenv("BOOTSTRAP_CHECKSUM_X86_64") ?: ""
-            if ([aarch64Checksum, armChecksum, i686Checksum, x86_64Checksum].any { it == "" }) {
-                throw new GradleException("Missing BOOTSTRAP_CHECKSUM_* env vars. Set all four before building.")
+            if (aarch64Checksum == "") {
+                throw new GradleException("Missing BOOTSTRAP_CHECKSUM_AARCH64 env var.")
             }
             downloadBootstrap("aarch64", aarch64Checksum, standaloneBootstrapVersion, bootstrapReleasesBaseUrl)
-            downloadBootstrap("arm",     armChecksum,     standaloneBootstrapVersion, bootstrapReleasesBaseUrl)
-            downloadBootstrap("i686",    i686Checksum,    standaloneBootstrapVersion, bootstrapReleasesBaseUrl)
-            downloadBootstrap("x86_64",  x86_64Checksum,  standaloneBootstrapVersion, bootstrapReleasesBaseUrl)
         } else {
             throw new GradleException("Unsupported TERMUX_PACKAGE_VARIANT \"" + packageVariant + "\"")
         }

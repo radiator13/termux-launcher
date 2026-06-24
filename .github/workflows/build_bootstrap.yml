@@ -24,46 +24,35 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build standalone bootstraps (all architectures)
+      - name: Build standalone bootstrap (aarch64)
         working-directory: termux-packages
         run: |
-          for ARCH in aarch64 arm i686 x86_64; do
-            echo "Building bootstrap for $ARCH..."
-            TERMUX_APP_PACKAGE=com.termux.launcher \
-              ./scripts/run-docker.sh \
-              ./scripts/build-bootstraps.sh --architectures "$ARCH"
-          done
+          TERMUX_APP_PACKAGE=com.termux.launcher \
+            ./scripts/run-docker.sh \
+            ./scripts/build-bootstraps.sh --architectures aarch64
 
-      - name: Collect and checksum bootstrap ZIPs
+      - name: Collect and checksum bootstrap ZIP
         working-directory: termux-packages
         run: |
           mkdir -p ../bootstrap-artifacts
-          for ARCH in aarch64 arm i686 x86_64; do
-            cp "bootstrap-${ARCH}.zip" ../bootstrap-artifacts/
-            sha256sum "bootstrap-${ARCH}.zip" >> ../bootstrap-artifacts/sha256sums.txt
-          done
+          cp bootstrap-aarch64.zip ../bootstrap-artifacts/
+          sha256sum bootstrap-aarch64.zip > ../bootstrap-artifacts/sha256sums.txt
 
-      - name: Publish bootstraps as GitHub release
+      - name: Publish bootstrap as GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: bootstrap-standalone-${{ github.event.inputs.bootstrap_tag }}
           name: Standalone Bootstrap ${{ github.event.inputs.bootstrap_tag }}
           body: |
-            Custom Termux bootstrap built with `TERMUX_APP_PACKAGE=com.termux.launcher`.
+            Custom Termux bootstrap (aarch64 only) built with `TERMUX_APP_PACKAGE=com.termux.launcher`.
             Required prefix path: `/data/data/com.termux.launcher/files/usr`
 
-            Use these with the `standalone-pkg` branch of termux-launcher by setting:
+            Use with the `standalone-pkg` branch by setting:
             ```
             TERMUX_STANDALONE_BOOTSTRAP_VERSION=${{ github.event.inputs.bootstrap_tag }}
             TERMUX_BOOTSTRAP_RELEASES_BASE_URL=https://github.com/${{ github.repository }}/releases/download
             BOOTSTRAP_CHECKSUM_AARCH64=<from sha256sums.txt>
-            BOOTSTRAP_CHECKSUM_ARM=<from sha256sums.txt>
-            BOOTSTRAP_CHECKSUM_I686=<from sha256sums.txt>
-            BOOTSTRAP_CHECKSUM_X86_64=<from sha256sums.txt>
             ```
           files: |
             bootstrap-artifacts/bootstrap-aarch64.zip
-            bootstrap-artifacts/bootstrap-arm.zip
-            bootstrap-artifacts/bootstrap-i686.zip
-            bootstrap-artifacts/bootstrap-x86_64.zip
             bootstrap-artifacts/sha256sums.txt

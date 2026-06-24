@@ -46,16 +46,10 @@ jobs:
           else
             echo "Downloading bootstrap from release: $RELEASE"
             mkdir -p app/src/main/cpp
-            for ARCH in aarch64 arm i686 x86_64; do
-              gh release download "$RELEASE" --repo ${{ github.repository }} \
-                --pattern "bootstrap-${ARCH}.zip" --dir app/src/main/cpp/
-            done
-            # Extract checksums
-            for ARCH in aarch64 arm i686 x86_64; do
-              CHECKSUM=$(sha256sum "app/src/main/cpp/bootstrap-${ARCH}.zip" | awk '{print $1}')
-              ENV_VAR="BOOTSTRAP_CHECKSUM_$(echo $ARCH | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
-              echo "${ENV_VAR}=${CHECKSUM}" >> "$GITHUB_ENV"
-            done
+            gh release download "$RELEASE" --repo ${{ github.repository }} \
+              --pattern "bootstrap-aarch64.zip" --dir app/src/main/cpp/
+            CHECKSUM=$(sha256sum "app/src/main/cpp/bootstrap-aarch64.zip" | awk '{print $1}')
+            echo "BOOTSTRAP_CHECKSUM_AARCH64=${CHECKSUM}" >> "$GITHUB_ENV"
             echo "skip=0" >> "$GITHUB_OUTPUT"
             # Parse version tag from release name
             VERSION=$(echo "$RELEASE" | sed 's/bootstrap-standalone-//')
@@ -115,9 +109,6 @@ jobs:
           (cd "$APK_DIR_PATH" && sha256sum \
             "${APK_BASENAME_PREFIX}_universal.apk" \
             "${APK_BASENAME_PREFIX}_arm64-v8a.apk" \
-            "${APK_BASENAME_PREFIX}_armeabi-v7a.apk" \
-            "${APK_BASENAME_PREFIX}_x86_64.apk" \
-            "${APK_BASENAME_PREFIX}_x86.apk" \
             > "${APK_BASENAME_PREFIX}_sha256sums")
 
       - name: Upload universal APK
