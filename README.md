@@ -13,7 +13,9 @@ Termux Launcher is a terminal-first Android home launcher inspired by [TEL](http
 
 ## About
 
-Designed to be a Terminal/ TUI android home launcher. What started out as me just wanting sixel image drawing in TEL spiralled out of scope to what this project is today. All credits go to the amazing developers and maintainers of Termux, TEL & Termux:Monet.
+Designed to be a Terminal/ TUI android home launcher. 
+What started out as me just wanting sixel image drawing in [TEL](https://github.com/t-e-l/tel) spiralled out of scope to what this project is today. 
+All credits go to the amazing developers and contributors of Termux, TEL & Termux:Monet.
 
 ## Features
 
