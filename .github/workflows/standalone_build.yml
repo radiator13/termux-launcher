@@ -1,0 +1,139 @@
+name: Build standalone (com.termux.launcher)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - standalone-pkg
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package_variant: [ apt-android-7 ]
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Setup java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Download standalone bootstraps from release
+        id: bootstrap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Look for the latest standalone bootstrap release tagged bootstrap-standalone-*
+          RELEASE=$(gh release list --repo ${{ github.repository }} --limit 20 \
+            | grep "bootstrap-standalone-" | head -1 | awk '{print $1}' || true)
+
+          if [ -z "$RELEASE" ]; then
+            echo "No standalone bootstrap release found. Set TERMUX_SKIP_BOOTSTRAP_DOWNLOAD=1 for initial build."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "Downloading bootstrap from release: $RELEASE"
+            mkdir -p app/src/main/cpp
+            for ARCH in aarch64 arm i686 x86_64; do
+              gh release download "$RELEASE" --repo ${{ github.repository }} \
+                --pattern "bootstrap-${ARCH}.zip" --dir app/src/main/cpp/
+            done
+            # Extract checksums
+            for ARCH in aarch64 arm i686 x86_64; do
+              CHECKSUM=$(sha256sum "app/src/main/cpp/bootstrap-${ARCH}.zip" | awk '{print $1}')
+              ENV_VAR="BOOTSTRAP_CHECKSUM_$(echo $ARCH | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+              echo "${ENV_VAR}=${CHECKSUM}" >> "$GITHUB_ENV"
+            done
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+            # Parse version tag from release name
+            VERSION=$(echo "$RELEASE" | sed 's/bootstrap-standalone-//')
+            echo "TERMUX_STANDALONE_BOOTSTRAP_VERSION=${VERSION}" >> "$GITHUB_ENV"
+            echo "TERMUX_BOOTSTRAP_RELEASES_BASE_URL=https://github.com/${{ github.repository }}/releases/download" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run unit tests
+        shell: bash {0}
+        env:
+          TERMUX_SKIP_BOOTSTRAP_DOWNLOAD: "1"
+          GRADLE_OPTS: >-
+            -Dorg.gradle.internal.http.connectionTimeout=120000
+            -Dorg.gradle.internal.http.socketTimeout=120000
+        run: |
+          ./.github/scripts/gradle_retry.sh ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build APKs
+        shell: bash {0}
+        env:
+          PACKAGE_VARIANT: ${{ matrix.package_variant }}
+          TERMUX_SKIP_BOOTSTRAP_DOWNLOAD: ${{ steps.bootstrap.outputs.skip }}
+          GRADLE_OPTS: >-
+            -Dorg.gradle.internal.http.connectionTimeout=120000
+            -Dorg.gradle.internal.http.socketTimeout=120000
+          GRADLE_MAX_ATTEMPTS: "5"
+          GRADLE_RETRY_SLEEP_SECONDS: "20"
+          GRADLE_REFRESH_FROM_ATTEMPT: "2"
+        run: |
+          exit_on_error() { echo "$1"; exit 1; }
+
+          CURRENT_VERSION_NAME_REGEX='\s+versionName "([^"]+)"$'
+          CURRENT_VERSION_NAME="$(grep -m 1 -E "$CURRENT_VERSION_NAME_REGEX" ./app/build.gradle | sed -r "s/$CURRENT_VERSION_NAME_REGEX/\1/")"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          if [[ "$CURRENT_VERSION_NAME" == *"+"* ]]; then
+            RELEASE_VERSION_NAME="v${CURRENT_VERSION_NAME}.${SHORT_SHA}"
+          else
+            RELEASE_VERSION_NAME="v${CURRENT_VERSION_NAME}+${SHORT_SHA}"
+          fi
+
+          APK_DIR_PATH="./app/build/outputs/apk/debug"
+          APK_VERSION_TAG="$RELEASE_VERSION_NAME-${{ env.PACKAGE_VARIANT }}-standalone-debug"
+          APK_VERSION_TAG="${APK_VERSION_TAG//+/-}"
+          APK_BASENAME_PREFIX="termux-launcher_$APK_VERSION_TAG"
+
+          echo "APK_DIR_PATH=$APK_DIR_PATH" >> $GITHUB_ENV
+          echo "APK_VERSION_TAG=$APK_VERSION_TAG" >> $GITHUB_ENV
+          echo "APK_BASENAME_PREFIX=$APK_BASENAME_PREFIX" >> $GITHUB_ENV
+
+          export TERMUX_APP_VERSION_NAME="${RELEASE_VERSION_NAME/v/}"
+          export TERMUX_APK_VERSION_TAG="$APK_VERSION_TAG"
+          export TERMUX_PACKAGE_VARIANT="${{ env.PACKAGE_VARIANT }}"
+          ./.github/scripts/gradle_retry.sh ./gradlew --no-daemon assembleDebug || \
+            exit_on_error "Build failed for standalone APK."
+
+          echo "Generating sha256sums"
+          (cd "$APK_DIR_PATH" && sha256sum \
+            "${APK_BASENAME_PREFIX}_universal.apk" \
+            "${APK_BASENAME_PREFIX}_arm64-v8a.apk" \
+            "${APK_BASENAME_PREFIX}_armeabi-v7a.apk" \
+            "${APK_BASENAME_PREFIX}_x86_64.apk" \
+            "${APK_BASENAME_PREFIX}_x86.apk" \
+            > "${APK_BASENAME_PREFIX}_sha256sums")
+
+      - name: Upload universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_BASENAME_PREFIX }}_universal
+          path: ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_universal.apk
+
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_BASENAME_PREFIX }}_arm64-v8a
+          path: ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_arm64-v8a.apk
+
+      - name: Upload sha256sums
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_BASENAME_PREFIX }}_sha256sums
+          path: ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_sha256sums

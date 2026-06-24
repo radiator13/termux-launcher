@@ -355,8 +355,8 @@ public final class TermuxConstants {
     /**
      * Termux package name
      */
-    // Default: "com.termux"
-    public static final String TERMUX_PACKAGE_NAME = "com.termux";
+    // Default: "com.termux.launcher" (standalone install path — co-installs with official Termux)
+    public static final String TERMUX_PACKAGE_NAME = "com.termux.launcher";
 
     /**
      * Termux GitHub repo name
