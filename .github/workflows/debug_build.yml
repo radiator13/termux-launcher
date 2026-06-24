@@ -2,6 +2,10 @@ name: Build nightly
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - experimental
+      - tai-ext
 
 
 concurrency:

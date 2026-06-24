@@ -3,7 +3,7 @@
 
     <PreferenceCategory
         app:key="apps_bar_primary"
-        app:title="@string/termux_app_launcher_header">
+        app:title="@string/apps_bar_behavior_header">
 
         <SwitchPreferenceCompat
             app:key="show_extra_keys"
@@ -32,6 +32,7 @@
         <SwitchPreferenceCompat
             app:key="app_launcher_az_row_enabled"
             app:title="@string/termux_app_launcher_az_row_enabled_title"
+            app:summary="@string/termux_app_launcher_az_row_enabled_summary"
             app:dependency="app_launcher_apps_row_enabled"
             android:defaultValue="true" />
 
@@ -42,10 +43,18 @@
             app:dependency="app_launcher_apps_row_enabled"
             android:defaultValue="false" />
 
+        <SwitchPreferenceCompat
+            app:key="app_launcher_most_used_page"
+            app:title="@string/termux_app_launcher_most_used_page_title"
+            app:summary="@string/termux_app_launcher_most_used_page_summary"
+            app:dependency="app_launcher_apps_row_enabled"
+            android:defaultValue="false" />
+
         <ListPreference
             app:key="app_launcher_az_lock_method"
             app:title="@string/termux_app_launcher_az_double_tap_lock_title"
             app:summary="@string/termux_app_launcher_az_double_tap_lock_summary"
+            app:dialogTitle="@string/termux_app_launcher_az_lock_method_dialog_title"
             android:defaultValue="off"
             app:entries="@array/app_launcher_az_lock_method_entries"
             app:entryValues="@array/app_launcher_az_lock_method_values" />
@@ -58,37 +67,8 @@
     </PreferenceCategory>
 
     <PreferenceCategory
-        app:key="apps_bar_icons"
-        app:title="@string/apps_bar_icons_header">
-
-        <SwitchPreferenceCompat
-            app:key="app_launcher_bw_icons"
-            app:title="@string/termux_app_launcher_bw_icons_title"
-            app:summary="@string/termux_app_launcher_bw_icons_summary"
-            android:defaultValue="false" />
-
-        <Preference
-            app:key="app_launcher_icon_pack_package"
-            app:title="@string/termux_app_launcher_icon_pack_title"
-            app:summary="@string/termux_app_launcher_icon_pack_summary" />
-
-        <Preference
-            app:key="app_launcher_pinned_icon_pack_package"
-            app:title="@string/termux_app_launcher_pinned_icon_pack_title"
-            app:summary="@string/termux_app_launcher_pinned_icon_pack_summary" />
-
-    </PreferenceCategory>
-
-    <PreferenceCategory
         app:key="apps_bar_search"
-        app:title="@string/termux_app_launcher_search_header">
-
-        <ListPreference
-            app:key="app_launcher_search_mode"
-            app:title="@string/termux_app_launcher_search_mode_title"
-            android:defaultValue="balanced"
-            app:entries="@array/app_launcher_search_mode_entries"
-            app:entryValues="@array/app_launcher_search_mode_values" />
+        app:title="@string/apps_bar_search_header">
 
         <EditTextPreference
             app:key="app_launcher_input_char"
@@ -101,6 +81,44 @@
             app:key="app_launcher_reset_usage_ranking"
             app:title="@string/termux_app_launcher_reset_usage_ranking_title"
             app:summary="@string/termux_app_launcher_reset_usage_ranking_summary" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="apps_bar_maintenance"
+        app:title="@string/apps_bar_maintenance_header">
+
+        <Preference
+            app:key="app_launcher_default_buttons"
+            app:title="@string/termux_app_launcher_default_buttons_title"
+            app:summary="@string/termux_app_launcher_default_buttons_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="apps_bar_permissions"
+        app:title="@string/apps_bar_permissions_header">
+
+        <com.termux.app.fragments.settings.PillPreference
+            app:key="app_launcher_storage_access"
+            app:title="@string/termux_app_launcher_storage_access_title" />
+
+        <com.termux.app.fragments.settings.PillPreference
+            app:key="app_launcher_notification_access"
+            app:title="@string/termux_app_launcher_notification_access_settings_title" />
+
+        <com.termux.app.fragments.settings.PillPreference
+            app:key="app_launcher_accessibility_lock_access"
+            app:title="@string/termux_app_launcher_accessibility_lock_access_title" />
+
+        <com.termux.app.fragments.settings.PillPreference
+            app:key="app_launcher_notification_settings"
+            app:title="@string/termux_app_launcher_notification_settings_title" />
+
+        <Preference
+            app:key="app_launcher_app_permissions"
+            app:title="@string/termux_app_launcher_app_permissions_title"
+            app:summary="@string/termux_app_launcher_app_permissions_summary" />
+
     </PreferenceCategory>
 
 </PreferenceScreen>

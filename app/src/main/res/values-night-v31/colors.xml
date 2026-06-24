@@ -5,13 +5,17 @@
     <color name="termux_secondary">@android:color/system_accent2_200</color>
     <color name="termux_on_secondary">@android:color/system_accent2_900</color>
 
-    <color name="termux_surface_base">@android:color/system_neutral1_900</color>
-    <color name="termux_surface_panel">@android:color/system_neutral1_800</color>
-    <color name="termux_surface_panel_high">@android:color/system_neutral1_700</color>
-    <color name="termux_surface_panel_highest">@android:color/system_neutral2_700</color>
-    <color name="termux_on_surface">@android:color/system_neutral1_100</color>
-    <color name="termux_on_surface_variant">@android:color/system_neutral2_300</color>
-    <color name="termux_outline_variant">@android:color/system_neutral2_600</color>
+    <color name="termux_surface_base">#101217</color>
+    <color name="termux_surface_panel">#181B22</color>
+    <color name="termux_surface_panel_high">#222630</color>
+    <color name="termux_surface_panel_highest">#2C313D</color>
+    <color name="termux_on_surface">#ECEEF6</color>
+    <color name="termux_on_surface_variant">#B5BAC8</color>
+    <color name="termux_outline_variant">#4A4F5D</color>
+    <color name="termux_primary_container">@android:color/system_accent1_700</color>
+    <color name="termux_on_primary_container">@android:color/system_accent1_100</color>
+    <color name="termux_tertiary_container">@android:color/system_accent3_700</color>
+    <color name="termux_on_tertiary_container">@android:color/system_accent3_100</color>
     <color name="termux_accent_container">@android:color/system_accent1_700</color>
     <color name="termux_on_accent_container">@android:color/system_accent1_100</color>
     <color name="termux_error">@color/red_error_link</color>

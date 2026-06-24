@@ -7,29 +7,35 @@ import androidx.annotation.NonNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public final class MultiBackendTaiRuntime implements TaiRuntime {
+public class MultiBackendTaiRuntime implements TaiRuntime {
     private final DualSlotTaiRuntime liteRt;
+    private final MnnTaiRuntime mnn;
     private TaiRuntime activeAssistant;
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
         liteRt = new DualSlotTaiRuntime(context);
+        mnn = new MnnTaiRuntime(context);
         activeAssistant = liteRt;
     }
 
     @NonNull @Override public synchronized TaiRuntimeState getState() {
         TaiRuntimeState assistant = activeAssistant.getState();
         TaiRuntimeState liteState = liteRt.getState();
-        if (activeAssistant == liteRt || !liteState.loaded || liteState.loadedModelId == null
-            || !liteState.loadedModelId.contains(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M)) return assistant;
+        TaiRuntimeState mnnState = mnn.getState();
+        boolean includeLiteRtCompanion = activeAssistant != liteRt && liteState.loaded && liteState.loadedModelId != null
+            && liteState.loadedModelId.contains(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
+        boolean includeMnn = activeAssistant != mnn && (mnnState.loaded || mnnState.activeGeneration || !"unloaded".equals(mnnState.state));
+        if (!includeLiteRtCompanion && !includeMnn) return assistant;
         JSONObject extra = new JSONObject();
         try {
             extra.put("assistant", assistant.toJson());
-            extra.put("mobileActions", liteState.toJson());
+            if (includeLiteRtCompanion) extra.put("mobileActions", liteState.toJson());
+            if (includeMnn) extra.put("mnn", mnnState.toJson());
         } catch (JSONException ignored) {}
-        return new TaiRuntimeState(assistant.loaded || liteState.loaded, assistant.loadedModelId,
+        return new TaiRuntimeState(assistant.loaded || liteState.loaded || mnnState.loaded, assistant.loadedModelId,
             "tai-multi-backend", assistant.state, assistant.status, assistant.backend,
             assistant.backendFallbackReason, assistant.loadedModelPath,
-            assistant.activeGeneration || liteState.activeGeneration, assistant.activeGenerationId,
+            assistant.activeGeneration || liteState.activeGeneration || mnnState.activeGeneration, assistant.activeGenerationId,
             assistant.activeGenerationStartedAtMs, assistant.keepWarmUntilMs, assistant.idleUnloadAtMs,
             assistant.loadedAtMs, assistant.lastUsedAtMs, extra);
     }
@@ -70,25 +76,42 @@ public final class MultiBackendTaiRuntime implements TaiRuntime {
         return target.keepWarm(model, options, minutes);
     }
 
-    @NonNull @Override public JSONObject cancel() throws JSONException {
+    @NonNull @Override public synchronized JSONObject cancel() throws JSONException {
         JSONObject assistant = activeAssistant.cancel();
         if (activeAssistant != liteRt) liteRt.cancel();
         return assistant;
     }
 
-    @NonNull @Override public JSONObject chat(@NonNull String id, @NonNull String system, @NonNull String user, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).chat(id, system, user, options); }
-    @NonNull @Override public JSONObject chat(@NonNull String id, @NonNull String system, @NonNull String user, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).chat(id, system, user, options, callback); }
-    @NonNull @Override public JSONObject chat(@NonNull String id, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).chat(id, request, options); }
-    @NonNull @Override public JSONObject chat(@NonNull String id, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).chat(id, request, options, callback); }
-    @NonNull @Override public JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).complete(id, prompt, options); }
-    @NonNull @Override public JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).complete(id, prompt, options, callback); }
+    @NonNull @Override public synchronized JSONObject chat(@NonNull String id, @NonNull String system, @NonNull String user, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).chat(id, system, user, options); }
+    @NonNull @Override public synchronized JSONObject chat(@NonNull String id, @NonNull String system, @NonNull String user, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).chat(id, system, user, options, callback); }
+    @NonNull @Override public synchronized JSONObject chat(@NonNull String id, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).chat(id, request, options); }
+    @NonNull @Override public synchronized JSONObject chat(@NonNull String id, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).chat(id, request, options, callback); }
+    @NonNull @Override public synchronized JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).complete(id, prompt, options); }
+    @NonNull @Override public synchronized JSONObject complete(@NonNull String id, @NonNull String prompt, @NonNull TaiRuntimeOptions options, @NonNull TaiGenerationCallback callback) throws JSONException { return runtimeForId(id).complete(id, prompt, options, callback); }
+
+    @NonNull
+    public synchronized JSONObject embed(@NonNull String modelId, @NonNull String input) throws JSONException {
+        JSONObject error = new JSONObject();
+        error.put("message", "Embeddings are not available for the active LiteRT/MNN backends.");
+        error.put("type", "invalid_request_error");
+        error.put("code", "capability_not_supported");
+        JSONObject response = new JSONObject();
+        response.put("error", error);
+        response.put("_statusCode", 400);
+        return response;
+    }
 
     private synchronized TaiRuntime runtimeForId(String id) {
         if (isMobileActions(id)) return liteRt;
+        TaiRuntimeState mnnState = mnn.getState();
+        if (mnnState.loadedModelId != null && mnnState.loadedModelId.equals(id)) return mnn;
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(id);
+        if (entry != null && TaiModelSpec.BACKEND_MNN_LLM.equals(entry.backend)) return mnn;
         return activeAssistant;
     }
 
     private TaiRuntime runtimeForModel(TaiModelSpec model) {
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)) return mnn;
         return liteRt;
     }
 

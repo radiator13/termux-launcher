@@ -13,12 +13,13 @@
             app:entries="@array/termux_theme_mode_entries"
             app:entryValues="@array/termux_theme_mode_values"
             app:useSimpleSummaryProvider="true" />
-    </PreferenceCategory>
 
-    <SwitchPreferenceCompat
-        app:key="use_system_wallpaper"
-        app:title="@string/termux_use_system_wallpaper_title"
-        android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="use_system_wallpaper"
+            app:title="@string/termux_use_system_wallpaper_title"
+            app:summary="@string/termux_use_system_wallpaper_summary"
+            android:defaultValue="true" />
+    </PreferenceCategory>
 
     <PreferenceCategory
         app:key="termux_terminal_background"
@@ -74,8 +75,18 @@
             app:showSeekBarValue="true" />
 
         <androidx.preference.SeekBarPreference
+            app:key="dock_glass_grain"
+            app:title="@string/termux_dock_glass_grain_title"
+            app:summary="@string/termux_dock_glass_grain_summary"
+            android:min="0"
+            android:max="100"
+            android:defaultValue="12"
+            app:showSeekBarValue="true" />
+
+        <androidx.preference.SeekBarPreference
             app:key="app_launcher_button_count"
             app:title="@string/termux_app_launcher_button_count_title"
+            app:summary="@string/termux_app_launcher_button_count_summary"
             app:min="1"
             android:max="20"
             android:defaultValue="7"
@@ -89,17 +100,53 @@
             android:defaultValue="2"
             app:showSeekBarValue="false" />
 
-        <SwitchPreferenceCompat
-            app:key="app_launcher_compact_dock"
-            app:title="@string/termux_app_launcher_compact_dock_title"
-            app:summary="@string/termux_app_launcher_compact_dock_summary"
-            android:defaultValue="false" />
+        <ListPreference
+            app:key="app_launcher_dock_style"
+            app:title="@string/termux_app_launcher_dock_style_title"
+            app:summary="@string/termux_app_launcher_dock_style_summary"
+            app:entries="@array/app_launcher_dock_style_entries"
+            app:entryValues="@array/app_launcher_dock_style_values"
+            app:useSimpleSummaryProvider="true" />
 
         <SwitchPreferenceCompat
             app:key="app_launcher_display_app_names"
             app:title="@string/termux_app_launcher_display_app_names_title"
             app:summary="@string/termux_app_launcher_display_app_names_summary"
             android:defaultValue="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="apps_bar_icons"
+        app:title="@string/apps_bar_icons_header">
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_unify_icons"
+            app:title="@string/termux_app_launcher_unify_icons_title"
+            app:summary="@string/termux_app_launcher_unify_icons_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_bw_icons"
+            app:title="@string/termux_app_launcher_bw_icons_title"
+            app:summary="@string/termux_app_launcher_bw_icons_summary"
+            android:defaultValue="false" />
+
+        <SwitchPreferenceCompat
+            app:key="app_launcher_icon_shadow"
+            app:title="@string/termux_app_launcher_icon_shadow_title"
+            app:summary="@string/termux_app_launcher_icon_shadow_summary"
+            android:defaultValue="true" />
+
+        <Preference
+            app:key="app_launcher_icon_pack_package"
+            app:title="@string/termux_app_launcher_icon_pack_title"
+            app:summary="@string/termux_app_launcher_icon_pack_summary" />
+
+        <Preference
+            app:key="app_launcher_pinned_icon_pack_package"
+            app:title="@string/termux_app_launcher_pinned_icon_pack_title"
+            app:summary="@string/termux_app_launcher_pinned_icon_pack_summary" />
 
     </PreferenceCategory>
 

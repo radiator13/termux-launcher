@@ -6,6 +6,7 @@ import android.content.Intent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -15,11 +16,22 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 
 public final class TaiModelDownloader {
+    private static final String[] MNN_MODEL_FILES = new String[] {
+        "config.json",
+        "llm.mnn",
+        "llm.mnn.weight",
+        "llm_config.json",
+        "llm.mnn.json",
+        "tokenizer.mtok",
+        "tokenizer.txt"
+    };
+
     public interface ProgressCallback {
         void onProgress(@NonNull JSONObject transfer);
     }
@@ -43,15 +55,15 @@ public final class TaiModelDownloader {
     ) throws JSONException {
         return startDownload(modelId, url, displayName, license, capabilities,
             TaiModelSpec.inferBackend(url), TaiModelSpec.inferFormat(url), "", "", 4096, 0,
-            "", authToken);
+            "", 0L, authToken);
     }
 
     @NonNull
     public JSONObject startCatalogDownload(@NonNull TaiModelCatalog.CatalogEntry entry,
                                            @Nullable String authToken) throws JSONException {
         return startDownload(entry.modelId, entry.downloadUrl, entry.displayName, entry.license,
-            entry.capabilities, entry.backend, entry.format, entry.architecture, entry.quantization,
-            entry.contextWindow, entry.recommendedRamGb, entry.sha256, authToken);
+            entry.sourceCapabilities, entry.backend, entry.format, entry.architecture, entry.quantization,
+            entry.endpointContextWindow, entry.recommendedRamGb, entry.sha256, entry.sizeBytes, authToken);
     }
 
     @NonNull
@@ -60,16 +72,17 @@ public final class TaiModelDownloader {
         @NonNull String license, @NonNull LinkedHashSet<String> capabilities,
         @NonNull String backend, @NonNull String format, @Nullable String architecture,
         @Nullable String quantization, int contextWindow, int recommendedRamGb,
-        @Nullable String expectedSha256, @Nullable String authToken
+        @Nullable String expectedSha256, long expectedSizeBytes, @Nullable String authToken
     ) throws JSONException {
         String safeModelId = sanitize(modelId);
         if (safeModelId.isEmpty()) return error(400, "bad_request", "Missing model id");
-        if (!url.startsWith("https://")) return error(400, "bad_request", "Model downloads require an https URL");
+        if (!url.startsWith("https://")) return error(400, "insecure_url", "Model downloads require an https URL");
 
         File modelDir = new File(store.getModelsDirectory(), safeModelId);
         File output = new File(modelDir, fileNameFromUrl(url));
         String transferId = "download-" + safeModelId;
-        JSONObject transfer = transfer(transferId, safeModelId, url, output.getAbsolutePath(), "queued", 0L, 0L, "");
+        TaiModelDownloadService.clearCancellation(safeModelId);
+        JSONObject transfer = transfer(transferId, safeModelId, url, output.getAbsolutePath(), TaiModelStore.STATE_QUEUED, 0L, expectedSizeBytes, "");
         store.upsertDownload(transfer);
 
         Intent intent = new Intent(appContext, TaiModelDownloadService.class);
@@ -82,6 +95,7 @@ public final class TaiModelDownloader {
         intent.putExtra(TaiModelDownloadService.EXTRA_LICENSE, license);
         intent.putExtra(TaiModelDownloadService.EXTRA_CAPABILITIES, capabilities.toArray(new String[0]));
         intent.putExtra(TaiModelDownloadService.EXTRA_AUTH_TOKEN, authToken == null ? "" : authToken);
+        intent.putExtra(TaiModelDownloadService.EXTRA_EXPECTED_SIZE_BYTES, expectedSizeBytes);
         putRuntimeMetadata(intent, backend, format, architecture, quantization, contextWindow,
             recommendedRamGb, expectedSha256);
         startService(intent);
@@ -104,6 +118,7 @@ public final class TaiModelDownloader {
         int contextWindow,
         int recommendedRamGb,
         String expectedSha256,
+        long expectedSizeBytes,
         @Nullable String authToken,
         @Nullable ProgressCallback callback
     ) {
@@ -122,13 +137,16 @@ public final class TaiModelDownloader {
             if (status < 200 || status >= 300) {
                 throw new IllegalStateException("Download failed with HTTP " + status);
             }
+            boolean resumed = existing > 0L && status == 206;
+            if (!resumed) existing = 0L;
             long responseLength = connection.getHeaderFieldLong("Content-Length", -1L);
             contentLength = responseLength > 0 ? existing + responseLength : -1L;
+            if (expectedSizeBytes > 0L) contentLength = Math.max(contentLength, expectedSizeBytes);
             bytesRead = existing;
-            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", bytesRead, contentLength, ""), callback);
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, bytesRead, contentLength, ""), callback);
 
             try (InputStream input = new BufferedInputStream(connection.getInputStream());
-                 FileOutputStream outputStream = new FileOutputStream(partial, existing > 0L && connection.getResponseCode() == 206)) {
+                 FileOutputStream outputStream = new FileOutputStream(partial, resumed)) {
                 byte[] buffer = new byte[1024 * 64];
                 int read;
                 long lastPersisted = 0L;
@@ -137,7 +155,7 @@ public final class TaiModelDownloader {
                     outputStream.write(buffer, 0, read);
                     bytesRead += read;
                     if (bytesRead - lastPersisted >= 1024L * 1024L) {
-                        persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "running", bytesRead, contentLength, ""), callback);
+                        persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, bytesRead, contentLength, ""), callback);
                         lastPersisted = bytesRead;
                     }
                 }
@@ -146,12 +164,96 @@ public final class TaiModelDownloader {
             if (!expectedSha256.isEmpty() && !expectedSha256.equalsIgnoreCase(sha256(partial))) {
                 throw new IllegalStateException("Downloaded model failed SHA-256 verification.");
             }
-            if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
-            if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_VERIFYING, bytesRead, contentLength, ""), callback);
 
-            if (!looksLikeModelFile(output)) {
+            if (isMnnPackage(url, backend, format)) {
+                if (!looksLikeSmallJson(partial, output.getName())) {
+                    throw new IllegalStateException("Downloaded MNN config does not look like JSON. It may be an HTML login or error page.");
+                }
+                if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model config.");
+                if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize MNN config download.");
+
+                File modelDir = output.getParentFile();
+                String baseUrl = baseUrlFromUrl(url);
+                LinkedHashSet<String> packageFiles = mnnPackageFilesFromHuggingFace(url, authToken);
+                if (packageFiles.isEmpty()) {
+                    for (String fileName : MNN_MODEL_FILES) packageFiles.add(fileName);
+                }
+                long currentBytes = output.length();
+                bytesRead = currentBytes;
+                long packageTotalBytes = expectedSizeBytes > 0L ? expectedSizeBytes : -1L;
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), callback);
+
+                for (String fileName : packageFiles) {
+                    if (output.getName().equals(fileName)) continue;
+                    String fileUrl = baseUrl + encodeHuggingFacePath(fileName);
+                    File fileOutput = new File(modelDir, fileName);
+                    File fileParent = fileOutput.getParentFile();
+                    if (fileParent != null && !fileParent.exists() && !fileParent.mkdirs()) {
+                        throw new IllegalStateException("Could not create MNN package directory.");
+                    }
+                    File filePartial = new File(fileOutput.getAbsolutePath() + ".part");
+                    HttpURLConnection fileConn = open(fileUrl, authToken, 0);
+                    int fileStatus = fileConn.getResponseCode();
+                    if (fileStatus < 200 || fileStatus >= 300) {
+                        if (isRequiredMnnPackageFile(fileName)) {
+                            throw new IllegalStateException("MNN package file missing: " + fileName);
+                        }
+                        continue;
+                    }
+                    persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                        TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                    try (InputStream fileInput = new BufferedInputStream(fileConn.getInputStream());
+                         FileOutputStream fileOut = new FileOutputStream(filePartial)) {
+                        byte[] buffer = new byte[1024 * 64];
+                        int read;
+                        while ((read = fileInput.read(buffer)) != -1) {
+                            if (TaiModelDownloadService.isCancelled(modelId)) throw new InterruptedException("Download cancelled.");
+                            fileOut.write(buffer, 0, read);
+                            currentBytes += read;
+                            bytesRead = currentBytes;
+                            if (currentBytes % (1024L * 1024L) < read) {
+                                persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                                    TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                            }
+                        }
+                    }
+                    if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace file.");
+                    if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize file download.");
+                    persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                        TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                }
+
+                TaiModelSpec spec = new TaiModelSpec(
+                    modelId,
+                    displayName.isEmpty() ? modelId : displayName,
+                    "Downloaded MNN model",
+                    "downloaded",
+                    output.getAbsolutePath(),
+                    license.isEmpty() ? "User accepted provider terms externally" : license,
+                    currentBytes,
+                    capabilities,
+                    false,
+                    null,
+                    TaiModelSpec.BACKEND_MNN_LLM,
+                    TaiModelSpec.FORMAT_MNN,
+                    emptyToNull(architecture),
+                    emptyToNull(quantization),
+                    contextWindow,
+                    recommendedRamGb,
+                    emptyToNull(expectedSha256)
+                );
+                store.upsertUserModel(spec);
+                persist(withEffectiveConfig(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                    TaiModelStore.STATE_INSTALLED, currentBytes, currentBytes, ""), output), callback);
+                return;
+            }
+
+            if (!looksLikeModelFile(partial, output.getName())) {
                 throw new IllegalStateException("Downloaded file does not look like a LiteRT-LM model. It may be an HTML login or error page.");
             }
+            if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
+            if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
 
             TaiModelSpec spec = new TaiModelSpec(
                 modelId,
@@ -170,10 +272,15 @@ public final class TaiModelDownloader {
                 recommendedRamGb, emptyToNull(expectedSha256)
             );
             store.upsertUserModel(spec);
-            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "complete", output.length(), output.length(), ""), callback);
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_INSTALLED, output.length(), output.length(), ""), callback);
+        } catch (InterruptedException e) {
+            try {
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_CANCELLED, bytesRead, contentLength, "cancelled"), callback);
+            } catch (JSONException ignored) {
+            }
         } catch (Exception e) {
             try {
-                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), "failed", bytesRead, contentLength, e.getMessage()), callback);
+                persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_FAILED, bytesRead, contentLength, e.getMessage()), callback);
             } catch (JSONException ignored) {
             }
         }
@@ -230,8 +337,8 @@ public final class TaiModelDownloader {
         return name.isEmpty() ? "model.bin" : name;
     }
 
-    private boolean looksLikeModelFile(@NonNull File file) {
-        String lowerName = file.getName().toLowerCase();
+    private boolean looksLikeModelFile(@NonNull File file, @NonNull String originalName) {
+        String lowerName = originalName.toLowerCase(Locale.ROOT);
         if (!lowerName.endsWith(".litertlm") && !lowerName.endsWith(".task")) {
             return false;
         }
@@ -247,6 +354,222 @@ public final class TaiModelDownloader {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private boolean looksLikeSmallJson(@NonNull File file, @NonNull String originalName) {
+        if (!originalName.toLowerCase(Locale.ROOT).endsWith(".json") || file.length() <= 0L || file.length() > 10L * 1024L * 1024L) {
+            return false;
+        }
+        try (InputStream input = new BufferedInputStream(new java.io.FileInputStream(file))) {
+            byte[] buffer = new byte[256];
+            int read = input.read(buffer);
+            if (read <= 0) return false;
+            String prefix = new String(buffer, 0, read, java.nio.charset.StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT);
+            return prefix.startsWith("{") && !(prefix.startsWith("<!doctype html") || prefix.startsWith("<html") || prefix.contains("<head"));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isMnnPackage(@NonNull String url, @NonNull String backend, @NonNull String format) {
+        boolean paramHint = TaiModelSpec.BACKEND_MNN_LLM.equals(backend) && TaiModelSpec.FORMAT_MNN.equals(format);
+        boolean urlHint = url.toLowerCase(Locale.ROOT).contains("-mnn") || url.toLowerCase(Locale.ROOT).contains("taobao-mnn/");
+        return paramHint || urlHint;
+    }
+
+    @NonNull
+    private LinkedHashSet<String> mnnPackageFilesFromHuggingFace(@NonNull String url, @Nullable String authToken) {
+        LinkedHashSet<String> files = new LinkedHashSet<>();
+        String repoId = huggingFaceRepoIdFromResolveUrl(url);
+        if (repoId.isEmpty()) return files;
+        try {
+            HttpURLConnection connection = open("https://huggingface.co/api/models/" + repoId, authToken, 0);
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) return files;
+            String body = readSmallUtf8(connection.getInputStream(), 2L * 1024L * 1024L);
+            JSONObject json = new JSONObject(body);
+            JSONArray siblings = json.optJSONArray("siblings");
+            if (siblings == null) return files;
+            for (int i = 0; i < siblings.length(); i++) {
+                JSONObject sibling = siblings.optJSONObject(i);
+                if (sibling == null) continue;
+                String fileName = sibling.optString("rfilename", "");
+                if (isMnnPackageFile(fileName)) files.add(fileName);
+            }
+        } catch (Exception ignored) {
+        }
+        return files;
+    }
+
+    /** Outcome of resolving a Hugging Face URL: the concrete file URL, or a flag that the repo is
+     *  gated/private and needs an access token. */
+    public static final class HfResolve {
+        @NonNull public final String url;
+        public final boolean authRequired;
+        HfResolve(@NonNull String url, boolean authRequired) { this.url = url; this.authRequired = authRequired; }
+    }
+
+    /**
+     * Resolve a Hugging Face URL to a concrete downloadable file URL, auto-detecting the backend from
+     * the repo's file list. A {@code .../resolve/...} URL is returned unchanged; a bare repo URL is
+     * resolved to the package entry point — a {@code .litertlm}/{@code .task} (LiteRT) if present,
+     * else {@code config.json} of an MNN package — so users never pick a backend or hunt the file
+     * list. Reports {@code authRequired} when the repo is gated/private (HTTP 401/403).
+     */
+    @NonNull
+    public HfResolve resolveHuggingFaceEntry(@NonNull String url, @Nullable String authToken) {
+        String trimmed = url.trim();
+        if (trimmed.contains("/resolve/")) return new HfResolve(trimmed, false);
+        String repoId = huggingFaceRepoIdFromRepoUrl(trimmed);
+        if (repoId.isEmpty()) return new HfResolve("", false);
+        try {
+            HttpURLConnection connection = open("https://huggingface.co/api/models/" + repoId, authToken, 0);
+            int code = connection.getResponseCode();
+            if (code == 401 || code == 403) return new HfResolve("", true);
+            if (code < 200 || code >= 300) return new HfResolve("", false);
+            JSONArray siblings = new JSONObject(readSmallUtf8(connection.getInputStream(), 2L * 1024L * 1024L))
+                .optJSONArray("siblings");
+            LinkedHashSet<String> files = new LinkedHashSet<>();
+            if (siblings != null) {
+                for (int i = 0; i < siblings.length(); i++) {
+                    JSONObject sibling = siblings.optJSONObject(i);
+                    if (sibling != null) files.add(sibling.optString("rfilename", ""));
+                }
+            }
+            String entry = chooseEntryFile(files);
+            if (entry.isEmpty()) return new HfResolve("", false);
+            String fileUrl = "https://huggingface.co/" + repoId + "/resolve/main/" + entry;
+            // License-gated repos (e.g. Gemma) expose metadata publicly but 401/403 on the actual
+            // file unless a token is set; a HEAD-style check surfaces that as "needs token" up front.
+            if (requiresAuth(fileUrl, authToken)) return new HfResolve("", true);
+            return new HfResolve(fileUrl, false);
+        } catch (Exception ignored) {
+            return new HfResolve("", false);
+        }
+    }
+
+    /** True when the resolved file URL returns 401/403 (gated/private and the token is missing or
+     *  unaccepted). Reads only the status line, not the body. */
+    private boolean requiresAuth(@NonNull String fileUrl, @Nullable String authToken) {
+        try {
+            HttpURLConnection connection = open(fileUrl, authToken, 0);
+            int code = connection.getResponseCode();
+            connection.disconnect();
+            return code == 401 || code == 403;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** Repo id ("org/name") from a bare repo URL, ignoring any /tree, /blob, query or trailing slash. */
+    @NonNull
+    static String huggingFaceRepoIdFromRepoUrl(@NonNull String url) {
+        String prefix = "https://huggingface.co/";
+        if (!url.startsWith(prefix)) return "";
+        String path = url.substring(prefix.length());
+        int cut = path.indexOf('?');
+        if (cut >= 0) path = path.substring(0, cut);
+        cut = path.indexOf('#');
+        if (cut >= 0) path = path.substring(0, cut);
+        String[] parts = path.split("/");
+        if (parts.length < 2 || parts[0].isEmpty() || parts[1].isEmpty()) return "";
+        return parts[0] + "/" + parts[1];
+    }
+
+    /** Pick the package entry file from a repo's file list, auto-detecting the backend: a LiteRT
+     *  package ({@code .litertlm}/{@code .task}) wins; otherwise an MNN package ({@code config.json}
+     *  alongside a {@code .mnn} weight). Returns "" when the repo holds no supported model. */
+    @NonNull
+    static String chooseEntryFile(@NonNull LinkedHashSet<String> files) {
+        for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".litertlm")) return f;
+        for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".task")) return f;
+        if (files.contains("config.json")) {
+            for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".mnn")) return "config.json";
+        }
+        return "";
+    }
+
+    @NonNull
+    private String huggingFaceRepoIdFromResolveUrl(@NonNull String url) {
+        String prefix = "https://huggingface.co/";
+        if (!url.startsWith(prefix)) return "";
+        String path = url.substring(prefix.length());
+        int resolve = path.indexOf("/resolve/");
+        if (resolve <= 0) return "";
+        return path.substring(0, resolve);
+    }
+
+    private boolean isMnnPackageFile(@NonNull String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        return !lower.startsWith(".")
+            && (lower.endsWith(".mnn")
+            || lower.endsWith(".mnn.weight")
+            || lower.endsWith(".mnn.json")
+            || lower.endsWith(".json")
+            || lower.endsWith(".mtok")
+            || lower.startsWith("tokenizer."));
+    }
+
+    private boolean isRequiredMnnPackageFile(@NonNull String fileName) {
+        return "config.json".equals(fileName)
+            || "llm.mnn".equals(fileName)
+            || "llm.mnn.weight".equals(fileName);
+    }
+
+    @NonNull
+    private String encodeHuggingFacePath(@NonNull String fileName) {
+        StringBuilder builder = new StringBuilder();
+        String[] parts = fileName.split("/", -1);
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) builder.append('/');
+            try {
+                builder.append(URLEncoder.encode(parts[i], "UTF-8").replace("+", "%20"));
+            } catch (Exception e) {
+                builder.append(parts[i]);
+            }
+        }
+        return builder.toString();
+    }
+
+    @NonNull
+    private JSONObject withCurrentFile(@NonNull JSONObject transfer, @NonNull String currentFile) throws JSONException {
+        transfer.put("currentFile", currentFile);
+        return transfer;
+    }
+
+    @NonNull
+    private JSONObject withEffectiveConfig(@NonNull JSONObject transfer, @NonNull File config) throws JSONException {
+        try {
+            transfer.put("effectiveConfig", new JSONObject(readSmallUtf8(new java.io.FileInputStream(config), 10L * 1024L * 1024L)));
+        } catch (Exception ignored) {
+            transfer.put("effectiveConfig", JSONObject.NULL);
+        }
+        return transfer;
+    }
+
+    @NonNull
+    private String readSmallUtf8(@NonNull InputStream input, long maxBytes) throws Exception {
+        try (BufferedInputStream buffered = new BufferedInputStream(input)) {
+            byte[] buffer = new byte[8192];
+            StringBuilder builder = new StringBuilder();
+            long total = 0L;
+            int read;
+            while ((read = buffered.read(buffer)) != -1) {
+                total += read;
+                if (total > maxBytes) throw new IllegalStateException("Response too large.");
+                builder.append(new String(buffer, 0, read, java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return builder.toString();
+        }
+    }
+
+    @NonNull
+    private String baseUrlFromUrl(@NonNull String url) {
+        int query = url.indexOf('?');
+        String base = query >= 0 ? url.substring(0, query) : url;
+        int lastSlash = base.lastIndexOf('/');
+        if (lastSlash < 0) return base.endsWith("/") ? base : base + "/";
+        return base.substring(0, lastSlash + 1);
     }
 
     private void putRuntimeMetadata(Intent intent, String backend, String format, @Nullable String architecture,
@@ -300,5 +623,4 @@ public final class TaiModelDownloader {
     private String emptyToNull(@Nullable String value) {
         return value == null || value.trim().isEmpty() ? null : value;
     }
-
 }

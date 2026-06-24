@@ -1,0 +1,188 @@
+# Curated model catalog — source of truth
+# backend: litert-lm | mlc-llm
+# sizes/ram are estimates; verify real file size + checksum from the repo manifest before download.
+
+litert_lm:
+  general_multimodal:
+    - id: gemma-4-e2b-it-litert-lm
+      name: Gemma 4 E2B IT
+      backend: litert-lm
+      url: https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm
+      caps: [Text, Vision, Audio]
+      size_est: 2.4 GB
+      ram_tier: 8GB+
+      priority: recommended_default      # assistant default
+
+    - id: gemma-4-e4b-it-litert-lm
+      name: Gemma 4 E4B IT
+      backend: litert-lm
+      url: https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm
+      caps: [Text, Vision, Audio, Reasoning]
+      size_est: 8.4 GB
+      ram_tier: 12GB+
+      priority: premium_default
+
+  lightweight_text:
+    - id: qwen2.5-1.5b-instruct-litert-lm
+      name: Qwen2.5 1.5B Instruct
+      backend: litert-lm
+      url: https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct
+      caps: [Text, Code, Multilingual]
+      size_est: 1.1 GB
+      ram_tier: 6GB+
+      priority: lightweight_alternative
+
+  reasoning:
+    - id: deepseek-r1-distill-qwen-1.5b-litert-lm
+      name: DeepSeek-R1 Distill 1.5B
+      backend: litert-lm
+      url: https://huggingface.co/litert-community/DeepSeek-R1-Distill-Qwen-1.5B
+      caps: [Reasoning, Text]
+      size_est: 1.0 GB
+      ram_tier: 6GB+
+      priority: reasoning_small
+
+  tool_calling:
+    - id: functiongemma-270m-mobile-actions-litert-lm
+      name: FunctionGemma 270M
+      backend: litert-lm
+      url: https://huggingface.co/litert-community/functiongemma-270m-ft-mobile-actions
+      caps: [Tools]
+      size_est: 0.3 GB
+      ram_tier: 4GB+
+      priority: experimental_launcher_agent
+
+mlc_llm:
+  coding:
+    - id: qwen2.5-coder-0.5b-instruct-q4f16_1-mlc
+      name: Qwen2.5-Coder 0.5B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC
+      caps: [Code]
+      quant: q4f16_1
+      size_est: 0.4 GB
+      ram_tier: 3GB+
+      priority: tiny_coder
+
+    - id: qwen2.5-coder-1.5b-instruct-q4f16_1-mlc
+      name: Qwen2.5-Coder 1.5B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC
+      caps: [Code]
+      quant: q4f16_1
+      size_est: 1.0 GB
+      ram_tier: 4GB-6GB+
+      priority: recommended_coder
+
+    - id: qwen2.5-coder-3b-instruct-q4f16_1-mlc
+      name: Qwen2.5-Coder 3B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC
+      caps: [Code]
+      quant: q4f16_1
+      size_est: 1.9 GB
+      ram_tier: 6GB-8GB+
+      priority: balanced_coder
+
+    - id: qwen2.5-coder-7b-instruct-q4f16_1-mlc
+      name: Qwen2.5-Coder 7B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC
+      caps: [Code]
+      quant: q4f16_1
+      size_est: 4.4 GB
+      ram_tier: 10GB-12GB+
+      priority: advanced_coder
+
+  general_text:
+    - id: qwen2.5-1.5b-instruct-q4f16_1-mlc
+      name: Qwen2.5 1.5B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1-MLC
+      caps: [Text, Multilingual]
+      quant: q4f16_1
+      size_est: 1.0 GB
+      ram_tier: 4GB-6GB+
+      priority: lightweight_general
+
+    - id: qwen2.5-3b-instruct-q4f16_1-mlc
+      name: Qwen2.5 3B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-3B-Instruct-q4f16_1-MLC
+      caps: [Text]
+      quant: q4f16_1
+      size_est: 1.9 GB
+      ram_tier: 6GB-8GB+
+      priority: balanced_general
+
+    - id: qwen2.5-7b-instruct-q4f16_1-mlc
+      name: Qwen2.5 7B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-7B-Instruct-q4f16_1-MLC
+      caps: [Text, Reasoning, Multilingual]
+      quant: q4f16_1
+      size_est: 4.4 GB
+      ram_tier: 10GB-12GB+
+      priority: strong_general
+
+  reasoning:
+    - id: deepseek-r1-distill-qwen-1.5b-q4f16_1-mlc
+      name: DeepSeek-R1 Distill 1.5B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/DeepSeek-R1-Distill-Qwen-1.5B-q4f16_1-MLC
+      caps: [Reasoning]
+      quant: q4f16_1
+      size_est: 1.0 GB
+      ram_tier: 4GB-6GB+
+      priority: lightweight_reasoning
+
+    - id: deepseek-r1-distill-qwen-7b-q4f16_1-mlc
+      name: DeepSeek-R1 Distill 7B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC
+      caps: [Reasoning]
+      quant: q4f16_1
+      size_est: 4.4 GB
+      ram_tier: 10GB-12GB+
+      priority: strong_reasoning
+
+  vision_multimodal:
+    - id: qwen2.5-vl-3b-instruct-q4f16_1-mlc
+      name: Qwen2.5-VL 3B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-VL-3B-Instruct-q4f16_1-MLC
+      caps: [Vision, Text]
+      quant: q4f16_1
+      size_est: 2.4 GB
+      ram_tier: 6GB-8GB+
+      priority: balanced_vision
+
+    - id: qwen2.5-vl-7b-instruct-q4f16_1-mlc
+      name: Qwen2.5-VL 7B
+      backend: mlc-llm
+      url: https://huggingface.co/mlc-ai/Qwen2.5-VL-7B-Instruct-q4f16_1-MLC
+      caps: [Vision, Text]
+      quant: q4f16_1
+      size_est: 5.1 GB
+      ram_tier: 10GB-12GB+
+      priority: strong_vision
+
+# Per-model & global generation parameters
+parameters:
+  litert_lm:        # mirrors Edge Gallery
+    max_tokens:   { default: 4000, range: [2000, 32000] }
+    top_k:        { default: 64,   range: [5, 100] }
+    top_p:        { default: 0.95, range: [0.0, 1.0] }
+    temperature:  { default: 1.00, range: [0.0, 2.0] }
+    accelerator:  { default: GPU,  options: [GPU, CPU] }
+    enable_thinking: { default: false }
+    enable_speculative_decoding: { default: false }
+    system_prompt: { type: text }   # overrides global
+  mlc_llm:
+    accelerator:    { default: Auto, options: [Auto, CPU, GPU] }
+    context_window: { default: 4096, range: [1024, 8192] }
+    max_tokens:     { default: 1024, range: [256, 8192] }
+    temperature:    { default: 0.70, range: [0.0, 2.0] }
+    top_p:          { default: 0.95, range: [0.0, 1.0] }
+    top_k:          { default: 64,   range: [5, 100] }
+    system_prompt:  { type: text }  # overrides global

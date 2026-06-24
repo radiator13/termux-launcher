@@ -17,7 +17,7 @@ public class TaiModelRegistryTest {
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT));
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT));
         assertNotNull(registry.getModel(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M));
-        assertEquals(3, registry.getBuiltInModels().size());
+        assertEquals(TaiModelCatalog.entries().size(), registry.getBuiltInModels().size());
     }
 
     @Test
@@ -26,9 +26,15 @@ public class TaiModelRegistryTest {
         JSONObject json = spec.toJson();
         JSONArray capabilities = json.getJSONArray("capabilities");
 
-        assertEquals("Gemma-4-E2B-it", json.getString("id"));
+        assertEquals("gemma-4-e2b-it-litert-lm", json.getString("id"));
         assertTrue(capabilities.toString().contains("text_chat"));
         assertTrue(capabilities.toString().contains("image_input"));
+        assertTrue(json.getJSONArray("endpointCapabilities").toString().contains("image_input"));
+        assertTrue(json.getJSONArray("sourceCapabilities").toString().contains("llm_thinking"));
+        assertTrue(!capabilities.toString().contains("llm_thinking"));
+        assertEquals(4096, json.getInt("endpointContextWindow"));
+        assertEquals(32768, json.getInt("sourceContextWindow"));
+        assertEquals(4000, json.getInt("defaultMaxOutputTokens"));
         assertTrue(json.isNull("localPath"));
         assertTrue(!json.has("temperature"));
         assertTrue(!json.has("topK"));

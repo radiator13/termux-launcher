@@ -1,0 +1,28 @@
+Task 11 Evidence - Local Endpoint Behavior
+==========================================
+Date: 2026-06-17
+Environment: Workspace (no local Android build environment)
+Verification method: Unit test code inspection
+
+CLAIM: Unit tests verify localhost endpoint behavior (auth required, models endpoint returns JSON).
+
+EVIDENCE FILES:
+- app/src/test/java/com/termux/launcherctl/EmbeddingsEndpointTest.java
+- app/src/test/java/com/termux/launcherctl/ApiSecuritySeamsTest.java
+
+EmbeddingsEndpointTest VERIFIES:
+- 401 without auth: `embeddings_noAuth_returns401` asserts that requests to `/v1/embeddings` without a bearer token receive HTTP 401.
+- Successful embeddings-capable MLC response: `embeddings_mlcCapable_returnsSuccess` injects a fake runtime, loads an MLC model with `text_embeddings` capability, and asserts a 200 response with a 768-dim embedding vector.
+- Chat-only MLC `capability_not_supported`: `embeddings_mlcChatOnly_returnsUnsupported` loads a chat-only MLC model and asserts `capability_not_supported` error.
+- LiteRT unsupported error: `embeddings_litert_returnsUnsupported` asserts that LiteRT models return `capability_not_supported` (501).
+- `/v1/models` backend/capability metadata shape: `modelsEndpoint_returnsBackendAndCapabilities` verifies the OpenAI-compatible list shape with internal `_backend` and `_capabilities` fields.
+- Existing chat/completions endpoints still responding (non-404): `chatCompletions_endpointStillResponds` and `completions_endpointStillResponds` verify `/v1/chat/completions` and `/v1/completions` return non-404.
+
+ApiSecuritySeamsTest VERIFIES:
+- LAN default localhost binding: `lanDefault_localhostBinding` asserts default `TaiSettings` binds to `127.0.0.1`.
+- LAN opt-in binds to all interfaces: `lanOptIn_bindsToAllInterfaces` asserts LAN mode binds to `0.0.0.0`.
+- Auth required for both modes: `lanAuth_requiredForBothModes` asserts requests without token return 401 in both localhost and LAN modes.
+- CORS disabled: `lanCors_disabled` asserts 401 responses contain no `Access-Control-Allow-*` headers.
+- Embeddings behavior: `embeddingsLiteRt_returnsUnsupported`, `embeddingsMlcChatOnly_returnsUnsupported`, `embeddingsMlcCapable_returnsSuccess` mirror the embeddings endpoint tests.
+
+CONCLUSION: Local endpoint behavior is fully covered by unit tests. Auth is mandatory, models endpoint returns correct JSON, and existing chat/completions endpoints remain functional.

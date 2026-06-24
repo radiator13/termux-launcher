@@ -2,8 +2,10 @@ package com.termux.launcherctl;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.Uri;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -17,14 +19,21 @@ import android.os.StatFs;
 import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.ai.TaiCliFormatter;
+import com.termux.ai.TaiDeviceCapabilities;
 import com.termux.ai.TaiManager;
+import com.termux.ai.TaiModelCatalog;
+import com.termux.ai.TaiModelRegistry;
+import com.termux.ai.TaiModelSpec;
+import com.termux.ai.TaiRuntimeState;
 import com.termux.ai.TaiSettings;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.model.LauncherAppEntry;
+import com.termux.app.launcher.notifications.LauncherNotificationAccess;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.PrivilegedPolicyStore;
 import com.termux.shared.logger.Logger;
@@ -46,8 +55,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayDeque;
@@ -56,7 +67,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -76,13 +89,15 @@ public class LauncherCtlApiServer {
     private static final String TOKEN_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/token";
     private static final String ENDPOINT_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/endpoint";
     private static final String LAUNCHERCTL_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl";
+    private static final String LAUNCHERCTL_MCP_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcherctl-mcp";
     private static final String LAUNCHER_RESTART_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/launcher-restart";
     private static final String TAI_BIN_PATH = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/tai";
+    static final String LAN_WARNING = "LAN exposure allows any device on your network to reach this endpoint when the token is known.";
 
     private static final int MAX_REQUEST_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINE_BYTES = 4096;
     private static final int MAX_HEADER_LINES = 64;
-    private static final int MAX_BODY_BYTES = 256 * 1024;
+    private static final int MAX_BODY_BYTES = 32 * 1024 * 1024;
     private static final int CLIENT_SOCKET_TIMEOUT_MS = 10_000;
 
     private static LauncherCtlApiServer instance;
@@ -126,15 +141,17 @@ public class LauncherCtlApiServer {
             appContext = context.getApplicationContext();
             TaiSettings settings = new TaiSettings(appContext);
             token = settings.getOrCreateApiToken();
-            serverSocket = createLoopbackServerSocket(settings.getApiPort());
+            String bindMode = settings.getApiBindMode();
+            serverSocket = createLoopbackServerSocket(settings.getApiPort(), bindMode);
             port = serverSocket.getLocalPort();
             running = true;
             writeClientConfig();
             installLauncherCtlCliScript();
+            installLauncherCtlMcpScript();
             installLauncherRestartScript();
             installTaiCliScripts();
             startAcceptLoop(context.getApplicationContext());
-            Logger.logInfo(LOG_TAG, "LauncherCtl API listening on 127.0.0.1:" + port);
+            Logger.logInfo(LOG_TAG, "LauncherCtl API listening on " + bindAddressForMode(bindMode) + ":" + port);
         } catch (Exception e) {
             running = false;
             Logger.logErrorExtended(LOG_TAG, "Failed to start LauncherCtl API server: " + e.getMessage());
@@ -162,6 +179,7 @@ public class LauncherCtlApiServer {
     public synchronized void ensureCliScriptsInstalled() {
         try {
             installLauncherCtlCliScript();
+            installLauncherCtlMcpScript();
             installLauncherRestartScript();
             installTaiCliScripts();
         } catch (Throwable t) {
@@ -258,7 +276,7 @@ public class LauncherCtlApiServer {
             }
 
             if (!isAuthorized(request.headers)) {
-                writeJsonResponse(output, 401, jsonError("unauthorized", "Missing or invalid token").toString());
+                writeResponse(output, unauthorizedResponse());
                 return;
             }
 
@@ -291,6 +309,28 @@ public class LauncherCtlApiServer {
                 return jsonResponse(buildNowPlayingArt());
             } else if ("GET".equals(request.method) && "/v1/notifications".equals(request.path)) {
                 return jsonResponse(buildNotifications());
+            } else if ("POST".equals(request.method) && "/v1/notifications/recent".equals(request.path)) {
+                return jsonResponse(buildNotificationsRecent(request.body));
+            } else if ("POST".equals(request.method) && "/v1/notifications/since".equals(request.path)) {
+                return jsonResponse(buildNotificationsSince(request.body));
+            } else if ("POST".equals(request.method) && "/v1/notifications/search".equals(request.path)) {
+                return jsonResponse(buildNotificationsSearch(request.body));
+            } else if ("POST".equals(request.method) && "/v1/notifications/stats".equals(request.path)) {
+                return jsonResponse(buildNotificationsStats(request.body));
+            } else if ("GET".equals(request.method) && "/v1/launcher/capabilities".equals(request.path)) {
+                return jsonResponse(buildLauncherCapabilities(context));
+            } else if ("GET".equals(request.method) && "/v1/agent/tools".equals(request.path)) {
+                return jsonResponse(buildAgentTools());
+            } else if ("POST".equals(request.method) && "/v1/agent/route".equals(request.path)) {
+                return jsonResponse(runAgentRoute(context, request.body));
+            } else if ("POST".equals(request.method) && "/v1/agent/execute".equals(request.path)) {
+                return jsonResponse(runAgentExecute(context, request.body));
+            } else if ("GET".equals(request.method) && "/v1/events".equals(request.path)) {
+                return jsonResponse(buildEventsTail("{}"));
+            } else if ("GET".equals(request.method) && "/v1/events/stream".equals(request.path)) {
+                return sseResponse(output -> writeEventsStream(output));
+            } else if ("POST".equals(request.method) && "/v1/events/tail".equals(request.path)) {
+                return jsonResponse(buildEventsTail(request.body));
             } else if ("POST".equals(request.method) && "/v1/apps/launch".equals(request.path)) {
                 return jsonResponse(runAppLaunch(context, request.body));
             } else if ("POST".equals(request.method) && "/v1/app/restart".equals(request.path)) {
@@ -320,6 +360,8 @@ public class LauncherCtlApiServer {
                 return maybeTextResponse(request, "load", TaiManager.getInstance(context).loadModel(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/runtime/load".equals(request.path)) {
                 return maybeTextResponse(request, "load", TaiManager.getInstance(context).loadModel(request.body));
+            } else if ("POST".equals(request.method) && "/v1/ai/runtime/preflight".equals(request.path)) {
+                return maybeTextResponse(request, "preflight", TaiManager.getInstance(context).preflight(request.body));
             } else if ("POST".equals(request.method) && "/v1/ai/models/unload".equals(request.path)) {
                 return maybeTextResponse(request, "unload", TaiManager.getInstance(context).unloadModel());
             } else if ("POST".equals(request.method) && "/v1/ai/runtime/unload".equals(request.path)) {
@@ -342,6 +384,10 @@ public class LauncherCtlApiServer {
                     return sseResponse(output -> writeCompletionStream(context, request.body, output));
                 }
                 return jsonResponse(TaiManager.getInstance(context).openAiCompletions(request.body));
+            } else if ("POST".equals(request.method) && "/v1/embeddings".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).embeddings(request.body));
+            } else if ("POST".equals(request.method) && "/v1/audio/speech".equals(request.path)) {
+                return jsonResponse(TaiManager.getInstance(context).openAiAudioSpeech(request.body));
             }
 
             JSONObject notFound = jsonError("not_found", "Unknown endpoint");
@@ -571,6 +617,278 @@ public class LauncherCtlApiServer {
         return snapshot;
     }
 
+    private JSONObject buildNotificationsRecent(String body) throws JSONException {
+        JSONObject request = parseJsonBody(body);
+        int limit = clampInt(request.optInt("limit", 50), 1, 200);
+        List<LauncherCtlNotificationEvent> events = LauncherCtlNotificationStore.getInstance().queryRecent(limit);
+        return notificationsResponse(events);
+    }
+
+    private JSONObject buildNotificationsSince(String body) throws JSONException {
+        JSONObject request = parseJsonBody(body);
+        if (!request.has("since")) {
+            JSONObject error = jsonError("bad_request", "Missing since timestamp");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        long since = request.optLong("since", 0);
+        int limit = clampInt(request.optInt("limit", 200), 1, 1000);
+        List<LauncherCtlNotificationEvent> events = LauncherCtlNotificationStore.getInstance().querySince(since, limit);
+        return notificationsResponse(events);
+    }
+
+    private JSONObject buildNotificationsSearch(String body) throws JSONException {
+        JSONObject request = parseJsonBody(body);
+        String query = request.optString("query", "").trim();
+        if (query.isEmpty()) {
+            JSONObject error = jsonError("bad_request", "Missing search query");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        int limit = clampInt(request.optInt("limit", 50), 1, 200);
+        List<LauncherCtlNotificationEvent> events = LauncherCtlNotificationStore.getInstance().querySearch(query, limit);
+        return notificationsResponse(events);
+    }
+
+    private JSONObject buildNotificationsStats(String body) throws JSONException {
+        JSONObject request = parseJsonBody(body);
+        Long since = request.has("since") ? request.optLong("since", 0) : null;
+        JSONObject stats = LauncherCtlNotificationStore.getInstance().queryStats(since);
+        stats.put("ok", true);
+        return stats;
+    }
+
+    private JSONObject buildLauncherCapabilities(Context context) throws JSONException {
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("apiVersion", API_VERSION);
+        data.put("timestampMs", System.currentTimeMillis());
+        JSONObject integrations = new JSONObject();
+        integrations.put("openAiCompatible", true);
+        integrations.put("mcpStdio", true);
+        integrations.put("mcpCommand", "launcherctl mcp");
+        integrations.put("cliStateDir", LAUNCHERCTL_DIR_PATH);
+        data.put("integrations", integrations);
+
+        TaiDeviceCapabilities device = TaiDeviceCapabilities.detect(context);
+        data.put("device", device.toJson());
+
+        JSONObject notifications = new JSONObject();
+        boolean listenerConnected = LauncherCtlNotificationListener.isListenerConnected();
+        boolean accessEnabled = LauncherNotificationAccess.isEnabled(context);
+        notifications.put("listenerConnected", listenerConnected);
+        notifications.put("accessEnabled", accessEnabled);
+        notifications.put("settingsAction", LauncherCtlNotificationListener.getListenerSettingsAction());
+        if (!listenerConnected) {
+            notifications.put("hint", LauncherCtlNotificationListener.getListenerHint());
+        }
+        data.put("notifications", notifications);
+
+        JSONObject tai = new JSONObject();
+        try {
+            JSONObject runtimeStatus = TaiManager.getInstance(context).runtimeStatus();
+            tai.put("runtime", runtimeStatus.optJSONObject("runtime"));
+            JSONObject runtimeState = runtimeStatus.optJSONObject("runtime");
+            tai.put("loadedModelId", runtimeState != null && !runtimeState.isNull("loadedModelId")
+                ? runtimeState.optString("loadedModelId", null) : JSONObject.NULL);
+        } catch (Exception e) {
+            tai.put("runtime", JSONObject.NULL);
+            tai.put("loadedModelId", JSONObject.NULL);
+        }
+        data.put("tai", tai);
+
+        data.put("functionGemma", buildFunctionGemmaInfo(context, device));
+
+        LauncherToolRegistry registry = LauncherToolRegistry.getInstance();
+        JSONArray toolNames = new JSONArray();
+        for (LauncherToolRegistry.ToolMetadata tool : registry.getTools()) {
+            toolNames.put(tool.name);
+        }
+        data.put("availableTools", toolNames);
+
+        JSONArray warnings = new JSONArray();
+        JSONArray blockingReasons = new JSONArray();
+        if (!accessEnabled) {
+            warnings.put("Notification access is disabled; notification and media tools are unavailable.");
+            blockingReasons.put("notification_access_disabled");
+        }
+        if (!device.liteRtLmAbiSupported || !device.liteRtLmNativeLibrariesAvailable) {
+            warnings.put("LiteRT-LM backend is not available for this device ABI/APK.");
+            blockingReasons.put(device.liteRtLmAbiSupported ? "litert_lm_native_unavailable" : "litert_lm_abi_unsupported");
+        }
+        if (device.mnnUnsupportedReason != null && !device.mnnUnsupportedReason.isEmpty()) {
+            warnings.put(device.mnnUnsupportedReason);
+        }
+        data.put("warnings", warnings);
+        data.put("blockingReasons", blockingReasons);
+
+        writeDebugSnapshot(registry, data);
+        return data;
+    }
+
+    private JSONObject buildFunctionGemmaInfo(Context context, TaiDeviceCapabilities device) throws JSONException {
+        JSONObject info = new JSONObject();
+        String modelId = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M;
+        info.put("modelId", modelId);
+
+        TaiModelCatalog.CatalogEntry catalogEntry = TaiModelCatalog.get(modelId);
+        if (catalogEntry != null) {
+            JSONObject catalog = new JSONObject();
+            catalog.put("displayName", catalogEntry.displayName);
+            catalog.put("roleHint", catalogEntry.roleHint);
+            catalog.put("sizeBytes", catalogEntry.sizeBytes);
+            catalog.put("recommendedRamGb", catalogEntry.recommendedRamGb);
+            catalog.put("downloadAvailable", catalogEntry.downloadAvailable);
+            catalog.put("backend", catalogEntry.backend);
+            info.put("catalog", catalog);
+        } else {
+            info.put("catalog", JSONObject.NULL);
+        }
+
+        boolean backendSupported = device.liteRtLmAbiSupported
+            && device.liteRtLmNativeLibrariesAvailable
+            && TaiModelSpec.BACKEND_LITERT_LM.equals(catalogEntry != null ? catalogEntry.backend : "");
+        info.put("backendSupported", backendSupported);
+
+        boolean modelAvailable = false;
+        try {
+            modelAvailable = TaiManager.getInstance(context).isModelAvailable(modelId);
+        } catch (Exception ignored) {
+        }
+        info.put("modelAvailable", modelAvailable);
+
+        boolean modelLoaded = false;
+        try {
+            TaiRuntimeState state = TaiManager.getInstance(context).getRuntimeState();
+            modelLoaded = state.loaded && modelId.equals(state.loadedModelId);
+        } catch (Exception ignored) {
+        }
+        info.put("modelLoaded", modelLoaded);
+
+        info.put("usable", backendSupported && modelAvailable);
+        return info;
+    }
+
+    private JSONObject buildAgentTools() throws JSONException {
+        LauncherToolRegistry registry = LauncherToolRegistry.getInstance();
+        registry.writeDebugToolsJson();
+        return registry.toResponseJson();
+    }
+
+    private JSONObject runAgentRoute(Context context, String body) throws JSONException {
+        JSONObject result = new LauncherCtlAgentHandler(context, new LauncherToolExecutionHandler(context)).route(body);
+        appendAgentAudit("agent.route", body, result);
+        return result;
+    }
+
+    private JSONObject runAgentExecute(Context context, String body) throws JSONException {
+        JSONObject result = new LauncherCtlAgentHandler(context, new LauncherToolExecutionHandler(context)).execute(body);
+        appendAgentAudit("agent.execute", body, result);
+        return result;
+    }
+
+    private JSONObject buildEventsTail(String body) throws JSONException {
+        JSONObject request = parseJsonBody(body);
+        int limit = clampInt(request.optInt("limit", 100), 1, 1000);
+        Long since = request.has("since") ? request.optLong("since", 0) : null;
+        List<JSONObject> events = LauncherCtlEventStore.getInstance().tailEvents(limit, since);
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("count", events.size());
+        data.put("limit", limit);
+        if (since != null) data.put("since", since.longValue());
+        JSONArray array = new JSONArray();
+        for (JSONObject event : events) {
+            array.put(event);
+        }
+        data.put("events", array);
+        return data;
+    }
+
+    private void writeEventsStream(OutputStream output) throws IOException {
+        List<JSONObject> events = LauncherCtlEventStore.getInstance().tailEvents(100, null);
+        for (JSONObject event : events) {
+            writeSseEvent(output, event.toString());
+        }
+        writeSseEvent(output, "[DONE]");
+    }
+
+    private void appendAgentAudit(String type, String requestBody, JSONObject result) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("request", requestBody == null ? "" : requestBody);
+            payload.put("resultOk", result.optBoolean("ok", false));
+            if (result.has("error") && !result.isNull("error")) {
+                payload.put("error", result.optString("error", null));
+            }
+            if (result.has("tool") && !result.isNull("tool")) {
+                payload.put("tool", result.optString("tool", null));
+            } else {
+                String requestTool = agentToolFromRequest(requestBody);
+                if (requestTool != null && !requestTool.isEmpty()) {
+                    payload.put("tool", requestTool);
+                }
+            }
+            LauncherCtlEventStore.getInstance().appendEvent(type, payload);
+            LauncherCtlEventStore.getInstance().appendAgentRun(type, payload);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to append agent audit event: " + e.getMessage());
+        }
+    }
+
+    @Nullable
+    private String agentToolFromRequest(String requestBody) {
+        if (requestBody == null || requestBody.trim().isEmpty()) {
+            return null;
+        }
+        JSONObject request = parseJsonBody(requestBody);
+        String tool = request.optString("tool", "").trim();
+        if (!tool.isEmpty()) return tool;
+        String name = request.optString("name", "").trim();
+        return name.isEmpty() ? null : LauncherToolRegistry.openAiNameToInternalName(name);
+    }
+
+    private void writeDebugSnapshot(LauncherToolRegistry registry, JSONObject capabilities) {
+        try {
+            registry.writeDebugToolsJson();
+            JSONObject payload = new JSONObject();
+            payload.put("generatedAtMs", System.currentTimeMillis());
+            payload.put("capabilities", capabilities);
+            writeTextFile(LauncherCtlStorage.getCapabilitiesJsonFile().getAbsolutePath(), payload.toString(2));
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write capability debug snapshot: " + e.getMessage());
+        }
+    }
+
+    private JSONObject notificationsResponse(List<LauncherCtlNotificationEvent> events) throws JSONException {
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("count", events.size());
+        JSONArray array = new JSONArray();
+        for (LauncherCtlNotificationEvent event : events) {
+            array.put(event.toJson());
+        }
+        data.put("events", array);
+        return data;
+    }
+
+    private JSONObject parseJsonBody(String body) {
+        if (body == null || body.trim().isEmpty()) {
+            return new JSONObject();
+        }
+        try {
+            return new JSONObject(body);
+        } catch (JSONException e) {
+            return new JSONObject();
+        }
+    }
+
+    private int clampInt(int value, int min, int max) {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
+    }
+
     private JSONObject buildNotificationListenerStatus() throws JSONException {
         JSONObject data = new JSONObject();
         boolean connected = LauncherCtlNotificationListener.isListenerConnected();
@@ -680,12 +998,17 @@ public class LauncherCtlApiServer {
     }
 
     private boolean isAuthorized(Map<String, String> headers) {
-        if (token == null || token.isEmpty()) return false;
+        return isAuthorized(token, headers);
+    }
+
+    static boolean isAuthorized(String expectedToken, Map<String, String> headers) {
+        if (expectedToken == null || expectedToken.isEmpty()) return false;
+        if (headers == null) return false;
         String value = headers.get("authorization");
         if (value == null) return false;
         String prefix = "Bearer ";
         if (!value.startsWith(prefix)) return false;
-        return secureEquals(token, value.substring(prefix.length()).trim());
+        return secureEquals(expectedToken, value.substring(prefix.length()).trim());
     }
 
     private boolean allowRequest(HttpRequest request) {
@@ -795,7 +1118,7 @@ public class LauncherCtlApiServer {
         writeResponse(output, new HttpResponse(statusCode, "application/json; charset=utf-8", bytes, null));
     }
 
-    private void writeResponse(OutputStream output, HttpResponse response) throws IOException {
+    static void writeResponse(OutputStream output, HttpResponse response) throws IOException {
         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
         byte[] bytes = response.body;
         writer.write("HTTP/1.1 " + response.statusCode + " " + statusMessage(response.statusCode) + "\r\n");
@@ -820,7 +1143,7 @@ public class LauncherCtlApiServer {
         output.flush();
     }
 
-    private String statusMessage(int code) {
+    private static String statusMessage(int code) {
         switch (code) {
             case 200: return "OK";
             case 409: return "Conflict";
@@ -847,6 +1170,17 @@ public class LauncherCtlApiServer {
         return error;
     }
 
+    static HttpResponse unauthorizedResponse() {
+        JSONObject error = new JSONObject();
+        try {
+            error.put("ok", false);
+            error.put("error", "unauthorized");
+            error.put("message", "Missing or invalid token");
+        } catch (JSONException ignored) {
+        }
+        return new HttpResponse(401, "application/json; charset=utf-8", error.toString().getBytes(StandardCharsets.UTF_8), null);
+    }
+
     private void initializeRateLimiters() {
         rateLimiters.clear();
         rateLimiters.put("GET:/v1/status", new SimpleRateLimiter(120, 60_000));
@@ -856,6 +1190,17 @@ public class LauncherCtlApiServer {
         rateLimiters.put("GET:/v1/media/now-playing", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("GET:/v1/media/art", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("GET:/v1/notifications", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/notifications/recent", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/notifications/since", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("POST:/v1/notifications/search", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/notifications/stats", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("GET:/v1/launcher/capabilities", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("GET:/v1/agent/tools", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/agent/route", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/agent/execute", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("GET:/v1/events", new SimpleRateLimiter(120, 60_000));
+        rateLimiters.put("GET:/v1/events/stream", new SimpleRateLimiter(12, 60_000));
+        rateLimiters.put("POST:/v1/events/tail", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/apps/launch", new SimpleRateLimiter(30, 60_000));
         rateLimiters.put("POST:/v1/app/restart", new SimpleRateLimiter(5, 60_000));
         rateLimiters.put("POST:/v1/auth/rotate", new SimpleRateLimiter(5, 60_000));
@@ -871,12 +1216,15 @@ public class LauncherCtlApiServer {
         rateLimiters.put("POST:/v1/ai/models/load", new SimpleRateLimiter(20, 60_000));
         rateLimiters.put("POST:/v1/ai/models/unload", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/runtime/load", new SimpleRateLimiter(20, 60_000));
+        rateLimiters.put("POST:/v1/ai/runtime/preflight", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/runtime/unload", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/runtime/keep-warm", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/ai/runtime/cancel", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("GET:/v1/models", new SimpleRateLimiter(120, 60_000));
         rateLimiters.put("POST:/v1/chat/completions", new SimpleRateLimiter(60, 60_000));
         rateLimiters.put("POST:/v1/completions", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/embeddings", new SimpleRateLimiter(60, 60_000));
+        rateLimiters.put("POST:/v1/audio/speech", new SimpleRateLimiter(60, 60_000));
     }
 
     private void writeClientConfig() throws IOException {
@@ -890,32 +1238,42 @@ public class LauncherCtlApiServer {
             throw new IOException("Failed to create launcherctl dir: " + LAUNCHERCTL_DIR_PATH);
         }
         writeTextFile(TOKEN_FILE_PATH, token + "\n");
-        writeTextFile(ENDPOINT_FILE_PATH, "http://127.0.0.1:" + port + "\n");
+        TaiSettings settings = appContext != null ? new TaiSettings(appContext) : null;
+        StringBuilder endpoint = new StringBuilder();
+        endpoint.append(localhostBaseUrl(port)).append("\n");
+        if (settings != null && TaiSettings.BIND_MODE_LAN.equals(settings.getApiBindMode())) {
+            endpoint.append(lanBaseUrl(port)).append("\n");
+        }
+        writeTextFile(ENDPOINT_FILE_PATH, endpoint.toString());
     }
 
-    private ServerSocket createLoopbackServerSocket(int preferredPort) throws IOException {
+    static ServerSocket createLoopbackServerSocket(int preferredPort, String bindMode) throws IOException {
         IOException preferredPortFailure = null;
         if (preferredPort > 0) {
             try {
-                return bindLoopback(preferredPort);
+                return bindApiAddress(preferredPort, bindMode);
             } catch (IOException e) {
                 preferredPortFailure = e;
                 Logger.logWarn(LOG_TAG, "Preferred LauncherCtl API port " + preferredPort + " unavailable; falling back to an ephemeral port: " + e.getMessage());
             }
         }
         try {
-            return bindLoopback(0);
+            return bindApiAddress(0, bindMode);
         } catch (IOException e) {
             if (preferredPortFailure != null) e.addSuppressed(preferredPortFailure);
             throw e;
         }
     }
 
-    private ServerSocket bindLoopback(int requestedPort) throws IOException {
+    private static ServerSocket bindApiAddress(int requestedPort, String bindMode) throws IOException {
         ServerSocket socket = new ServerSocket();
         socket.setReuseAddress(true);
-        socket.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), requestedPort), 16);
+        socket.bind(new InetSocketAddress(InetAddress.getByName(bindAddressForMode(bindMode)), requestedPort), 16);
         return socket;
+    }
+
+    static String bindAddressForMode(String bindMode) {
+        return TaiSettings.BIND_MODE_LAN.equals(TaiSettings.normalizeApiBindMode(bindMode)) ? "0.0.0.0" : "127.0.0.1";
     }
 
     private JSONObject buildEndpointSettings(Context context, boolean includeToken) throws JSONException {
@@ -923,19 +1281,74 @@ public class LauncherCtlApiServer {
         JSONObject data = new JSONObject();
         int configuredPort = settings.getApiPort();
         int activePort = port > 0 ? port : configuredPort;
+        String bindMode = settings.getApiBindMode();
+        String baseUrl = localhostBaseUrl(activePort);
         data.put("configuredPort", configuredPort);
         data.put("activePort", activePort);
-        data.put("baseUrl", "http://127.0.0.1:" + activePort);
-        data.put("openAiBaseUrl", "http://127.0.0.1:" + activePort + "/v1");
+        data.put("bindMode", bindMode);
+        data.put("baseUrl", baseUrl);
+        data.put("openAiBaseUrl", baseUrl + "/v1");
+        data.put("mcpCommand", "launcherctl mcp");
+        data.put("tokenRequired", true);
+        if (TaiSettings.BIND_MODE_LAN.equals(bindMode)) {
+            data.put("baseUrlLan", lanBaseUrl(activePort));
+            data.put("lanWarning", LAN_WARNING);
+        }
         data.put("endpointFile", ENDPOINT_FILE_PATH);
         data.put("tokenFile", TOKEN_FILE_PATH);
         data.put("running", running);
         data.put("usingConfiguredPort", activePort == configuredPort);
         data.put("tokenConfigured", TaiSettings.isValidApiToken(settings.getOrCreateApiToken()));
+        JSONArray supportedEndpoints = new JSONArray();
+        supportedEndpoints.put("/v1/models");
+        supportedEndpoints.put("/v1/chat/completions");
+        supportedEndpoints.put("/v1/completions");
+        supportedEndpoints.put("/v1/embeddings");
+        supportedEndpoints.put("/v1/audio/speech");
+        supportedEndpoints.put("/v1/launcher/capabilities");
+        supportedEndpoints.put("/v1/agent/tools");
+        supportedEndpoints.put("/v1/agent/route");
+        supportedEndpoints.put("/v1/agent/execute");
+        supportedEndpoints.put("/v1/events");
+        supportedEndpoints.put("/v1/events/tail");
+        supportedEndpoints.put("/v1/events/stream");
+        data.put("supportedEndpoints", supportedEndpoints);
+        data.put("embeddingsNote", "Embeddings support is model-capability dependent; check /v1/models _capabilities for text_embeddings.");
+        data.put("audioOutputNote", "Audio output returns an explicit unsupported_audio_output error until a local runner exposes generated audio.");
+        data.put("modelFormatNote", "TAI supports LiteRT-LM and MNN model packages only; GGUF/raw weights are not supported by this APK.");
         if (includeToken) {
             data.put("token", settings.getOrCreateApiToken());
         }
         return data;
+    }
+
+    static String localhostBaseUrl(int activePort) {
+        return "http://127.0.0.1:" + activePort;
+    }
+
+    static String lanBaseUrl(int activePort) {
+        return "http://" + lanAddressHost() + ":" + activePort;
+    }
+
+    private static String lanAddressHost() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                if (!networkInterface.isUp() || networkInterface.isLoopback()) continue;
+                Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress address = addresses.nextElement();
+                    if (address.isLoopbackAddress() || address.isAnyLocalAddress()) continue;
+                    String host = address.getHostAddress();
+                    if (host != null && host.indexOf(':') < 0) {
+                        return host;
+                    }
+                }
+            }
+        } catch (SocketException ignored) {
+        }
+        return "0.0.0.0";
     }
 
     private void installLauncherCtlCliScript() {
@@ -970,6 +1383,19 @@ public class LauncherCtlApiServer {
             "  fi\n" +
             "  exit $?\n" +
             "fi\n" +
+            "if [ \"$cmd\" = \"mcp\" ]; then\n" +
+            "  shift || true\n" +
+            "  if ! command -v python3 >/dev/null 2>&1; then\n" +
+            "    echo \"launcherctl mcp: missing required command: python3\" >&2\n" +
+            "    echo \"install it with: pkg install python\" >&2\n" +
+            "    exit 1\n" +
+            "  fi\n" +
+            "  if command -v launcherctl-mcp >/dev/null 2>&1; then\n" +
+            "    exec launcherctl-mcp \"$@\"\n" +
+            "  fi\n" +
+            "  echo \"launcherctl mcp: missing launcherctl-mcp helper\" >&2\n" +
+            "  exit 1\n" +
+            "fi\n" +
             "LAUNCHERCTL_DIR=\"$HOME/.launcherctl\"\n" +
             "TOKEN_FILE=\"$LAUNCHERCTL_DIR/token\"\n" +
             "ENDPOINT_FILE=\"$LAUNCHERCTL_DIR/endpoint\"\n" +
@@ -978,10 +1404,15 @@ public class LauncherCtlApiServer {
             "  exit 1\n" +
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
-            "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
+            "BASE=$(sed -n '1p' \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"-fsS --connect-timeout 2 --max-time 10\"\n" +
             "shift || true\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
+            "post_json() {\n" +
+            "  path=\"$1\"\n" +
+            "  data=\"$2\"\n" +
+            "  curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" --data \"$data\" \"$BASE$path\"\n" +
+            "}\n" +
             "RISH_DIR=\"$HOME/.rish\"\n" +
             "RISH_BIN=\"$RISH_DIR/rish\"\n" +
             "RISH_DEX=\"$RISH_DIR/rish_shizuku.dex\"\n" +
@@ -1029,6 +1460,12 @@ public class LauncherCtlApiServer {
             "  status)\n" +
             "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/status\"\n" +
             "    ;;\n" +
+            "  capabilities)\n" +
+            "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/launcher/capabilities\"\n" +
+            "    ;;\n" +
+            "  tools)\n" +
+            "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/agent/tools\"\n" +
+            "    ;;\n" +
             "  apps)\n" +
             "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/apps\"\n" +
             "    ;;\n" +
@@ -1048,7 +1485,87 @@ public class LauncherCtlApiServer {
             "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/media/art\"\n" +
             "    ;;\n" +
             "  notifications)\n" +
-            "    curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/notifications\"\n" +
+            "    sub=\"${1:-}\"\n" +
+            "    [ -n \"$sub\" ] && shift || true\n" +
+            "    case \"$sub\" in\n" +
+            "      \"\"|active)\n" +
+            "        curl $CURL_COMMON -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/notifications\"\n" +
+            "        ;;\n" +
+            "      recent)\n" +
+            "        limit=\"${1:-50}\"\n" +
+            "        [ \"$limit\" -ge 1 ] 2>/dev/null || { echo \"usage: launcherctl notifications recent [limit]\" >&2; exit 2; }\n" +
+            "        post_json /v1/notifications/recent \"{\\\"limit\\\":$limit}\"\n" +
+            "        ;;\n" +
+"      since)\n" +
+"        [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl notifications since <epoch-ms> [limit]\" >&2; exit 2; }\n" +
+"        since=\"$1\"; shift || true\n" +
+"        limit=\"${1:-200}\"\n" +
+"        [ \"$since\" -ge 0 ] 2>/dev/null || { echo \"usage: launcherctl notifications since <epoch-ms> [limit]\" >&2; exit 2; }\n" +
+"        [ \"$limit\" -ge 1 ] 2>/dev/null || { echo \"usage: launcherctl notifications since <epoch-ms> [limit]\" >&2; exit 2; }\n" +
+"        post_json /v1/notifications/since \"{\\\"since\\\":$since,\\\"limit\\\":$limit}\"\n" +
+"        ;;\n" +
+            "      search)\n" +
+            "        [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl notifications search <text>\" >&2; exit 2; }\n" +
+            "        query=\"$*\"\n" +
+            "        post_json /v1/notifications/search \"{\\\"query\\\":\\\"$(json_escape \"$query\")\\\"}\"\n" +
+            "        ;;\n" +
+            "      stats)\n" +
+            "        post_json /v1/notifications/stats \"{}\"\n" +
+            "        ;;\n" +
+            "      *)\n" +
+            "        echo \"launcherctl: unknown notifications subcommand: $sub\" >&2\n" +
+            "        echo \"usage: launcherctl notifications {active|recent|since|search|stats}\" >&2\n" +
+            "        exit 2\n" +
+            "        ;;\n" +
+            "    esac\n" +
+            "    ;;\n" +
+            "  agent)\n" +
+            "    dry_run=\"false\"\n" +
+            "    if [ \"$#\" -gt 0 ] && [ \"$1\" = \"--dry-run\" ]; then\n" +
+            "      dry_run=\"true\"\n" +
+            "      shift || true\n" +
+            "    fi\n" +
+            "    [ \"$#\" -gt 0 ] || { echo \"usage: launcherctl agent [--dry-run] <request>\" >&2; exit 2; }\n" +
+            "    REQUEST_ESCAPED=$(json_escape \"$*\")\n" +
+            "    route_json=$(post_json /v1/agent/route \"{\\\"request\\\":\\\"$REQUEST_ESCAPED\\\"}\")\n" +
+            "    printf '%s\\n' \"$route_json\"\n" +
+            "    if [ \"$dry_run\" = \"true\" ]; then\n" +
+            "      exit 0\n" +
+            "    fi\n" +
+            "    if ! command -v jq >/dev/null 2>&1; then\n" +
+            "      echo\n" +
+            "      echo \"launcherctl agent: non-dry-run requires jq to parse route output\" >&2\n" +
+            "      echo \"install it with: pkg install jq\" >&2\n" +
+            "      exit 1\n" +
+            "    fi\n" +
+            "    tool=$(printf '%s' \"$route_json\" | jq -r '.tool // empty')\n" +
+            "    arguments=$(printf '%s' \"$route_json\" | jq -c '.arguments // {}')\n" +
+            "    if [ -z \"$tool\" ]; then\n" +
+            "      echo \"launcherctl agent: route did not return a tool\" >&2\n" +
+            "      exit 1\n" +
+            "    fi\n" +
+            "    echo\n" +
+            "    post_json /v1/agent/execute \"{\\\"tool\\\":\\\"$tool\\\",\\\"arguments\\\":$arguments,\\\"confirm\\\":true}\"\n" +
+            "    ;;\n" +
+            "  mcp)\n" +
+            "    echo \"launcherctl mcp: internal dispatch error\" >&2\n" +
+            "    exit 1\n" +
+            "    ;;\n" +
+            "  events)\n" +
+            "    sub=\"${1:-}\"\n" +
+            "    [ -n \"$sub\" ] && shift || true\n" +
+            "    case \"$sub\" in\n" +
+            "      tail)\n" +
+            "        limit=\"${1:-100}\"\n" +
+            "        [ \"$limit\" -ge 1 ] 2>/dev/null || { echo \"usage: launcherctl events tail [limit]\" >&2; exit 2; }\n" +
+            "        post_json /v1/events/tail \"{\\\"limit\\\":$limit}\"\n" +
+            "        ;;\n" +
+            "      *)\n" +
+            "        echo \"launcherctl: unknown events subcommand: $sub\" >&2\n" +
+            "        echo \"usage: launcherctl events tail\" >&2\n" +
+            "        exit 2\n" +
+            "        ;;\n" +
+            "    esac\n" +
             "    ;;\n" +
             "  restart)\n" +
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/app/restart\"\n" +
@@ -1066,7 +1583,7 @@ public class LauncherCtlApiServer {
             "    curl $CURL_COMMON -X POST -H \"Authorization: Bearer $TOKEN\" \"$BASE/v1/auth/rotate\"\n" +
             "    ;;\n" +
             "  *)\n" +
-            "    echo \"usage: launcherctl {status|apps|launch|resources|media|art|notifications|restart|update-scripts|tty-doctor|token rotate}\" >&2\n" +
+            "    echo \"usage: launcherctl {status|capabilities|tools|apps|launch|resources|media|art|notifications|notifications recent|notifications since|notifications search|notifications stats|agent|mcp|events tail|restart|update-scripts|tty-doctor|token rotate}\" >&2\n" +
             "    exit 2\n" +
             "    ;;\n" +
             "esac\n";
@@ -1080,6 +1597,20 @@ public class LauncherCtlApiServer {
             }
         } catch (Exception e) {
             Logger.logErrorExtended(LOG_TAG, "Failed to install launcherctl cli: " + e.getMessage());
+        }
+    }
+
+    private void installLauncherCtlMcpScript() {
+        File loginBinary = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/login");
+        if (!loginBinary.exists()) {
+            Logger.logInfo(LOG_TAG, "Skipping launcherctl-mcp install until bootstrap is initialized.");
+            return;
+        }
+
+        try {
+            installExecutableAsset("launcherctl-mcp", LAUNCHERCTL_MCP_BIN_PATH);
+        } catch (Exception e) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to install launcherctl-mcp: " + e.getMessage());
         }
     }
 
@@ -1160,16 +1691,36 @@ public class LauncherCtlApiServer {
             "  tai downloads\n" +
             "  tai download-cancel <model-id>\n" +
             "  tai delete <model-id>\n" +
+            "  tai preflight [model] [--auto|--cpu|--gpu]\n" +
             "  tai load [model] [--auto|--cpu|--gpu]\n" +
             "  tai unload\n" +
             "  tai keep-warm [model] [--minutes N] [--auto|--cpu|--gpu]\n" +
             "  tai cancel\n" +
             "  tai doctor\n" +
             "\n" +
-            "TAI is authenticated through ~/.launcherctl and runs in the Android app process.\n" +
-            "LiteRT-LM runs in the Android app process when supported by the installed APK.\n" +
-            "Auto uses backend-specific GPU-first behavior with CPU fallback where available.\n" +
-            "Use OpenAI-compatible clients against /v1/models, /v1/chat/completions, and /v1/completions.\n" +
+            "TAI is authenticated through ~/.launcherctl and runs native AI in the isolated :tai_runtime process.\n" +
+            "LiteRT-LM and MNN load in :tai_runtime after ABI/API/library/model/memory preflight.\n" +
+            "MNN models route through the bundled MNN backend when supported by the installed APK.\n" +
+            "GGUF/raw weight files are not supported by this APK.\n" +
+            "Auto defaults to CPU on unknown devices; GPU is used automatically only after a successful device/model history.\n" +
+            "OpenAI-compatible endpoints (default bind mode is localhost):\n" +
+            "  /v1/models\n" +
+            "  /v1/chat/completions\n" +
+            "  /v1/completions\n" +
+            "  /v1/embeddings\n" +
+            "  /v1/audio/speech\n" +
+            "\n" +
+            "Point OpenAI-compatible terminal tools at this host, e.g.:\n" +
+            "  export OPENAI_BASE_URL=http://127.0.0.1:<port>/v1\n" +
+            "  export OPENAI_API_KEY=<your-token>\n" +
+            "The actual token is stored at ~/.launcherctl/token (do not echo it into shell history).\n" +
+            "\n" +
+            "Security notes:\n" +
+            "  LAN mode (opt-in via settings) exposes the API to your local network. Keep your token secure.\n" +
+            "  /v1/embeddings is model-capability dependent. Not all models support embeddings.\n" +
+            "  /v1/audio/speech returns unsupported_audio_output until a local runner exposes generated audio.\n" +
+            "  Check /v1/models for capability metadata (for example, _backend and _capabilities per model).\n" +
+            "\n" +
             "Use tai --json <command> for raw API JSON.\n" +
             "EOF\n" +
             "}\n" +
@@ -1181,7 +1732,7 @@ public class LauncherCtlApiServer {
             "  exit 1\n" +
             "fi\n" +
             "TOKEN=$(cat \"$TOKEN_FILE\")\n" +
-            "BASE=$(cat \"$ENDPOINT_FILE\")\n" +
+            "BASE=$(sed -n '1p' \"$ENDPOINT_FILE\")\n" +
             "CURL_COMMON=\"--fail-with-body -sS --connect-timeout 2 --max-time 180\"\n" +
             "json_escape() { printf '%s' \"$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g'; }\n" +
             "post_json() {\n" +
@@ -1248,6 +1799,23 @@ public class LauncherCtlApiServer {
             "    [ \"$#\" -gt 0 ] || { echo \"usage: tai delete <model-id>\" >&2; exit 2; }\n" +
             "    model=$(json_escape \"$1\")\n" +
             "    post_json /v1/ai/models/delete \"{\\\"modelId\\\":\\\"$model\\\"}\"\n" +
+            "    ;;\n" +
+            "  preflight)\n" +
+            "    model=\"\"\n" +
+            "    accelerator=\"\"\n" +
+            "    while [ \"$#\" -gt 0 ]; do\n" +
+            "      case \"$1\" in\n" +
+            "        --auto) accelerator=auto ;;\n" +
+            "        --cpu) accelerator=cpu ;;\n" +
+            "        --gpu) accelerator=gpu ;;\n" +
+            "        --*) echo \"usage: tai preflight [model] [--auto|--cpu|--gpu]\" >&2; exit 2 ;;\n" +
+            "        *) [ -z \"$model\" ] || { echo \"usage: tai preflight [model] [--auto|--cpu|--gpu]\" >&2; exit 2; }; model=\"$1\" ;;\n" +
+            "      esac\n" +
+            "      shift\n" +
+            "    done\n" +
+            "    accel_json=\"\"\n" +
+            "    if [ -n \"$accelerator\" ]; then accel_json=\",\\\"accelerator\\\":\\\"$accelerator\\\"\"; fi\n" +
+            "    if [ -n \"$model\" ]; then model_escaped=$(json_escape \"$model\"); post_json /v1/ai/runtime/preflight \"{\\\"model\\\":\\\"$model_escaped\\\"$accel_json}\"; elif [ -n \"$accelerator\" ]; then post_json /v1/ai/runtime/preflight \"{\\\"accelerator\\\":\\\"$accelerator\\\"}\"; else post_json /v1/ai/runtime/preflight '{}'; fi\n" +
             "    ;;\n" +
             "  load)\n" +
             "    model=\"\"\n" +
@@ -1344,6 +1912,46 @@ public class LauncherCtlApiServer {
             file.setExecutable(true, false);
             file.setReadable(true, false);
         }
+    }
+
+    private void installExecutableAsset(String assetName, String path) throws IOException {
+        Context context = appContext;
+        if (context == null) {
+            throw new IOException("Application context is not available");
+        }
+        try (InputStream input = context.getAssets().open(assetName)) {
+            writeBytesFile(path, readAllBytes(input));
+        }
+        File file = new File(path);
+        if (file.exists()) {
+            file.setExecutable(true, false);
+            file.setReadable(true, false);
+        }
+    }
+
+    private void writeBytesFile(String path, byte[] content) throws IOException {
+        File file = new File(path);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Failed to create dir for " + path);
+        }
+        try (FileOutputStream stream = new FileOutputStream(file, false)) {
+            stream.write(content);
+        }
+        file.setReadable(false, false);
+        file.setWritable(false, false);
+        file.setReadable(true, true);
+        file.setWritable(true, true);
+    }
+
+    private byte[] readAllBytes(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     private byte[] readAllBytes(File file) throws IOException {
@@ -1875,7 +2483,7 @@ public class LauncherCtlApiServer {
         }
     }
 
-    private boolean secureEquals(String expected, String actual) {
+    private static boolean secureEquals(String expected, String actual) {
         byte[] e = expected.getBytes(StandardCharsets.UTF_8);
         byte[] a = actual.getBytes(StandardCharsets.UTF_8);
         if (e.length != a.length) return false;
@@ -2027,6 +2635,214 @@ public class LauncherCtlApiServer {
         }
     }
 
+    /**
+     * Executes launcher tools by dispatching to the existing API server helpers.
+     * This is the shared execution handler used by {@link LauncherCtlAgentHandler}.
+     */
+    private class LauncherToolExecutionHandler implements LauncherToolRegistry.ToolExecutionHandler {
+        private final Context context;
+
+        LauncherToolExecutionHandler(Context context) {
+            this.context = context.getApplicationContext();
+        }
+
+        @NonNull
+        @Override
+        public LauncherToolRegistry.ToolExecutionResult execute(
+            @NonNull LauncherToolRegistry.ToolMetadata tool,
+            @NonNull JSONObject arguments
+        ) throws Exception {
+            switch (tool.name) {
+                case LauncherToolRegistry.TOOL_CAPABILITIES_GET:
+                    return wrapExecutionResult(buildLauncherCapabilities(context));
+                case LauncherToolRegistry.TOOL_APPS_SEARCH:
+                    return wrapExecutionResult(buildAppsSearchResponse(arguments));
+                case LauncherToolRegistry.TOOL_APPS_LAUNCH:
+                    return wrapExecutionResult(runAppLaunch(context, arguments.toString()));
+                case LauncherToolRegistry.TOOL_NOTIFICATIONS_RECENT:
+                    return wrapExecutionResult(buildNotificationsRecent(arguments.toString()));
+                case LauncherToolRegistry.TOOL_NOTIFICATIONS_SINCE:
+                    return wrapExecutionResult(buildNotificationsSince(arguments.toString()));
+                case LauncherToolRegistry.TOOL_NOTIFICATIONS_SEARCH:
+                    return wrapExecutionResult(buildNotificationsSearch(arguments.toString()));
+                case LauncherToolRegistry.TOOL_NOTIFICATIONS_STATS:
+                    return wrapExecutionResult(buildNotificationsStats(arguments.toString()));
+                case LauncherToolRegistry.TOOL_MEDIA_NOW_PLAYING:
+                    return wrapExecutionResult(buildNowPlaying());
+                case LauncherToolRegistry.TOOL_SYSTEM_RESOURCES:
+                    return wrapExecutionResult(buildSystemResources(context));
+                case LauncherToolRegistry.TOOL_INTENT_OPEN:
+                    return wrapExecutionResult(runIntentOpen(context, arguments));
+                case LauncherToolRegistry.TOOL_MEMORY_WRITE:
+                    return wrapExecutionResult(runMemoryWrite(arguments));
+                case LauncherToolRegistry.TOOL_MEMORY_SEARCH:
+                    return wrapExecutionResult(runMemorySearch(arguments));
+                case LauncherToolRegistry.TOOL_EVENTS_TAIL:
+                    return wrapExecutionResult(buildEventsTail(arguments.toString()));
+                case LauncherToolRegistry.TOOL_USER_CONFIRM:
+                    return wrapExecutionResult(buildUserConfirm(arguments));
+                default:
+                    return LauncherToolRegistry.ToolExecutionResult.error(501, "not_implemented",
+                        "Tool '" + tool.name + "' is registered but not yet executable");
+            }
+        }
+
+        @NonNull
+        private LauncherToolRegistry.ToolExecutionResult wrapExecutionResult(@Nullable JSONObject result) {
+            if (result == null) {
+                return LauncherToolRegistry.ToolExecutionResult.error(500, "execution_failed", "Tool returned null");
+            }
+            boolean ok = result.optBoolean("ok", false);
+            int statusCode = result.optInt("_statusCode", ok ? 200 : 500);
+            if (ok && statusCode >= 200 && statusCode < 300) {
+                return LauncherToolRegistry.ToolExecutionResult.success(result);
+            }
+            String errorCode = result.optString("error", "execution_failed");
+            String message = result.optString("message", "Tool execution failed");
+            return LauncherToolRegistry.ToolExecutionResult.error(statusCode, errorCode, message);
+        }
+    }
+
+    private JSONObject buildAppsSearchResponse(JSONObject arguments) throws JSONException {
+        String query = arguments.optString("query", "").trim();
+        int limit = clampInt(arguments.optInt("limit", 50), 1, 200);
+        if (query.isEmpty()) {
+            JSONObject error = jsonError("bad_request", "Missing search query");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        List<LauncherAppEntry> apps = LauncherAppDataProvider.getInstance(appContext).getAllAppsBlocking();
+        JSONObject data = new JSONObject();
+        JSONArray results = new JSONArray();
+        String lowerQuery = query.toLowerCase(Locale.US);
+        int count = 0;
+        for (LauncherAppEntry entry : apps) {
+            if (count >= limit) break;
+            String label = entry.label == null ? "" : entry.label.toLowerCase(Locale.US);
+            String pkg = entry.appRef.packageName.toLowerCase(Locale.US);
+            String activity = entry.appRef.activityName == null ? "" : entry.appRef.activityName.toLowerCase(Locale.US);
+            if (label.contains(lowerQuery) || pkg.contains(lowerQuery) || activity.contains(lowerQuery)) {
+                JSONObject item = new JSONObject();
+                item.put("label", entry.label);
+                item.put("packageName", entry.appRef.packageName);
+                item.put("activityName", entry.appRef.activityName == null ? "" : entry.appRef.activityName);
+                item.put("stableId", entry.appRef.stableId());
+                results.put(item);
+                count++;
+            }
+        }
+        data.put("ok", true);
+        data.put("query", query);
+        data.put("count", results.length());
+        data.put("apps", results);
+        return data;
+    }
+
+    private JSONObject runIntentOpen(Context context, JSONObject arguments) throws JSONException {
+        String action = arguments.optString("action", "android.intent.action.VIEW");
+        String data = arguments.optString("data", "").trim();
+        if (data.isEmpty()) {
+            JSONObject error = jsonError("bad_request", "Missing intent data URI");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        Intent intent = new Intent(action, Uri.parse(data));
+        String packageName = arguments.optString("package", "").trim();
+        String component = arguments.optString("component", "").trim();
+        if (!packageName.isEmpty()) {
+            intent.setPackage(packageName);
+        }
+        if (!component.isEmpty()) {
+            ComponentName cn = ComponentName.unflattenFromString(component);
+            if (cn != null) {
+                intent.setComponent(cn);
+            }
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        JSONObject extras = arguments.optJSONObject("extras");
+        if (extras != null) {
+            Iterator<String> keys = extras.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                Object value = extras.opt(key);
+                if (value instanceof String) {
+                    intent.putExtra(key, (String) value);
+                } else if (value instanceof Boolean) {
+                    intent.putExtra(key, (Boolean) value);
+                } else if (value instanceof Integer) {
+                    intent.putExtra(key, (Integer) value);
+                } else if (value instanceof Long) {
+                    intent.putExtra(key, (Long) value);
+                }
+            }
+        }
+        try {
+            context.startActivity(intent);
+        } catch (android.content.ActivityNotFoundException e) {
+            JSONObject error = jsonError("activity_not_found", "No activity found for intent: " + data);
+            error.put("_statusCode", 404);
+            return error;
+        }
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("action", action);
+        result.put("data", data);
+        return result;
+    }
+
+    private JSONObject runMemoryWrite(JSONObject arguments) throws JSONException {
+        String namespace = arguments.optString("namespace", "agent").trim();
+        String key = arguments.optString("key", "").trim();
+        String value = arguments.optString("value", "");
+        if (namespace.isEmpty() || key.isEmpty()) {
+            JSONObject error = jsonError("bad_request", "Missing namespace or key");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        LauncherCtlMemoryStore.getInstance().write(namespace, key, value);
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("namespace", namespace);
+        result.put("key", key);
+        result.put("value", value);
+        return result;
+    }
+
+    private JSONObject runMemorySearch(JSONObject arguments) throws JSONException {
+        String namespace = arguments.optString("namespace", "agent").trim();
+        String query = arguments.optString("query", "").trim();
+        int limit = clampInt(arguments.optInt("limit", 10), 1, 100);
+        if (namespace.isEmpty() || query.isEmpty()) {
+            JSONObject error = jsonError("bad_request", "Missing namespace or query");
+            error.put("_statusCode", 400);
+            return error;
+        }
+        List<LauncherCtlMemoryStore.MemoryEntry> entries = LauncherCtlMemoryStore.getInstance().search(namespace, query, limit);
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("namespace", namespace);
+        data.put("query", query);
+        data.put("count", entries.size());
+        JSONArray array = new JSONArray();
+        for (LauncherCtlMemoryStore.MemoryEntry entry : entries) {
+            array.put(entry.toJson());
+        }
+        data.put("entries", array);
+        return data;
+    }
+
+    private JSONObject buildUserConfirm(JSONObject arguments) throws JSONException {
+        String message = arguments.optString("message", "Confirm?");
+        String risk = arguments.optString("risk", "medium");
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("confirmed", false);
+        result.put("message", message);
+        result.put("risk", risk);
+        result.put("note", "Confirmation must be obtained by the caller before executing the action");
+        return result;
+    }
+
     private static class HttpRequest {
         String method;
         String path;
@@ -2034,7 +2850,7 @@ public class LauncherCtlApiServer {
         String body;
     }
 
-    private static class HttpResponse {
+    static class HttpResponse {
         final int statusCode;
         final String contentType;
         final byte[] body;

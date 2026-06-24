@@ -42,6 +42,7 @@ public final class TaiModelDownloadService extends Service {
     public static final String EXTRA_CONTEXT_WINDOW = "context_window";
     public static final String EXTRA_RECOMMENDED_RAM_GB = "recommended_ram_gb";
     public static final String EXTRA_SHA256 = "sha256";
+    public static final String EXTRA_EXPECTED_SIZE_BYTES = "expected_size_bytes";
 
     private static final String CHANNEL_ID = "termux_ai_model_downloads";
     private static final int NOTIFICATION_ID = 24100;
@@ -49,6 +50,8 @@ public final class TaiModelDownloadService extends Service {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile int activeDownloads;
+    private long lastNotificationUpdateMs;
+    private String lastNotificationStatus = "";
 
     public static void requestCancel(@NonNull String modelId) { CANCELLED_MODELS.add(modelId); }
     public static boolean isCancelled(@NonNull String modelId) { return CANCELLED_MODELS.contains(modelId); }
@@ -63,7 +66,9 @@ public final class TaiModelDownloadService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         ensureChannel();
-        startForeground(NOTIFICATION_ID, buildNotification("TAI model download", "Preparing download", 0L, 0L, true));
+        if (activeDownloads <= 0) {
+            startForeground(NOTIFICATION_ID, buildNotification("TAI model download", "Preparing download", 0L, 0L, true));
+        }
         if (intent == null || !ACTION_DOWNLOAD.equals(intent.getAction())) {
             stopSelf(startId);
             return START_NOT_STICKY;
@@ -92,8 +97,6 @@ public final class TaiModelDownloadService extends Service {
         String url = intent.getStringExtra(EXTRA_URL);
         String outputPath = intent.getStringExtra(EXTRA_OUTPUT_PATH);
         if (transferId == null || modelId == null || url == null || outputPath == null) return;
-        clearCancellation(modelId);
-
         LinkedHashSet<String> capabilities = new LinkedHashSet<>();
         String[] rawCapabilities = intent.getStringArrayExtra(EXTRA_CAPABILITIES);
         if (rawCapabilities != null) {
@@ -104,39 +107,57 @@ public final class TaiModelDownloadService extends Service {
 
         TaiModelStore store = new TaiModelStore(this);
         TaiModelDownloader downloader = new TaiModelDownloader(this, store);
-        downloader.runDownload(
-            transferId,
-            modelId,
-            url,
-            new File(outputPath),
-            valueOrEmpty(intent.getStringExtra(EXTRA_DISPLAY_NAME)),
-            valueOrEmpty(intent.getStringExtra(EXTRA_LICENSE)),
-            capabilities,
-            valueOrEmpty(intent.getStringExtra(EXTRA_BACKEND)),
-            valueOrEmpty(intent.getStringExtra(EXTRA_FORMAT)),
-            valueOrEmpty(intent.getStringExtra(EXTRA_ARCHITECTURE)),
-            valueOrEmpty(intent.getStringExtra(EXTRA_QUANTIZATION)),
-            intent.getIntExtra(EXTRA_CONTEXT_WINDOW, 4096),
-            intent.getIntExtra(EXTRA_RECOMMENDED_RAM_GB, 0),
-            valueOrEmpty(intent.getStringExtra(EXTRA_SHA256)),
-            intent.getStringExtra(EXTRA_AUTH_TOKEN),
-            this::updateProgressNotification
-        );
+        try {
+            downloader.runDownload(
+                transferId,
+                modelId,
+                url,
+                new File(outputPath),
+                valueOrEmpty(intent.getStringExtra(EXTRA_DISPLAY_NAME)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_LICENSE)),
+                capabilities,
+                valueOrEmpty(intent.getStringExtra(EXTRA_BACKEND)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_FORMAT)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_ARCHITECTURE)),
+                valueOrEmpty(intent.getStringExtra(EXTRA_QUANTIZATION)),
+                intent.getIntExtra(EXTRA_CONTEXT_WINDOW, 4096),
+                intent.getIntExtra(EXTRA_RECOMMENDED_RAM_GB, 0),
+                valueOrEmpty(intent.getStringExtra(EXTRA_SHA256)),
+                intent.getLongExtra(EXTRA_EXPECTED_SIZE_BYTES, 0L),
+                intent.getStringExtra(EXTRA_AUTH_TOKEN),
+                this::updateProgressNotification
+            );
+        } finally {
+            clearCancellation(modelId);
+        }
     }
 
     private void updateProgressNotification(@NonNull JSONObject transfer) {
         String modelId = transfer.optString("modelId", "model");
-        String status = transfer.optString("status", "running");
+        String status = transfer.optString("status", TaiModelStore.STATE_DOWNLOADING);
         long bytesRead = transfer.optLong("bytesRead", 0L);
         long totalBytes = transfer.optLong("totalBytes", 0L);
+        long now = android.os.SystemClock.elapsedRealtime();
+        boolean terminal = TaiModelStore.STATE_INSTALLED.equals(status)
+            || TaiModelStore.STATE_FAILED.equals(status)
+            || TaiModelStore.STATE_CANCELLED.equals(status);
+        boolean statusChanged = !status.equals(lastNotificationStatus);
+        if (!terminal && !statusChanged && now - lastNotificationUpdateMs < 750L) return;
+        lastNotificationUpdateMs = now;
+        lastNotificationStatus = status;
         String title = "TAI downloading " + modelId;
         String text;
-        if ("complete".equals(status)) {
+        if (TaiModelStore.STATE_INSTALLED.equals(status)) {
             title = "TAI model downloaded";
             text = modelId + " is ready";
-        } else if ("failed".equals(status)) {
+        } else if (TaiModelStore.STATE_FAILED.equals(status)) {
             title = "TAI model download failed";
-            text = transfer.optString("error", "Download failed");
+            text = formatErrorForNotification(transfer.optString("error", "Download failed"));
+        } else if (TaiModelStore.STATE_CANCELLED.equals(status)) {
+            title = "TAI model download cancelled";
+            text = modelId + " can be retried later";
+        } else if (TaiModelStore.STATE_VERIFYING.equals(status)) {
+            text = "Verifying downloaded model";
         } else if (totalBytes > 0L) {
             text = formatPercent(bytesRead, totalBytes) + " - " + formatBytes(bytesRead) + " of " + formatBytes(totalBytes);
         } else {
@@ -144,7 +165,20 @@ public final class TaiModelDownloadService extends Service {
         }
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
-            manager.notify(NOTIFICATION_ID, buildNotification(title, text, bytesRead, totalBytes, "queued".equals(status) || "running".equals(status)));
+            manager.notify(NOTIFICATION_ID, buildNotification(title, text, bytesRead, totalBytes,
+                TaiModelStore.STATE_QUEUED.equals(status)
+                    || TaiModelStore.STATE_DOWNLOADING.equals(status)
+                    || TaiModelStore.STATE_VERIFYING.equals(status)));
+        }
+    }
+
+    @NonNull
+    private String formatErrorForNotification(@NonNull String error) {
+        switch (error) {
+            case "insecure_url":
+                return "Insecure URL: HTTPS required";
+            default:
+                return error;
         }
     }
 

@@ -96,35 +96,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setIntStoredAsString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_BUTTON_COUNT, value, false);
     }
 
-    public int getAppLauncherSearchTolerance() {
-        String mode = getAppLauncherSearchMode();
-        if (mode == null || mode.trim().isEmpty()) {
-            int tolerance = SharedPreferenceUtils.getIntStoredAsString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SEARCH_TOLERANCE, TERMUX_APP.DEFAULT_APP_LAUNCHER_SEARCH_TOLERANCE);
-            return DataUtils.clamp(tolerance, 0, 100);
-        }
-        switch (mode) {
-            case "strict":
-                return 85;
-            case "loose":
-                return 55;
-            case "balanced":
-            default:
-                return 70;
-        }
-    }
-
-    public void setAppLauncherSearchTolerance(int value) {
-        SharedPreferenceUtils.setIntStoredAsString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SEARCH_TOLERANCE, value, false);
-    }
-
-    public String getAppLauncherSearchMode() {
-        return SharedPreferenceUtils.getString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SEARCH_MODE, TERMUX_APP.DEFAULT_APP_LAUNCHER_SEARCH_MODE, true);
-    }
-
-    public void setAppLauncherSearchMode(String value) {
-        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_SEARCH_MODE, value, false);
-    }
-
     public String getAppLauncherInputChar() {
         String value = SharedPreferenceUtils.getString(
             mSharedPreferences,
@@ -162,13 +133,23 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setFloat(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_BAR_HEIGHT, value, false);
     }
 
-    public boolean isAppLauncherCompactDockEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_COMPACT_DOCK,
-            TERMUX_APP.DEFAULT_APP_LAUNCHER_COMPACT_DOCK);
+    public String getAppLauncherDockStyle() {
+        String value = SharedPreferenceUtils.getString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_DOCK_STYLE,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_DOCK_STYLE,
+            true
+        );
+        return normalizeAppLauncherDockStyle(value);
     }
 
-    public void setAppLauncherCompactDockEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_COMPACT_DOCK, value, false);
+    public void setAppLauncherDockStyle(String value) {
+        SharedPreferenceUtils.setString(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_DOCK_STYLE,
+            normalizeAppLauncherDockStyle(value),
+            false
+        );
     }
 
     public boolean isAppLauncherDisplayAppNamesEnabled() {
@@ -186,6 +167,22 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     public void setAppLauncherBwIconsEnabled(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_BW_ICONS, value, false);
+    }
+
+    public boolean isAppLauncherUnifyIconsEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_UNIFY_ICONS, TERMUX_APP.DEFAULT_APP_LAUNCHER_UNIFY_ICONS);
+    }
+
+    public void setAppLauncherUnifyIconsEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_UNIFY_ICONS, value, false);
+    }
+
+    public boolean isAppLauncherIconShadowEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_ICON_SHADOW, TERMUX_APP.DEFAULT_APP_LAUNCHER_ICON_SHADOW);
+    }
+
+    public void setAppLauncherIconShadowEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_ICON_SHADOW, value, false);
     }
 
     public String getAppLauncherIconPackPackage() {
@@ -267,6 +264,18 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_NOTIFICATION_DOTS, value, false);
     }
 
+    public boolean isAppLauncherMostUsedPageEnabled() {
+        return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_MOST_USED_PAGE,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_MOST_USED_PAGE
+        );
+    }
+
+    public void setAppLauncherMostUsedPageEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_MOST_USED_PAGE, value, false);
+    }
+
     public boolean isAppLauncherAzRowEnabled() {
         return isAppLauncherAppsRowEnabled() && SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_AZ_ROW_ENABLED,
             TERMUX_APP.DEFAULT_APP_LAUNCHER_AZ_ROW_ENABLED);
@@ -338,6 +347,19 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             case TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF:
             default:
                 return TERMUX_APP.APP_LAUNCHER_AZ_LOCK_METHOD_OFF;
+        }
+    }
+
+    public static String normalizeAppLauncherDockStyle(@Nullable String value) {
+        if (value == null) {
+            return TERMUX_APP.DEFAULT_APP_LAUNCHER_DOCK_STYLE;
+        }
+        switch (value) {
+            case TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE:
+                return TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE;
+            case TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_DEFAULT:
+            default:
+                return TERMUX_APP.APP_LAUNCHER_DOCK_STYLE_DEFAULT;
         }
     }
 
@@ -594,6 +616,15 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     public void setExtraKeysBlurRadius(int value) {
         SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_EXTRAKEYS_BLUR_RADIUS, Math.max(value, 0), false);
+    }
+
+    public int getDockGlassGrain() {
+        int grain = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_DOCK_GLASS_GRAIN, TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN);
+        return DataUtils.clamp(grain, 0, 100);
+    }
+
+    public void setDockGlassGrain(int value) {
+        SharedPreferenceUtils.setInt(mSharedPreferences, TERMUX_APP.KEY_DOCK_GLASS_GRAIN, DataUtils.clamp(value, 0, 100), false);
     }
 
     public int getAppBarOpacity() {

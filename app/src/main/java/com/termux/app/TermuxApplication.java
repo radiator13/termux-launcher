@@ -6,6 +6,7 @@ import android.content.Context;
 import com.jakewharton.processphoenix.ProcessPhoenix;
 import com.termux.BuildConfig;
 import com.termux.shared.errors.Error;
+import com.termux.shared.android.ProcessUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxBootstrap;
 import com.termux.shared.termux.TermuxConstants;
@@ -33,6 +34,10 @@ public class TermuxApplication extends Application {
         TermuxCrashUtils.setDefaultCrashHandler(this);
         // Set log config for the app
         setLogConfig(context);
+        if (isTaiRuntimeProcess(context)) {
+            Logger.logInfo(LOG_TAG, "Starting TAI runtime process");
+            return;
+        }
         Logger.logDebug("Starting Application");
         // Set TermuxBootstrap.TERMUX_APP_PACKAGE_MANAGER and TermuxBootstrap.TERMUX_APP_PACKAGE_VARIANT
         TermuxBootstrap.setTermuxPackageManagerAndVariant(BuildConfig.TERMUX_PACKAGE_VARIANT);
@@ -80,5 +85,10 @@ public class TermuxApplication extends Application {
         if (preferences == null)
             return;
         preferences.setLogLevel(null, preferences.getLogLevel());
+    }
+
+    private boolean isTaiRuntimeProcess(Context context) {
+        String processName = ProcessUtils.getAppProcessNameForPid(context, android.os.Process.myPid());
+        return processName != null && processName.endsWith(":tai_runtime");
     }
 }

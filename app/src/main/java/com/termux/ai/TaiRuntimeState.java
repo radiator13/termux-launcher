@@ -148,4 +148,29 @@ public final class TaiRuntimeState {
         }
         return json;
     }
+
+    @NonNull
+    public static TaiRuntimeState fromJson(@Nullable JSONObject json) {
+        if (json == null) {
+            return new TaiRuntimeState(false, null, "tai-runtime-service", "Runtime status unavailable.");
+        }
+        return new TaiRuntimeState(
+            json.optBoolean("loaded", false),
+            json.isNull("loadedModelId") ? null : json.optString("loadedModelId", null),
+            json.optString("runtimeName", "tai-runtime-service"),
+            json.optString("state", json.optBoolean("loaded", false) ? "loaded" : "unloaded"),
+            json.optString("status", ""),
+            json.optString("backend", "none"),
+            json.isNull("backendFallbackReason") ? null : json.optString("backendFallbackReason", null),
+            json.isNull("loadedModelPath") ? null : json.optString("loadedModelPath", null),
+            json.optBoolean("activeGeneration", false),
+            json.isNull("activeGenerationId") ? null : json.optString("activeGenerationId", null),
+            json.optLong("activeGenerationStartedAtMs", 0L),
+            json.optLong("keepWarmUntilMs", 0L),
+            json.optLong("idleUnloadAtMs", 0L),
+            json.optLong("loadedAtMs", 0L),
+            json.optLong("lastUsedAtMs", 0L),
+            json
+        );
+    }
 }

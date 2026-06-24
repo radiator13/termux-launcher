@@ -4,12 +4,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.View;
+import android.view.Window;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import com.termux.R;
+import com.termux.app.fragments.settings.PillPreference;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
+import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.activities.ReportActivity;
 import com.termux.shared.file.FileUtils;
@@ -28,11 +34,13 @@ import com.termux.shared.termux.TermuxUtils;
 import com.termux.shared.termux.theme.TermuxThemeUtils;
 import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
+import com.termux.shared.theme.ThemeUtils;
 
 public class SettingsActivity extends AppCompatActivity {
 
     public static final String EXTRA_INITIAL_FRAGMENT = "settings_initial_fragment";
     public static final String EXTRA_INITIAL_TITLE_RES = "settings_initial_title_res";
+    public static final String EXTRA_OPEN_TAI_SETTINGS = "open_tai_settings";
 
     public static Intent createFragmentIntent(@NonNull Context context, @NonNull Class<? extends Fragment> fragmentClass, int titleResId) {
         Intent intent = new Intent(context, SettingsActivity.class);
@@ -50,8 +58,18 @@ public class SettingsActivity extends AppCompatActivity {
         setTheme(R.style.Theme_TermuxApp_DayNight_NoActionBar);
         TermuxThemeManager.applyThemeOverlays(this);
         super.onCreate(savedInstanceState);
+        registerSettingsStyleCallbacks();
         setContentView(R.layout.activity_settings);
+        applySettingsSystemBars();
         if (savedInstanceState == null) {
+            // QA deep-link entry path:
+            // adb shell am start -n com.termux/.app.activities.SettingsActivity --ez open_tai_settings true
+            Intent intent = getIntent();
+            if (intent.getBooleanExtra(EXTRA_OPEN_TAI_SETTINGS, false)) {
+                intent.putExtra(EXTRA_INITIAL_FRAGMENT,
+                    "com.termux.app.fragments.settings.termux.TaiPreferencesFragment");
+                intent.putExtra(EXTRA_INITIAL_TITLE_RES, R.string.termux_ai_preferences_title);
+            }
             Fragment initialFragment = buildInitialFragment();
             getSupportFragmentManager().beginTransaction().replace(R.id.settings, initialFragment).commit();
         }
@@ -59,6 +77,60 @@ public class SettingsActivity extends AppCompatActivity {
         AppCompatActivityUtils.setShowBackButtonInActionBar(this, true);
         int titleResId = getIntent().getIntExtra(EXTRA_INITIAL_TITLE_RES, R.string.title_activity_termux_settings);
         setTitle(titleResId);
+    }
+
+    /**
+     * Applies the TL handoff styling to every settings page so individual fragments do not
+     * each need to opt in:
+     * <ul>
+     *   <li>Row/category/card layouts (applied in onFragmentCreated, before the list adapter
+     *       is built, so older sub-screens such as Debugging / Terminal IO / Terminal view
+     *       pick up the redesigned rows too).</li>
+     *   <li>Dividers (applied in onFragmentViewCreated, once the list exists): inset,
+     *       icon-aligned dividers between root rows, and none on sub-screens where sections
+     *       are separated by the category hairline instead.</li>
+     * </ul>
+     */
+    private void registerSettingsStyleCallbacks() {
+        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
+            new androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
+                @Override
+                public void onFragmentCreated(@NonNull androidx.fragment.app.FragmentManager fm,
+                                              @NonNull Fragment fragment, Bundle savedInstanceState) {
+                    if (!(fragment instanceof PreferenceFragmentCompat)) return;
+                    PreferenceFragmentCompat preferenceFragment = (PreferenceFragmentCompat) fragment;
+                    if (preferenceFragment.getPreferenceScreen() == null) return;
+                    if (fragment instanceof RootPreferencesFragment) {
+                        SettingsLayoutUtils.applyRootLayout(preferenceFragment);
+                    } else {
+                        SettingsLayoutUtils.applyScreenLayout(preferenceFragment);
+                    }
+                }
+
+                @Override
+                public void onFragmentViewCreated(@NonNull androidx.fragment.app.FragmentManager fm,
+                                                  @NonNull Fragment fragment, @NonNull View view,
+                                                  Bundle savedInstanceState) {
+                    if (!(fragment instanceof PreferenceFragmentCompat)) return;
+                    PreferenceFragmentCompat preferenceFragment = (PreferenceFragmentCompat) fragment;
+                    if (fragment instanceof RootPreferencesFragment) {
+                        // Root rows rely on the category header hairline; a list divider here
+                        // creates the unwanted double-line seen between sections.
+                        preferenceFragment.setDivider(null);
+                        preferenceFragment.setDividerHeight(0);
+                    } else {
+                        preferenceFragment.setDivider(null);
+                        preferenceFragment.setDividerHeight(0);
+                    }
+                }
+            }, true);
+    }
+
+    private void applySettingsSystemBars() {
+        Window window = getWindow();
+        int surface = ThemeUtils.getSystemAttrColor(this, com.termux.shared.R.attr.termuxColorSurfaceBase, android.graphics.Color.BLACK);
+        window.setStatusBarColor(surface);
+        window.setNavigationBarColor(surface);
     }
 
     @NonNull
@@ -84,6 +156,7 @@ public class SettingsActivity extends AppCompatActivity {
             if (context == null)
                 return;
             setPreferencesFromResource(R.xml.root_preferences, rootKey);
+            SettingsLayoutUtils.applyRootLayout(this);
             configureTermuxAPIPreference(context);
             configureTermuxGUIPreference(context);
             configureTermuxFloatPreference(context);
@@ -91,6 +164,37 @@ public class SettingsActivity extends AppCompatActivity {
             configureTermuxWidgetPreference(context);
             configureAboutPreference(context);
             configureDonatePreference(context);
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            if (getActivity() != null) {
+                getActivity().setTitle(R.string.application_name);
+            }
+            updateShizukuPill();
+        }
+
+        private void updateShizukuPill() {
+            Preference preference = findPreference("shizuku");
+            if (!(preference instanceof PillPreference))
+                return;
+            PillPreference pillPreference = (PillPreference) preference;
+            PrivilegedBackendManager.BackendState state = PrivilegedBackendManager.getInstance().getBackendState();
+            switch (state) {
+                case READY:
+                    pillPreference.setPill("READY", PillPreference.Tone.POSITIVE);
+                    break;
+                case FALLBACK_SHELL:
+                    pillPreference.setPill("SHELL", PillPreference.Tone.POSITIVE);
+                    break;
+                case PERMISSION_DENIED:
+                    pillPreference.setPill("DENIED", PillPreference.Tone.NEGATIVE);
+                    break;
+                default:
+                    pillPreference.setPill("OFF", PillPreference.Tone.NEUTRAL);
+                    break;
+            }
         }
 
         private void configureTermuxAPIPreference(@NonNull Context context) {

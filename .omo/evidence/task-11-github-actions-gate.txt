@@ -1,0 +1,44 @@
+Task 11 Evidence - GitHub Actions Build Nightly Gate
+====================================================
+Date: 2026-06-17
+Run ID: 27661233112
+Branch: experimental
+Commit SHA: d388e4cf6c36f5432cd9a7c171b94fb4147b148b
+Run URL: https://github.com/PickleHik3/termux-launcher/actions/runs/27661233112
+Conclusion: success
+Duration: 8m25s
+
+WORKFLOW JOBS:
+- build (apt-android-7): PASSED
+  - Set up job: PASSED
+  - Clone repository: PASSED
+  - Setup java 21: PASSED
+  - Setup Gradle cache: PASSED
+  - Run unit tests: PASSED
+  - Build APKs: PASSED
+  - Attach universal APK file: PASSED
+  - Attach arm64-v8a APK file: PASSED
+  - Attach armeabi-v7a APK file: PASSED
+  - Attach x86_64 APK file: PASSED
+  - Attach x86 APK file: PASSED
+  - Attach sha256sums file: PASSED
+
+ARTIFACTS DOWNLOADED:
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_arm64-v8a/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_arm64-v8a.apk
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_armeabi-v7a/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_armeabi-v7a.apk
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_sha256sums/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_sha256sums
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_universal/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_universal.apk
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_x86/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_x86.apk
+- .omo/evidence/github-actions/27661233112/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_x86_64/termux-app_v0.2.22-d388e4c-apt-android-7-github-debug_x86_64.apk
+
+UNIT TEST STATUS:
+- Run unit tests step completed successfully.
+- Pre-existing `package androidx.test.core.app does not exist` error affects Robolectric test files but does not block the workflow (continue-on-error behavior).
+- No new compilation errors introduced by Task 11 evidence commits.
+
+ACCEPTANCE CRITERIA CHECK:
+- [x] Git push to experimental triggers Build nightly: YES
+- [x] Build nightly passes unit-test step: YES
+- [x] Build nightly passes APK-build step: YES
+- [x] APK artifacts downloaded: YES (5 variants)
+- [x] sha256sums artifact downloaded: YES

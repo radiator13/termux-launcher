@@ -4,26 +4,41 @@ import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
 import android.provider.Settings;
 import android.widget.Toast;
 
 import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.app.TermuxActivity;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
+import com.termux.app.fragments.settings.PillPreference;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
+import com.termux.app.launcher.PinnedAppsEditor;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.notifications.LauncherNotificationAccess;
+import com.termux.shared.android.PermissionUtils;
+import com.termux.shared.termux.TermuxConstants;
 
 @Keep
-public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
+public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
+
+    private static final String KEY_STORAGE = "app_launcher_storage_access";
+    private static final String KEY_NOTIFICATION_ACCESS = "app_launcher_notification_access";
+    private static final String KEY_ACCESSIBILITY_LOCK = "app_launcher_accessibility_lock_access";
+    private static final String KEY_NOTIFICATION_SETTINGS = "app_launcher_notification_settings";
+    private static final String KEY_APP_PERMISSIONS = "app_launcher_app_permissions";
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -33,7 +48,9 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxStylePreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
-        LauncherIconPackPreferenceController.configure(this, context);
+        SettingsLayoutUtils.applyScreenLayout(this);
+        configurePermissionActions(context);
+        updatePermissionSummaries(context);
 
         SwitchPreferenceCompat appsRowPreference = findPreference("app_launcher_apps_row_enabled");
         SwitchPreferenceCompat azRowPreference = findPreference("app_launcher_az_row_enabled");
@@ -76,6 +93,15 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
             });
         }
 
+        Preference defaultAppsPreference = findPreference("app_launcher_default_buttons");
+        if (defaultAppsPreference != null) {
+            defaultAppsPreference.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx != null) PinnedAppsEditor.show(ctx, null);
+                return true;
+            });
+        }
+
         Preference setHomePreference = findPreference("app_launcher_set_home");
         if (setHomePreference != null) {
             setHomePreference.setOnPreferenceClickListener(preference -> {
@@ -108,10 +134,72 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
         super.onResume();
         Context context = getContext();
         if (context == null) return;
-        LauncherIconPackPreferenceController.configure(this, context);
+        if (getActivity() != null) {
+            getActivity().setTitle(R.string.termux_launcher_preferences_title);
+        }
+        updatePermissionSummaries(context);
         SwitchPreferenceCompat notificationDotsPreference = findPreference("app_launcher_notification_dots");
         if (notificationDotsPreference != null) {
             updateNotificationDotsSummary(context, notificationDotsPreference);
+        }
+    }
+
+    private void configurePermissionActions(@NonNull Context context) {
+        setClickListener(KEY_STORAGE, preference -> {
+            Intent intent = new Intent(context, TermuxActivity.class)
+                .setAction(TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS);
+            startActivity(intent);
+            return true;
+        });
+        setClickListener(KEY_NOTIFICATION_ACCESS, preference -> {
+            openNotificationAccessSettings(context);
+            return true;
+        });
+        setClickListener(KEY_ACCESSIBILITY_LOCK, preference -> {
+            if (!startSettingsIntent(context, new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))) {
+                showSettingsUnavailable(context);
+            }
+            return true;
+        });
+        setClickListener(KEY_NOTIFICATION_SETTINGS, preference -> {
+            openNotificationSettings(context);
+            return true;
+        });
+        setClickListener(KEY_APP_PERMISSIONS, preference -> {
+            openAppDetails(context);
+            return true;
+        });
+    }
+
+    private void setClickListener(String key, Preference.OnPreferenceClickListener listener) {
+        Preference preference = findPreference(key);
+        if (preference != null) {
+            preference.setOnPreferenceClickListener(listener);
+        }
+    }
+
+    private void updatePermissionSummaries(@NonNull Context context) {
+        setStatusPill(
+            KEY_STORAGE,
+            PermissionUtils.checkAndRequestLegacyOrManageExternalStoragePermission(context, -1, true, false)
+        );
+        setStatusPill(KEY_NOTIFICATION_ACCESS, LauncherNotificationAccess.isEnabled(context));
+        setStatusPill(KEY_ACCESSIBILITY_LOCK, LauncherLockAccessibilityAccess.isEnabled(context));
+        setStatusPill(KEY_NOTIFICATION_SETTINGS, NotificationManagerCompat.from(context).areNotificationsEnabled());
+    }
+
+    private void setStatusPill(String key, boolean enabled) {
+        Preference preference = findPreference(key);
+        if (preference instanceof PillPreference) {
+            ((PillPreference) preference).setPill(
+                getString(enabled
+                    ? R.string.termux_app_launcher_access_status_on
+                    : R.string.termux_app_launcher_access_status_off),
+                enabled ? PillPreference.Tone.POSITIVE : PillPreference.Tone.NEGATIVE);
+        } else if (preference != null) {
+            preference.setSummary(enabled
+                ? R.string.termux_app_launcher_access_status_on
+                : R.string.termux_app_launcher_access_status_off);
         }
     }
 
@@ -151,6 +239,26 @@ public class LauncherPreferencesFragment extends PreferenceFragmentCompat {
             return;
         }
         Toast.makeText(context, R.string.termux_app_launcher_notification_access_unavailable, Toast.LENGTH_SHORT).show();
+    }
+
+    private void openNotificationSettings(@NonNull Context context) {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
+        if (!startSettingsIntent(context, intent)) {
+            openAppDetails(context);
+        }
+    }
+
+    private void openAppDetails(@NonNull Context context) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:" + context.getPackageName()));
+        if (!startSettingsIntent(context, intent)) {
+            showSettingsUnavailable(context);
+        }
+    }
+
+    private void showSettingsUnavailable(@NonNull Context context) {
+        Toast.makeText(context, R.string.termux_app_launcher_permission_settings_unavailable, Toast.LENGTH_SHORT).show();
     }
 
     private void showAccessibilityLockPrompt(Context context) {

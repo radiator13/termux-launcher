@@ -14,6 +14,7 @@ public final class TaiCliFormatter {
     @NonNull
     public static String format(@NonNull String command, @NonNull JSONObject data) {
         try {
+            if ("preflight".equals(command)) return formatPreflight(data);
             if (!data.optBoolean("ok", true) || data.has("error")) {
                 return formatError(data);
             }
@@ -30,6 +31,8 @@ public final class TaiCliFormatter {
                     return formatImport(data);
                 case "download":
                     return formatDownloadStarted(data);
+                case "preflight":
+                    return formatPreflight(data);
                 case "delete":
                     return formatDelete(data);
                 case "load":
@@ -247,6 +250,49 @@ public final class TaiCliFormatter {
             appendValue(out, "Idle unload", state.optLong("idleUnloadRemainingMs", 0L) > 0L ? formatDuration(state.optLong("idleUnloadRemainingMs", 0L)) : "off");
         }
         appendCompatibility(out, data);
+        return out.toString();
+    }
+
+    @NonNull
+    private static String formatPreflight(@NonNull JSONObject data) {
+        StringBuilder out = new StringBuilder();
+        out.append(data.optBoolean("ok", false) ? "Preflight passed\n" : "Preflight blocked\n");
+        JSONObject model = data.optJSONObject("model");
+        if (model != null) {
+            appendValue(out, "Model", model.optString("id", ""));
+            appendValue(out, "Backend", model.optString("backend", "") + " / " + model.optString("format", ""));
+            appendValue(out, "Recommended memory", model.optInt("recommendedRamGb", 0) > 0
+                ? model.optInt("recommendedRamGb") + " GiB" : "not specified");
+        }
+        appendValue(out, "Requested accelerator", data.optString("requestedAccelerator", ""));
+        appendValue(out, "Effective accelerator", data.optString("effectiveAccelerator", ""));
+        appendValue(out, "Message", data.optString("message", ""));
+        appendCompatibility(out, data);
+
+        JSONArray checks = data.optJSONArray("checks");
+        if (checks != null && checks.length() > 0) {
+            out.append("\nChecks\n");
+            for (int i = 0; i < checks.length(); i++) {
+                JSONObject check = checks.optJSONObject(i);
+                if (check == null) continue;
+                out.append("  ").append(check.optBoolean("ok", false) ? "OK " : "FAIL ")
+                    .append(check.optString("id", "check"));
+                String message = clean(check.optString("message", ""));
+                if (!message.isEmpty()) out.append(": ").append(message);
+                out.append('\n');
+            }
+        }
+
+        JSONArray warnings = data.optJSONArray("warnings");
+        if (warnings != null && warnings.length() > 0) {
+            out.append("\nWarnings\n");
+            for (int i = 0; i < warnings.length(); i++) {
+                JSONObject warning = warnings.optJSONObject(i);
+                if (warning == null) continue;
+                String message = clean(warning.optString("message", ""));
+                if (!message.isEmpty()) out.append("  - ").append(message).append('\n');
+            }
+        }
         return out.toString();
     }
 

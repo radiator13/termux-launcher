@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1d1714"/><rect x="30" y="30" width="40" height="40" rx="9" fill="none" stroke="#e08a6e" stroke-width="3"/><circle cx="50" cy="44" r="5.5" fill="#e08a6e"/><rect x="40" y="56" width="20" height="3.5" rx="1.75" fill="#e08a6e"/><rect x="43" y="63" width="14" height="3" rx="1.5" fill="#a99c96"/></svg></template>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inconsolata:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;}
+    body{margin:0;background:#e9e7e3;font-family:'Inconsolata',ui-monospace,monospace;}
+  </style>
+</helmet>
+
+<div style="min-height:100vh;background:#e9e7e3;padding:44px 48px 90px;font-family:'Inconsolata',monospace;color:#2b2b2b;">
+
+  <!-- HEADER -->
+  <div style="max-width:1280px;margin:0 auto 8px;">
+    <div style="font-family:'Kalam',cursive;font-weight:700;font-size:34px;line-height:1.1;">Termux:Launcher — Settings Rework</div>
+    <div style="font-family:'Kalam',cursive;font-size:20px;color:#d9805f;margin-top:2px;">Handoff wireframes · TAI (Termux AI), curated model catalog &amp; per-model parameters</div>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#6b6864;">
+      <span style="border:1.5px solid #2b2b2b;border-radius:6px;padding:2px 8px;">★ recommended</span>
+      <span style="border:1.5px solid #d9805f;color:#b85c3c;border-radius:6px;padding:2px 8px;">LiteRT</span>
+      <span style="border:1.5px solid #5f7a86;color:#46606b;border-radius:6px;padding:2px 8px;">MLC</span>
+      <span style="background:#d9805f;color:#fff;border-radius:6px;padding:2px 8px;">● active</span>
+      <span style="border:1.5px solid #2b2b2b;border-radius:6px;padding:2px 8px;">install ↓ / installed ✓ / delete</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid #2b2b2b;border-radius:6px;padding:2px 8px;">tune icon = per-model params <span style="display:flex;flex-direction:column;justify-content:center;gap:2.5px;width:16px;height:14px;"><span style="position:relative;height:2px;border-radius:2px;background:#6b6864;"><span style="position:absolute;top:-2px;left:1px;width:5px;height:5px;border-radius:50%;border:1.4px solid #6b6864;background:#fff;"></span></span><span style="position:relative;height:2px;border-radius:2px;background:#6b6864;"><span style="position:absolute;top:-2px;left:8px;width:5px;height:5px;border-radius:50%;border:1.4px solid #6b6864;background:#fff;"></span></span><span style="position:relative;height:2px;border-radius:2px;background:#6b6864;"><span style="position:absolute;top:-2px;left:4px;width:5px;height:5px;border-radius:50%;border:1.4px solid #6b6864;background:#fff;"></span></span></span></span>
+    </div>
+  </div>
+
+  <!-- ================= ROW 1 ================= -->
+  <div style="max-width:1280px;margin:40px auto 0;"><div style="font-family:'Kalam',cursive;font-weight:700;font-size:24px;">1 · Main list &amp; the TAI · Termux AI page</div></div>
+  <div style="margin:16px auto 0;display:flex;flex-wrap:wrap;gap:32px;justify-content:center;align-items:flex-start;max-width:1280px;">
+
+    <!-- MAIN LIST -->
+    <div style="width:328px;background:#fff;border:2.5px solid #2b2b2b;border-radius:30px;overflow:hidden;box-shadow:6px 6px 0 rgba(0,0,0,.12);">
+      <div style="padding:18px 18px 12px;display:flex;align-items:center;gap:12px;border-bottom:1.5px dashed #d2cfc9;"><span style="font-size:20px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:20px;">Termux:Launcher</span></div>
+      <div style="padding:10px 16px 18px;">
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:10px 2px 4px;">ASSISTANT</div>
+        <sc-for list="{{ mainTop }}" as="r" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid #efedea;">
+          <span style="width:30px;height:30px;border:1.5px solid #c9c6c1;border-radius:8px;flex:none;"></span>
+          <span style="flex:1;"><span style="font-weight:700;font-size:15px;">{{ r.t }}</span><br><span style="font-size:12px;color:#9b9893;">{{ r.s }}</span></span>
+          <sc-if value="{{ r.b }}" hint-placeholder-val="READY"><span style="font-size:11px;color:#b85c3c;border:1.2px solid #e3bcab;border-radius:20px;padding:2px 7px;">{{ r.b }}</span></sc-if>
+          <span style="color:#c9c6c1;">›</span>
+        </div></sc-for>
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:16px 2px 4px;">LAUNCHER</div>
+        <sc-for list="{{ mainMid }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid #efedea;">
+          <span style="width:30px;height:30px;border:1.5px solid #c9c6c1;border-radius:8px;flex:none;"></span>
+          <span style="flex:1;"><span style="font-weight:700;font-size:15px;">{{ r.t }}</span><br><span style="font-size:12px;color:#9b9893;">{{ r.s }}</span></span>
+          <span style="color:#c9c6c1;">›</span>
+        </div></sc-for>
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:16px 2px 4px;">SYSTEM &amp; INFO</div>
+        <sc-for list="{{ mainBot }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid #efedea;">
+          <span style="width:30px;height:30px;border:1.5px solid #c9c6c1;border-radius:8px;flex:none;"></span>
+          <span style="flex:1;"><span style="font-weight:700;font-size:15px;">{{ r.t }}</span><br><span style="font-size:12px;color:#9b9893;">{{ r.s }}</span></span>
+          <span style="color:#c9c6c1;">›</span>
+        </div></sc-for>
+      </div>
+    </div>
+
+    <!-- TAI PAGE -->
+    <div style="width:340px;background:#fff;border:2.5px solid #d9805f;border-radius:30px;overflow:hidden;box-shadow:6px 6px 0 rgba(217,128,95,.25);">
+      <div style="padding:18px 18px 12px;display:flex;align-items:center;gap:12px;border-bottom:1.5px dashed #d2cfc9;"><span style="font-size:20px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:20px;">TAI · Termux AI</span></div>
+      <div style="padding:14px 16px 18px;">
+
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:2px 2px 6px;">RUNTIME</div>
+        <div style="border:1.5px solid #2b2b2b;border-radius:14px;background:#1d1714;color:#e8d9d2;font-size:11px;line-height:1.7;padding:13px 14px;">
+          <div style="color:#e8a487;font-weight:700;">● RUNTIME · LOADED</div>
+          <div style="margin-top:6px;color:#a99c96;">device&nbsp;&nbsp;&nbsp;&nbsp;A065 · 14.9 GiB<br>accel&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cpu, gpu<br>model&nbsp;&nbsp;&nbsp;&nbsp;gemma-4-e2b-it<br>backend&nbsp;&nbsp;litert-lm<br>status&nbsp;&nbsp;&nbsp;assistant slot loaded · keep-warm<br>endpoint&nbsp;127.0.0.1:54298/v1<br>token&nbsp;&nbsp;&nbsp;&nbsp;33a634…9c4b9</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:9px;">
+          <span style="flex:1;text-align:center;background:#d9805f;color:#fff;border-radius:8px;padding:7px 0;font-size:12px;font-weight:700;">Stop</span>
+          <span style="flex:1;text-align:center;border:1.5px solid #2b2b2b;border-radius:8px;padding:7px 0;font-size:12px;">Unload</span>
+          <span style="flex:1;text-align:center;border:1.5px solid #2b2b2b;border-radius:8px;padding:7px 0;font-size:12px;">Logs</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 2px;">
+          <span style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;">MODELS</span>
+          <span style="font-size:12px;color:#9b9893;">2 installed</span>
+        </div>
+        <sc-for list="{{ installedModels }}" as="m" hint-placeholder-count="2">
+          <div style="border:1.5px solid #e0ddd8;border-radius:14px;padding:11px 12px;margin-top:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <sc-if value="{{ m.active }}" hint-placeholder-val="{{ true }}"><span style="width:8px;height:8px;border-radius:50%;background:#d9805f;flex:none;"></span></sc-if>
+              <span style="font-weight:700;font-size:14px;flex:1;line-height:1.15;">{{ m.name }}</span>
+              <span style="font-size:10px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:5px;padding:1px 6px;">{{ m.tag }}</span>
+              <span style="display:flex;flex-direction:column;justify-content:center;gap:3px;width:22px;height:22px;flex:none;border:1.4px solid #d2cfc9;border-radius:7px;padding:4px 3px;">
+                <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:1px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:8px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:4px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+              </span>
+            </div>
+            <div style="font-size:11px;color:#9b9893;margin-top:5px;">{{ m.disk }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"><sc-for list="{{ m.caps }}" as="cap" hint-placeholder-count="2"><span style="font-size:10px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:5px;padding:1px 7px;">{{ cap }}</span></sc-for></div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:9px;">
+              <sc-if value="{{ m.active }}" hint-placeholder-val="{{ true }}"><span style="background:#d9805f;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">● ACTIVE</span></sc-if>
+              <sc-if value="{{ m.idle }}" hint-placeholder-val="{{ true }}"><span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Set active</span></sc-if>
+              <span style="margin-left:auto;color:#b5503f;border:1.5px solid #e3b6ab;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Delete</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <span style="flex:1;text-align:center;background:#2b2b2b;color:#fff;border-radius:10px;padding:9px 0;font-size:13px;font-weight:700;">Browse catalog</span>
+          <span style="flex:1;text-align:center;border:1.5px solid #2b2b2b;border-radius:10px;padding:9px 0;font-size:13px;font-weight:700;">＋ Import</span>
+        </div>
+
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:18px 2px 6px;">SERVER</div>
+        <sc-for list="{{ serverRows }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #efedea;font-size:13px;"><span style="flex:1;font-weight:700;">{{ r.t }}<br><span style="font-weight:400;font-size:11px;color:#9b9893;">{{ r.s }}</span></span><span style="color:#c9c6c1;">{{ r.c }}</span></div></sc-for>
+
+        <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:18px 2px 6px;">ADVANCED</div>
+        <sc-for list="{{ advRows }}" as="r" hint-placeholder-count="4"><div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #efedea;font-size:13px;"><span style="flex:1;font-weight:700;">{{ r.t }}<br><span style="font-weight:400;font-size:11px;color:#9b9893;">{{ r.s }}</span></span><span style="color:#c9c6c1;">›</span></div></sc-for>
+      </div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div style="width:300px;align-self:flex-start;">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;color:#6b6864;margin-bottom:10px;">Models · empty state</div>
+      <div style="background:#fff;border:2.5px solid #2b2b2b;border-radius:24px;overflow:hidden;box-shadow:5px 5px 0 rgba(0,0,0,.1);">
+        <div style="padding:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;">MODELS</span><span style="font-size:12px;color:#9b9893;">0 installed</span></div>
+          <div style="border:1.5px dashed #c9c6c1;border-radius:14px;padding:20px 16px;text-align:center;margin-top:10px;">
+            <div style="font-size:26px;color:#c9c6c1;">▢</div>
+            <div style="font-size:13px;color:#6b6864;margin-top:6px;line-height:1.5;">No models yet. Download one from the catalog that fits your device, or import your own.</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <span style="flex:1;text-align:center;background:#2b2b2b;color:#fff;border-radius:10px;padding:9px 0;font-size:13px;font-weight:700;">Browse catalog</span>
+            <span style="flex:1;text-align:center;border:1.5px solid #2b2b2b;border-radius:10px;padding:9px 0;font-size:13px;font-weight:700;">＋ Import</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:'Kalam',cursive;font-size:14px;color:#6b6864;margin-top:10px;line-height:1.5;">TAI page = 4 zones: Runtime · Models (installed only) · Server · Advanced.</div>
+    </div>
+  </div>
+
+  <!-- ================= ROW 2 ================= -->
+  <div style="max-width:1280px;margin:54px auto 0;"><div style="font-family:'Kalam',cursive;font-weight:700;font-size:24px;">2 · Model catalog — download &amp; manage</div>
+  <div style="font-family:'Kalam',cursive;font-size:17px;color:#d9805f;margin-top:2px;">Filter by backend · grouped by job · short capability tags · tune icon opens per-model params</div></div>
+  <div style="margin:18px auto 0;display:flex;flex-wrap:wrap;gap:34px;justify-content:center;align-items:flex-start;max-width:1280px;">
+
+    <!-- LiteRT catalog -->
+    <div style="width:344px;background:#fff;border:2.5px solid #2b2b2b;border-radius:30px;overflow:hidden;box-shadow:6px 6px 0 rgba(0,0,0,.12);">
+      <div style="padding:16px 16px 10px;border-bottom:1.5px dashed #d2cfc9;">
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:20px;">Models</span></div>
+        <div style="display:flex;gap:6px;margin-top:12px;font-size:12px;"><span style="border:1.2px solid #c9c6c1;color:#9b9893;border-radius:14px;padding:4px 12px;">All</span><span style="background:#d9805f;color:#fff;border-radius:14px;padding:4px 12px;font-weight:700;">LiteRT-LM</span><span style="border:1.2px solid #c9c6c1;color:#9b9893;border-radius:14px;padding:4px 12px;">MLC-LLM</span></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;border:1.5px solid #d2cfc9;border-radius:10px;padding:7px 10px;font-size:13px;color:#9b9893;"><span>⌕</span><span>Search models…</span><span style="margin-left:auto;color:#b85c3c;font-weight:700;">＋ Import</span></div>
+      </div>
+      <div style="padding:8px 14px 18px;">
+        <sc-for list="{{ liteGroups }}" as="g" hint-placeholder-count="4">
+          <div style="font-family:'Kalam',cursive;font-size:13px;color:#b85c3c;font-weight:700;margin:14px 2px 2px;">{{ g.cat }}</div>
+          <sc-for list="{{ g.items }}" as="m" hint-placeholder-count="2">
+            <div style="border:1.5px solid #e0ddd8;border-radius:14px;padding:11px 12px;margin-top:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <sc-if value="{{ m.rec }}" hint-placeholder-val="{{ true }}"><span style="color:#d9805f;font-size:14px;">★</span></sc-if>
+                <span style="font-weight:700;font-size:14px;flex:1;line-height:1.15;">{{ m.name }}</span>
+                <span style="font-size:10px;color:#b85c3c;border:1.2px solid #e3bcab;border-radius:5px;padding:1px 6px;">LiteRT</span>
+                <span style="display:flex;flex-direction:column;justify-content:center;gap:3px;width:22px;height:22px;flex:none;border:1.4px solid #d2cfc9;border-radius:7px;padding:4px 3px;">
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:1px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:8px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:4px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                </span>
+              </div>
+              <div style="font-size:11px;color:#9b9893;margin-top:5px;">{{ m.meta }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"><sc-for list="{{ m.caps }}" as="cap" hint-placeholder-count="2"><span style="font-size:10px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:5px;padding:1px 7px;">{{ cap }}</span></sc-for></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:9px;">
+                <sc-if value="{{ m.isActive }}" hint-placeholder-val="{{ true }}"><span style="background:#d9805f;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">● ACTIVE</span><span style="margin-left:auto;color:#b5503f;border:1.5px solid #e3b6ab;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Delete</span></sc-if>
+                <sc-if value="{{ m.isInstalled }}" hint-placeholder-val="{{ true }}"><span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Set active</span><span style="margin-left:auto;color:#b5503f;border:1.5px solid #e3b6ab;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Delete</span></sc-if>
+                <sc-if value="{{ m.isAvailable }}" hint-placeholder-val="{{ true }}"><span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Install ↓</span></sc-if>
+                <sc-if value="{{ m.isDownloading }}" hint-placeholder-val="{{ true }}"><span style="flex:1;height:7px;border:1.5px solid #2b2b2b;border-radius:5px;overflow:hidden;"><span style="display:block;width:60%;height:100%;background:#d9805f;"></span></span><span style="font-size:11px;font-weight:700;">60%</span><span style="font-size:12px;color:#9b9893;">✕</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- MLC catalog -->
+    <div style="width:344px;background:#fff;border:2.5px solid #2b2b2b;border-radius:30px;overflow:hidden;box-shadow:6px 6px 0 rgba(0,0,0,.12);">
+      <div style="padding:16px 16px 10px;border-bottom:1.5px dashed #d2cfc9;">
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:20px;">Models</span></div>
+        <div style="display:flex;gap:6px;margin-top:12px;font-size:12px;"><span style="border:1.2px solid #c9c6c1;color:#9b9893;border-radius:14px;padding:4px 12px;">All</span><span style="border:1.2px solid #c9c6c1;color:#9b9893;border-radius:14px;padding:4px 12px;">LiteRT-LM</span><span style="background:#5f7a86;color:#fff;border-radius:14px;padding:4px 12px;font-weight:700;">MLC-LLM</span></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;border:1.5px solid #d2cfc9;border-radius:10px;padding:7px 10px;font-size:13px;color:#9b9893;"><span>⌕</span><span>Search models…</span><span style="margin-left:auto;color:#46606b;font-weight:700;">＋ Import</span></div>
+      </div>
+      <div style="padding:8px 14px 18px;">
+        <sc-for list="{{ mlcGroups }}" as="g" hint-placeholder-count="4">
+          <div style="font-family:'Kalam',cursive;font-size:13px;color:#46606b;font-weight:700;margin:14px 2px 2px;">{{ g.cat }}</div>
+          <sc-for list="{{ g.items }}" as="m" hint-placeholder-count="3">
+            <div style="border:1.5px solid #e0ddd8;border-radius:14px;padding:11px 12px;margin-top:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <sc-if value="{{ m.rec }}" hint-placeholder-val="{{ true }}"><span style="color:#d9805f;font-size:14px;">★</span></sc-if>
+                <span style="font-weight:700;font-size:14px;flex:1;line-height:1.15;">{{ m.name }}</span>
+                <span style="font-size:10px;color:#46606b;border:1.2px solid #aebfc6;border-radius:5px;padding:1px 6px;">MLC</span>
+                <span style="display:flex;flex-direction:column;justify-content:center;gap:3px;width:22px;height:22px;flex:none;border:1.4px solid #d2cfc9;border-radius:7px;padding:4px 3px;">
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:1px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:8px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                  <span style="position:relative;height:2px;border-radius:2px;background:#9b9893;"><span style="position:absolute;top:-2px;left:4px;width:6px;height:6px;border-radius:50%;border:1.6px solid #9b9893;background:#fff;"></span></span>
+                </span>
+              </div>
+              <div style="font-size:11px;color:#9b9893;margin-top:5px;">{{ m.meta }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"><sc-for list="{{ m.caps }}" as="cap" hint-placeholder-count="2"><span style="font-size:10px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:5px;padding:1px 7px;">{{ cap }}</span></sc-for></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:9px;">
+                <sc-if value="{{ m.isInstalled }}" hint-placeholder-val="{{ true }}"><span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Set active</span><span style="margin-left:auto;color:#b5503f;border:1.5px solid #e3b6ab;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Delete</span></sc-if>
+                <sc-if value="{{ m.isAvailable }}" hint-placeholder-val="{{ true }}"><span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;">Install ↓</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- caps legend -->
+    <div style="width:230px;align-self:flex-start;">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;color:#b85c3c;margin-bottom:10px;">Capability tags</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <sc-for list="{{ capLegend }}" as="c" hint-placeholder-count="6"><span style="font-size:12px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:5px;padding:2px 9px;">{{ c }}</span></sc-for>
+      </div>
+      <div style="font-family:'Kalam',cursive;font-size:14px;color:#6b6864;line-height:1.6;margin-top:14px;">Short, consistent labels — not "python / screenshot / debug". Each model shows 1–4.</div>
+      <div style="font-family:'Kalam',cursive;font-size:15px;color:#b85c3c;line-height:1.5;margin-top:14px;">Tap the tune icon on any row → per-model parameters (row 3 →)</div>
+    </div>
+  </div>
+
+  <!-- ================= ROW 3 ================= -->
+  <div style="max-width:1280px;margin:54px auto 0;"><div style="font-family:'Kalam',cursive;font-weight:700;font-size:24px;">3 · Per-model parameters &amp; global defaults</div>
+  <div style="font-family:'Kalam',cursive;font-size:17px;color:#d9805f;margin-top:2px;">LiteRT page mirrors Edge Gallery (incl. thinking / speculative decoding) · MLC uses its own engine knobs</div></div>
+  <div style="margin:18px auto 0;display:flex;flex-wrap:wrap;gap:34px;justify-content:center;align-items:flex-start;max-width:1280px;">
+
+    <!-- LiteRT params -->
+    <div style="width:324px;background:#fff;border:2.5px solid #d9805f;border-radius:28px;overflow:hidden;box-shadow:6px 6px 0 rgba(217,128,95,.22);">
+      <div style="padding:16px 16px 0;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:19px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;">Gemma 4 E2B IT</span><span style="font-size:10px;color:#b85c3c;border:1.2px solid #e3bcab;border-radius:5px;padding:1px 6px;">LiteRT</span></div>
+        <div style="display:flex;gap:18px;margin-top:12px;border-bottom:1.5px solid #efedea;font-size:13px;"><span style="font-weight:700;color:#b85c3c;border-bottom:2.5px solid #d9805f;padding-bottom:8px;">Model configs</span><span style="color:#9b9893;padding-bottom:8px;">System prompt</span></div>
+      </div>
+      <div style="padding:4px 16px 14px;">
+        <sc-for list="{{ paramsLite }}" as="p" hint-placeholder-count="7">
+          <div style="padding:11px 0;border-bottom:1px solid #efedea;">
+            <div style="display:flex;align-items:baseline;gap:6px;"><span style="font-size:13px;font-weight:700;">{{ p.label }}</span><sc-if value="{{ p.range }}" hint-placeholder-val="0–1"><span style="font-size:11px;color:#9b9893;">({{ p.range }})</span></sc-if></div>
+            <sc-if value="{{ p.isNum }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;margin-top:7px;"><div style="flex:1;position:relative;height:4px;border-radius:3px;background:#e0ddd8;"><div style="position:absolute;left:0;top:0;height:100%;width:55%;background:#d9805f;border-radius:3px;"></div><div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #d9805f;"></div></div><div style="width:58px;border:1.5px solid #c9c6c1;border-radius:8px;padding:5px 0;text-align:center;font-size:13px;">{{ p.val }}</div></div></sc-if>
+            <sc-if value="{{ p.isSeg }}" hint-placeholder-val="{{ true }}"><div style="display:inline-flex;border:1.5px solid #2b2b2b;border-radius:20px;overflow:hidden;margin-top:8px;font-size:12px;"><sc-for list="{{ p.opts }}" as="o" hint-placeholder-count="2"><sc-if value="{{ o.sel }}" hint-placeholder-val="{{ true }}"><span style="background:#d9805f;color:#fff;padding:5px 16px;font-weight:700;">✓ {{ o.t }}</span></sc-if><sc-if value="{{ o.idle }}" hint-placeholder-val="{{ true }}"><span style="padding:5px 16px;color:#6b6864;">{{ o.t }}</span></sc-if></sc-for></div></sc-if>
+            <sc-if value="{{ p.isToggle }}" hint-placeholder-val="{{ true }}"><div style="margin-top:8px;"><span style="display:inline-flex;width:44px;height:24px;border-radius:14px;background:#dcd8d2;position:relative;"><span style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;"></span></span></div></sc-if>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:14px;font-size:13px;font-weight:700;"><span style="color:#9b9893;">Restore default</span><span style="color:#b85c3c;">Cancel</span><span style="background:#d9805f;color:#fff;border-radius:20px;padding:7px 20px;">OK</span></div>
+      </div>
+    </div>
+
+    <!-- System prompt tab -->
+    <div style="width:300px;align-self:flex-start;">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;color:#6b6864;margin-bottom:10px;">…System prompt tab</div>
+      <div style="background:#fff;border:2.5px solid #2b2b2b;border-radius:24px;overflow:hidden;box-shadow:5px 5px 0 rgba(0,0,0,.1);">
+        <div style="padding:16px;">
+          <div style="display:flex;gap:18px;border-bottom:1.5px solid #efedea;font-size:13px;"><span style="color:#9b9893;padding-bottom:8px;">Model configs</span><span style="font-weight:700;color:#b85c3c;border-bottom:2.5px solid #d9805f;padding-bottom:8px;">System prompt</span></div>
+          <div style="border:1.5px solid #d2cfc9;border-radius:12px;padding:12px;margin-top:14px;font-size:12px;color:#9b9893;line-height:1.5;min-height:96px;">Enter system instructions (e.g. "You are a versatile assistant. Provide accurate, context-aware responses in a professional tone.")</div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:14px;font-size:13px;font-weight:700;"><span style="color:#9b9893;">Restore default</span><span style="color:#b85c3c;">Cancel</span><span style="background:#d9805f;color:#fff;border-radius:20px;padding:7px 20px;">OK</span></div>
+        </div>
+      </div>
+      <div style="font-family:'Kalam',cursive;font-size:14px;color:#6b6864;margin-top:10px;line-height:1.5;">Per-model system prompt overrides the global one.</div>
+    </div>
+
+    <!-- MLC params -->
+    <div style="width:324px;background:#fff;border:2.5px solid #5f7a86;border-radius:28px;overflow:hidden;box-shadow:6px 6px 0 rgba(95,122,134,.22);">
+      <div style="padding:16px 16px 0;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:19px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;">Qwen2.5-Coder 1.5B</span><span style="font-size:10px;color:#46606b;border:1.2px solid #aebfc6;border-radius:5px;padding:1px 6px;">MLC</span></div>
+        <div style="display:flex;gap:18px;margin-top:12px;border-bottom:1.5px solid #efedea;font-size:13px;"><span style="font-weight:700;color:#46606b;border-bottom:2.5px solid #5f7a86;padding-bottom:8px;">Model configs</span><span style="color:#9b9893;padding-bottom:8px;">System prompt</span></div>
+      </div>
+      <div style="padding:4px 16px 14px;">
+        <sc-for list="{{ paramsMlc }}" as="p" hint-placeholder-count="6">
+          <div style="padding:11px 0;border-bottom:1px solid #efedea;">
+            <div style="display:flex;align-items:baseline;gap:6px;"><span style="font-size:13px;font-weight:700;">{{ p.label }}</span><sc-if value="{{ p.range }}" hint-placeholder-val="0–1"><span style="font-size:11px;color:#9b9893;">({{ p.range }})</span></sc-if></div>
+            <sc-if value="{{ p.isNum }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:10px;margin-top:7px;"><div style="flex:1;position:relative;height:4px;border-radius:3px;background:#e0ddd8;"><div style="position:absolute;left:0;top:0;height:100%;width:50%;background:#5f7a86;border-radius:3px;"></div><div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #5f7a86;"></div></div><div style="width:58px;border:1.5px solid #c9c6c1;border-radius:8px;padding:5px 0;text-align:center;font-size:13px;">{{ p.val }}</div></div></sc-if>
+            <sc-if value="{{ p.isSeg }}" hint-placeholder-val="{{ true }}"><div style="display:inline-flex;border:1.5px solid #46606b;border-radius:20px;overflow:hidden;margin-top:8px;font-size:12px;"><sc-for list="{{ p.opts }}" as="o" hint-placeholder-count="3"><sc-if value="{{ o.sel }}" hint-placeholder-val="{{ true }}"><span style="background:#5f7a86;color:#fff;padding:5px 14px;font-weight:700;">✓ {{ o.t }}</span></sc-if><sc-if value="{{ o.idle }}" hint-placeholder-val="{{ true }}"><span style="padding:5px 14px;color:#46606b;">{{ o.t }}</span></sc-if></sc-for></div></sc-if>
+          </div>
+        </sc-for>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:14px;font-size:13px;font-weight:700;"><span style="color:#9b9893;">Restore default</span><span style="color:#46606b;">Cancel</span><span style="background:#5f7a86;color:#fff;border-radius:20px;padding:7px 20px;">OK</span></div>
+      </div>
+    </div>
+
+    <!-- Global defaults -->
+    <div style="width:300px;align-self:flex-start;">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;color:#b85c3c;margin-bottom:10px;">Advanced → Parameters (global)</div>
+      <div style="background:#fff;border:2.5px solid #2b2b2b;border-radius:24px;overflow:hidden;box-shadow:5px 5px 0 rgba(0,0,0,.1);">
+        <div style="padding:15px 16px 14px;">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:18px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:17px;">Parameters</span></div>
+          <div style="font-size:12px;color:#6b6864;margin-top:6px;line-height:1.5;">Default generation settings for newly installed models. Each model can override these from its tune menu.</div>
+          <div style="display:flex;gap:6px;margin-top:12px;font-size:12px;"><span style="background:#d9805f;color:#fff;border-radius:14px;padding:4px 12px;font-weight:700;">LiteRT defaults</span><span style="border:1.2px solid #c9c6c1;color:#9b9893;border-radius:14px;padding:4px 12px;">MLC defaults</span></div>
+          <sc-for list="{{ paramsLite }}" as="p" hint-placeholder-count="7">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #efedea;font-size:13px;">
+              <span style="font-weight:700;">{{ p.label }}</span>
+              <span style="font-size:12px;color:#6b6864;border:1.2px solid #d8d4ce;border-radius:7px;padding:3px 10px;">{{ p.summary }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-family:'Kalam',cursive;font-size:14px;color:#6b6864;margin-top:10px;line-height:1.5;">Same fields as per-model, but applied globally.</div>
+    </div>
+  </div>
+
+  <!-- ================= ROW 4 ================= -->
+  <div style="max-width:1280px;margin:54px auto 0;"><div style="font-family:'Kalam',cursive;font-weight:700;font-size:24px;">4 · Import your own &amp; cohesive companion screens</div></div>
+  <div style="margin:18px auto 0;display:flex;flex-wrap:wrap;gap:30px;justify-content:center;align-items:flex-start;max-width:1280px;">
+
+    <!-- Import -->
+    <div style="width:322px;background:#fff;border:2.5px solid #2b2b2b;border-radius:28px;overflow:hidden;box-shadow:5px 5px 0 rgba(0,0,0,.1);">
+      <div style="padding:16px 18px 12px;border-bottom:1.5px dashed #d2cfc9;display:flex;align-items:center;gap:12px;"><span style="font-size:19px;">✕</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;">Import a model</span></div>
+      <div style="padding:15px 18px 20px;">
+        <div style="font-size:13px;color:#6b6864;line-height:1.5;">Bring a model that isn't in the catalog. Pick the engine that will run it.</div>
+        <div style="display:flex;gap:8px;margin-top:13px;"><span style="flex:1;text-align:center;border:1.5px solid #d9805f;color:#b85c3c;border-radius:10px;padding:9px 0;font-size:13px;font-weight:700;">LiteRT-LM</span><span style="flex:1;text-align:center;border:1.5px solid #c9c6c1;color:#9b9893;border-radius:10px;padding:9px 0;font-size:13px;">MLC-LLM</span></div>
+        <div style="font-family:'Kalam',cursive;font-size:14px;color:#b85c3c;font-weight:700;margin:16px 2px 6px;">FROM A LINK</div>
+        <div style="border:1.5px solid #d2cfc9;border-radius:10px;padding:11px 12px;font-size:13px;color:#9b9893;">huggingface.co/…  paste URL</div>
+        <div style="font-size:11px;color:#9b9893;margin-top:5px;">LiteRT: .litertlm / .task · MLC: data + config package</div>
+        <div style="border:1.5px solid #d2cfc9;border-radius:10px;padding:11px 12px;font-size:13px;color:#9b9893;margin-top:8px;">Model id <span style="color:#c4c0ba;">(optional)</span></div>
+        <div style="font-family:'Kalam',cursive;font-size:14px;color:#b85c3c;font-weight:700;margin:16px 2px 6px;">FROM THIS DEVICE</div>
+        <div style="border:1.5px dashed #c9c6c1;border-radius:12px;padding:16px;text-align:center;font-size:13px;color:#6b6864;"><div style="font-size:22px;">⤓</div>Choose file… <span style="color:#9b9893;">copies into app-private storage</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 2px;border-top:1px solid #efedea;font-size:13px;"><span style="flex:1;font-weight:700;">Hugging Face token<br><span style="font-weight:400;font-size:11px;color:#9b9893;">optional · gated / private repos</span></span><span style="color:#c9c6c1;">›</span></div>
+        <div style="background:#d9805f;color:#fff;text-align:center;border-radius:12px;padding:12px 0;font-size:14px;font-weight:700;margin-top:6px;">Import &amp; verify</div>
+      </div>
+    </div>
+
+    <!-- companion screens -->
+    <sc-for list="{{ otherScreens }}" as="sc" hint-placeholder-count="3">
+      <div style="width:300px;background:#fff;border:2.5px solid #2b2b2b;border-radius:28px;overflow:hidden;box-shadow:5px 5px 0 rgba(0,0,0,.1);">
+        <div style="padding:15px 16px 11px;display:flex;align-items:center;gap:10px;border-bottom:1.5px dashed #d2cfc9;"><span style="font-size:18px;">←</span><span style="font-family:'Kalam',cursive;font-weight:700;font-size:18px;">{{ sc.title }}</span></div>
+        <div style="padding:8px 16px 18px;">
+          <sc-for list="{{ sc.groups }}" as="grp" hint-placeholder-count="3">
+            <div style="font-family:'Kalam',cursive;font-size:12px;color:#b85c3c;font-weight:700;margin:12px 2px 2px;">{{ grp.h }}</div>
+            <sc-for list="{{ grp.rows }}" as="r" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #efedea;"><span style="flex:1;font-size:13px;"><b>{{ r.t }}</b><br><span style="font-size:11px;color:#9b9893;">{{ r.s }}</span></span><span style="font-size:13px;color:#9b9893;">{{ r.c }}</span></div>
+            </sc-for>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ================= BUILD NOTES ================= -->
+  <div style="max-width:1280px;margin:64px auto 0;border-top:2px dashed #c9c6c1;padding-top:34px;">
+    <div style="font-family:'Kalam',cursive;font-weight:700;font-size:28px;">Build notes — implementation handoff</div>
+    <div style="font-family:'Kalam',cursive;font-size:18px;color:#d9805f;margin-top:2px;">Read alongside the frames above. The frames specify structure &amp; flow; these notes specify build.</div>
+  </div>
+
+  <!-- ================= BASIC DIAGRAMS ================= -->
+  <div style="max-width:1280px;margin:22px auto 0;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:20px 22px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+    <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Navigation map</div>
+
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="width:108px;flex:none;font-size:12px;font-weight:700;color:#b85c3c;">Assistant</span>
+        <span style="border:1.8px solid #d9805f;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;color:#b85c3c;">TAI · Termux AI ▸</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Shizuku</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="width:108px;flex:none;font-size:12px;font-weight:700;color:#b85c3c;">Launcher</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Termux</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Appearance</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Apps &amp; Access</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="width:108px;flex:none;font-size:12px;font-weight:700;color:#b85c3c;">System &amp; Info</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Termux:API</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">About</span>
+        <span style="border:1.8px solid #2b2b2b;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;">Donate</span>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;border-top:1px dashed #d2cfc9;padding-top:16px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;">
+        <span style="border:1.8px solid #d9805f;border-radius:10px;padding:6px 14px;font-weight:700;color:#b85c3c;">TAI · Termux AI</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Runtime</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Models</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Server</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Advanced</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:10px;padding-left:26px;">
+        <span style="color:#9b9893;">Models</span><span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Model catalog</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Per-model params</span>
+        <span style="color:#c9c6c1;">·</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">＋ Import</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-top:8px;padding-left:26px;">
+        <span style="color:#9b9893;">Advanced</span><span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Global params · LiteRT / MLC</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">System prompt</span>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;border-top:1px dashed #d2cfc9;padding-top:16px;">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:16px;color:#b85c3c;margin-bottom:12px;">Download → activate flow</div>
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;">
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Catalog · filter backend</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Install ↓</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Downloading % · cancel</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Installed ✓</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;border-radius:8px;padding:5px 11px;">Set active</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="background:#d9805f;color:#fff;border-radius:8px;padding:5px 11px;font-weight:700;">● Active · runtime loads</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;margin-top:10px;color:#9b9893;">
+        <span style="border:1.5px solid #e3b6ab;color:#b5503f;border-radius:8px;padding:5px 11px;">Delete</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span>confirm "Free 2.4 GB?" · unload if active</span>
+        <span style="color:#d9805f;font-weight:700;">→</span>
+        <span style="border:1.5px solid #2b2b2b;color:#2b2b2b;border-radius:8px;padding:5px 11px;">back to Available in catalog</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- THEMING CALLOUT -->
+  <div style="max-width:1280px;margin:18px auto 0;background:#fff;border:2.5px solid #d9805f;border-radius:18px;padding:18px 20px;box-shadow:5px 5px 0 rgba(217,128,95,.2);display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">
+    <div style="font-family:'Kalam',cursive;font-weight:700;font-size:20px;color:#b85c3c;min-width:120px;">⚠ THEMING</div>
+    <div style="flex:1;min-width:300px;font-size:14px;line-height:1.6;color:#2b2b2b;">
+      <b>No hard-coded colour anywhere.</b> Every colour in the frames above is a stand-in. Production UI derives 100% from <b>Android Material 3 dynamic colour (Material You)</b> — light/dark + wallpaper-driven palette. Build against <b>colour roles</b>, never hex. The map on the left below assigns each element to its role.
+    </div>
+  </div>
+
+  <!-- NOTE CARDS -->
+  <div style="max-width:1280px;margin:24px auto 0;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;">
+
+    <!-- color roles -->
+    <div style="flex:1;min-width:360px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Element → Material 3 role</div>
+      <div style="margin-top:10px;">
+        <sc-for list="{{ colorRoles }}" as="r" hint-placeholder-count="10"><div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #efedea;font-size:13px;">
+          <span style="flex:1;color:#2b2b2b;">{{ r.el }}</span>
+          <span style="font-family:'Inconsolata',monospace;font-size:12px;color:#46606b;background:#eef1f2;border:1px solid #d6dee1;border-radius:6px;padding:2px 8px;">{{ r.role }}</span>
+        </div></sc-for>
+      </div>
+    </div>
+
+    <!-- component map -->
+    <div style="flex:1;min-width:360px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Wireframe → Compose / Material widget</div>
+      <div style="margin-top:10px;">
+        <sc-for list="{{ componentMap }}" as="r" hint-placeholder-count="10"><div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #efedea;font-size:13px;">
+          <span style="width:120px;flex:none;font-weight:700;color:#2b2b2b;">{{ r.w }}</span>
+          <span style="flex:1;color:#6b6864;">{{ r.c }}</span>
+        </div></sc-for>
+      </div>
+    </div>
+
+    <!-- param defaults -->
+    <div style="flex:1;min-width:360px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Parameter defaults &amp; ranges</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:12px;font-weight:700;color:#b85c3c;border:1.2px solid #e3bcab;border-radius:6px;padding:2px 8px;display:inline-block;">LiteRT-LM</div>
+          <sc-for list="{{ paramSpecLite }}" as="p" hint-placeholder-count="8"><div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #efedea;font-size:12.5px;"><span style="font-weight:700;">{{ p.k }}</span><span style="color:#6b6864;font-family:'Inconsolata',monospace;text-align:right;">{{ p.v }}</span></div></sc-for>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:12px;font-weight:700;color:#46606b;border:1.2px solid #aebfc6;border-radius:6px;padding:2px 8px;display:inline-block;">MLC-LLM</div>
+          <sc-for list="{{ paramSpecMlc }}" as="p" hint-placeholder-count="7"><div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #efedea;font-size:12.5px;"><span style="font-weight:700;">{{ p.k }}</span><span style="color:#6b6864;font-family:'Inconsolata',monospace;text-align:right;">{{ p.v }}</span></div></sc-for>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#9b9893;margin-top:10px;line-height:1.5;">LiteRT fields &amp; ranges mirror Edge Gallery. MLC fields are engine-native. Per-model edits override these; global page (Advanced → Parameters) sets them for new installs.</div>
+    </div>
+
+    <!-- flows -->
+    <div style="flex:1;min-width:520px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Interaction flows</div>
+      <div style="margin-top:10px;">
+        <sc-for list="{{ flows }}" as="f" hint-placeholder-count="5"><div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #efedea;">
+          <span style="width:24px;height:24px;flex:none;border-radius:50%;background:#d9805f;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;">{{ f.n }}</span>
+          <span style="flex:1;font-size:13px;"><b style="font-size:14px;">{{ f.title }}</b><br><span style="color:#6b6864;line-height:1.55;">{{ f.body }}</span></span>
+        </div></sc-for>
+      </div>
+    </div>
+
+    <!-- edge cases -->
+    <div style="flex:1;min-width:360px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">States &amp; edge cases</div>
+      <div style="margin-top:10px;">
+        <sc-for list="{{ edgeCases }}" as="e" hint-placeholder-count="9"><div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #efedea;font-size:13px;line-height:1.5;"><span style="color:#d9805f;flex:none;">▸</span><span style="flex:1;color:#2b2b2b;">{{ e }}</span></div></sc-for>
+      </div>
+    </div>
+
+    <!-- copy & a11y -->
+    <div style="flex:1;min-width:360px;background:#fff;border:2px solid #2b2b2b;border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 rgba(0,0,0,.1);">
+      <div style="font-family:'Kalam',cursive;font-weight:700;font-size:19px;color:#b85c3c;">Copy &amp; accessibility</div>
+      <div style="margin-top:10px;">
+        <sc-for list="{{ copyA11y }}" as="e" hint-placeholder-count="5"><div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #efedea;font-size:13px;line-height:1.5;"><span style="color:#d9805f;flex:none;">▸</span><span style="flex:1;color:#2b2b2b;">{{ e }}</span></div></sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1280px;margin:34px auto 0;font-family:'Kalam',cursive;font-size:17px;color:#6b6864;">Frames + these notes = a self-contained handoff. Hi-fi remains optional polish — your live Material You theme already carries the visual language.</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const cap = (...a) => a;
+    const liteGroups = [
+      { cat: 'General · Multimodal', items: [
+        { name: 'Gemma 4 E2B IT', rec: true, meta: '2.4 GB · 8GB+ RAM', caps: cap('Text','Vision','Audio'), isActive: true },
+        { name: 'Gemma 4 E4B IT', rec: true, meta: '8.4 GB · 12GB+ RAM', caps: cap('Text','Vision','Audio','Reasoning'), isAvailable: true },
+      ]},
+      { cat: 'Lightweight Text', items: [
+        { name: 'Qwen2.5 1.5B Instruct', meta: '1.1 GB · 6GB+ RAM', caps: cap('Text','Code','Multilingual'), isAvailable: true },
+      ]},
+      { cat: 'Reasoning', items: [
+        { name: 'DeepSeek-R1 Distill 1.5B', meta: '1.0 GB · 6GB+ RAM', caps: cap('Reasoning','Text'), isAvailable: true },
+      ]},
+      { cat: 'Tool Calling', items: [
+        { name: 'FunctionGemma 270M', meta: '0.3 GB · 4GB+ RAM · experimental', caps: cap('Tools'), isDownloading: true },
+      ]},
+    ];
+    const mlcGroups = [
+      { cat: 'Coding', items: [
+        { name: 'Qwen2.5-Coder 0.5B', meta: '0.4 GB · 3GB+ RAM · q4f16', caps: cap('Code'), isAvailable: true },
+        { name: 'Qwen2.5-Coder 1.5B', rec: true, meta: '1.0 GB · 4–6GB RAM · q4f16', caps: cap('Code'), isInstalled: true },
+        { name: 'Qwen2.5-Coder 3B', meta: '1.9 GB · 6–8GB RAM · q4f16', caps: cap('Code'), isAvailable: true },
+        { name: 'Qwen2.5-Coder 7B', meta: '4.4 GB · 10–12GB RAM · q4f16', caps: cap('Code'), isAvailable: true },
+      ]},
+      { cat: 'General Text', items: [
+        { name: 'Qwen2.5 1.5B', meta: '1.0 GB · 4–6GB RAM · q4f16', caps: cap('Text','Multilingual'), isAvailable: true },
+        { name: 'Qwen2.5 3B', meta: '1.9 GB · 6–8GB RAM · q4f16', caps: cap('Text'), isAvailable: true },
+        { name: 'Qwen2.5 7B', meta: '4.4 GB · 10–12GB RAM · q4f16', caps: cap('Text','Reasoning','Multilingual'), isAvailable: true },
+      ]},
+      { cat: 'Reasoning', items: [
+        { name: 'DeepSeek-R1 Distill 1.5B', meta: '1.0 GB · 4–6GB RAM · q4f16', caps: cap('Reasoning'), isAvailable: true },
+        { name: 'DeepSeek-R1 Distill 7B', meta: '4.4 GB · 10–12GB RAM · q4f16', caps: cap('Reasoning'), isAvailable: true },
+      ]},
+      { cat: 'Vision · Multimodal', items: [
+        { name: 'Qwen2.5-VL 3B', rec: true, meta: '2.4 GB · 6–8GB RAM · q4f16', caps: cap('Vision','Text'), isAvailable: true },
+        { name: 'Qwen2.5-VL 7B', meta: '5.1 GB · 10–12GB RAM · q4f16', caps: cap('Vision','Text'), isAvailable: true },
+      ]},
+    ];
+    const paramsLite = [
+      { label: 'Max tokens', range: '2000–32000', isNum: true, val: '4000', summary: '4000' },
+      { label: 'Top-K', range: '5–100', isNum: true, val: '64', summary: '64' },
+      { label: 'Top-P', range: '0.00–1.00', isNum: true, val: '0.95', summary: '0.95' },
+      { label: 'Temperature', range: '0.00–2.00', isNum: true, val: '1.00', summary: '1.00' },
+      { label: 'Accelerator', isSeg: true, opts: [ { t: 'GPU', sel: true }, { t: 'CPU', idle: true } ], summary: 'GPU' },
+      { label: 'Enable thinking', isToggle: true, summary: 'Off' },
+      { label: 'Enable speculative decoding', isToggle: true, summary: 'Off' },
+    ];
+    const paramsMlc = [
+      { label: 'Accelerator', isSeg: true, opts: [ { t: 'Auto', sel: true }, { t: 'CPU', idle: true }, { t: 'GPU', idle: true } ] },
+      { label: 'Context window', range: '1024–8192', isNum: true, val: '4096' },
+      { label: 'Max tokens', range: '256–8192', isNum: true, val: '1024' },
+      { label: 'Temperature', range: '0.00–2.00', isNum: true, val: '0.70' },
+      { label: 'Top-P', range: '0.00–1.00', isNum: true, val: '0.95' },
+      { label: 'Top-K', range: '5–100', isNum: true, val: '64' },
+    ];
+    return {
+      liteGroups, mlcGroups, paramsLite, paramsMlc,
+      capLegend: ['Text','Code','Vision','Audio','Reasoning','Tools','Multilingual'],
+      colorRoles: [
+        { el: 'Screen background', role: 'surface / surfaceContainerLowest' },
+        { el: 'Cards & list surfaces', role: 'surfaceContainer / …High' },
+        { el: 'Primary text', role: 'onSurface' },
+        { el: 'Meta / supporting text', role: 'onSurfaceVariant' },
+        { el: 'Section headers', role: 'primary (or secondary)' },
+        { el: 'Active model · ★ · filled buttons', role: 'primary / onPrimary' },
+        { el: 'Switch ON · slider active', role: 'primary' },
+        { el: 'LiteRT tag', role: 'primaryContainer / on…' },
+        { el: 'MLC tag', role: 'tertiaryContainer / on…' },
+        { el: 'Selected segmented option', role: 'secondaryContainer / on…' },
+        { el: 'Delete / destructive', role: 'error / onErrorContainer' },
+        { el: 'Dividers · outlines · chips', role: 'outline / outlineVariant' },
+        { el: 'Terminal status card', role: 'surfaceContainerHighest, monospace' },
+      ],
+      componentMap: [
+        { w: 'Settings row', c: 'ListItem / Preference (title · supporting · trailing)' },
+        { w: 'Toggle', c: 'Switch' },
+        { w: 'Slider + value box', c: 'Slider + numeric OutlinedTextField' },
+        { w: 'Accelerator selector', c: 'SingleChoiceSegmentedButtonRow' },
+        { w: 'Backend filter', c: 'TabRow or FilterChip row' },
+        { w: 'Model card', c: 'OutlinedCard + ListItem + AssistChip (caps)' },
+        { w: 'Tune icon', c: 'IconButton · Icons.Outlined.Tune' },
+        { w: 'Install + progress', c: 'Button → determinate LinearProgressIndicator' },
+        { w: 'Delete', c: 'TextButton (error) → confirm AlertDialog' },
+        { w: 'Params screen', c: 'Full screen · TabRow: Model configs / System prompt' },
+        { w: 'Import', c: 'Screen/sheet · segmented + URL field + SAF file picker' },
+        { w: 'Terminal status', c: 'Surface · FontFamily.Monospace' },
+      ],
+      flows: [
+        { n: '1', title: 'Download & activate', body: 'Models → Browse catalog → filter by backend → Install (downloads with progress; Cancel mid-download) → Installed ✓ → Set active → runtime loads → status shows ● active.' },
+        { n: '2', title: 'Tune a model', body: 'Row tune icon → Model configs tab (sliders · accelerator · toggles) → OK saves a per-model override; Restore default reverts to the global value.' },
+        { n: '3', title: 'Import your own', body: 'Import → choose LiteRT or MLC → paste HF URL or Choose file → optional HF token → Import & verify → appears under installed.' },
+        { n: '4', title: 'Delete weights', body: 'Installed/active row → Delete → confirm dialog (“Free 2.4 GB?”) → if active, Unload first → model returns to Available in the catalog.' },
+        { n: '5', title: 'Global defaults', body: 'Advanced → Parameters → LiteRT / MLC tabs → edit → applies to newly installed models only; existing models keep their own.' },
+      ],
+      edgeCases: [
+        'Download lifecycle: queued · downloading % · paused · failed → Retry · verifying · done.',
+        'Insufficient storage → block install, show required vs free.',
+        'Low RAM (model min-RAM > device) → allow with a caution note; warn again before load.',
+        'Gated / private HF repo → prompt for HF token, then resume the download.',
+        'Offline → disable Install with an offline note; already-installed models still run.',
+        'Delete the active model → require Unload + explicit confirm.',
+        'MLC unsupported on device → disable the MLC tab/models, show the reason from device capabilities.',
+        'Active vs installed → only one active; installed = on disk, not necessarily loaded.',
+        'Empty state → hint + Browse catalog / Import.',
+      ],
+      paramSpecLite: [
+        { k: 'Max tokens', v: '4000 · 2000–32000' },
+        { k: 'Top-K', v: '64 · 5–100' },
+        { k: 'Top-P', v: '0.95 · 0–1' },
+        { k: 'Temperature', v: '1.00 · 0–2' },
+        { k: 'Accelerator', v: 'GPU · {GPU, CPU}' },
+        { k: 'Enable thinking', v: 'Off' },
+        { k: 'Speculative decoding', v: 'Off' },
+        { k: 'System prompt', v: 'text · overrides global' },
+      ],
+      paramSpecMlc: [
+        { k: 'Accelerator', v: 'Auto · {Auto, CPU, GPU}' },
+        { k: 'Context window', v: '4096 · 1024–8192' },
+        { k: 'Max tokens', v: '1024 · 256–8192' },
+        { k: 'Temperature', v: '0.70 · 0–2' },
+        { k: 'Top-P', v: '0.95 · 0–1' },
+        { k: 'Top-K', v: '64 · 5–100' },
+        { k: 'System prompt', v: 'text · overrides global' },
+      ],
+      copyA11y: [
+        'Plain language on the main surface; technical jargon lives under Advanced.',
+        'Sentence-case labels; terse one-line supporting text.',
+        'Touch targets ≥ 48dp; every icon button needs a contentDescription.',
+        'Support dynamic type / large fonts — rows reflow, never truncate critical info.',
+        'Sizes & RAM tiers are estimates — read real file size + checksum from the repo manifest before download.',
+      ],
+      installedModels: [
+        { name: 'Gemma 4 E2B IT', tag: 'LiteRT', disk: '2.4 GB on disk', caps: cap('Text','Vision','Audio'), active: true },
+        { name: 'Qwen2.5-Coder 1.5B', tag: 'MLC', disk: '1.0 GB on disk', caps: cap('Code'), idle: true },
+      ],
+      mainTop: [
+        { t: 'TAI · Termux AI', s: 'Local LiteRT-LM hosting, models & endpoint' },
+        { t: 'Shizuku', s: 'Privileged backend controls', b: 'READY' },
+      ],
+      mainMid: [
+        { t: 'Termux', s: 'Terminal, input, debugging' },
+        { t: 'Appearance', s: 'Theme, terminal, dock, icons' },
+        { t: 'Apps & Access', s: 'App bar, search, defaults, permissions' },
+      ],
+      mainBot: [
+        { t: 'Termux:API', s: 'Preferences for Termux:API app' },
+        { t: 'About', s: 'Version, build, licenses' },
+        { t: 'Donate', s: 'Support development' },
+      ],
+      serverRows: [
+        { t: 'API endpoint', s: '127.0.0.1:54298/v1 · OpenAI-compatible', c: 'copy ⧉' },
+        { t: 'Access token', s: 'Bearer set · tap to recreate', c: '›' },
+        { t: 'LAN access', s: 'Localhost only (127.0.0.1)', c: '⬭' },
+      ],
+      advRows: [
+        { t: 'Parameters', s: 'Global generation defaults · LiteRT & MLC' },
+        { t: 'System prompt', s: 'Not set' },
+        { t: 'Runtime overrides', s: 'Port, accelerator, defaults' },
+        { t: 'Device & engine info', s: 'MLC supported · refresh status' },
+      ],
+      otherScreens: [
+        { title: 'Appearance', groups: [
+          { h: 'THEME', rows: [ { t: 'Mode', s: 'System', c: '›' }, { t: 'Wallpaper', s: 'Launcher-managed', c: '⬮' } ] },
+          { h: 'TERMINAL', rows: [ { t: 'Material colors', s: 'From palette', c: '⬮' }, { t: 'Opacity', s: '19', c: '—○—' } ] },
+          { h: 'DOCK', rows: [ { t: 'Icon count', s: '8', c: '—○—' }, { t: 'Dock size', s: 'Large', c: '—○—' }, { t: 'Dock style', s: 'Valerie capsule', c: '›' }, { t: 'Blur / Opacity', s: '6 / 29', c: '—○—' }, { t: 'Display app names', s: 'Name pill while scrubbing', c: '⬮' } ] },
+          { h: 'ICONS', rows: [ { t: 'Icon pack', s: 'System default', c: '›' }, { t: 'Pinned icon pack', s: 'System default', c: '›' }, { t: 'Black & white icons', s: 'Grayscale app icons', c: '⬭' } ] },
+          { h: 'SESSIONS', rows: [ { t: 'Sessions menu opacity', s: '50', c: '—○—' } ] },
+        ]},
+        { title: 'Apps & Access', groups: [
+          { h: 'APP BAR', rows: [ { t: 'Show apps bar', s: 'Icon row above extra keys', c: '⬮' }, { t: 'Alphabets row', s: 'Scrubber below dock', c: '⬮' }, { t: 'Notification dots', s: 'Dot on apps w/ notifications', c: '⬮' }, { t: 'Double-tap action', s: 'What double-tap does', c: '›' }, { t: 'Set as home launcher', s: 'Android home settings', c: '›' } ] },
+          { h: 'SEARCH', rows: [ { t: 'Search strictness', s: 'How letters narrow apps', c: '›' }, { t: 'Input split character', s: 'Default: %', c: '›' }, { t: 'Reset app order', s: 'Ordered by usage', c: '›' } ] },
+          { h: 'DEFAULTS', rows: [ { t: 'Default apps', s: 'Comma-separated pins', c: '›' } ] },
+          { h: 'PERMISSIONS', rows: [ { t: 'Storage', s: 'Enabled', c: '✓' }, { t: 'Notifications', s: 'Enabled', c: '✓' }, { t: 'Accessibility lock', s: 'Not enabled', c: '!' }, { t: 'App permissions', s: 'Open Android settings', c: '›' } ] },
+        ]},
+        { title: 'Shizuku', groups: [
+          { h: 'STATUS', rows: [ { t: 'Shizuku', s: 'READY · granted · binder restored', c: '●' } ] },
+          { h: 'POLICY', rows: [ { t: 'Privileged features', s: 'Enabled', c: '⬮' }, { t: 'Prefer Shizuku', s: 'Try first, then fallback', c: '⬮' }, { t: 'Shell fallback', s: 'su / rish if unavailable', c: '⬮' }, { t: 'Request permission', s: 'Re-check now', c: '›' } ] },
+        ]},
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -10,16 +10,6 @@
         <item>false</item>
         <item>true</item>
     </string-array>
-    <string-array name="app_launcher_search_mode_entries">
-        <item>@string/termux_app_launcher_search_mode_strict</item>
-        <item>@string/termux_app_launcher_search_mode_balanced</item>
-        <item>@string/termux_app_launcher_search_mode_loose</item>
-    </string-array>
-    <string-array name="app_launcher_search_mode_values">
-        <item>strict</item>
-        <item>balanced</item>
-        <item>loose</item>
-    </string-array>
     <string-array name="app_launcher_az_lock_method_entries">
         <item>@string/termux_app_launcher_az_lock_method_off</item>
         <item>@string/termux_app_launcher_az_lock_method_shizuku</item>
@@ -29,6 +19,14 @@
         <item>off</item>
         <item>shizuku</item>
         <item>accessibility</item>
+    </string-array>
+    <string-array name="app_launcher_dock_style_entries">
+        <item>@string/termux_app_launcher_dock_style_default</item>
+        <item>@string/termux_app_launcher_dock_style_valarie_capsule</item>
+    </string-array>
+    <string-array name="app_launcher_dock_style_values">
+        <item>default</item>
+        <item>valarie_capsule</item>
     </string-array>
     <string-array name="termux_ai_model_entries">
         <item>Gemma-4-E2B-it</item>
@@ -123,5 +121,15 @@
         <item>5</item>
         <item>10</item>
         <item>30</item>
+    </string-array>
+    <string-array name="termux_ai_catalog_backend_filter_entries">
+        <item>@string/termux_ai_catalog_backend_all</item>
+        <item>@string/termux_ai_backend_label_litert</item>
+        <item>@string/termux_ai_backend_label_mnn</item>
+    </string-array>
+    <string-array name="termux_ai_catalog_backend_filter_values">
+        <item>all</item>
+        <item>litert-lm</item>
+        <item>mnn-llm</item>
     </string-array>
 </resources>

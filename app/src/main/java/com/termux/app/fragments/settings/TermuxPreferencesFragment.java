@@ -4,13 +4,13 @@ import android.content.Context;
 import android.os.Bundle;
 import androidx.annotation.Keep;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import com.termux.R;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 @Keep
-public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
+public class TermuxPreferencesFragment extends MaterialPreferenceFragment {
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -20,6 +20,7 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
         PreferenceManager preferenceManager = getPreferenceManager();
         preferenceManager.setPreferenceDataStore(TermuxPreferencesDataStore.getInstance(context));
         setPreferencesFromResource(R.xml.termux_preferences, rootKey);
+        SettingsLayoutUtils.applyScreenLayout(this);
     }
 }
 

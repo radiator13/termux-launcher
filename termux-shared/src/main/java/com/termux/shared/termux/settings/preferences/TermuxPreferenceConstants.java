@@ -122,21 +122,6 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_APP_LAUNCHER_BUTTON_COUNT = 7;
 
         /**
-         * Defines the key for app launcher search tolerance (0-100).
-         * Kept for legacy settings migration.
-         */
-        public static final String KEY_APP_LAUNCHER_SEARCH_TOLERANCE = "app_launcher_search_tolerance";
-
-        public static final int DEFAULT_APP_LAUNCHER_SEARCH_TOLERANCE = 70;
-
-        /**
-         * Defines the key for app launcher search mode.
-         */
-        public static final String KEY_APP_LAUNCHER_SEARCH_MODE = "app_launcher_search_mode";
-
-        public static final String DEFAULT_APP_LAUNCHER_SEARCH_MODE = "balanced";
-
-        /**
          * Defines the key for app launcher input split character.
          */
         public static final String KEY_APP_LAUNCHER_INPUT_CHAR = "app_launcher_input_char";
@@ -172,18 +157,29 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_APP_LAUNCHER_NOTIFICATION_DOTS = false;
 
         /**
+         * Defines the key for the optional dynamic "most used apps" dock page.
+         */
+        public static final String KEY_APP_LAUNCHER_MOST_USED_PAGE = "app_launcher_most_used_page";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_MOST_USED_PAGE = false;
+
+        /**
          * Defines the key for app launcher bar height scale.
          */
         public static final String KEY_APP_LAUNCHER_BAR_HEIGHT = "app_launcher_bar_height";
 
-        public static final float DEFAULT_APP_LAUNCHER_BAR_HEIGHT = 1.45f;
+        public static final float DEFAULT_APP_LAUNCHER_BAR_HEIGHT = 2.18f;
 
         /**
-         * Defines the key for compact vertical dock spacing.
+         * Defines the visual surface style for the app launcher dock.
          */
-        public static final String KEY_APP_LAUNCHER_COMPACT_DOCK = "app_launcher_compact_dock";
+        public static final String KEY_APP_LAUNCHER_DOCK_STYLE = "app_launcher_dock_style";
 
-        public static final boolean DEFAULT_APP_LAUNCHER_COMPACT_DOCK = false;
+        public static final String APP_LAUNCHER_DOCK_STYLE_DEFAULT = "default";
+
+        public static final String APP_LAUNCHER_DOCK_STYLE_VALARIE_CAPSULE = "valarie_capsule";
+
+        public static final String DEFAULT_APP_LAUNCHER_DOCK_STYLE = APP_LAUNCHER_DOCK_STYLE_DEFAULT;
 
         /**
          * Defines the key for showing focused app names while scrubbing the dock.
@@ -198,6 +194,22 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_APP_LAUNCHER_BW_ICONS = "app_launcher_bw_icons";
 
         public static final boolean DEFAULT_APP_LAUNCHER_BW_ICONS = false;
+
+
+        /**
+         * Defines the key for harmonizing app icons with the dock (consistent footprint, soft
+         * shadow, slight saturation match) without requiring a custom icon pack.
+         */
+        public static final String KEY_APP_LAUNCHER_UNIFY_ICONS = "app_launcher_unify_icons";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_UNIFY_ICONS = true;
+
+        /**
+         * Defines the key for the soft drop shadow behind dock app icons.
+         */
+        public static final String KEY_APP_LAUNCHER_ICON_SHADOW = "app_launcher_icon_shadow";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_ICON_SHADOW = true;
 
         /**
          * Defines the selected launcher icon-pack package.
@@ -397,6 +409,14 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_APP_BAR_OPACITY = "app_bar_opacity";
 
         public static final int DEFAULT_VALUE_APP_BAR_OPACITY = 50;
+
+        /**
+         * Defines the key for the dock-glass grain/noise amount (percentage, 0 disables). A subtle
+         * film grain over the frosted glass that reads as real glass texture rather than flat blur.
+         */
+        public static final String KEY_DOCK_GLASS_GRAIN = "dock_glass_grain";
+
+        public static final int DEFAULT_VALUE_DOCK_GLASS_GRAIN = 12;
 
         /**
          * Stores the user's preferred terminal opacity while wallpaper mode is enabled so it can

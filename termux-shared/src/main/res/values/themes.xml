@@ -23,6 +23,10 @@
         <item name="termuxColorOutlineVariant">@color/termux_outline_variant</item>
         <item name="termuxColorAccentContainer">@color/termux_accent_container</item>
         <item name="termuxColorOnAccentContainer">@color/termux_on_accent_container</item>
+        <item name="termuxColorPrimaryContainer">@color/termux_primary_container</item>
+        <item name="termuxColorOnPrimaryContainer">@color/termux_on_primary_container</item>
+        <item name="termuxColorTertiaryContainer">@color/termux_tertiary_container</item>
+        <item name="termuxColorOnTertiaryContainer">@color/termux_on_tertiary_container</item>
         <item name="termuxColorError">@color/termux_error</item>
         <item name="termuxColorErrorContainer">@color/termux_error_container</item>
         <item name="termuxColorOnErrorContainer">@color/termux_on_error_container</item>
@@ -86,6 +90,10 @@
         <item name="termuxColorOutlineVariant">@color/termux_outline_variant</item>
         <item name="termuxColorAccentContainer">@color/termux_accent_container</item>
         <item name="termuxColorOnAccentContainer">@color/termux_on_accent_container</item>
+        <item name="termuxColorPrimaryContainer">@color/termux_primary_container</item>
+        <item name="termuxColorOnPrimaryContainer">@color/termux_on_primary_container</item>
+        <item name="termuxColorTertiaryContainer">@color/termux_tertiary_container</item>
+        <item name="termuxColorOnTertiaryContainer">@color/termux_on_tertiary_container</item>
         <item name="termuxColorError">@color/termux_error</item>
         <item name="termuxColorErrorContainer">@color/termux_error_container</item>
         <item name="termuxColorOnErrorContainer">@color/termux_on_error_container</item>

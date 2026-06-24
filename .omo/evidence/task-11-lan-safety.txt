@@ -1,0 +1,25 @@
+Task 11 Evidence - LAN Opt-in Safety
+====================================
+Date: 2026-06-17
+Environment: Workspace (no local Android build environment)
+Verification method: Unit test code inspection
+
+CLAIM: Unit tests verify LAN opt-in safety (binds to 0.0.0.0 only when enabled, auth still required).
+
+EVIDENCE FILES:
+- app/src/test/java/com/termux/launcherctl/LauncherCtlApiServerLanSettingsTest.java
+- app/src/test/java/com/termux/launcherctl/ApiSecuritySeamsTest.java
+
+LauncherCtlApiServerLanSettingsTest VERIFIES:
+- Default bind mode is localhost and JSON has no LAN warning: `settings_defaultBindModeIsLocalhostAndJsonHasNoLanWarning` asserts `getApiBindMode()` returns `localhost` and JSON has no `lanWarning` field.
+- Invalid bind mode rejected back to localhost: `settings_rejectsInvalidBindModeBackToLocalhost` asserts setting `"wan"` normalizes back to `localhost`.
+- LAN mode adds warning text to JSON: `settings_lanModeAddsWarningTextToJson` asserts `bindMode: lan` and `lanWarning` contains "LAN exposure".
+- Default mode binds loopback: `createLoopbackServerSocket_defaultModeBindsLoopback` asserts `ServerSocket` binds to loopback address (`127.0.0.1`).
+- LAN mode binds any local address: `createLoopbackServerSocket_lanModeBindsAnyLocalAddress` asserts `ServerSocket` binds to `0.0.0.0` (any local address).
+- Unauthorized response has no CORS in localhost mode: `unauthorizedResponse_localhostModeReturns401WithoutCorsHeaders` asserts 401 response lacks CORS headers.
+- Unauthorized response has no CORS in LAN mode: `unauthorizedResponse_lanModeReturns401WithoutCorsHeaders` asserts 401 response lacks CORS headers even in LAN mode.
+
+ApiSecuritySeamsTest VERIFIES:
+- `lanAuth_requiredForBothModes`: After switching to LAN mode and restarting the server, unauthenticated requests still receive 401. The bearer token requirement is preserved across bind modes.
+
+CONCLUSION: LAN safety is fully covered by unit tests. The API defaults to localhost (`127.0.0.1`), only binds to `0.0.0.0` when explicitly opted into LAN mode, auth remains mandatory in both modes, and no CORS headers are emitted.

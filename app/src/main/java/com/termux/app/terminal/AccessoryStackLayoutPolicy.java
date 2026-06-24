@@ -20,23 +20,24 @@ public final class AccessoryStackLayoutPolicy {
         return Math.round(safeDensity * (3f + (Math.max(0f, safeIconScale - 1f) * 2f)));
     }
 
-    public static int computePageIndicatorBandHeightPx(boolean azEnabled, boolean compactDock, float density) {
+    public static int computePageIndicatorBandHeightPx(boolean azEnabled, float density) {
         if (!azEnabled)
             return 0;
-        return Math.round(Math.max(0f, density) * (compactDock ? 2f : 9f));
+        // Pure spacing between the icon row and the A-Z row (the page-indicator ticks draw at the
+        // dock's top rim, not in this band) — kept tight so the gap matches the other inter-row gaps.
+        return Math.round(Math.max(0f, density) * 3f);
     }
 
-    public static int computeAzRowHeightPx(boolean azEnabled, boolean compactDock, float density) {
+    public static int computeAzRowHeightPx(boolean azEnabled, float density) {
         if (!azEnabled)
             return 0;
-        return Math.round(Math.max(0f, density) * (compactDock ? 14f : 19f));
+        return Math.round(Math.max(0f, density) * 19f);
     }
 
-    public static int computeTerminalToolbarHeightPx(int baseHeightPx, int rowCount, float scaleFactor, boolean compactDock) {
+    public static int computeTerminalToolbarHeightPx(int baseHeightPx, int rowCount, float scaleFactor) {
         int safeBaseHeight = Math.max(0, baseHeightPx);
         int safeRows = Math.max(0, rowCount);
         float safeScale = Math.max(0f, scaleFactor);
-        float compactFactor = compactDock ? 0.78f : 1f;
-        return Math.round(safeBaseHeight * safeRows * safeScale * compactFactor);
+        return Math.round(safeBaseHeight * safeRows * safeScale);
     }
 }

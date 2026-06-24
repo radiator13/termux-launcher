@@ -40,7 +40,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     private static final double DEFAULT_TEMPERATURE = 1.0d;
     private static final int DEFAULT_KEEP_WARM_MINUTES = 30;
     private static final String AUTO_GPU_REASON =
-        "Auto selected GPU first from the model's Edge Gallery compatibility profile.";
+        "Auto selected GPU because this model/device has a successful GPU load history.";
     private static final String AUTO_MODEL_CPU_REASON =
         "Auto selected CPU because the model's Edge Gallery compatibility profile requires CPU.";
 
@@ -376,18 +376,24 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         if (!deviceCapabilities.liteRtLmAbiSupported) {
             return error(501, "litert_lm_unsupported_abi", "LiteRT-LM 0.12.0 ships native libraries for arm64-v8a and x86_64 only.");
         }
+        if (!deviceCapabilities.liteRtLmNativeLibrariesAvailable) {
+            return error(501, "litert_lm_native_unavailable", "LiteRT-LM native libraries are not available in this APK.");
+        }
         if (modelSpec.localPath == null || modelSpec.localPath.trim().isEmpty()) {
             return error(404, "model_file_missing", "Download or import this model before loading it.");
         }
         File modelFile = new File(modelSpec.localPath);
         if (!modelFile.isFile() || !modelFile.canRead()) {
-            JSONObject error = error(404, "model_file_not_readable", "Model file is missing or not readable by the app process.");
+            JSONObject error = error(404, "model_file_not_readable", "Model file is missing or not readable by the runtime process.");
             error.put("path", modelSpec.localPath);
             return error;
         }
 
         String requestedAccelerator = requestedAccelerator(options);
         List<String> autoAccelerators = deviceCapabilities.compatibleAccelerators(profile);
+        if (requestedAccelerator == null) {
+            autoAccelerators = safeAutoAccelerators(modelSpec, deviceCapabilities, profile);
+        }
         if (requestedAccelerator != null) {
             if (!profile.supports(requestedAccelerator)) {
                 JSONObject error = error(400, "accelerator_not_supported_by_model",
@@ -436,14 +442,17 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                         Backend backend = new Backend.GPU();
                         initializedBackendName = backend.getName();
                         initializedFallbackReason = AUTO_GPU_REASON;
-                        initializedEngine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, profile, backend);
+                        initializedEngine = createAndInitializeEngineWithCrashMarker(modelSpec, modelFile.getAbsolutePath(), options, profile, backend, "gpu");
                     } catch (Exception gpuException) {
+                        TaiRuntimeCrashMarker.clear(appContext);
+                        TaiRuntimeHistory.recordFailure(appContext, modelSpec, deviceCapabilities,
+                            TaiModelSpec.BACKEND_LITERT_LM, "gpu", gpuException.getMessage() == null ? "GPU initialization failed." : gpuException.getMessage());
                         if (!autoAccelerators.contains("cpu")) throw gpuException;
                         throwIfLoadCancellationRequested();
                         Backend backend = new Backend.CPU(null);
                         initializedBackendName = backend.getName();
                         initializedFallbackReason = "Auto GPU initialization failed; selected the model's CPU fallback. GPU error: " + gpuException.getMessage();
-                        initializedEngine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, profile, backend);
+                        initializedEngine = createAndInitializeEngineWithCrashMarker(modelSpec, modelFile.getAbsolutePath(), options, profile, backend, "cpu");
                     }
                 } else {
                     throwIfLoadCancellationRequested();
@@ -452,15 +461,22 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                     initializedFallbackReason = deviceCapabilities.pixel10 && profile.supports("gpu")
                         ? "Auto selected CPU because Google AI Edge Gallery disables GPU on Pixel 10 devices."
                         : AUTO_MODEL_CPU_REASON;
-                    initializedEngine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, profile, backend);
+                    initializedEngine = createAndInitializeEngineWithCrashMarker(modelSpec, modelFile.getAbsolutePath(), options, profile, backend, "cpu");
                 }
             } else {
                 throwIfLoadCancellationRequested();
                 Backend backend = "gpu".equals(requestedAccelerator) ? new Backend.GPU() : new Backend.CPU(null);
                 initializedBackendName = backend.getName();
-                initializedEngine = createAndInitializeEngine(modelFile.getAbsolutePath(), options, profile, backend);
+                initializedEngine = createAndInitializeEngineWithCrashMarker(modelSpec, modelFile.getAbsolutePath(), options, profile, backend, requestedAccelerator);
             }
         } catch (Exception e) {
+            TaiRuntimeCrashMarker.clear(appContext);
+            TaiRuntimeHistory.recordFailure(appContext, modelSpec, deviceCapabilities,
+                TaiModelSpec.BACKEND_LITERT_LM, acceleratorFromBackendName(initializedBackendName, requestedAccelerator),
+                e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            if (modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) {
+                TaiRuntimeHistory.recordAudioInputOutcome(appContext, modelSpec.id, deviceCapabilities, false);
+            }
             synchronized (this) {
                 boolean cancelled = loadCancellationRequested;
                 finishLoadingLocked();
@@ -486,6 +502,12 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                 loadedAtMs = System.currentTimeMillis();
                 lastUsedAtMs = loadedAtMs;
                 keepWarmUntilMs = keepWarmMinutes > 0 ? loadedAtMs + TimeUnit.MINUTES.toMillis(keepWarmMinutes) : 0L;
+                TaiRuntimeCrashMarker.clear(appContext);
+                TaiRuntimeHistory.recordSuccess(appContext, modelSpec, deviceCapabilities,
+                    TaiModelSpec.BACKEND_LITERT_LM, acceleratorFromBackendName(backendName, requestedAccelerator));
+                if (modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) {
+                    TaiRuntimeHistory.recordAudioInputOutcome(appContext, modelSpec.id, deviceCapabilities, true);
+                }
                 finishLoadingLocked();
                 statusMessage = keepWarmUntilMs > 0L ? "Model loaded and warm." : "Model loaded.";
                 maybeRefreshStateLocked();
@@ -514,6 +536,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         }
 
         closeEngine(initializedEngine);
+        TaiRuntimeCrashMarker.clear(appContext);
         synchronized (this) {
             finishLoadingLocked();
             runtimeState = "unloaded";
@@ -577,6 +600,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
     }
 
     private Engine createAndInitializeEngine(
+        @NonNull TaiModelSpec modelSpec,
         @NonNull String modelPath,
         @NonNull TaiRuntimeOptions options,
         @NonNull TaiModelProfile profile,
@@ -585,13 +609,25 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         applyExperimentalFlags(options, modelPath);
         String cacheDir = modelPath.startsWith("/data/local/tmp")
             ? appContext.getCacheDir().getAbsolutePath() : null;
+        boolean imageInput = modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)
+            || modelSpec.capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+        boolean audioInput = modelSpec.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)
+            || modelSpec.capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+        // The 5th EngineConfig arg is the engine's TOTAL token budget (KV-cache / max sequence),
+        // not the per-request output cap. Size it to the model's context window (or an explicit
+        // context_window override) so the input prompt always fits. Using the request's max_tokens
+        // here made short max_tokens (e.g. 12) reject any longer prompt with "Input token ids are
+        // too long" and reloaded the engine on every distinct max_tokens value.
+        int engineMaxTokens = options.contextWindow != null
+            ? options.contextWindow
+            : Math.max(profile.defaultMaxTokens, modelSpec.endpointContextWindow);
         EngineConfig config = new EngineConfig(
             modelPath,
             backend,
-            null,
-            null,
-            options.maxTokens == null ? profile.defaultMaxTokens : options.maxTokens,
-            null,
+            imageInput ? matchingBackend(backend) : null,
+            audioInput ? new Backend.CPU(null) : null,
+            engineMaxTokens,
+            imageInput ? 8 : null,
             cacheDir
         );
         Engine loadedEngine = new Engine(config);
@@ -609,11 +645,52 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         }
     }
 
+    private Engine createAndInitializeEngineWithCrashMarker(
+        @NonNull TaiModelSpec modelSpec,
+        @NonNull String modelPath,
+        @NonNull TaiRuntimeOptions options,
+        @NonNull TaiModelProfile profile,
+        @NonNull Backend backend,
+        @NonNull String accelerator
+    ) {
+        TaiRuntimeCrashMarker.markLoad(appContext, modelSpec, options.withAccelerator(accelerator), TaiModelSpec.BACKEND_LITERT_LM);
+        return createAndInitializeEngine(modelSpec, modelPath, options, profile, backend);
+    }
+
+    @NonNull
+    private Backend matchingBackend(@NonNull Backend backend) {
+        return backend instanceof Backend.GPU ? new Backend.GPU() : new Backend.CPU(null);
+    }
+
     @Nullable
     private String requestedAccelerator(@NonNull TaiRuntimeOptions options) {
         if (options.accelerator == null || options.accelerator.trim().isEmpty()
             || "auto".equalsIgnoreCase(options.accelerator)) return null;
         return options.accelerator.trim().toLowerCase(Locale.ROOT);
+    }
+
+    @NonNull
+    private List<String> safeAutoAccelerators(
+        @NonNull TaiModelSpec modelSpec,
+        @NonNull TaiDeviceCapabilities deviceCapabilities,
+        @NonNull TaiModelProfile profile
+    ) {
+        if (profile.supports("gpu") && deviceCapabilities.supportsAccelerator("gpu")
+            && TaiRuntimeHistory.hasSuccessfulGpu(appContext, modelSpec, deviceCapabilities)) {
+            return deviceCapabilities.compatibleAccelerators(profile);
+        }
+        if (profile.supports("cpu") && deviceCapabilities.supportsAccelerator("cpu")) {
+            return Collections.singletonList("cpu");
+        }
+        return Collections.emptyList();
+    }
+
+    @NonNull
+    private String acceleratorFromBackendName(@NonNull String backend, @Nullable String fallback) {
+        String value = backend.toLowerCase(Locale.ROOT);
+        if (value.contains("gpu")) return "gpu";
+        if (value.contains("cpu")) return "cpu";
+        return fallback == null ? "auto" : fallback;
     }
 
     private void applyExperimentalFlags(@NonNull TaiRuntimeOptions options, @NonNull String modelPath) {
@@ -872,7 +949,8 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
 
     @NonNull
     private String optionsKey(@NonNull TaiRuntimeOptions options) {
-        return String.valueOf(options.maxTokens) + "|"
+        // contextWindow (not maxTokens) sizes the engine, so reload only when it changes.
+        return String.valueOf(options.contextWindow) + "|"
             + options.topK + "|"
             + options.topP + "|"
             + options.temperature + "|"

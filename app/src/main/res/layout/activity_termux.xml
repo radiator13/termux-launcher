@@ -6,13 +6,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
         <FrameLayout
             android:id="@+id/terminal_root_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
         <View
             android:id="@+id/terminal_status_bar_background"
@@ -173,6 +177,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:visibility="gone">
 
             <FrameLayout
@@ -211,6 +217,19 @@
                     android:layout_height="match_parent"
                     android:visibility="gone"
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
+
+                <com.termux.app.DockEdgeGlowView
+                    android:id="@+id/accessory_edge_glow_fx"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
+
+                <View
+                    android:id="@+id/accessory_specular_fx"
+                    android:layout_width="300dp"
+                    android:layout_height="300dp"
+                    android:layout_gravity="center"
+                    android:visibility="gone" />
             </FrameLayout>
 
             <com.termux.app.LauncherAzGestureFxView
@@ -232,7 +251,7 @@
             <View
                 android:id="@+id/apps_bar_indicator_band"
                 android:layout_width="match_parent"
-                android:layout_height="9dp"
+                android:layout_height="3dp"
                 android:layout_above="@+id/apps_bar_az_row"
                 android:visibility="gone" />
 
@@ -265,6 +284,14 @@
                     android:layout_height="match_parent"
                     android:visibility="gone" />
             </FrameLayout>
+
+            <View
+                android:id="@+id/extrakeys_divider"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_alignTop="@+id/terminal_toolbar_view_pager"
+                android:layout_marginTop="5dp"
+                android:visibility="gone" />
 
             <com.termux.app.LauncherAzGestureFxView
                 android:id="@+id/apps_bar_az_fx_overlay"

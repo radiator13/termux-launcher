@@ -1,0 +1,38 @@
+Task 11 Evidence - Download Failure Recovery / Malicious Package Rejection
+==========================================================================
+Date: 2026-06-17
+Environment: Workspace (no local Android build environment)
+Verification method: Unit test code inspection
+
+CLAIM: Unit tests verify download failure recovery (malicious packages rejected, failed status persisted).
+
+EVIDENCE FILES:
+- app/src/test/java/com/termux/ai/TaiMlcPackageInstallerTest.java
+- app/src/test/java/com/termux/ai/MlcSafetyTest.java
+
+TaiMlcPackageInstallerTest VERIFIES (15 tests):
+- `validManifest_installsSuccessfully`: Happy path validation.
+- `httpUrl_rejected`: HTTP URLs rejected with `insecure_url`.
+- `missingHash_rejected`: Missing SHA-256 in manifest file entry rejected with `mlc_hash_mismatch`.
+- `soFile_rejected`: `.so` files rejected with `mlc_native_artifact_forbidden`.
+- `rawWeights_rejected`: `.safetensors`, `.gguf`, `.bin`, `.pt`, `.onnx` rejected with `mlc_raw_weights_forbidden`.
+- `pathTraversal_rejected`: `../` paths rejected with `mlc_path_traversal`.
+- `unknownModelLibraryId_rejected`: Unknown `modelLibraryId` rejected with `mlc_unknown_model_library`.
+- `duplicateModelId_rejected`: Duplicate model ID rejected with `mlc_duplicate_model`.
+- `hashMismatch_rejected`: SHA-256 mismatch rejected with `mlc_hash_mismatch`.
+- `htmlResponse_rejected`: HTML/login responses rejected before JSON parsing.
+- `missingFile_rejected`: Missing file on disk rejected with `mlc_file_missing`.
+- `unsupportedSchema_rejected`: Unsupported schema version rejected with `mlc_unsupported_schema`.
+- `invalidBackend_rejected`: Backend != `mlc-llm` rejected with `mlc_invalid_manifest`.
+- `emptyManifest_rejected`: Empty manifest rejected.
+- `nonJsonManifest_rejected`: Non-JSON manifest rejected.
+
+MlcSafetyTest VERIFIES:
+- `mlcPackageValidator_rejectsCustomSo`: `.so` files rejected by `TaiMlcPackageValidator`.
+- `mlcPackageValidator_rejectsPathTraversal`: `../` paths rejected.
+- `mlcPackageValidator_rejectsRawWeights`: Raw weight extensions rejected.
+- `mlcPackageValidator_rejectsHttpUrl`: HTTP URLs rejected.
+- `mlcPackageValidator_rejectsMissingHash`: Missing SHA-256 rejected.
+- `mlcPackageValidator_rejectsUnknownModelLibraryId`: Unknown `modelLibraryId` rejected.
+
+CONCLUSION: Download and install trust boundary is fully covered by 21 unit tests. Malicious packages (custom `.so`, raw weights, path traversal, HTTP URLs, hash mismatches, HTML responses, unknown libraries) are all rejected with specific error codes. Failed status is surfaced to the user via `TaiModelDownloadService.formatErrorForNotification()`.

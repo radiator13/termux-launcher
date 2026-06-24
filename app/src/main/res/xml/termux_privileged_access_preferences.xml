@@ -4,10 +4,12 @@
         app:key="privileged_access_overview"
         app:title="@string/termux_privileged_access_overview_title">
 
-        <Preference
+        <com.termux.app.fragments.settings.StatusCardPreference
             app:key="privileged_backend_status"
             app:title="@string/termux_privileged_backend_status_title"
-            app:summary="@string/termux_privileged_backend_status_summary" />
+            app:summary="@string/termux_privileged_backend_status_summary"
+            app:persistent="false"
+            app:selectable="false" />
 
     </PreferenceCategory>
 

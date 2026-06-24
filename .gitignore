@@ -7,6 +7,10 @@ build/
 release/
 *.apk
 *.so
+!app/src/main/jniLibs/
+!app/src/main/jniLibs/arm64-v8a/
+!app/src/main/jniLibs/arm64-v8a/libMNN.so
+!app/src/main/jniLibs/arm64-v8a/libmnnllmapp.so
 .externalNativeBuild
 .cxx
 *.zip
@@ -62,3 +66,12 @@ AGENTS.md
 
 # Reference repos
 reference-repos/
+
+# Design handoff bundle (reference only, not part of the app source)
+/TL-handoff/
+
+# Local agent / session scratch (do not commit)
+.codex-remote-attachments/
+.omo/
+*.mp4
+WhatsApp Video*

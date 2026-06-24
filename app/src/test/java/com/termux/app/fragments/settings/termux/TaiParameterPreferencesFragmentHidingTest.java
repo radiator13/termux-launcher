@@ -1,0 +1,128 @@
+package com.termux.app.fragments.settings.termux;
+
+import com.termux.ai.TaiModelRegistry;
+import com.termux.ai.TaiModelSpec;
+import com.termux.ai.TaiSettings;
+
+import org.junit.Test;
+
+import java.util.LinkedHashSet;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class TaiParameterPreferencesFragmentHidingTest {
+
+    private TaiModelSpec litertMultimodal(boolean speculative) {
+        LinkedHashSet<String> caps = new LinkedHashSet<>();
+        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        caps.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
+        if (speculative) caps.add(TaiModelSpec.CAPABILITY_SPECULATIVE_DECODING);
+        return new TaiModelSpec(
+            "gemma-4-e2b-it-litert-lm",
+            "Gemma 4 E2B",
+            "chat",
+            "test",
+            "/models/gemma-4-e2b-it-litert-lm/model.litertlm",
+            "test",
+            0L,
+            caps,
+            false,
+            null,
+            TaiModelSpec.BACKEND_LITERT_LM,
+            TaiModelSpec.FORMAT_LITERTLM,
+            "gemma",
+            null,
+            4096,
+            4,
+            null
+        );
+    }
+
+    private TaiModelSpec mobileActions() {
+        LinkedHashSet<String> caps = new LinkedHashSet<>();
+        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        caps.add(TaiModelSpec.CAPABILITY_TOOL_USE);
+        caps.add(TaiModelSpec.CAPABILITY_MOBILE_ACTIONS);
+        return new TaiModelSpec(
+            TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M,
+            "FunctionGemma Mobile Actions",
+            "Mobile actions tool-call model",
+            "test",
+            "/models/functiongemma-270m-mobile-actions-litert-lm/model.litertlm",
+            "test",
+            0L,
+            caps,
+            false,
+            null,
+            TaiModelSpec.BACKEND_LITERT_LM,
+            TaiModelSpec.FORMAT_LITERTLM,
+            "gemma",
+            null,
+            1024,
+            6,
+            null
+        );
+    }
+
+    private TaiModelSpec mnnModel() {
+        LinkedHashSet<String> caps = new LinkedHashSet<>();
+        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        caps.add(TaiModelSpec.CAPABILITY_CODE);
+        return new TaiModelSpec(
+            "qwen2.5-coder-1.5b-instruct-mnn",
+            "Qwen2.5 Coder MNN",
+            "chat",
+            "test",
+            "/models/qwen2.5-coder-1.5b-instruct-mnn/config.json",
+            "test",
+            0L,
+            caps,
+            false,
+            null,
+            TaiModelSpec.BACKEND_MNN_LLM,
+            TaiModelSpec.FORMAT_MNN,
+            "qwen2.5",
+            "int4",
+            8192,
+            4,
+            null
+        );
+    }
+
+    @Test
+    public void thinkingParam_isAlwaysHidden() {
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            litertMultimodal(false), "gemma-4-e2b-it-litert-lm", TaiSettings.FIELD_ENABLE_THINKING, true));
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            mnnModel(), "qwen2.5-coder-1.5b-instruct-mnn", TaiSettings.FIELD_ENABLE_THINKING, true));
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            null, null, TaiSettings.FIELD_ENABLE_THINKING, false));
+    }
+
+    @Test
+    public void speculativeDecodingParam_hiddenUnlessModelAdvertisesIt() {
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            litertMultimodal(false), "gemma-4-e2b-it-litert-lm", TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING, true));
+        assertTrue(TaiParameterPreferencesFragment.shouldShowParameter(
+            litertMultimodal(true), "gemma-4-e2b-it-litert-lm", TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING, true));
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            mnnModel(), "qwen2.5-coder-1.5b-instruct-mnn", TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING, true));
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            null, "gemma-4-e2b-it-litert-lm", TaiSettings.FIELD_ENABLE_SPECULATIVE_DECODING, true));
+    }
+
+    @Test
+    public void acceleratorParam_hiddenForCpuOnlyFunctionGemma() {
+        assertFalse(TaiParameterPreferencesFragment.shouldShowParameter(
+            mobileActions(), TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M, TaiSettings.FIELD_ACCELERATOR, true));
+        assertTrue(TaiParameterPreferencesFragment.shouldShowParameter(
+            litertMultimodal(false), "gemma-4-e2b-it-litert-lm", TaiSettings.FIELD_ACCELERATOR, true));
+    }
+
+    @Test
+    public void acceleratorParam_visibleForGlobalScreen() {
+        assertTrue(TaiParameterPreferencesFragment.shouldShowParameter(
+            null, null, TaiSettings.FIELD_ACCELERATOR, false));
+    }
+}

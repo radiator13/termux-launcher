@@ -12,6 +12,10 @@
     <color name="termux_on_surface">#E8EDF7</color>
     <color name="termux_on_surface_variant">#A9B4C5</color>
     <color name="termux_outline_variant">#404B5D</color>
+    <color name="termux_primary_container">#29477A</color>
+    <color name="termux_on_primary_container">#D9E2FF</color>
+    <color name="termux_tertiary_container">#4A3780</color>
+    <color name="termux_on_tertiary_container">#EADDFF</color>
     <color name="termux_accent_container">#29477A</color>
     <color name="termux_on_accent_container">#D9E2FF</color>
     <color name="termux_error">#FFB4AB</color>

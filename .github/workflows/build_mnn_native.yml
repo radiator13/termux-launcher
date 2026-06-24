@@ -1,0 +1,97 @@
+name: Build MNN native (arm64)
+
+# Builds libMNN.so (with the LLM engine bundled) and libmnnllmapp.so for arm64-v8a from
+# alibaba/MNN @ 3.6.0, with a patched utf8_stream_processor.hpp that validates UTF-8
+# continuation bytes — so a malformed multibyte token from the model can never reach
+# NewStringUTF and SIGABRT the :tai_runtime process. Artifacts are committed into
+# app/src/main/jniLibs/arm64-v8a/ by hand after a green run.
+#
+# Iterative: dispatch manually or push this file. Does not touch the app build.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [experimental]
+    paths:
+      - '.github/workflows/build_mnn_native.yml'
+      - 'ci/mnn-patch/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout MNN @ 3.6.0
+        uses: actions/checkout@v6
+        with:
+          repository: alibaba/MNN
+          ref: '3.6.0'
+          submodules: recursive
+          path: mnn
+
+      - name: Checkout this repo (for the UTF-8 patch)
+        uses: actions/checkout@v6
+        with:
+          path: self
+
+      - name: Apply UTF-8 stream-processor patch
+        run: |
+          set -euxo pipefail
+          DST="mnn/apps/Android/MnnLlmChat/app/src/main/cpp/utf8_stream_processor.hpp"
+          cp -v self/ci/mnn-patch/utf8_stream_processor.hpp "$DST"
+          grep -q "0xC0) != 0x80" "$DST"   # fail fast if the patch didn't land
+          echo "--- patched header ---"; cat "$DST"
+
+      - name: Setup Android NDK 27.2.12479018
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          local-cache: false
+
+      - name: Build MNN (LLM + vision + OpenCL) for arm64-v8a
+        env:
+          ANDROID_NDK: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          set -euxo pipefail
+          cd mnn/project/android
+          mkdir -p build_64 && cd build_64
+          ../build_64.sh "-DMNN_LOW_MEMORY=true -DMNN_CPU_WEIGHT_DEQUANT_GEMM=true -DMNN_BUILD_LLM=true -DMNN_SUPPORT_TRANSFORMER_FUSE=true -DMNN_ARM82=true -DMNN_USE_LOGCAT=true -DMNN_OPENCL=true -DLLM_SUPPORT_VISION=true -DMNN_BUILD_OPENCV=true -DMNN_IMGCODECS=true -DLLM_SUPPORT_AUDIO=true -DMNN_BUILD_AUDIO=true -DMNN_BUILD_DIFFUSION=ON -DMNN_SEP_BUILD=OFF -DCMAKE_SHARED_LINKER_FLAGS='-Wl,-z,max-page-size=16384' -DCMAKE_INSTALL_PREFIX=."
+          echo "--- build_64 output ---"
+          ls -la
+          mkdir -p lib
+          find . -maxdepth 2 -name 'libMNN*.so' -exec cp -v {} lib/ \;
+          ls -la lib
+
+      - name: Build app native (libmnnllmapp.so)
+        env:
+          ANDROID_NDK: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          set -euxo pipefail
+          CPP="mnn/apps/Android/MnnLlmChat/app/src/main/cpp"
+          cmake -S "$CPP" -B build_app \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-30 \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_app -j"$(nproc)"
+          echo "--- built app native ---"
+          find build_app -name '*.so'
+
+      - name: Collect arm64 .so artifacts
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          find mnn/project/android/build_64 -maxdepth 2 -name 'libMNN.so' -exec cp -v {} out/ \;
+          find build_app -name 'libmnnllmapp.so' -exec cp -v {} out/ \;
+          echo "--- artifacts ---"
+          ls -la out
+          test -f out/libmnnllmapp.so
+          test -f out/libMNN.so
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mnn-native-arm64-v8a
+          path: out/*.so
+          if-no-files-found: error

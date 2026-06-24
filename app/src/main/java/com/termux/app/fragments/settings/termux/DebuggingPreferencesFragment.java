@@ -10,9 +10,10 @@ import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceDataStore;
-import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import com.termux.R;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.privileged.PrivilegedBackend;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.ShizukuBackend;
@@ -20,7 +21,7 @@ import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.logger.Logger;
 
 @Keep
-public class DebuggingPreferencesFragment extends PreferenceFragmentCompat {
+public class DebuggingPreferencesFragment extends MaterialPreferenceFragment {
     private static final String LOG_TAG = "DebuggingPrefs";
 
     @Override
@@ -33,6 +34,7 @@ public class DebuggingPreferencesFragment extends PreferenceFragmentCompat {
         setPreferencesFromResource(R.xml.termux_debugging_preferences, rootKey);
         configureLoggingPreferences(context);
         configurePrivilegedBackendSmokeTestPreference(context);
+        SettingsLayoutUtils.applyScreenLayout(this);
     }
 
     private void configureLoggingPreferences(@NonNull Context context) {

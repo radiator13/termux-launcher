@@ -67,10 +67,21 @@ public final class AzScrubRowView extends AppCompatTextView {
     @Nullable private ScrubCallback callback;
     private int currentSelectionIndex = 0;
     private final Paint letterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // Crisp dark outline drawn under each (light) letter so it stays legible over both light and dark
+    // wallpaper regions — a sharp stroke, unlike the old blurry drop-shadow which read as fuzzy.
+    private final Paint letterOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Rect glyphRect = new Rect();
     private float activeTouchX = -1f;
     private float waveStrength = 0f;
     private int accentColor = Color.WHITE;
+    // Softer than pure black: a desaturated near-black that keeps letters legible over any
+    // wallpaper without the harsh hard-edged look the old #000 stroke had.
+    private static final int OUTLINE_DARK = 0xFF1A1F2A;
+    // A slow "sword-glint" sweep position (runs off-screen to off-screen) that, while the row is
+    // touched, brushes a soft material-colour shimmer across every letter's outline in turn.
+    private float shimmerPhase = 0f;
+    private boolean shimmerActive;
+    @Nullable private ValueAnimator shimmerAnimator;
     @Nullable private ValueAnimator settleAnimator;
     private long lastTapUpTimeMs;
     private float lastTapUpX = Float.NaN;
@@ -108,6 +119,10 @@ public final class AzScrubRowView extends AppCompatTextView {
         letterPaint.setTextAlign(Paint.Align.CENTER);
         letterPaint.setTextSize(getTextSize());
         letterPaint.setColor(getCurrentTextColor());
+        letterOutlinePaint.setTextAlign(Paint.Align.CENTER);
+        letterOutlinePaint.setStyle(Paint.Style.STROKE);
+        letterOutlinePaint.setStrokeJoin(Paint.Join.ROUND);
+        letterOutlinePaint.setStrokeCap(Paint.Cap.ROUND);
         ViewConfiguration viewConfiguration = ViewConfiguration.get(getContext());
         doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout();
         doubleTapSlopPx = viewConfiguration.getScaledDoubleTapSlop();
@@ -116,6 +131,36 @@ public final class AzScrubRowView extends AppCompatTextView {
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
+
+    private float dp(float value) {
+        return value * getResources().getDisplayMetrics().density;
+    }
+
+    // Letters span the full row width (no inset). Kept as a band helper so the draw and the
+    // touch->letter mapping stay derived from one place.
+    private float letterInsetPx() {
+        return 0f;
+    }
+
+    private float letterContentWidth() {
+        return Math.max(1f, getWidth() - (letterInsetPx() * 2f));
+    }
+
+    private float letterSlotWidth() {
+        return letterContentWidth() / Math.max(1, visibleLetters.length);
+    }
+
+    private float letterCenterX(int index) {
+        float slot = letterSlotWidth();
+        return letterInsetPx() + (slot * index) + (slot * 0.5f);
+    }
+
+    private int indexForTouchX(float x) {
+        int len = Math.max(1, visibleLetters.length);
+        int index = (int) (((x - letterInsetPx()) / letterContentWidth()) * len);
+        return Math.max(0, Math.min(len - 1, index));
+    }
+
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -130,16 +175,16 @@ public final class AzScrubRowView extends AppCompatTextView {
         float baseTextSize = getTextSize();
         letterPaint.setTextSize(baseTextSize);
         float contentBottom = height - getPaddingBottom();
-        float slot = width / Math.max(1, visibleLetters.length);
+        float slot = letterSlotWidth();
         float anchorX = activeTouchX < 0f ? (width * 0.5f) : activeTouchX;
         float waveAmplitude = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK ? 0f : (dp(15) * waveStrength);
-        int activeIndex = resolveActiveIndex(anchorX, slot);
+        int activeIndex = resolveActiveIndex(anchorX);
         boolean hasInlineFocus = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK
             && waveStrength > 0.01f
             && (activeTouchX >= 0f || lockedInlineLetter != null);
 
         for (int i = 0; i < visibleLetters.length; i++) {
-            float x = (slot * i) + (slot * 0.5f);
+            float x = letterCenterX(i);
             float distance = Math.abs(x - anchorX) / Math.max(1f, slot);
             float envelope = (float) Math.exp(-(distance * distance) * 0.85f);
             float waveLift = (float) Math.sin(Math.min(1f, envelope) * (Math.PI * 0.5f)) * waveAmplitude;
@@ -165,7 +210,28 @@ public final class AzScrubRowView extends AppCompatTextView {
                     : clamp01(envelope * waveStrength * 0.72f);
                 letterPaint.setColor(blendColors(baseColor, focusColor, colorProgress));
             }
-            canvas.drawText(String.valueOf(visibleLetters[i]), x, baseline, letterPaint);
+            // Crisp outline pass under the fill: a sharp dark stroke that keeps the light letter
+            // readable on any wallpaper, replacing the fuzzy drop-shadow. Constant width so the
+            // stroke never thickens enough to fill the letters' inner holes (no "bloat").
+            String glyph = String.valueOf(visibleLetters[i]);
+            float density = getResources().getDisplayMetrics().density;
+            letterOutlinePaint.setTextSize(letterPaint.getTextSize());
+            letterOutlinePaint.setTypeface(letterPaint.getTypeface());
+            letterOutlinePaint.setStrokeWidth(density * 1.4f);
+            // Sword-glint shimmer: a soft material-accent highlight that the sweep brushes across
+            // each outline in turn. Gaussian falloff around the sweep position; soothing, capped.
+            int outlineBase = OUTLINE_DARK;
+            if (shimmerActive) {
+                float lx = x / width;
+                float d = (lx - shimmerPhase) / 0.16f;
+                float glint = (float) Math.exp(-(d * d));
+                if (glint > 0.001f) {
+                    outlineBase = blendColors(OUTLINE_DARK, accentColor, clamp01(glint) * 0.6f);
+                }
+            }
+            letterOutlinePaint.setColor(withAlpha(outlineBase, activeFocus ? 215 : 195));
+            canvas.drawText(glyph, x, baseline, letterOutlinePaint);
+            canvas.drawText(glyph, x, baseline, letterPaint);
         }
     }
 
@@ -271,9 +337,9 @@ public final class AzScrubRowView extends AppCompatTextView {
         }
 
         float width = Math.max(1f, getWidth());
-        float slot = width / Math.max(1, visibleLetters.length);
+        float slot = letterSlotWidth();
         float anchorX = activeTouchX < 0f ? (width * 0.5f) : activeTouchX;
-        int activeIndex = resolveActiveIndex(anchorX, slot);
+        int activeIndex = resolveActiveIndex(anchorX);
         int index = indexOfVisibleLetter(letter);
         if (index < 0) {
             index = activeIndex;
@@ -283,7 +349,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         }
 
         boolean activeFocus = index == activeIndex;
-        float x = (slot * index) + (slot * 0.5f);
+        float x = letterCenterX(index);
         float distance = Math.abs(x - anchorX) / Math.max(1f, slot);
         float envelope = (float) Math.exp(-(distance * distance) * 0.85f);
         float waveLift = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK
@@ -356,6 +422,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 stopSettleAnimation();
+                startShimmer();
                 updateInteractionRenderLayer(true);
                 activeTouchX = x;
                 activeLetterIndex = indexOfVisibleLetter(letter);
@@ -399,6 +466,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                     waveStrength = 0f;
                     activeTouchX = -1f;
                     activeLetterIndex = -1;
+                    stopShimmer();
                     updateInteractionRenderLayer(false);
                     invalidate();
                 }
@@ -413,6 +481,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                     waveStrength = 0f;
                     activeTouchX = -1f;
                     activeLetterIndex = -1;
+                    stopShimmer();
                     updateInteractionRenderLayer(false);
                     invalidate();
                 }
@@ -427,6 +496,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         if (!isAttachedToWindow()) {
             waveStrength = 0f;
             activeTouchX = -1f;
+            stopShimmer();
             updateInteractionRenderLayer(false);
             invalidate();
             return;
@@ -443,16 +513,50 @@ public final class AzScrubRowView extends AppCompatTextView {
             public void onAnimationEnd(android.animation.Animator animation) {
                 waveStrength = 0f;
                 activeTouchX = -1f;
+                stopShimmer();
                 updateInteractionRenderLayer(false);
                 invalidate();
             }
 
             @Override
             public void onAnimationCancel(android.animation.Animator animation) {
+                stopShimmer();
                 updateInteractionRenderLayer(false);
             }
         });
         settleAnimator.start();
+    }
+
+    private void startShimmer() {
+        shimmerActive = true;
+        if (shimmerAnimator != null && shimmerAnimator.isRunning()) return;
+        if (!isAttachedToWindow()) return;
+        // Sweep from just off the left edge to just off the right, slow and linear, repeating.
+        shimmerAnimator = ValueAnimator.ofFloat(-0.2f, 1.2f);
+        shimmerAnimator.setDuration(1700L);
+        shimmerAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        shimmerAnimator.setRepeatMode(ValueAnimator.RESTART);
+        shimmerAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+        shimmerAnimator.addUpdateListener(animation -> {
+            shimmerPhase = (float) animation.getAnimatedValue();
+            if (shimmerActive) invalidate();
+        });
+        shimmerAnimator.start();
+    }
+
+    private void stopShimmer() {
+        shimmerActive = false;
+        if (shimmerAnimator != null) {
+            shimmerAnimator.cancel();
+            shimmerAnimator = null;
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        stopSettleAnimation();
+        stopShimmer();
     }
 
     private void stopSettleAnimation() {
@@ -476,18 +580,15 @@ public final class AzScrubRowView extends AppCompatTextView {
     }
 
     private char pickLetter(float x, boolean applyHysteresis) {
-        float width = Math.max(1f, getWidth());
-        int len = Math.max(1, visibleLetters.length);
-        float slotWidth = width / len;
-        int index = (int) ((x / width) * len);
-        index = Math.max(0, Math.min(len - 1, index));
+        float slotWidth = letterSlotWidth();
+        int index = indexForTouchX(x);
         if (interactionMode == InteractionMode.WAVE_TRACK) {
             if (activeLetterIndex < 0 || !applyHysteresis) {
                 activeLetterIndex = index;
             } else if (Math.abs(index - activeLetterIndex) > 1) {
                 activeLetterIndex = index;
             } else if (index != activeLetterIndex) {
-                float boundary = Math.max(index, activeLetterIndex) * slotWidth;
+                float boundary = letterInsetPx() + (Math.max(index, activeLetterIndex) * slotWidth);
                 float hysteresis = slotWidth * LETTER_SLOT_HYSTERESIS_RATIO;
                 if (index > activeLetterIndex) {
                     if (x >= (boundary + hysteresis)) {
@@ -514,9 +615,8 @@ public final class AzScrubRowView extends AppCompatTextView {
         return -1;
     }
 
-    private int resolveActiveIndex(float anchorX, float slot) {
-        int activeIndex = (int) (anchorX / Math.max(1f, slot));
-        activeIndex = Math.max(0, Math.min(visibleLetters.length - 1, activeIndex));
+    private int resolveActiveIndex(float anchorX) {
+        int activeIndex = indexForTouchX(anchorX);
         if (interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK && lockedInlineLetter != null) {
             int lockedIndex = indexOfVisibleLetter(lockedInlineLetter);
             if (lockedIndex >= 0) {
@@ -531,9 +631,10 @@ public final class AzScrubRowView extends AppCompatTextView {
     }
 
     private int resolveFocusLetterColor() {
-        int vivid = boostColor(accentColor, 1.22f, 1.12f);
-        return blendColors(vivid, Color.WHITE, 0.18f);
+        int vivid = boostColor(accentColor, 1.34f, 1.18f);
+        return blendColors(vivid, Color.WHITE, 0.22f);
     }
+
 
     private void applyLetterWeight(float envelope, boolean active) {
         float influence = interactionMode == InteractionMode.INLINE_EMPHASIS_TRACK
@@ -573,6 +674,10 @@ public final class AzScrubRowView extends AppCompatTextView {
         hsv[1] = Math.max(0f, Math.min(1f, hsv[1] * saturationMultiplier));
         hsv[2] = Math.max(0f, Math.min(1f, hsv[2] * valueMultiplier));
         return Color.HSVToColor(Color.alpha(color), hsv);
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (Math.max(0, Math.min(255, alpha)) << 24) | (color & 0x00FFFFFF);
     }
 
     private static float clamp01(float value) {

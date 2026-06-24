@@ -54,15 +54,28 @@ public final class TaiModelProfile {
 
         String id = normalizedIdentity(modelSpec.id);
         String path = modelSpec.localPath == null ? "" : modelSpec.localPath.toLowerCase(Locale.ROOT);
-        if ("gemma4e2bit".equals(id) || path.contains("gemma-4-e2b-it.litertlm")) {
+        if (TaiModelSpec.BACKEND_MNN_LLM.equals(modelSpec.backend)) {
+            return new TaiModelProfile(Collections.singletonList("cpu"), 1024, 40, 0.90d, 0.80d,
+                modelSpec.recommendedRamGb > 0 ? modelSpec.recommendedRamGb : null, "tai-mnn-config-default");
+        }
+        if ("gemma4e2bit".equals(id) || "gemma4e2bitlitertlm".equals(id) || path.contains("gemma-4-e2b-it.litertlm")) {
             return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4000, 1.0d, 8);
         }
-        if ("gemma4e4bit".equals(id) || path.contains("gemma-4-e4b-it.litertlm")) {
+        if ("gemma4e4bit".equals(id) || "gemma4e4bitlitertlm".equals(id) || path.contains("gemma-4-e4b-it.litertlm")) {
             return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4000, 1.0d, 12);
         }
         if (normalizedIdentity(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M).equals(id)
             || path.contains("mobile_actions_q8_ekv1024")) {
             return edgeGalleryProfile(Collections.singletonList("cpu"), 1024, 0.0d, 6);
+        }
+        if ("deepseekr1distillqwen15blitertlm".equals(id)
+            || path.contains("deepseek-r1-distill-qwen-1.5b_multi-prefill-seq_q8_ekv4096.litertlm")) {
+            return edgeGalleryProfile(Arrays.asList("gpu", "cpu"), 4096, 1.0d, 6);
+        }
+        if ("qwen2515binstructlitertlm".equals(id)
+            || path.contains("qwen2.5-1.5b-instruct_multi-prefill-seq_q8_ekv4096.litertlm")) {
+            return new TaiModelProfile(Arrays.asList("gpu", "cpu"), 4096, 20, 0.80d, 0.70d, 6,
+                SOURCE_EDGE_GALLERY_1_0_15);
         }
         if ("tinygarden270m".equals(id) || path.contains("tiny_garden_q8_ekv1024")) {
             return edgeGalleryProfile(Collections.singletonList("cpu"), 1024, 0.0d, 6);

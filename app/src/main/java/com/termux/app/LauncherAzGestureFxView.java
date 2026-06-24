@@ -2,6 +2,7 @@ package com.termux.app;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -49,6 +50,8 @@ public final class LauncherAzGestureFxView extends View {
     private final Paint edgeInnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bloomPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pageIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Soft underglow blur for the active page tick; lazily built once the density is known. */
+    private BlurMaskFilter pageTickGlow;
     private final Paint previewFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint previewLabelPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final Path liquidBridgePath = new Path();
@@ -84,12 +87,11 @@ public final class LauncherAzGestureFxView extends View {
     private boolean interactionCanPageRight;
     private int interactionCurrentPageIndex;
     private int interactionPageCount = 1;
+    private int interactionDynamicPageIndex = -1;
     private float interactionPageIndicatorPosition;
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
     private boolean interactionUseSubtlePageIndicators;
-    private boolean compactDockSpacingEnabled;
-    private boolean drawingCompactPageIndicator;
     private float subtlePageIndicatorAttention = 1f;
     private boolean subtlePageIndicatorFadeScheduled;
     @Nullable private ValueAnimator subtlePageIndicatorAttentionAnimator;
@@ -97,7 +99,7 @@ public final class LauncherAzGestureFxView extends View {
         @Override
         public void run() {
             subtlePageIndicatorFadeScheduled = false;
-            animateSubtlePageIndicatorAttentionTo(0f);
+            animateSubtlePageIndicatorAttentionTo(PINNED_INDICATOR_IDLE_ATTENTION);
         }
     };
     private float edgeProximityLeft;
@@ -114,8 +116,10 @@ public final class LauncherAzGestureFxView extends View {
     private float previewDisplayRawX;
     private boolean focusedAppPreviewLaunchDismissing;
     private boolean focusedAppPreviewLabelEnabled;
+    private boolean focusedIconRingEnabled = true;
     @Nullable private String focusedAppPreviewLabel;
     private boolean darkThemeActive = true;
+    private boolean capsuleDockStyle;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
 
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
@@ -123,6 +127,7 @@ public final class LauncherAzGestureFxView extends View {
     private static final long FOCUS_HOLD_MS = 140L;
     private static final long PINNED_INDICATOR_IDLE_DELAY_MS = 5000L;
     private static final long PINNED_INDICATOR_FADE_DURATION_MS = 520L;
+    private static final float PINNED_INDICATOR_IDLE_ATTENTION = 0.42f;
 
     private boolean launchBloomActive;
     private float launchBloomRawX;
@@ -243,8 +248,10 @@ public final class LauncherAzGestureFxView extends View {
         float currentPagePosition,
         int pageCount,
         boolean showPageIndicators,
-        boolean useSubtlePageIndicators
+        boolean useSubtlePageIndicators,
+        int dynamicPageIndex
     ) {
+        interactionDynamicPageIndex = dynamicPageIndex;
         int newPageCount = Math.max(1, pageCount);
         float newPagePosition = clamp(currentPagePosition, 0f, newPageCount - 1f);
         int newPageIndex = Math.min(Math.max(0, Math.round(newPagePosition)), newPageCount - 1);
@@ -341,11 +348,11 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
-    public void setCompactDockSpacingEnabled(boolean enabled) {
-        if (compactDockSpacingEnabled == enabled) {
+    public void setFocusedIconRingEnabled(boolean enabled) {
+        if (focusedIconRingEnabled == enabled) {
             return;
         }
-        compactDockSpacingEnabled = enabled;
+        focusedIconRingEnabled = enabled;
         invalidate();
     }
 
@@ -354,6 +361,14 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
         darkThemeActive = active;
+        invalidate();
+    }
+
+    public void setCapsuleDockStyle(boolean capsule) {
+        if (capsuleDockStyle == capsule) {
+            return;
+        }
+        capsuleDockStyle = capsule;
         invalidate();
     }
 
@@ -377,6 +392,7 @@ public final class LauncherAzGestureFxView extends View {
             interactionCanPageRight = false;
             interactionCurrentPageIndex = 0;
             interactionPageCount = 1;
+            interactionDynamicPageIndex = -1;
             interactionPageIndicatorPosition = 0f;
             cancelPageIndicatorAnimations();
             cancelSubtlePageIndicatorIdleFade();
@@ -447,7 +463,9 @@ public final class LauncherAzGestureFxView extends View {
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive
             && (interactionCanPageLeft || interactionCanPageRight || interactionPageCount > 1);
-        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f && focusedAppPreviewProgress <= 0.01f) {
+        boolean drawFocusRing = focusedIconRingEnabled && hasFocus && !focusRawRect.isEmpty();
+        if (!shouldDrawInteractionOverflow && edgeDwellProgress <= 0.01f
+            && focusedAppPreviewProgress <= 0.01f && !drawFocusRing) {
             return;
         }
         if (edgeDwellProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
@@ -461,9 +479,30 @@ public final class LauncherAzGestureFxView extends View {
                 drawInteractionPageIndicators(canvas);
             }
         }
+        if (drawFocusRing && renderLayer == RenderLayer.OVERLAY) {
+            drawFocusedIconRing(canvas);
+        }
         if (focusedAppPreviewProgress > 0.01f && renderLayer == RenderLayer.OVERLAY) {
             drawFocusedAppPreviewIcon(canvas);
         }
+    }
+
+    /**
+     * 2dp accent ring hugging the app icon currently under the finger while scrubbing the icon
+     * row — the design's "active app" marker (focused-during-scrub only). Snaps to each icon as
+     * the focus moves; the apps are circular, so a circular ring 3dp outside the icon reads clean.
+     */
+    private void drawFocusedIconRing(Canvas canvas) {
+        float left = focusRawRect.left - locationOnScreen[0];
+        float top = focusRawRect.top - locationOnScreen[1];
+        float right = focusRawRect.right - locationOnScreen[0];
+        float bottom = focusRawRect.bottom - locationOnScreen[1];
+        float cx = (left + right) * 0.5f;
+        float cy = (top + bottom) * 0.5f;
+        float radius = (Math.min(right - left, bottom - top) * 0.5f) + dp(3f);
+        glassStrokePaint.setStrokeWidth(dp(2f));
+        glassStrokePaint.setColor(withAlpha(boostColor(edgeTintColor, 1.22f, 1.10f), 235));
+        canvas.drawCircle(cx, cy, radius, glassStrokePaint);
     }
 
     private void drawFocusedAppPreviewIcon(Canvas canvas) {
@@ -834,137 +873,102 @@ public final class LauncherAzGestureFxView extends View {
         }
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
-        boolean compactInteraction = compactDockSpacingEnabled;
-        if (compactInteraction && subtle && attention < 0.08f) {
-            drawCompactIdlePageDots(canvas, interactionPageIndicatorPosition, interactionPageCount);
-            return;
-        }
-        if (compactInteraction) {
-            drawCompactActivePageIndicator(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
-            return;
-        }
-        drawPageIndicatorStrip(
-            canvas,
-            interactionPageIndicatorPosition,
-            interactionPageCount,
-            subtle
-                ? clamp(getWidth() * lerp(0.16f, 0.22f, attention), dp(48f), dp(118f))
-                : clamp(getWidth() * 0.34f, dp(120f), dp(220f)),
-            subtle ? dp(lerp(4.6f, 6f, attention)) : dp(8.5f),
-            subtle ? dp(lerp(5.8f, 7f, attention)) : dp(10f),
-            subtle
-                ? withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, attention)))
-                : withAlpha(boostColor(glassTintColor, 1.22f, 1.08f), 150),
-            subtle
-                ? withAlpha(boostColor(edgeTintColor, 1.20f, 1.08f), Math.round(lerp(104f, 196f, attention)))
-                : withAlpha(boostColor(edgeTintColor, 1.28f, 1.14f), 232),
-            !subtle
-        );
+        // Both dock styles use the same "minimal ticks" indicator centred on the top edge.
+        drawPageTicksIndicator(canvas, interactionPageIndicatorPosition, interactionPageCount, attention, interactionDynamicPageIndex);
     }
 
-    private void drawCompactActivePageIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention) {
-        float clampedAttention = clamp01(attention);
-        drawingCompactPageIndicator = true;
-        try {
-            drawPageIndicatorStrip(
-                canvas,
-                activePagePosition,
-                totalPages,
-                clamp(getWidth() * lerp(0.08f, 0.13f, clampedAttention), dp(26f), dp(70f)),
-                dp(lerp(1.2f, 1.7f, clampedAttention)),
-                dp(lerp(3.2f, 4.2f, clampedAttention)),
-                withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), Math.round(lerp(48f, 112f, clampedAttention))),
-                withAlpha(boostColor(edgeTintColor, 1.20f, 1.08f), Math.round(lerp(104f, 196f, clampedAttention))),
-                false
-            );
-        } finally {
-            drawingCompactPageIndicator = false;
-        }
-    }
+    /**
+     * "Minimal ticks" page indicator (per the design spec): a row of small horizontal tick marks
+     * centred on the dock's top edge. The active tick brightens and widens with a soft underglow;
+     * inactive ticks are dim and short. Everything keys off proximity to the fractional page
+     * position, so the brightness/width morph is continuous across a swipe (adjacent ticks share the
+     * transition at the midpoint). Pure function of (position, page count, accent); fades with the
+     * indicator's attention. Applies to both dock styles.
+     */
+    // Toned-down warm amber for the dynamic "most-used" page tick: distinguishable from the
+    // dock-blended ticks, but harmonized rather than a loud neon.
+    private static final int DYNAMIC_PAGE_TICK_COLOR = 0xFFE0A338;
 
-    private void drawPageIndicatorStrip(
-        Canvas canvas,
-        float activePagePosition,
-        int totalPages,
-        float totalWidth,
-        float lineHeight,
-        float segmentGap,
-        int backgroundLineColor,
-        int activeLineColor,
-        boolean insetActive
-    ) {
-        if (totalPages <= 1) {
+    private void drawPageTicksIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention, int dynamicPageIndex) {
+        if (totalPages <= 1 || getWidth() <= 0) {
             return;
         }
-        float cy = resolvePageIndicatorCenterY();
-        float clampedPosition = clamp(activePagePosition, 0f, totalPages - 1f);
-        float dotSize = lineHeight;
-        float activeWidth = insetActive ? dp(38f) : (compactDockSpacingEnabled ? dp(12f) : dp(26f));
-        float desiredWidth = activeWidth
-            + (dotSize * Math.max(0, totalPages - 1))
-            + (segmentGap * Math.max(0, totalPages - 1));
-        if (desiredWidth > totalWidth) {
-            float scale = totalWidth / Math.max(1f, desiredWidth);
-            float minDotSize = compactDockSpacingEnabled ? dp(1.1f) : dp(4.5f);
-            float minActiveWidth = compactDockSpacingEnabled ? dp(8f) : dp(20f);
-            float minSegmentGap = compactDockSpacingEnabled ? dp(2.5f) : dp(4f);
-            dotSize = Math.max(minDotSize, dotSize * scale);
-            activeWidth = Math.max(minActiveWidth, activeWidth * scale);
-            segmentGap = Math.max(minSegmentGap, segmentGap * scale);
-            desiredWidth = activeWidth
-                + (dotSize * Math.max(0, totalPages - 1))
-                + (segmentGap * Math.max(0, totalPages - 1));
-        }
-
-        float left = (getWidth() - desiredWidth) * 0.5f;
-        for (int i = 0; i < totalPages; i++) {
-            float activeAmount = 1f - clamp(Math.abs(i - clampedPosition), 0f, 1f);
-            float width = lerp(dotSize, activeWidth, activeAmount);
-            float radius = dotSize * 0.5f;
-            tmpRect.set(left, cy - radius, left + width, cy + radius);
-            pageIndicatorPaint.setColor(lerpColor(backgroundLineColor, activeLineColor, activeAmount));
-            canvas.drawRoundRect(tmpRect, radius, radius, pageIndicatorPaint);
-            left += width + segmentGap;
-        }
-    }
-
-    private void drawCompactIdlePageDots(Canvas canvas, float activePagePosition, int totalPages) {
-        if (totalPages <= 1) {
+        float master = clamp01(attention);
+        if (master <= 0.01f) {
             return;
         }
-        drawingCompactPageIndicator = true;
-        try {
-            drawCompactIdlePageDotsInternal(
-                canvas,
-                activePagePosition,
-                totalPages,
-                withAlpha(boostColor(glassTintColor, 1.12f, 1.02f), 66),
-                withAlpha(boostColor(edgeTintColor, 1.24f, 1.10f), 150)
-            );
-        } finally {
-            drawingCompactPageIndicator = false;
-        }
-    }
 
-    private void drawCompactIdlePageDotsInternal(
-        Canvas canvas,
-        float activePagePosition,
-        int totalPages,
-        int inactiveColor,
-        int activeColor
-    ) {
-        float cy = resolvePageIndicatorCenterY();
-        float dotSize = dp(2.2f);
-        float gap = dp(4.2f);
-        float desiredWidth = (dotSize * totalPages) + (gap * Math.max(0, totalPages - 1));
-        float left = (getWidth() - desiredWidth) * 0.5f;
-        float activePosition = clamp(activePagePosition, 0f, totalPages - 1f);
-        for (int i = 0; i < totalPages; i++) {
-            float activeAmount = 1f - clamp(Math.abs(i - activePosition), 0f, 1f);
-            float radius = lerp(dotSize * 0.42f, dotSize * 0.58f, activeAmount);
-            pageIndicatorPaint.setColor(lerpColor(inactiveColor, activeColor, activeAmount));
-            canvas.drawCircle(left + (dotSize * 0.5f), cy, radius, pageIndicatorPaint);
-            left += dotSize + gap;
+        float wInactive = dp(13f);
+        float wActive = dp(24f);
+        float h = dp(2.5f);
+        float r = h * 0.5f;
+        float gap = dp(4f);
+        float cx = getWidth() * 0.5f;
+        float cy = dp(3.5f); // flush against the dock's top rim
+        float pos = clamp(activePagePosition, 0f, totalPages - 1f);
+
+        // Per-tick widths (the active page's tick widens), then laid out left-to-right with a
+        // CONSTANT gap so the spacing reads evenly no matter which page is active.
+        float[] widths = new float[totalPages];
+        float sumW = 0f;
+        for (int p = 0; p < totalPages; p++) {
+            float prox = Math.max(0f, 1f - Math.abs(p - pos));
+            widths[p] = wInactive + ((wActive - wInactive) * prox);
+            sumW += widths[p];
+        }
+        float maxW = getWidth() - dp(36f);
+        float total = sumW + (totalPages - 1) * gap;
+        if (total > maxW && totalPages > 1) {
+            gap = Math.max(dp(4f), (maxW - sumW) / (totalPages - 1));
+            total = sumW + (totalPages - 1) * gap;
+        }
+        float[] centers = new float[totalPages];
+        float x = cx - (total * 0.5f);
+        for (int p = 0; p < totalPages; p++) {
+            centers[p] = x + (widths[p] * 0.5f);
+            x += widths[p] + gap;
+        }
+
+        // Blend into the dock: a slightly-brighter shade of the dock's own surface tint, so the
+        // ticks and glow harmonize with the capsule instead of contrasting against it.
+        int accent = boostColor(glassTintColor, 1.0f, 1.18f);
+        boolean dynamicActive = dynamicPageIndex >= 0 && Math.abs(pos - dynamicPageIndex) < 0.5f;
+        int glowColor = dynamicActive ? DYNAMIC_PAGE_TICK_COLOR : accent;
+
+        // Soft glow: a blurred capsule that hugs the active tick (same pill shape, slightly larger),
+        // following the fractional position across a swipe — a gentle dock-toned highlight.
+        int lo = (int) Math.floor(pos);
+        int hi = Math.min(totalPages - 1, lo + 1);
+        float frac = pos - lo;
+        float glowCx = centers[lo] + (centers[hi] - centers[lo]) * frac;
+        float glowW = (widths[lo] + (widths[hi] - widths[lo]) * frac) + dp(8f);
+        float glowH = h + dp(7f);
+        float glowR = glowH * 0.5f;
+        if (pageTickGlow == null) {
+            pageTickGlow = new BlurMaskFilter(dp(5f), BlurMaskFilter.Blur.NORMAL);
+        }
+        pageIndicatorPaint.setStyle(Paint.Style.FILL);
+        pageIndicatorPaint.setColor(withAlpha(glowColor, Math.round(70f * master)));
+        pageIndicatorPaint.setMaskFilter(pageTickGlow);
+        tmpRect.set(glowCx - glowW * 0.5f, cy - glowH * 0.5f, glowCx + glowW * 0.5f, cy + glowH * 0.5f);
+        canvas.drawRoundRect(tmpRect, glowR, glowR, pageIndicatorPaint);
+        pageIndicatorPaint.setMaskFilter(null);
+
+        // Ticks: alpha interpolates by proximity to the active position; inactive floor kept legible.
+        for (int p = 0; p < totalPages; p++) {
+            float prox = Math.max(0f, 1f - Math.abs(p - pos));
+            float alpha = 0.40f + (0.60f * prox);
+            int tickColor = accent;
+            if (p == dynamicPageIndex) {
+                tickColor = DYNAMIC_PAGE_TICK_COLOR;
+                // Extra idle damp: the warm tint only reads when this page is active; sleeping it
+                // must not steal attention.
+                alpha *= (0.55f + (0.45f * prox));
+            }
+            float left = centers[p] - (widths[p] * 0.5f);
+            pageIndicatorPaint.setColor(withAlpha(tickColor, Math.round(255f * alpha * master)));
+            tmpRect.set(left, cy - r, left + widths[p], cy + r);
+            canvas.drawRoundRect(tmpRect, r, r, pageIndicatorPaint);
         }
     }
 
@@ -1100,36 +1104,6 @@ public final class LauncherAzGestureFxView extends View {
             interactionPageIndicatorAnimator.cancel();
             interactionPageIndicatorAnimator = null;
         }
-    }
-
-    private float resolvePageIndicatorCenterY() {
-        if (compactDockSpacingEnabled && drawingCompactPageIndicator
-            && !appsRowRawBounds.isEmpty() && !azRowRawBounds.isEmpty()) {
-            float appTop = appsRowRawBounds.top - locationOnScreen[1];
-            float appBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-            float appHeight = Math.max(1f, appBottom - appTop);
-            float appCenter = (appTop + appBottom) * 0.5f;
-            float iconBottomEstimate = appCenter + Math.min(appHeight * 0.36f, (appHeight * 0.5f) - dp(6f));
-            float visualGapTop = Math.min(appBottom - dp(5.5f), iconBottomEstimate);
-            float visualGapBottom = (azRowRawBounds.top - locationOnScreen[1]) + dp(0.6f);
-            if (visualGapTop >= visualGapBottom) {
-                visualGapTop = visualGapBottom - dp(4f);
-            }
-            return (visualGapTop + visualGapBottom) * 0.5f;
-        }
-        if (!indicatorBandRawBounds.isEmpty()) {
-            return ((indicatorBandRawBounds.top + indicatorBandRawBounds.bottom) * 0.5f) - locationOnScreen[1];
-        }
-        float rowBottom = appsRowRawBounds.bottom - locationOnScreen[1];
-        if (azRowRawBounds.isEmpty()) {
-            return rowBottom + dp(4.5f);
-        }
-        float azTop = azRowRawBounds.top - locationOnScreen[1];
-        float gapTop = rowBottom + dp(4f);
-        float gapBottom = azTop - dp(8f);
-        return gapTop <= gapBottom
-            ? clamp((gapTop + gapBottom) * 0.5f, gapTop, gapBottom)
-            : rowBottom + dp(4.5f);
     }
 
     private void drawLaunchGlassBloom(Canvas canvas) {

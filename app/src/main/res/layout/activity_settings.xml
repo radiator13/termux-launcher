@@ -1,12 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/termuxColorSurfaceBase"
     android:orientation="vertical">
 
-    <include
-        layout="@layout/partial_primary_toolbar"
-        android:id="@+id/partial_primary_toolbar"/>
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:background="?attr/termuxColorSurfaceBase"
+        android:gravity="center_vertical"
+        android:minHeight="80dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="20dp"
+        app:contentInsetStartWithNavigation="0dp"
+        app:navigationIconTint="?attr/termuxColorOnSurface"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:titleMarginTop="0dp"
+        app:titleMarginBottom="0dp"
+        app:titleTextAppearance="@style/TextAppearance.Termux.Settings.ToolbarTitle" />
 
     <FrameLayout
         android:id="@+id/settings"

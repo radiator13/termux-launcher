@@ -12,17 +12,19 @@ import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
 
 import com.termux.R;
 import com.termux.app.TermuxActivity;
+import com.termux.app.fragments.settings.MaterialPreferenceFragment;
+import com.termux.app.fragments.settings.PillPreference;
+import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
 import com.termux.app.launcher.notifications.LauncherNotificationAccess;
 import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.termux.TermuxConstants;
 
 @Keep
-public class LauncherPermissionsPreferencesFragment extends PreferenceFragmentCompat {
+public class LauncherPermissionsPreferencesFragment extends MaterialPreferenceFragment {
 
     private static final String KEY_STORAGE = "app_launcher_storage_access";
     private static final String KEY_NOTIFICATION_ACCESS = "app_launcher_notification_access";
@@ -37,6 +39,7 @@ public class LauncherPermissionsPreferencesFragment extends PreferenceFragmentCo
             return;
         }
         setPreferencesFromResource(R.xml.launcher_permissions_preferences, rootKey);
+        SettingsLayoutUtils.applyScreenLayout(this);
         configureActions(context);
         updateSummaries(context);
     }
@@ -83,18 +86,24 @@ public class LauncherPermissionsPreferencesFragment extends PreferenceFragmentCo
     }
 
     private void updateSummaries(@NonNull Context context) {
-        setStatusSummary(
+        setStatusPill(
             KEY_STORAGE,
             PermissionUtils.checkAndRequestLegacyOrManageExternalStoragePermission(context, -1, true, false)
         );
-        setStatusSummary(KEY_NOTIFICATION_ACCESS, LauncherNotificationAccess.isEnabled(context));
-        setStatusSummary(KEY_ACCESSIBILITY_LOCK, LauncherLockAccessibilityAccess.isEnabled(context));
-        setStatusSummary(KEY_NOTIFICATION_SETTINGS, NotificationManagerCompat.from(context).areNotificationsEnabled());
+        setStatusPill(KEY_NOTIFICATION_ACCESS, LauncherNotificationAccess.isEnabled(context));
+        setStatusPill(KEY_ACCESSIBILITY_LOCK, LauncherLockAccessibilityAccess.isEnabled(context));
+        setStatusPill(KEY_NOTIFICATION_SETTINGS, NotificationManagerCompat.from(context).areNotificationsEnabled());
     }
 
-    private void setStatusSummary(String key, boolean enabled) {
+    private void setStatusPill(String key, boolean enabled) {
         Preference preference = findPreference(key);
-        if (preference != null) {
+        if (preference instanceof PillPreference) {
+            ((PillPreference) preference).setPill(
+                getString(enabled
+                    ? R.string.termux_app_launcher_access_status_on
+                    : R.string.termux_app_launcher_access_status_off),
+                enabled ? PillPreference.Tone.POSITIVE : PillPreference.Tone.NEGATIVE);
+        } else if (preference != null) {
             preference.setSummary(enabled
                 ? R.string.termux_app_launcher_access_status_on
                 : R.string.termux_app_launcher_access_status_off);

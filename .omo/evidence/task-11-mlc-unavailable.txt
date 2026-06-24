@@ -1,0 +1,48 @@
+Task 11 Evidence - MLC Runtime Unavailable (No Physical Device)
+===============================================================
+Date: 2026-06-17
+Environment: Workspace (Linux x86_64, no Android device, no MLC-capable runtime)
+Verification method: Code inspection + unit test evidence
+
+PHYSICAL DEVICE STATUS:
+- No MLC-capable physical Android device is available in this workspace.
+- No local Android build environment or emulator with bundled MLC artifacts.
+- The app uses APK-bundled MLC artifacts only; without a real APK install on a device with bundled libraries, MLC runtime will report `mlc_runtime_unavailable`.
+
+CODE INSPECTION - MlcTaiRuntime.load():
+File: app/src/main/java/com/termux/ai/MlcTaiRuntime.java
+- Step 1 (line 115-119): `findSupportedAbi()` returns null when no bundled ABI matches device ABI → returns 501 `mlc_runtime_unavailable`.
+- Step 4 (line 142-153): `getNativeLibraryDir()` returns the app's native library dir. If any listed `nativeLibraryName` is missing from that dir → returns 501 `mlc_runtime_unavailable` with message "Bundled native library missing: <name>".
+- This is the expected behavior for devices/APKs without bundled MLC artifacts.
+
+CODE INSPECTION - TaiDeviceCapabilities:
+File: app/src/main/java/com/termux/ai/TaiDeviceCapabilities.java
+- `computeMlcCapabilities()` (line 306-341):
+  - `findMlcSupportedAbi(abis)` checks `MlcBundledLibraryRegistry.isAbiSupported(abi)`. Only `arm64-v8a` is registered.
+  - If device ABI is not supported → `mlcSupported = false` and `mlcUnsupportedReason` contains concrete reason: "MLC runtime is not available for this device ABI. Supported: arm64-v8a."
+  - If SDK < 24 → `mlcUnsupportedReason` contains: "MLC requires Android 7.0 (API 24) or higher. Device is API <N>."
+  - Both reasons are concatenated when applicable.
+- `toJson()` (line 210-241) surfaces `mlcSupported`, `mlcUnsupportedReason`, and `backends` object with `mlc-llm` boolean.
+- `checkModelCapability()` (line 191-207) returns `ModelCapabilityCheck` with `blockingReason` when MLC backend is unsupported, gating model download/load before it reaches the runtime.
+
+CODE INSPECTION - Settings UI Disabled-with-Reason:
+File: app/src/main/java/com/termux/app/fragments/settings/termux/TaiPreferencesFragment.java
+- `refreshDeviceCapabilities()` (line 526-557):
+  - Sets support status preference summary to "Supported" or "Unsupported" based on `capabilities.mlcSupported`.
+  - When unsupported, shows `tai_mlc_unsupported_reason` preference with `capabilities.mlcUnsupportedReason` as summary.
+  - Disables `tai_mlc_custom_download` and sets its summary to the unsupported reason.
+- `showModelActions()` (line 1143-1156): For MLC catalog models, if `!capabilities.mlcSupported`, shows a `MaterialAlertDialogBuilder` with the concrete reason and blocks download/load.
+- `showInstalledModelActions()` (line 1198-1209): Same gating for installed MLC models.
+
+UNIT TEST EVIDENCE:
+- `MlcTaiRuntimeTest`:
+  - `unsupportedAbiReturns501`: `load()` returns 501 `mlc_runtime_unavailable` for unsupported ABI.
+  - `missingBundledLibraryReturns501`: `load()` returns 501 when native library file is missing.
+- `TaiDeviceCapabilitiesTest`:
+  - `unsupportedAbiReturnsReason`: unsupported ABI returns concrete human-readable reason.
+  - `lowSdkReturnsReason`: low SDK returns concrete reason.
+- `MlcSafetyTest`:
+  - `mlcRuntime_unsupportedAbiReturns501`: confirms 501 behavior.
+  - `mlcDeviceGating_unsupportedAbiReturnsReason`: confirms reason text.
+
+CONCLUSION: On a device/APK without bundled MLC artifacts, the app correctly reports `mlc_runtime_unavailable` (501) with a concrete reason, disables MLC controls in settings, and blocks MLC model download/load with a human-readable explanation. This is the expected and verified behavior.

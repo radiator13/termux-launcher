@@ -11,12 +11,25 @@ Usage:
 
 Commands:
   status                    Get backend/API status.
+  capabilities              Get launcher capabilities and hardware support.
+  tools                     Get launcher agent tool schemas.
   apps                      List launchable app activities.
   launch <query>            Launch an app by label, package, or activity.
   resources                 Get system resource snapshot.
   media                     Get now-playing media info.
   art                       Get current media artwork metadata.
   notifications             Get active notifications snapshot.
+  notifications recent [limit]
+                            Recent notification events (default limit 50).
+  notifications since <epoch-ms> [limit]
+                            Notification events since timestamp.
+  notifications search <text>
+                            Search notification events.
+  notifications stats       Notification event statistics.
+  agent [--dry-run] <request>
+                            Route a request through the agent (dry-run only routes).
+  mcp                       Run MCP stdio server backed by LauncherCtl tools.
+  events tail [limit]       Tail recent agent/system events (default 100).
   restart                   Restart the launcher through authenticated API.
   update-scripts            Refresh Termux Launcher shell helper scripts.
   tty-doctor                Validate local rish setup and print fixes.
@@ -26,6 +39,10 @@ Examples:
   launcherctl status
   launcherctl apps
   launcherctl launch whatsapp
+  launcherctl agent "open maps"
+  launcherctl agent --dry-run "turn on bluetooth"
+  launcherctl mcp
+  launcherctl events tail 20
   launcherctl update-scripts
   launcherctl restart
   launcherctl tty-doctor
@@ -132,6 +149,14 @@ update_scripts() {
         ;;
       none)
         ;;
+      python)
+        if command -v python3 >/dev/null 2>&1; then
+          python3 -m py_compile "$tmp" || {
+            echo "launcherctl update-scripts: python syntax check failed: $url" >&2
+            return 1
+          }
+        fi
+        ;;
     esac
 
     mkdir -p "$(dirname "$dest")" || return 1
@@ -148,6 +173,7 @@ update_scripts() {
   update_one "$raw_base/kew-tmux-status" "$HOME/.local/bin/kew-tmux-status" 700 sh
   update_one "$raw_root/resources/scripts/statusbar/kew-now-playing" "$HOME/.local/bin/kew-now-playing" 700 bash
   update_one "$raw_root/resources/bin/tai" "$PREFIX/bin/tai" 700 sh
+  update_one "$raw_root/resources/bin/launcherctl-mcp" "$PREFIX/bin/launcherctl-mcp" 700 python
   update_one "$raw_base/setup-btop-rish" "$HOME/setup-btop-rish" 700 sh
   update_one "$raw_base/setup-tmux-btop" "$HOME/setup-tmux-btop" 700 sh
   update_one "$raw_base/material-theme.tmux" "$HOME/.tmux/material-theme.tmux" 700 sh
@@ -189,6 +215,25 @@ case "$cmd" in
     ;;
 esac
 
+if [ "$cmd" = "mcp" ]; then
+  shift || true
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "launcherctl mcp: missing required command: python3" >&2
+    echo "install it with: pkg install python" >&2
+    exit 1
+  fi
+  if command -v launcherctl-mcp >/dev/null 2>&1; then
+    exec launcherctl-mcp "$@"
+  fi
+  script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  if [ -x "$script_dir/launcherctl-mcp" ]; then
+    exec "$script_dir/launcherctl-mcp" "$@"
+  fi
+  echo "launcherctl mcp: missing launcherctl-mcp helper" >&2
+  echo "install it with: launcherctl update-scripts" >&2
+  exit 1
+fi
+
 LAUNCHERCTL_DIR="$HOME/.launcherctl"
 TOKEN_FILE="$LAUNCHERCTL_DIR/token"
 ENDPOINT_FILE="$LAUNCHERCTL_DIR/endpoint"
@@ -199,11 +244,16 @@ if [ ! -r "$TOKEN_FILE" ] || [ ! -r "$ENDPOINT_FILE" ]; then
 fi
 
 TOKEN=$(cat "$TOKEN_FILE")
-BASE=$(cat "$ENDPOINT_FILE")
+BASE=$(sed -n '1p' "$ENDPOINT_FILE")
 CURL_COMMON="-fsS --connect-timeout 2 --max-time 10"
 shift || true
 
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+post_json() {
+  path="$1"
+  data="$2"
+  curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$data" "$BASE$path"
+}
 RISH_DIR="$HOME/.rish"
 RISH_BIN="$RISH_DIR/rish"
 RISH_DEX="$RISH_DIR/rish_shizuku.dex"
@@ -256,6 +306,12 @@ case "$cmd" in
   status)
     curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/status"
     ;;
+  capabilities)
+    curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/launcher/capabilities"
+    ;;
+  tools)
+    curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/agent/tools"
+    ;;
   apps)
     curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/apps"
     ;;
@@ -275,7 +331,88 @@ case "$cmd" in
     curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/media/art"
     ;;
   notifications)
-    curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/notifications"
+    sub="${1:-}"
+    [ -n "$sub" ] && shift || true
+    case "$sub" in
+      ""|active)
+        curl $CURL_COMMON -H "Authorization: Bearer $TOKEN" "$BASE/v1/notifications"
+        ;;
+    recent)
+      limit="${1:-50}"
+      [ "$limit" -ge 1 ] 2>/dev/null || { echo "usage: launcherctl notifications recent [limit]" >&2; exit 2; }
+      post_json /v1/notifications/recent "{\"limit\":$limit}"
+      ;;
+    since)
+      [ "$#" -gt 0 ] || { echo "usage: launcherctl notifications since <epoch-ms> [limit]" >&2; exit 2; }
+      since="$1"; shift || true
+      limit="${1:-200}"
+      [ "$since" -ge 0 ] 2>/dev/null || { echo "usage: launcherctl notifications since <epoch-ms> [limit]" >&2; exit 2; }
+      [ "$limit" -ge 1 ] 2>/dev/null || { echo "usage: launcherctl notifications since <epoch-ms> [limit]" >&2; exit 2; }
+      post_json /v1/notifications/since "{\"since\":$since,\"limit\":$limit}"
+      ;;
+    search)
+      [ "$#" -gt 0 ] || { echo "usage: launcherctl notifications search <text>" >&2; exit 2; }
+      query="$*"
+      post_json /v1/notifications/search "{\"query\":\"$(json_escape "$query")\"}"
+      ;;
+      stats)
+        post_json /v1/notifications/stats "{}"
+        ;;
+      *)
+        echo "launcherctl: unknown notifications subcommand: $sub" >&2
+        echo "usage: launcherctl notifications {active|recent|since|search|stats}" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  agent)
+    dry_run="false"
+    if [ "$#" -gt 0 ] && [ "$1" = "--dry-run" ]; then
+      dry_run="true"
+      shift || true
+    fi
+    [ "$#" -gt 0 ] || { echo "usage: launcherctl agent [--dry-run] <request>" >&2; exit 2; }
+    REQUEST_ESCAPED=$(json_escape "$*")
+    route_json=$(post_json /v1/agent/route "{\"request\":\"$REQUEST_ESCAPED\"}")
+    printf '%s\n' "$route_json"
+    if [ "$dry_run" = "true" ]; then
+      exit 0
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+      echo
+      echo "launcherctl agent: non-dry-run requires jq to parse route output" >&2
+      echo "install it with: pkg install jq" >&2
+      echo "or use: launcherctl agent --dry-run \"$*\"" >&2
+      exit 1
+    fi
+    tool=$(printf '%s' "$route_json" | jq -r '.tool // empty')
+    arguments=$(printf '%s' "$route_json" | jq -c '.arguments // {}')
+    if [ -z "$tool" ]; then
+      echo "launcherctl agent: route did not return a tool" >&2
+      exit 1
+    fi
+    echo
+    post_json /v1/agent/execute "{\"tool\":\"$tool\",\"arguments\":$arguments,\"confirm\":true}"
+    ;;
+  mcp)
+    echo "launcherctl mcp: internal dispatch error" >&2
+    exit 1
+    ;;
+  events)
+    sub="${1:-}"
+    [ -n "$sub" ] && shift || true
+    case "$sub" in
+      tail)
+        limit="${1:-100}"
+        [ "$limit" -ge 1 ] 2>/dev/null || { echo "usage: launcherctl events tail [limit]" >&2; exit 2; }
+        post_json /v1/events/tail "{\"limit\":$limit}"
+        ;;
+      *)
+        echo "launcherctl: unknown events subcommand: $sub" >&2
+        echo "usage: launcherctl events tail" >&2
+        exit 2
+        ;;
+    esac
     ;;
   restart)
     curl $CURL_COMMON -X POST -H "Authorization: Bearer $TOKEN" "$BASE/v1/app/restart"
