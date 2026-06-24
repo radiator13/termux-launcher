@@ -238,7 +238,12 @@ public final class TaiModelImporter {
     }
 
     @NonNull
+    /** Backend is auto-detected from the repo, so URL validation no longer needs it. */
     public static ValidationResult validateHuggingFaceImportUrl(@NonNull String backend, @NonNull String url) {
+        return validateHuggingFaceImportUrl(url);
+    }
+
+    public static ValidationResult validateHuggingFaceImportUrl(@NonNull String url) {
         String trimmed = url.trim();
         if (!trimmed.startsWith("https://")) {
             return ValidationResult.rejected(ERROR_INSECURE_URL, "Hugging Face imports require an https:// URL.");
@@ -251,7 +256,25 @@ public final class TaiModelImporter {
                 : ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
                     "Enter a Hugging Face repo URL (https://huggingface.co/<org>/<model>) or a direct .../resolve/main/<file> URL.");
         }
-        return validateImportFileNameForBackend(backend, fileNameFromUrl(trimmed));
+        return validateSupportedDownloadFileName(fileNameFromUrl(trimmed));
+    }
+
+    /** Accept the entry file of either backend from a direct /resolve/ URL: a LiteRT package
+     *  (.litertlm/.task) or an MNN config.json. Reject raw weights and native libraries. */
+    public static ValidationResult validateSupportedDownloadFileName(@NonNull String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".dll")) {
+            return ValidationResult.rejected(ERROR_NATIVE_LIBRARY_FORBIDDEN, "Native libraries cannot be imported as models.");
+        }
+        if (isRawWeightFileName(lower)) {
+            return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
+                "Raw weight files are not supported. Use a repo with a LiteRT .litertlm/.task package or an MNN config.json.");
+        }
+        if (lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.equals("config.json")) {
+            return ValidationResult.accepted(false);
+        }
+        return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
+            "Hugging Face downloads must point at a LiteRT .litertlm/.task file or an MNN config.json.");
     }
 
     static boolean looksLikeHuggingFaceRepoUrl(@NonNull String url) {

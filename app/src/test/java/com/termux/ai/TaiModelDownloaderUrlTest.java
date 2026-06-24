@@ -21,23 +21,31 @@ public class TaiModelDownloaderUrlTest {
     }
 
     @Test
-    public void entryFile_chosenByBackend() {
+    public void entryFile_autoDetectedFromFileList() {
+        // MNN package: config.json alongside a .mnn weight.
         LinkedHashSet<String> mnn = new LinkedHashSet<>();
         mnn.add("config.json");
         mnn.add("llm.mnn");
         mnn.add("llm.mnn.weight");
-        assertEquals("config.json", TaiModelDownloader.chooseEntryFile(mnn, TaiModelSpec.BACKEND_MNN_LLM));
+        assertEquals("config.json", TaiModelDownloader.chooseEntryFile(mnn));
 
+        // LiteRT package wins even if a config.json is also present.
         LinkedHashSet<String> litert = new LinkedHashSet<>();
         litert.add("README.md");
+        litert.add("config.json");
         litert.add("gemma3-1b-it.litertlm");
-        assertEquals("gemma3-1b-it.litertlm", TaiModelDownloader.chooseEntryFile(litert, TaiModelSpec.BACKEND_LITERT_LM));
+        assertEquals("gemma3-1b-it.litertlm", TaiModelDownloader.chooseEntryFile(litert));
 
         LinkedHashSet<String> taskOnly = new LinkedHashSet<>();
         taskOnly.add("model.task");
-        assertEquals("model.task", TaiModelDownloader.chooseEntryFile(taskOnly, TaiModelSpec.BACKEND_LITERT_LM));
+        assertEquals("model.task", TaiModelDownloader.chooseEntryFile(taskOnly));
 
-        // No suitable file -> empty (caller surfaces a clear error).
-        assertEquals("", TaiModelDownloader.chooseEntryFile(new LinkedHashSet<>(), TaiModelSpec.BACKEND_MNN_LLM));
+        // config.json with no .mnn weight is not a usable MNN package -> empty.
+        LinkedHashSet<String> bareConfig = new LinkedHashSet<>();
+        bareConfig.add("config.json");
+        bareConfig.add("tokenizer.json");
+        assertEquals("", TaiModelDownloader.chooseEntryFile(bareConfig));
+
+        assertEquals("", TaiModelDownloader.chooseEntryFile(new LinkedHashSet<>()));
     }
 }

@@ -401,22 +401,32 @@ public final class TaiModelDownloader {
         return files;
     }
 
+    /** Outcome of resolving a Hugging Face URL: the concrete file URL, or a flag that the repo is
+     *  gated/private and needs an access token. */
+    public static final class HfResolve {
+        @NonNull public final String url;
+        public final boolean authRequired;
+        HfResolve(@NonNull String url, boolean authRequired) { this.url = url; this.authRequired = authRequired; }
+    }
+
     /**
-     * Resolve a Hugging Face URL to a concrete downloadable file URL. A {@code .../resolve/...} URL
-     * is returned unchanged; a bare repo URL (e.g. {@code https://huggingface.co/taobao-mnn/Foo-MNN})
-     * is resolved against the repo file list to the package entry point — {@code config.json} for MNN,
-     * the first {@code .litertlm}/{@code .task} for LiteRT — so users never hunt through the HF file
-     * list. Returns "" when no suitable file is found.
+     * Resolve a Hugging Face URL to a concrete downloadable file URL, auto-detecting the backend from
+     * the repo's file list. A {@code .../resolve/...} URL is returned unchanged; a bare repo URL is
+     * resolved to the package entry point — a {@code .litertlm}/{@code .task} (LiteRT) if present,
+     * else {@code config.json} of an MNN package — so users never pick a backend or hunt the file
+     * list. Reports {@code authRequired} when the repo is gated/private (HTTP 401/403).
      */
     @NonNull
-    public String resolveHuggingFaceEntryUrl(@NonNull String url, @NonNull String backend, @Nullable String authToken) {
+    public HfResolve resolveHuggingFaceEntry(@NonNull String url, @Nullable String authToken) {
         String trimmed = url.trim();
-        if (trimmed.contains("/resolve/")) return trimmed;
+        if (trimmed.contains("/resolve/")) return new HfResolve(trimmed, false);
         String repoId = huggingFaceRepoIdFromRepoUrl(trimmed);
-        if (repoId.isEmpty()) return "";
+        if (repoId.isEmpty()) return new HfResolve("", false);
         try {
             HttpURLConnection connection = open("https://huggingface.co/api/models/" + repoId, authToken, 0);
-            if (connection.getResponseCode() < 200 || connection.getResponseCode() >= 300) return "";
+            int code = connection.getResponseCode();
+            if (code == 401 || code == 403) return new HfResolve("", true);
+            if (code < 200 || code >= 300) return new HfResolve("", false);
             JSONArray siblings = new JSONObject(readSmallUtf8(connection.getInputStream(), 2L * 1024L * 1024L))
                 .optJSONArray("siblings");
             LinkedHashSet<String> files = new LinkedHashSet<>();
@@ -426,10 +436,10 @@ public final class TaiModelDownloader {
                     if (sibling != null) files.add(sibling.optString("rfilename", ""));
                 }
             }
-            String entry = chooseEntryFile(files, backend);
-            return entry.isEmpty() ? "" : "https://huggingface.co/" + repoId + "/resolve/main/" + entry;
+            String entry = chooseEntryFile(files);
+            return new HfResolve(entry.isEmpty() ? "" : "https://huggingface.co/" + repoId + "/resolve/main/" + entry, false);
         } catch (Exception ignored) {
-            return "";
+            return new HfResolve("", false);
         }
     }
 
@@ -448,13 +458,16 @@ public final class TaiModelDownloader {
         return parts[0] + "/" + parts[1];
     }
 
-    /** Pick the package entry file from a repo's file list for the chosen backend. */
+    /** Pick the package entry file from a repo's file list, auto-detecting the backend: a LiteRT
+     *  package ({@code .litertlm}/{@code .task}) wins; otherwise an MNN package ({@code config.json}
+     *  alongside a {@code .mnn} weight). Returns "" when the repo holds no supported model. */
     @NonNull
-    static String chooseEntryFile(@NonNull LinkedHashSet<String> files, @NonNull String backend) {
-        boolean mnn = TaiModelSpec.BACKEND_MNN_LLM.equals(backend);
-        if (mnn) return files.contains("config.json") ? "config.json" : "";
+    static String chooseEntryFile(@NonNull LinkedHashSet<String> files) {
         for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".litertlm")) return f;
         for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".task")) return f;
+        if (files.contains("config.json")) {
+            for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".mnn")) return "config.json";
+        }
         return "";
     }
 

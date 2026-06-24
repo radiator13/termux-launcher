@@ -263,15 +263,22 @@ public final class TaiManager {
         if (modelId.isEmpty()) return error(400, "bad_request", "Missing model id");
         if (url.isEmpty()) return error(400, "bad_request", "Missing download URL");
         String token = request.optString("huggingFaceToken", settings.getHuggingFaceToken());
-        // Accept a bare repo URL: resolve it to the package entry file (config.json / .litertlm) so
-        // the user never has to find the right file in the Hugging Face file list.
+        // Accept a bare repo URL: auto-detect the backend and resolve to the package entry file
+        // (config.json / .litertlm) so the user never picks a backend or hunts the HF file list.
         if (!url.contains("/resolve/")) {
-            String resolved = modelDownloader.resolveHuggingFaceEntryUrl(url, request.optString("backend", "").trim(), token);
-            if (resolved.isEmpty()) {
+            TaiModelDownloader.HfResolve resolved = modelDownloader.resolveHuggingFaceEntry(url, token);
+            if (resolved.authRequired) {
+                JSONObject gated = error(403, "gated_model_requires_auth",
+                    "This Hugging Face repo is gated or private. Save your Hugging Face access token "
+                    + "(after accepting the model's terms on huggingface.co) and try again.");
+                gated.put("huggingFaceTokenBundled", false);
+                return gated;
+            }
+            if (resolved.url.isEmpty()) {
                 return error(400, "hf_resolve_failed", "Could not find a downloadable model file in that Hugging Face repo. "
                     + "Paste the repo URL (e.g. https://huggingface.co/taobao-mnn/Qwen2.5-VL-3B-Instruct-MNN) or a direct .../resolve/main/<file> URL.");
             }
-            url = resolved;
+            url = resolved.url;
         }
         JSONObject data = modelDownloader.startDownload(
             modelId,

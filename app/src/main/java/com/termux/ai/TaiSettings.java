@@ -222,6 +222,10 @@ public final class TaiSettings {
         return preferences.getString(KEY_HUGGINGFACE_TOKEN, "");
     }
 
+    public void setHuggingFaceToken(@NonNull String token) {
+        preferences.edit().putString(KEY_HUGGINGFACE_TOKEN, token.trim()).apply();
+    }
+
     public int getApiPort() {
         String value = preferences.getString(KEY_API_PORT, String.valueOf(DEFAULT_API_PORT));
         return normalizeApiPort(value);

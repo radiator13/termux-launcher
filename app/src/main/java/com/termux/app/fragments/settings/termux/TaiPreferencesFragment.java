@@ -21,8 +21,6 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -1641,18 +1639,14 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         int padding = (int) (20 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(padding, 0, padding, 0);
 
-        RadioGroup backendGroup = new RadioGroup(context);
-        backendGroup.setOrientation(RadioGroup.HORIZONTAL);
-        RadioButton litert = new RadioButton(context);
-        litert.setText(R.string.termux_ai_backend_label_litert);
-        litert.setId(View.generateViewId());
-        RadioButton mnn = new RadioButton(context);
-        mnn.setText(R.string.termux_ai_backend_label_mnn);
-        mnn.setId(View.generateViewId());
-        backendGroup.addView(litert);
-        backendGroup.addView(mnn);
-        backendGroup.check(IMPORT_BACKEND_MNN.equals(draft.backend) ? mnn.getId() : litert.getId());
-        layout.addView(backendGroup);
+        // Backend is auto-detected: a Hugging Face URL resolves to LiteRT or MNN from the repo's
+        // files; a local file is always a LiteRT package. No manual toggle.
+        EditText hfUrlInput = new EditText(context);
+        hfUrlInput.setSingleLine(true);
+        hfUrlInput.setHint(R.string.termux_ai_model_import_hf_url_field_hint);
+        hfUrlInput.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+        hfUrlInput.setText(draft.hfUrl == null ? "" : draft.hfUrl);
+        layout.addView(hfUrlInput);
 
         TextView modalityLabel = new TextView(context);
         modalityLabel.setText(R.string.termux_ai_model_import_modalities_label);
@@ -1672,22 +1666,6 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         layout.addView(audio);
         layout.addView(video);
 
-        // Audio input only has a LiteRT runtime path; vision is real on LiteRT and best-effort on
-        // MNN VL models; video is declared-only (advertised as intent, no runtime yet).
-        Runnable applyModalityGates = () -> {
-            boolean liteRt = IMPORT_BACKEND_LITERT.equals(draft.backend);
-            audio.setEnabled(liteRt);
-            if (!liteRt) audio.setChecked(false);
-        };
-        applyModalityGates.run();
-
-        EditText hfUrlInput = new EditText(context);
-        hfUrlInput.setSingleLine(true);
-        hfUrlInput.setHint(R.string.termux_ai_model_import_hf_url_field_hint);
-        hfUrlInput.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
-        hfUrlInput.setText(draft.hfUrl == null ? "" : draft.hfUrl);
-        layout.addView(hfUrlInput);
-
         EditText modelIdInput = new EditText(context);
         modelIdInput.setSingleLine(true);
         modelIdInput.setHint(R.string.termux_ai_model_import_id_hint);
@@ -1696,21 +1674,26 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         modelIdInput.setSelectAllOnFocus(true);
         layout.addView(modelIdInput);
 
+        // Tap-to-set Hugging Face token (needed for gated/private repos).
+        TextView tokenLine = new TextView(context);
+        tokenLine.setPadding(0, padding / 2, 0, padding / 2);
+        Runnable refreshTokenLine = () -> tokenLine.setText(
+            new TaiSettings(context).getHuggingFaceToken().trim().isEmpty()
+                ? getString(R.string.termux_ai_model_import_token_unset)
+                : getString(R.string.termux_ai_model_import_token_set));
+        refreshTokenLine.run();
+        tokenLine.setOnClickListener(v -> promptHuggingFaceToken(context, refreshTokenLine));
+        layout.addView(tokenLine);
+
         TextView selectedFile = new TextView(context);
         selectedFile.setText(importSelectionText(context, draft));
         selectedFile.setPadding(0, padding / 2, 0, 0);
         layout.addView(selectedFile);
 
-        backendGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            draft.backend = checkedId == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
-            applyModalityGates.run();
-            selectedFile.setText(importSelectionText(context, draft));
-        });
-
         Runnable captureModalities = () -> {
             draft.capabilities.clear();
             if (vision.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_IMAGE_INPUT);
-            if (audio.isEnabled() && audio.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
+            if (audio.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_AUDIO_INPUT);
             if (video.isChecked()) draft.capabilities.add(TaiModelSpec.CAPABILITY_VIDEO_INPUT);
         };
 
@@ -1724,7 +1707,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             .show();
         Button positive = dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
         positive.setOnClickListener(view -> {
-            draft.backend = backendGroup.getCheckedRadioButtonId() == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
+            draft.backend = IMPORT_BACKEND_LITERT; // local files are LiteRT; URLs auto-detect downstream
             String hfUrl = hfUrlInput.getText().toString().trim();
             draft.hfUrl = hfUrl;
             draft.hfToken = hfUrl.isEmpty() ? "" : new TaiSettings(context).getHuggingFaceToken();
@@ -1734,7 +1717,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         });
         Button neutral = dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
         neutral.setOnClickListener(view -> {
-            draft.backend = backendGroup.getCheckedRadioButtonId() == mnn.getId() ? IMPORT_BACKEND_MNN : IMPORT_BACKEND_LITERT;
+            draft.backend = IMPORT_BACKEND_LITERT;
             draft.hfUrl = "";
             draft.hfToken = "";
             draft.modelId = modelIdInput.getText().toString().trim();
@@ -1746,16 +1729,32 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     }
 
     private CharSequence importSelectionText(Context context, ImportDraft draft) {
-        String backend = IMPORT_BACKEND_MNN.equals(draft.backend)
-            ? getString(R.string.termux_ai_backend_label_mnn)
-            : getString(R.string.termux_ai_backend_label_litert);
         if (draft.documentMetadata == null) {
-            return context.getString(R.string.termux_ai_model_import_no_file_selected, backend);
+            return context.getString(R.string.termux_ai_model_import_no_file_selected);
         }
         TaiModelImporter.DocumentMetadata metadata = draft.documentMetadata;
         return context.getString(R.string.termux_ai_model_import_selected,
-            metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size")
-            + "\nBackend: " + backend;
+            metadata.displayName, metadata.sizeBytes > 0L ? formatBytes(metadata.sizeBytes) : "unknown size");
+    }
+
+    /** Prompt for and persist a Hugging Face token (for gated/private repos); runs onSaved after. */
+    private void promptHuggingFaceToken(Context context, @Nullable Runnable onSaved) {
+        EditText input = new EditText(context);
+        input.setSingleLine(true);
+        input.setHint(R.string.termux_ai_huggingface_token_title);
+        input.setText(new TaiSettings(context).getHuggingFaceToken());
+        input.setSelectAllOnFocus(true);
+        new MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.termux_ai_huggingface_token_title)
+            .setView(wrapDialogView(context, getString(R.string.termux_ai_huggingface_token_dialog_message), input))
+            .setPositiveButton(R.string.termux_ai_dialog_save, (dialog, which) -> {
+                new TaiSettings(context).setHuggingFaceToken(input.getText().toString().trim());
+                if (onSaved != null) onSaved.run();
+            })
+            .setNeutralButton(R.string.termux_ai_huggingface_token_get_action,
+                (dialog, which) -> openUrl(context, "https://huggingface.co/settings/tokens"))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     private boolean startImportDraft(Context context, ImportDraft draft) {
@@ -1767,7 +1766,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         }
         if (hasUrl) {
             TaiModelImporter.ValidationResult validation =
-                TaiModelImporter.validateHuggingFaceImportUrl(draft.backend, draft.hfUrl);
+                TaiModelImporter.validateHuggingFaceImportUrl(draft.hfUrl);
             if (!validation.supported) {
                 Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
                 return false;
@@ -1775,17 +1774,14 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             startHuggingFaceImport(context, draft);
             return true;
         }
-        if (IMPORT_BACKEND_MNN.equals(draft.backend)) {
-            Toast.makeText(context, R.string.termux_ai_model_import_mnn_local_unsupported, Toast.LENGTH_LONG).show();
-            return false;
-        }
+        // Local file: only LiteRT packages can be imported from storage (MNN comes from a URL).
         TaiModelImporter.ValidationResult validation = TaiModelImporter.validateImportFileNameForBackend(
-            draft.backend, draft.documentMetadata.displayName);
+            IMPORT_BACKEND_LITERT, draft.documentMetadata.displayName);
         if (!validation.supported) {
             Toast.makeText(context, validation.message, Toast.LENGTH_LONG).show();
             return false;
         }
-        importModelDocument(context, draft.documentUri, draft.modelId, draft.backend, draft.capabilities);
+        importModelDocument(context, draft.documentUri, draft.modelId, IMPORT_BACKEND_LITERT, draft.capabilities);
         pendingImportDraft = null;
         return true;
     }
@@ -1805,9 +1801,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                 request.put("displayName", modelId);
                 request.put("url", draft.hfUrl);
                 request.put("acceptedTerms", true);
-                request.put("backend", draft.backend);
-                request.put("format", IMPORT_BACKEND_MNN.equals(draft.backend)
-                    ? TaiModelSpec.FORMAT_MNN : TaiModelSpec.FORMAT_LITERTLM);
+                // Backend/format are auto-detected by downloadModel from the resolved file.
                 JSONArray capabilities = new JSONArray();
                 capabilities.put(TaiModelSpec.CAPABILITY_TEXT_CHAT);
                 for (String capability : draft.capabilities) capabilities.put(capability);
@@ -1826,6 +1820,18 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
                     Toast.makeText(currentContext, R.string.termux_ai_model_download_started, Toast.LENGTH_SHORT).show();
                     handler.removeCallbacks(refreshRuntimeRunnable);
                     handler.postDelayed(refreshRuntimeRunnable, 1000L);
+                } else if (finalResult != null && "gated_model_requires_auth".equals(finalResult.optString("error"))) {
+                    // Gated/private repo: prompt for a token, then retry the same import.
+                    new MaterialAlertDialogBuilder(currentContext)
+                        .setTitle(R.string.termux_ai_huggingface_token_title)
+                        .setMessage(finalResult.optString("message", getString(R.string.termux_ai_model_import_gated_message)))
+                        .setPositiveButton(R.string.termux_ai_huggingface_token_title,
+                            (d, w) -> promptHuggingFaceToken(currentContext, () -> {
+                                draft.hfToken = new TaiSettings(currentContext).getHuggingFaceToken();
+                                startHuggingFaceImport(currentContext, draft);
+                            }))
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
                 } else {
                     String message = finalResult == null
                         ? currentContext.getString(R.string.termux_ai_model_action_failed)
