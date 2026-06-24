@@ -1,0 +1,272 @@
+# Developer Docs
+
+This page keeps the intermediate and high-level details out of the beginner guide. Start with [Getting Started](Launcher_Getting_Started.md) if you are installing or using the launcher for the first time.
+
+## Project Shape
+
+Termux Launcher is based on [termux-app](https://github.com/termux/termux-app), with launcher UI, sixel-capable terminal rendering, Material color integration, LauncherCtl, and the local Termux AI runtime added on top.
+
+Important local areas:
+
+- `app/src/main/java/com/termux/launcherctl/LauncherCtlApiServer.java`: local API server and generated shell clients.
+- `app/src/main/java/com/termux/launcherctl/LauncherCtlNotificationListener.java`: notification and media cache source.
+- `app/src/main/java/com/termux/ai/`: TAI settings, model registry, model downloads/imports, and runtime adapters.
+- `resources/bin/launcherctl`: installed LauncherCtl shell helper.
+- `resources/bin/tai`: installed TAI shell helper.
+- `docs/en/examples/`: optional tmux, status, weather, and Shizuku helper scripts.
+
+## LauncherCtl Internals
+
+LauncherCtl runs in the app process and binds to:
+
+```text
+127.0.0.1
+```
+
+Runtime files:
+
+```sh
+~/.launcherctl/endpoint
+~/.launcherctl/token
+```
+
+The endpoint file contains the base URL without `/v1`, for example:
+
+```text
+http://127.0.0.1:41237
+```
+
+The token file contains the bearer token used by `launcherctl`, `tai`, and direct API clients.
+
+### Launcher Routes
+
+```text
+GET  /v1/status
+GET  /v1/apps
+POST /v1/apps/launch
+GET  /v1/system/resources
+GET  /v1/media/now-playing
+GET  /v1/media/art
+GET  /v1/notifications
+POST /v1/app/restart
+POST /v1/auth/rotate
+```
+
+`/v1/system/resources` returns CPU, memory, runtime heap, uptime, storage, battery, network, thermal, and backend status data. It is designed for periodic dashboard or tmux status polling.
+
+Notification and media routes require notification listener permission and may expose sensitive user content.
+
+### TAI Routes
+
+```text
+GET  /v1/ai/status
+GET  /v1/ai/runtime
+POST /v1/ai/runtime/load
+POST /v1/ai/runtime/unload
+POST /v1/ai/runtime/keep-warm
+POST /v1/ai/runtime/cancel
+GET  /v1/ai/models
+POST /v1/ai/models/import
+POST /v1/ai/models/download
+POST /v1/ai/models/download-catalog
+GET  /v1/ai/models/downloads
+POST /v1/ai/models/downloads/cancel
+POST /v1/ai/models/delete
+POST /v1/ai/models/load
+POST /v1/ai/models/unload
+GET  /v1/models
+POST /v1/chat/completions
+POST /v1/completions
+```
+
+`/v1/chat/completions` and `/v1/completions` support `stream: true` and return `text/event-stream` chunks ending with:
+
+```text
+data: [DONE]
+```
+
+### Security Model
+
+Implemented mitigations:
+
+- bearer token authentication
+- constant-time token comparison
+- bounded worker pool
+- HTTP request size limits
+- endpoint rate limiting
+- token rotation
+- owner-only sensitive files
+
+Remaining considerations:
+
+- Localhost token auth still depends on local process trust.
+- Apps or processes that can read the same Termux home files can read the token.
+- Notification and media endpoints should be treated as privacy-sensitive.
+- A future Unix-domain socket or endpoint-level permission toggle could tighten local access further.
+
+## Termux AI Runtime Notes
+
+TAI stores user overrides separately from model metadata. Most runtime tunables default to `Auto / Gallery default`:
+
+- max tokens
+- TopK
+- TopP
+- temperature
+- accelerator
+- thinking
+- speculative decoding
+- idle unload or keep-warm policy
+
+Known catalog profiles are synchronized with Google AI Edge Gallery 1.0.15:
+
+- `Gemma-4-E2B-it`: GPU, CPU; 8 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `Gemma-4-E4B-it`: GPU, CPU; 12 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
+- `MobileActions-270M`: CPU only; 6 GiB minimum; 1024 max tokens; TopK 64; TopP 0.95; temperature 0.0.
+
+Auto accelerator follows the ordered compatible accelerator list from the Gallery model allowlist. Explicit `--gpu` or `--cpu` is accepted only when both the model profile and device support it.
+
+Device memory detection follows Gallery behavior:
+
+- Android 14 and newer use `ActivityManager.MemoryInfo.advertisedMem`.
+- Older Android versions use `totalMem`.
+- Low memory is reported as a warning so the user can still decide whether to proceed.
+
+The LiteRT-LM `Engine` remains loaded after `tai load`. TAI reuses a `Conversation` while the model, prompt mode, system prompt, and sampling options remain compatible. One generation runs at a time.
+
+Future runtime work:
+
+- isolate GPU probing/loading so native GPU initialization failures cannot crash the main launcher process
+- add benchmark counters
+- expand multimodal and tool-calling support when there is a clear API boundary
+- add more download controls such as pause, cancel, and retry in the UI
+
+Reference material:
+
+- [Google AI Edge Gallery model allowlist 1.0.15](https://github.com/google-ai-edge/gallery/blob/main/model_allowlists/1_0_15.json)
+- [Gallery model allowlist/device policy](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/data/ModelAllowlist.kt)
+- [Gallery memory detection](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/MemoryWarning.kt)
+- [Gallery LiteRT-LM runtime](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt)
+
+## Model Import Details
+
+Settings import and CLI import intentionally behave differently.
+
+Settings import:
+
+- uses Android's document picker
+- accepts `.litertlm` and `.task`
+- copies the selected file into app-private model storage
+- registers the copied model path
+
+CLI import:
+
+```sh
+tai import /absolute/path/to/model.litertlm MyModel
+```
+
+- requires a path the app process can read
+- registers the path
+- does not copy the file into app-private storage
+- accepts optional runtime profile metadata through the JSON API
+
+The import API accepts fields such as:
+
+- `runtimeProfile.compatibleAccelerators`
+- `defaultMaxTokens`
+- `defaultTopK`
+- `defaultTopP`
+- `defaultTemperature`
+- `minDeviceMemoryInGb`
+
+Unknown imported models default to CPU, matching Gallery's import behavior.
+
+## Material Colors
+
+When Terminal Material colors are enabled, the launcher writes:
+
+```sh
+~/.termux/material-colors.sh
+~/.termux/material-colors.properties
+```
+
+The shell file exports variables such as:
+
+```sh
+TERMUX_MATERIAL_PRIMARY
+TERMUX_MATERIAL_ON_SURFACE
+TERMUX_MATERIAL_SURFACE
+TERMUX_MATERIAL_SURFACE_CONTAINER
+TERMUX_MATERIAL_TERMINAL_BACKGROUND
+TERMUX_MATERIAL_TERMINAL_FOREGROUND
+TERMUX_MATERIAL_TERMINAL_COLOR4
+```
+
+Shell startup pattern:
+
+```sh
+if [ -r "$HOME/.termux/material-colors.sh" ]; then
+    . "$HOME/.termux/material-colors.sh"
+fi
+```
+
+tmux can read exported environment values with `#{E:VARIABLE_NAME}`:
+
+```tmux
+set -g status-style "fg=#{E:TERMUX_MATERIAL_ON_SURFACE},bg=#{E:TERMUX_MATERIAL_SURFACE_CONTAINER}"
+set -g window-status-current-style "fg=#{E:TERMUX_MATERIAL_SURFACE},bg=#{E:TERMUX_MATERIAL_PRIMARY}"
+```
+
+## Optional Helper Scripts
+
+The helper scripts in `docs/en/examples/` are not installed by the APK. The beginner setup downloads them when requested.
+
+Scripts:
+
+- `setup-tmux-btop`: interactive installer for tmux theme/plugin setup and optional Shizuku `btop`.
+- `launcher-system-monitor`: cached CPU/RAM formatter for tmux status bars.
+- `launcher-weather-widget`: cached weather formatter using wttr.in.
+- `setup-btop-rish`: installs Linux `btop` under `/data/local/tmp` through Shizuku `rish`.
+- `kew-tmux-status`: optional second tmux status row for `kew-now-playing`.
+- `tmux.conf` and `material-theme.tmux`: manual tmux examples.
+
+`launcher-system-monitor` prefers `launcherctl resources`. It keeps a `rish` fallback for plain Termux plus Shizuku setups, but that path is less efficient because it starts a Shizuku shell to sample system files.
+
+Refresh installed helper scripts after an APK or docs update:
+
+```sh
+launcherctl update-scripts
+```
+
+This updates repo-owned helper scripts and leaves `~/.tmux.conf` alone.
+
+## Shizuku and rish
+
+Normal launcher usage does not require Shizuku. Optional Shizuku-backed behavior includes lock-screen handling and helper workflows such as `btop-shizuku`.
+
+For direct Shizuku shell commands, call `rish` directly:
+
+```sh
+rish -c "id"
+```
+
+Expected local setup:
+
+- `rish` is executable and in `$PATH`, or `RISH_BIN` points to it.
+- `rish_shizuku.dex` is beside it as Shizuku generated.
+- the bottom of `rish` uses `RISH_APPLICATION_ID="com.termux"`.
+- Shizuku permission has been granted once.
+
+Diagnostics:
+
+```sh
+launcherctl tty-doctor
+```
+
+`setup-btop-rish` creates:
+
+```text
+btop-shizuku
+mini-btop-shizuku
+```
+
+The mini layout is better for small Android terminal panes because it keeps CPU and process panels visible and uses a slower refresh.

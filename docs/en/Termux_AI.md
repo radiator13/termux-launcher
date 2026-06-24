@@ -1,71 +1,71 @@
-# TAI / Termux AI
+# Termux AI
 
-TAI is the local on-device model endpoint for Termux Launcher. It runs inside the Android app process and exposes a small authenticated localhost API through the existing `launcherctl` bridge.
+Termux AI, also called TAI, is a local on-device model host built into Termux Launcher. It runs inside the Android app process and exposes an authenticated localhost API through LauncherCtl.
 
-TAI is intentionally not a shell agent. Use established shell/coding clients such as `aichat` or `tmuxai` for terminal workflows, pane context, command review, and coding UX. TAI provides the local model runtime those tools can call.
+TAI is not a shell agent. It does not plan commands or control Android by itself. Use tools such as `aichat`, coding assistants, or tmux helpers for the chat UI. TAI provides the local model runtime those tools can call.
 
-## Scope
+## What It Does
 
-TAI currently handles:
+TAI can:
 
-- model catalog metadata
-- explicit model import/download/delete
-- model load/unload/keep-warm/cancel lifecycle control
-- OpenAI-compatible `GET /v1/models`
-- OpenAI-compatible `POST /v1/chat/completions`
-- OpenAI-compatible `POST /v1/completions`
-- streaming SSE responses for chat and completion requests
+- download catalog models from the app settings page
+- import local `.litertlm` or `.task` model files
+- load, unload, keep warm, and cancel model runs
+- expose OpenAI-compatible endpoints for chat and completions
+- stream responses with Server-Sent Events when the client asks for streaming
 
 TAI does not currently:
 
-- plan or execute shell commands
+- execute shell commands
 - summarize notifications
-- execute Android/device actions
-- accept multimodal image/audio prompts
-- expose Gallery skills or benchmark UI
+- perform Android actions
+- accept image or audio prompts
+- provide a benchmark UI
 
-Those features should be built later as explicit capability APIs or delegated to dedicated external tools instead of being hidden inside the `tai` shell helper.
+Advanced runtime and API details are in [Developer docs](Developer_Docs.md).
 
-## Model Roles
+## Open the Settings Page
 
-TAI keeps one default model assignment for requests that omit `model`:
+Open:
 
-- `Gemma-4-E2B-it`: default fast assistant model
+```text
+Long press Terminal -> More -> TAI / Termux AI
+```
 
-Open Settings -> TAI / Termux AI to change the default model and runtime overrides.
+From there you can:
 
-TAI does not bundle model files in the APK. Downloads and imports must be explicit user actions, with license/terms awareness for gated or restricted models. Hugging Face tokens are never bundled; an optional user token can be saved in app-private settings for Hugging Face downloads.
+- download supported catalog models
+- import a local model with Android's file picker
+- choose the default assistant model
+- choose Auto, GPU, or CPU when supported
+- change generation defaults such as max tokens and temperature
+- configure the local API port
+- view, edit, or recreate the API token
+- save an optional Hugging Face token for gated Hugging Face downloads
 
-## Runtime Defaults
+The APK does not include model files. Downloads and imports are explicit user actions so you can review model licenses and provider terms.
 
-TAI stores user overrides separately from model metadata. Runtime tunables default to `Auto / Gallery default`:
+## Supported Models
 
-- max tokens
-- TopK
-- TopP
-- temperature
-- accelerator: Auto / GPU / CPU
-- thinking
-- speculative decoding
-- idle unload / keep-warm policy
+Use these catalog model IDs exactly:
 
-Auto accelerator follows the ordered compatible accelerator list from Google AI Edge Gallery's model allowlist. MobileActions-270M is CPU-only with temperature 0.0, while Gemma 4 E2B/E4B prefer GPU with CPU fallback and use their Gallery defaults. TAI also applies Gallery's Pixel 10 GPU exclusion and minimum-memory metadata. Explicit `--gpu` or `--cpu` is accepted only when both the model profile and device support it.
+```text
+Gemma-4-E2B-it
+Gemma-4-E4B-it
+MobileActions-270M
+```
 
-Device memory detection matches Gallery: Android 14 and newer use `ActivityManager.MemoryInfo.advertisedMem`; older versions use `totalMem`. `tai runtime` exposes the detected ABI, memory source, SoC, device model, available phase-one accelerators, active model profile, and any memory warning. A low-memory result is a warning, matching Gallery's proceed-anyway behavior, rather than an automatic load failure.
+`Gemma-4-E2B-it` is the default fast assistant model. `Gemma-4-E4B-it` is larger. `MobileActions-270M` is smaller and CPU-only.
 
-Known profiles are synchronized with Edge Gallery 1.0.15:
+Device memory matters. Low-memory devices may show a warning or fail to load larger models. If GPU loading fails, try CPU mode:
 
-- Gemma-4-E2B-it: GPU, CPU; 8 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- Gemma-4-E4B-it: GPU, CPU; 12 GiB minimum; 4000 max tokens; TopK 64; TopP 0.95; temperature 1.0.
-- MobileActions-270M: CPU only; 6 GiB minimum; 1024 max tokens; TopK 64; TopP 0.95; temperature 0.0.
+```sh
+tai load Gemma-4-E2B-it --cpu
+```
 
-Unknown imported models default to CPU, matching Gallery's import dialog. The import API accepts `runtimeProfile.compatibleAccelerators`, `defaultMaxTokens`, `defaultTopK`, `defaultTopP`, `defaultTemperature`, and `minDeviceMemoryInGb` when the user knows the package's requirements.
+## Shell Helper
 
-The LiteRT-LM `Engine` remains loaded after `tai load`, and TAI reuses a `Conversation` while the model, prompt mode, system prompt, and sampling options remain compatible. One generation runs at a time. Use `tai cancel` or `POST /v1/ai/runtime/cancel` to stop an active generation.
-
-## Shell Command
-
-The launcher installs:
+The app installs:
 
 ```sh
 tai
@@ -74,99 +74,163 @@ tai
 Useful commands:
 
 ```sh
-tai --json status
 tai status
 tai runtime
 tai models
-tai import ~/models/gemma.litertlm Gemma-4-E2B-it-local
-tai download Gemma-4-E2B-it https://example.invalid/path/to/model.litertlm --accept-terms
 tai downloads
 tai load Gemma-4-E2B-it
-tai load Gemma-4-E2B-it --gpu
-tai load Gemma-4-E2B-it --cpu
 tai keep-warm Gemma-4-E2B-it --minutes 30
 tai cancel
 tai unload
 tai doctor
 ```
 
-The `tai` CLI is a model-management helper, not the chat frontend. Use `tai --json <command>` when scripts or debugging need the raw authenticated API JSON response.
+Use JSON output for scripts:
 
-## Local API
-
-TAI uses the same bearer-token local bridge as `launcherctl`.
-
-Implemented endpoints:
-
-- `GET /v1/ai/status`
-- `GET /v1/ai/runtime`
-- `POST /v1/ai/runtime/load`
-- `POST /v1/ai/runtime/unload`
-- `POST /v1/ai/runtime/keep-warm`
-- `POST /v1/ai/runtime/cancel`
-- `GET /v1/ai/models`
-- `POST /v1/ai/models/import`
-- `POST /v1/ai/models/download`
-- `POST /v1/ai/models/download-catalog`
-- `GET /v1/ai/models/downloads`
-- `POST /v1/ai/models/delete`
-- `POST /v1/ai/models/load`
-- `POST /v1/ai/models/unload`
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `POST /v1/completions`
-
-Model import and download registry persistence is implemented. Downloaded or imported `.litertlm` models can be loaded through the Android-side LiteRT-LM adapter on supported 64-bit devices.
-
-The runtime supports non-streaming JSON responses and streaming `text/event-stream` responses. Streaming emits OpenAI-style chunks and finishes with `data: [DONE]`. Auto follows the model profile and device exclusions before initializing LiteRT-LM. The app manifest declares the same optional native libraries as Edge Gallery: `libvndksupport.so`, `libOpenCL.so`, `libcdsprpc.so`, and `libedgetpu_litert.so`. LiteRT-LM's `Capabilities` API is checked before speculative decoding is enabled. A future isolated GPU probe/runtime process should still be added so failed native GPU initialization cannot crash the main launcher process.
-
-Reference implementation and metadata:
-
-- [Google AI Edge Gallery model allowlist 1.0.15](https://github.com/google-ai-edge/gallery/blob/main/model_allowlists/1_0_15.json)
-- [Gallery model allowlist/device policy](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/data/ModelAllowlist.kt)
-- [Gallery memory detection](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/MemoryWarning.kt)
-- [Gallery LiteRT-LM runtime](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt)
-
-## External Clients
-
-For `aichat`, `tmuxai`, or other OpenAI-compatible clients, point the base URL at the authenticated LauncherCtl endpoint and use:
-
-```text
-/v1/chat/completions
-/v1/completions
+```sh
+tai --json status
+tai --json runtime
 ```
 
-The endpoint URL and bearer token are stored at:
+## Download or Import Models
+
+The easiest path is the Settings page:
+
+```text
+TAI / Termux AI -> Models
+```
+
+Settings downloads catalog models into app-private storage. Settings imports copy selected `.litertlm` or `.task` files into app-private storage.
+
+The CLI can also register a readable local model path:
+
+```sh
+tai import /absolute/path/to/model.litertlm MyLocalModel
+```
+
+CLI import registers the path. It does not copy the file into app-private storage.
+
+For direct downloads:
+
+```sh
+tai download MyDownloadedModel https://provider.example/model.litertlm --accept-terms
+tai downloads
+```
+
+Downloads require:
+
+- an HTTPS URL
+- a model ID
+- `--accept-terms`, meaning you reviewed the provider license or terms yourself
+
+For gated Hugging Face models, accept the model terms on Hugging Face, create a read token, then save it in:
+
+```text
+Settings -> TAI / Termux AI -> Hugging Face token
+```
+
+Do not paste private tokens into shell commands if you want to avoid shell history.
+
+## Use With OpenAI-Compatible Clients
+
+TAI shares the LauncherCtl endpoint and token:
 
 ```sh
 ~/.launcherctl/endpoint
 ~/.launcherctl/token
 ```
 
-## Importing and Downloading Models
-
-TAI supports two explicit model registration paths:
+Most OpenAI-compatible tools need a base URL ending in `/v1`:
 
 ```sh
-tai import /absolute/path/to/model.litertlm MyLocalModel
-tai download MyDownloadedModel https://provider.example/model.litertlm --accept-terms
-tai downloads
+export OPENAI_BASE_URL="$(cat ~/.launcherctl/endpoint)/v1"
+export OPENAI_API_KEY="$(cat ~/.launcherctl/token)"
 ```
 
-Import registers a readable local file path. It does not copy the file into app-private storage yet.
+Supported OpenAI-style endpoints:
 
-Download starts a foreground app-process transfer into app-private storage under `files/tai/models/`. Settings shows progress while the page is open, and Android shows a progress notification while the transfer runs. Downloads require:
+```text
+GET  /v1/models
+POST /v1/chat/completions
+POST /v1/completions
+```
 
-- an explicit HTTPS URL
-- an explicit model id
-- `--accept-terms`, meaning you reviewed the provider license/terms yourself
+When a client sends a request, TAI checks the model name:
 
-For gated Hugging Face models, first accept the provider terms on Hugging Face, create a read token, and save it in Settings -> TAI / Termux AI -> Hugging Face token. TAI sends that token only as a Bearer token to Hugging Face download URLs. Do not put Hugging Face or other private tokens in shell history.
+- if the model is already loaded, it uses it
+- if the model is installed but not loaded, it loads it
+- if another installed assistant model is requested, it switches to that model
+- if the model is unknown or missing, the request fails with an error
 
-## Current Limitations / TODO
+## Runtime Basics
 
-- Expand the LiteRT-LM runtime adapter with benchmark counters, multimodal prompts, and tool-calling integration.
-- Move LiteRT-LM GPU probing/loading into an isolated runtime process so native GPU failures cannot crash the main launcher process.
-- Add copy-into-private-storage import mode and UI file picker.
-- Add pause/cancel/retry controls for foreground downloads.
-- Add explicit Android capability APIs separately from the local model endpoint.
+The default accelerator is Auto. Auto follows the model profile and the device capabilities. You can request GPU or CPU explicitly:
+
+```sh
+tai load Gemma-4-E2B-it --gpu
+tai load Gemma-4-E2B-it --cpu
+```
+
+The model stays loaded while it is active, then unloads after the configured idle timeout. You can keep it warm for a while:
+
+```sh
+tai keep-warm Gemma-4-E2B-it --minutes 30
+```
+
+Only one generation runs at a time. Stop an active generation with:
+
+```sh
+tai cancel
+```
+
+## Security Notes
+
+The endpoint is local to the device:
+
+```text
+127.0.0.1
+```
+
+Requests must include the bearer token from:
+
+```sh
+~/.launcherctl/token
+```
+
+Treat this token like an API key. If it is exposed, recreate it from Settings or run:
+
+```sh
+launcherctl token rotate
+```
+
+After rotating the token, update any AI clients that saved the old key.
+
+## Troubleshooting
+
+Check that the bridge files exist:
+
+```sh
+cat ~/.launcherctl/endpoint
+cat ~/.launcherctl/token
+```
+
+If they are missing, open Termux Launcher again.
+
+Check installed models:
+
+```sh
+tai models
+```
+
+Check runtime state:
+
+```sh
+tai runtime
+```
+
+If a model does not load, try CPU mode and check memory warnings:
+
+```sh
+tai load Gemma-4-E2B-it --cpu
+tai doctor
+```

@@ -4,24 +4,16 @@ page_ref: /docs/apps/termux-launcher/index.html
 
 # Termux Launcher Documentation
 
-This wiki is only for Termux Launcher-specific usage: the launcher surface, shell commands, terminal integrations, optional Shizuku backend, and launcher troubleshooting.
+This wiki is focused on beginner-friendly Termux Launcher setup and the small reference pages most users need.
 
 [Releases](https://github.com/PickleHik3/termux-launcher/releases) | [README](../../README.md) | [Changelog](../../CHANGELOG.md)
 
 ## Start Here
 
-- [Getting started](Launcher_Getting_Started)
-- [Using the launcher](Launcher_Usage)
-- [Troubleshooting](Launcher_Troubleshooting)
+- [Getting Started](Launcher_Getting_Started)
 
-## Integrations
+## Reference
 
-- [Shell integration](Launcher_Shell_Integration)
-- [Termux Launcher AI](Termux_Launcher_AI)
-- [TAI / Termux AI](Termux_AI)
-- [Terminal Material colors](Launcher_Material_Colors)
-- [Termux extra keys](Termux_Extrakeys)
-- [tmux status setup](Launcher_Tmux_Status_Setup) and [theme plugin](https://github.com/PickleHik3/termux-launcher-tmux)
-- [LauncherCtl API](LauncherCtl_API)
-- [Optional Shizuku integration](Launcher_Optional_Shizuku)
-- [Shizuku helper examples](Launcher_Shizuku_Examples)
+- [LauncherCtl](LauncherCtl_API)
+- [Termux AI](Termux_AI)
+- [Developer Docs](Developer_Docs)
