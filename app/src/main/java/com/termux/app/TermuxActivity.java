@@ -1140,6 +1140,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mGlassParamsValid = false;
     private float mGlassBlurPx, mGlassCapLeft, mGlassCapTop, mGlassCapRight, mGlassCapBottom, mGlassRadiusPx;
 
+    // Page-indicator notch state fed into the glass shader (GLASS_AGSL uPill* uniforms), plus the
+    // last raw indicator inputs so a backdrop rebuild can re-sync the notches without an interaction.
+    private int mPillCount = 0;
+    private final float[] mPillCx = new float[6];
+    private final float[] mPillHalfW = new float[6];
+    private float mPillCy, mPillHalfH, mPillRadius;
+    private int mPillActive = -1, mPillDynamic = -1;
+    private float mPillAlpha = 0f;
+    private int mPillSig = Integer.MIN_VALUE;
+    private boolean mIndShown;
+    private int mIndPageCount = 1, mIndDynamic = -1;
+    private float mIndPosition = 0f;
+
     /**
      * AGSL glass: what separates real glass from frosted polymer is that glass <em>bends</em> light
      * at its edges (refraction) and catches a crisp edge highlight, instead of just diffusing it.
@@ -1167,6 +1180,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         "uniform float uLensRadius;\n" +
         "uniform float uLensStrength;\n" +
         "uniform float uLensFeather;\n" +
+        // Page-indicator "notches": up to 6 rounded-rect pills recessed into the dock's top rim, so
+        // the indicator is part of the glass (shaded grooves) rather than a separate overlay.
+        "uniform float uPillCount;\n" +
+        "uniform float uPillCx[6];\n" +
+        "uniform float uPillHalfW[6];\n" +
+        "uniform float uPillCy;\n" +
+        "uniform float uPillHalfH;\n" +
+        "uniform float uPillRadius;\n" +
+        "uniform float uPillActive;\n" +
+        "uniform float uPillDynamic;\n" +
+        "uniform float uPillAlpha;\n" +
+        "uniform half3 uPillWarm;\n" +
         "float sdRoundRect(float2 p, float2 b, float r) {\n" +
         "    float2 q = abs(p) - b + float2(r, r);\n" +
         "    return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0, 0.0))) - r;\n" +
@@ -1202,6 +1227,31 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         "    float rim = 1.0 - smoothstep(0.0, 2.0 * uDensity, inside);\n" +
         "    col.rgb = col.rgb + half3(rim * uRim);\n" +
         "    col.rgb = col.rgb + half3(lensGlow * uRim * 0.6);\n" +
+        // Recessed page-indicator notches: darken toward the top of each pill (inner shadow of a
+        // groove) with a faint bright lower lip; the active pill brightens slightly and the dynamic
+        // page gets a gentle warm tint. All within the glass, so they share its rim/refraction.
+        "    if (uPillCount > 0.5 && uPillAlpha > 0.001) {\n" +
+        "        for (int i = 0; i < 6; i++) {\n" +
+        "            if (float(i) < uPillCount) {\n" +
+        "                float2 pc = float2(uPillCx[i], uPillCy);\n" +
+        "                float2 ph = float2(uPillHalfW[i], uPillHalfH);\n" +
+        "                float pdist = -sdRoundRect(fragCoord - pc, ph, uPillRadius);\n" +
+        "                if (pdist > 0.0) {\n" +
+        "                    float pedge = clamp(pdist / max(uDensity * 1.5, 1.0), 0.0, 1.0);\n" +
+        "                    float vy = clamp((fragCoord.y - (pc.y - ph.y)) / max(2.0 * ph.y, 1.0), 0.0, 1.0);\n" +
+        "                    float a = pedge * uPillAlpha;\n" +
+        "                    col.rgb = col.rgb - half3(a * (1.0 - vy) * 0.24);\n" +
+        "                    col.rgb = col.rgb + half3(a * smoothstep(0.65, 1.0, vy) * 0.10);\n" +
+        "                    if (abs(float(i) - uPillActive) < 0.5) {\n" +
+        "                        col.rgb = col.rgb + half3(a * 0.13);\n" +
+        "                    }\n" +
+        "                    if (abs(float(i) - uPillDynamic) < 0.5) {\n" +
+        "                        col.rgb = col.rgb + half(a) * uPillWarm;\n" +
+        "                    }\n" +
+        "                }\n" +
+        "            }\n" +
+        "        }\n" +
+        "    }\n" +
         "    return col;\n" +
         "}\n";
 
@@ -1234,6 +1284,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mGlassShader.setFloatUniform("uLensRadius", mKeyLensRadius);
             mGlassShader.setFloatUniform("uLensStrength", 0.20f);
             mGlassShader.setFloatUniform("uLensFeather", density * 10f);
+            // Page-indicator notches.
+            mGlassShader.setFloatUniform("uPillCount", mPillCount);
+            mGlassShader.setFloatUniform("uPillCx", mPillCx);
+            mGlassShader.setFloatUniform("uPillHalfW", mPillHalfW);
+            mGlassShader.setFloatUniform("uPillCy", mPillCy);
+            mGlassShader.setFloatUniform("uPillHalfH", Math.max(1f, mPillHalfH));
+            mGlassShader.setFloatUniform("uPillRadius", mPillRadius);
+            mGlassShader.setFloatUniform("uPillActive", mPillActive);
+            mGlassShader.setFloatUniform("uPillDynamic", mPillDynamic);
+            mGlassShader.setFloatUniform("uPillAlpha", mPillAlpha);
+            mGlassShader.setFloatUniform("uPillWarm", 0.16f, 0.10f, -0.04f);
             RenderEffect shaderEffect = RenderEffect.createRuntimeShaderEffect(mGlassShader, "content");
             if (blurPx > 0f) {
                 RenderEffect blur = RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP);
@@ -1304,6 +1365,77 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (glass != null) {
             backdrop.setRenderEffect(glass);
         }
+    }
+
+    /**
+     * Recomputes the page-indicator notch geometry/state for the glass shader and, when the glass
+     * backdrop is live, rebuilds it so the notches are carved into the dock's top rim. When the glass
+     * shader isn't active (pre-33, live wallpaper, blur off) the canvas indicator in the FX overlay
+     * draws instead — so we only suppress the canvas one while the glass actually renders the notches.
+     */
+    private void updateGlassPageIndicator(boolean shown, int pageCount, float position, int dynamicIndex) {
+        mIndShown = shown;
+        mIndPageCount = pageCount;
+        mIndPosition = position;
+        mIndDynamic = dynamicIndex;
+
+        boolean glass = mGlassParamsValid;
+        int count = (shown && pageCount > 1) ? Math.min(6, pageCount) : 0;
+        int active = count > 0 ? Math.round(Math.max(0f, Math.min(count - 1f, position))) : -1;
+        int dyn = (count > 0 && dynamicIndex >= 0 && dynamicIndex < count) ? dynamicIndex : -1;
+
+        applyGlassIndicatorSuppression(glass && count > 0);
+
+        int sig = (glass ? 1 : 0);
+        sig = sig * 31 + count;
+        sig = sig * 31 + (active + 2);
+        sig = sig * 31 + (dyn + 2);
+        sig = sig * 31 + Math.round(mGlassCapLeft);
+        sig = sig * 31 + Math.round(mGlassCapRight);
+        if (sig == mPillSig) return;
+        mPillSig = sig;
+
+        if (!glass || count == 0) {
+            if (mPillCount != 0) {
+                mPillCount = 0;
+                mPillAlpha = 0f;
+                rebuildBackdropGlassEffectForLens();
+            }
+            return;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        float wInactive = density * 12f;
+        float wActive = density * 20f;
+        float gap = density * 4f;
+        mPillCy = density * 5f;
+        mPillHalfH = density * 2.4f;
+        mPillRadius = mPillHalfH;
+        mPillActive = active;
+        mPillDynamic = dyn;
+        mPillAlpha = 1f;
+        mPillCount = count;
+
+        float sumW = 0f;
+        for (int p = 0; p < count; p++) {
+            mPillHalfW[p] = ((p == active) ? wActive : wInactive) * 0.5f;
+            sumW += mPillHalfW[p] * 2f;
+        }
+        float total = sumW + (count - 1) * gap;
+        float cxCenter = (mGlassCapLeft + mGlassCapRight) * 0.5f;
+        float x = cxCenter - total * 0.5f;
+        for (int p = 0; p < count; p++) {
+            float w = mPillHalfW[p] * 2f;
+            mPillCx[p] = x + w * 0.5f;
+            x += w + gap;
+        }
+        rebuildBackdropGlassEffectForLens();
+    }
+
+    private void applyGlassIndicatorSuppression(boolean suppress) {
+        if (mLauncherAzGestureFxUnderlayView != null) mLauncherAzGestureFxUnderlayView.setGlassIndicatorActive(suppress);
+        if (mLauncherAzGestureFxOverlayView != null) mLauncherAzGestureFxOverlayView.setGlassIndicatorActive(suppress);
+        if (mLauncherAzGestureFxLabelOverlayView != null) mLauncherAzGestureFxLabelOverlayView.setGlassIndicatorActive(suppress);
     }
 
     /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
@@ -1599,7 +1731,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float progress = mPreferences != null
             ? resolveDockSizeProgress(mPreferences.getAppLauncherBarHeightScale())
             : 1f;
-        float dp = 7f + progress * 7f;
+        float dp = 6f + progress * 7f;
         return Math.round(dp * getResources().getDisplayMetrics().density);
     }
 
@@ -1610,7 +1742,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int resolveDefaultDockAppsTopPaddingPx() {
         // The default dock draws its minimal page ticks in the top glass band. Reserve that band
         // before laying out icons so the ticks never sit on top of the first row of app icons.
-        return Math.round(dpToPx(10));
+        return Math.round(dpToPx(9));
     }
 
     private int resolveDockCapsuleBottomGapPx() {
@@ -2431,6 +2563,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             backdrop.setRenderEffect(glass != null
                 ? glass
                 : RenderEffect.createBlurEffect(blurRadiusPx, blurRadiusPx, Shader.TileMode.CLAMP));
+            // Re-sync the page-indicator notches now the capsule rect/glass state is current (carves
+            // them into the freshly-built glass without waiting for the next dock interaction).
+            mPillSig = Integer.MIN_VALUE;
+            updateGlassPageIndicator(mIndShown, mIndPageCount, mIndPosition, mIndDynamic);
         } else {
             Bitmap blurredBackdrop = createPreBlurredWallpaperBackdropBitmap(wallpaperBackdrop, state.blurRadiusDp);
             if (blurredBackdrop == null) {
@@ -3683,6 +3819,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             subtlePageIndicators,
             dynamicPageIndex
         );
+        updateGlassPageIndicator(showPageIndicators, pageCount, currentPagePosition, dynamicPageIndex);
     }
 
     private void applyAzFxRowBounds() {

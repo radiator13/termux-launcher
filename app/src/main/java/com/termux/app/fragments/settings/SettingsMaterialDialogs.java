@@ -115,12 +115,16 @@ public final class SettingsMaterialDialogs {
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
 
+            // Fixed-width radio so the title and the description below share one left edge (the
+            // description's indent below is set to this same width).
+            int radioColumnW = Math.round(40 * d);
             RadioButton radio = new RadioButton(context);
             radio.setClickable(false);
             radio.setFocusable(false);
             radio.setChecked(idx == checked);
+            radio.setPadding(0, 0, 0, 0);
             radio.setButtonTintList(ColorStateList.valueOf(accent));
-            header.addView(radio);
+            header.addView(radio, new LinearLayout.LayoutParams(radioColumnW, ViewGroup.LayoutParams.WRAP_CONTENT));
 
             TextView titleView = new TextView(context);
             titleView.setText(title);
@@ -129,7 +133,6 @@ public final class SettingsMaterialDialogs {
             titleView.setTypeface(Typeface.DEFAULT_BOLD);
             LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            titleParams.setMarginStart(Math.round(8 * d));
             header.addView(titleView, titleParams);
 
             row.addView(header, new LinearLayout.LayoutParams(
@@ -143,7 +146,7 @@ public final class SettingsMaterialDialogs {
                 descView.setLineSpacing(Math.round(2 * d), 1f);
                 LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                descParams.setMarginStart(Math.round(48 * d)); // indent under the title (past the radio)
+                descParams.setMarginStart(Math.round(40 * d)); // align under the title (== radio column width)
                 descParams.topMargin = Math.round(2 * d);
                 row.addView(descView, descParams);
             }

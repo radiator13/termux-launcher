@@ -88,6 +88,9 @@ public final class LauncherAzGestureFxView extends View {
     private int interactionCurrentPageIndex;
     private int interactionPageCount = 1;
     private int interactionDynamicPageIndex = -1;
+    // When the dock glass shader renders the page-indicator notches, the canvas indicator is
+    // suppressed to avoid drawing it twice. Falls back to canvas when the glass shader is inactive.
+    private boolean glassIndicatorActive;
     private float interactionPageIndicatorPosition;
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
@@ -239,6 +242,12 @@ public final class LauncherAzGestureFxView extends View {
         } else {
             extraKeysRawBounds.setEmpty();
         }
+    }
+
+    public void setGlassIndicatorActive(boolean active) {
+        if (glassIndicatorActive == active) return;
+        glassIndicatorActive = active;
+        invalidate();
     }
 
     public void setInteractionOverflowState(
@@ -868,6 +877,9 @@ public final class LauncherAzGestureFxView extends View {
     }
 
     private void drawInteractionPageIndicators(Canvas canvas) {
+        if (glassIndicatorActive) {
+            return; // the glass shader carves the notches into the dock rim instead
+        }
         if (!interactionOverflowActive || interactionPageCount <= 1 || appsRowRawBounds.isEmpty()) {
             return;
         }
@@ -902,7 +914,7 @@ public final class LauncherAzGestureFxView extends View {
         float wActive = dp(24f);
         float h = dp(2.5f);
         float r = h * 0.5f;
-        float gap = dp(9f);
+        float gap = dp(4f);
         float cx = getWidth() * 0.5f;
         float cy = dp(3.5f); // flush against the dock's top rim
         float pos = clamp(activePagePosition, 0f, totalPages - 1f);
