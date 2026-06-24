@@ -349,7 +349,8 @@ public final class TaiLoadPreflight {
             }
             checkMnnSidecar(modelDir, json, "llm_model", "llm.mnn");
             checkMnnSidecar(modelDir, json, "llm_weight", "llm.mnn.weight");
-            String tokenizer = json.optString("tokenizer_file", "");
+            // Qwen3-VL/eagle packages omit tokenizer_file and ship the conventional tokenizer.txt.
+            String tokenizer = TaiModelStore.mnnTokenizerFile(modelDir, json);
             if (tokenizer.trim().isEmpty()) {
                 block("model_file_not_readable", "MNN config is missing tokenizer_file.");
                 check("mnn_tokenizer", false, "", "MNN config is missing tokenizer_file.");
