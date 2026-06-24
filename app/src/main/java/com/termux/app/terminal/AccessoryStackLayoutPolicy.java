@@ -23,7 +23,9 @@ public final class AccessoryStackLayoutPolicy {
     public static int computePageIndicatorBandHeightPx(boolean azEnabled, float density) {
         if (!azEnabled)
             return 0;
-        return Math.round(Math.max(0f, density) * 9f);
+        // Pure spacing between the icon row and the A-Z row (the page-indicator ticks draw at the
+        // dock's top rim, not in this band) — kept tight so the gap matches the other inter-row gaps.
+        return Math.round(Math.max(0f, density) * 3f);
     }
 
     public static int computeAzRowHeightPx(boolean azEnabled, float density) {

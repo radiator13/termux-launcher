@@ -885,9 +885,9 @@ public final class LauncherAzGestureFxView extends View {
      * transition at the midpoint). Pure function of (position, page count, accent); fades with the
      * indicator's attention. Applies to both dock styles.
      */
-    // Distinct, attention-grabbing colour for the dynamic "most-used" page tick (Material Amber).
-    // Wallpaper-independent so it always reads as "special" against the edge-tint ticks.
-    private static final int DYNAMIC_PAGE_TICK_COLOR = 0xFFFFB300;
+    // Toned-down warm amber for the dynamic "most-used" page tick: distinguishable from the
+    // dock-blended ticks, but harmonized rather than a loud neon.
+    private static final int DYNAMIC_PAGE_TICK_COLOR = 0xFFE0A338;
 
     private void drawPageTicksIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention, int dynamicPageIndex) {
         if (totalPages <= 1 || getWidth() <= 0) {
@@ -904,7 +904,7 @@ public final class LauncherAzGestureFxView extends View {
         float r = h * 0.5f;
         float gap = dp(9f);
         float cx = getWidth() * 0.5f;
-        float cy = dp(7f); // in the dock's top band, just under the rim
+        float cy = dp(3.5f); // flush against the dock's top rim
         float pos = clamp(activePagePosition, 0f, totalPages - 1f);
 
         // Per-tick widths (the active page's tick widens), then laid out left-to-right with a
@@ -929,14 +929,14 @@ public final class LauncherAzGestureFxView extends View {
             x += widths[p] + gap;
         }
 
-        // Accent from the dock's wallpaper-derived edge tint, saturation-boosted so the ticks read
-        // clearly in both the active and sleeping states.
-        int accent = boostSaturation(edgeTintColor);
+        // Blend into the dock: a slightly-brighter shade of the dock's own surface tint, so the
+        // ticks and glow harmonize with the capsule instead of contrasting against it.
+        int accent = boostColor(glassTintColor, 1.0f, 1.18f);
         boolean dynamicActive = dynamicPageIndex >= 0 && Math.abs(pos - dynamicPageIndex) < 0.5f;
         int glowColor = dynamicActive ? DYNAMIC_PAGE_TICK_COLOR : accent;
 
-        // Neon glow: a blurred capsule that hugs the active tick (same pill shape, slightly larger),
-        // following the fractional position across a swipe — reads like a neon outline, not a blob.
+        // Soft glow: a blurred capsule that hugs the active tick (same pill shape, slightly larger),
+        // following the fractional position across a swipe — a gentle dock-toned highlight.
         int lo = (int) Math.floor(pos);
         int hi = Math.min(totalPages - 1, lo + 1);
         float frac = pos - lo;
@@ -948,7 +948,7 @@ public final class LauncherAzGestureFxView extends View {
             pageTickGlow = new BlurMaskFilter(dp(5f), BlurMaskFilter.Blur.NORMAL);
         }
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        pageIndicatorPaint.setColor(withAlpha(glowColor, Math.round(90f * master)));
+        pageIndicatorPaint.setColor(withAlpha(glowColor, Math.round(70f * master)));
         pageIndicatorPaint.setMaskFilter(pageTickGlow);
         tmpRect.set(glowCx - glowW * 0.5f, cy - glowH * 0.5f, glowCx + glowW * 0.5f, cy + glowH * 0.5f);
         canvas.drawRoundRect(tmpRect, glowR, glowR, pageIndicatorPaint);
@@ -961,7 +961,7 @@ public final class LauncherAzGestureFxView extends View {
             int tickColor = accent;
             if (p == dynamicPageIndex) {
                 tickColor = DYNAMIC_PAGE_TICK_COLOR;
-                // Extra idle damp: the vivid amber only pops when this page is active; sleeping it
+                // Extra idle damp: the warm tint only reads when this page is active; sleeping it
                 // must not steal attention.
                 alpha *= (0.55f + (0.45f * prox));
             }
@@ -970,14 +970,6 @@ public final class LauncherAzGestureFxView extends View {
             tmpRect.set(left, cy - r, left + widths[p], cy + r);
             canvas.drawRoundRect(tmpRect, r, r, pageIndicatorPaint);
         }
-    }
-
-    /** Returns the colour with its HSV saturation boosted (clamped), for more vivid indicator ticks. */
-    private static int boostSaturation(int color) {
-        float[] hsv = new float[3];
-        Color.colorToHSV(color, hsv);
-        hsv[1] = Math.min(1f, hsv[1] * 1.35f + 0.10f);
-        return Color.HSVToColor(Color.alpha(color), hsv);
     }
 
     private void animateInteractionPageIndicatorTo(int pageIndex, boolean animate) {
