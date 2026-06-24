@@ -1,11 +1,15 @@
 MNN native runtime libraries for the arm64-v8a MNN backend.
 
-These binaries were taken from the upstream MNN Chat Android 0.8.3 release APK:
-https://meta.alicdn.com/data/mnn/apks/mnn_chat_0_8_3.apk
+These binaries are built from upstream MNN **3.6.0** (tag `3.6.0`) by the
+`.github/workflows/build_mnn_native.yml` GitHub Actions workflow:
 
-Included libraries:
-- libMNN.so
-- libmnnllmapp.so
+- `libMNN.so` — MNN core with the LLM engine bundled (`MNN_BUILD_LLM=ON`,
+  `MNN_SEP_BUILD=OFF`, vision + OpenCL + audio), built via `project/android/build_64.sh`.
+- `libmnnllmapp.so` — the MnnLlmChat JNI bridge (`apps/Android/MnnLlmChat/app/src/main/cpp`),
+  which at 3.6.0 includes `utf8_stream_processor.hpp`, fixing the streaming UTF-8 (emoji)
+  `NewStringUTF` crash present in the previous 0.8.3 binaries.
 
-The Java shim in `com.alibaba.mnnllm.android.llm` preserves the JNI package and
-method names exported by `libmnnllmapp.so`.
+Built with NDK r27c, `ANDROID_STL=c++_static`, min API 30. The Java shim
+`com.alibaba.mnnllm.android.llm.LlmSession` matches the JNI method names and signatures
+exported by this `libmnnllmapp.so`; only `submitStructuredChatNative` was removed upstream,
+and the runtime falls back (UnsatisfiedLinkError) when it is absent.
