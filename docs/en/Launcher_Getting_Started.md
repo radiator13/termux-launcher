@@ -3,24 +3,85 @@
 ## Install & Setup
 
 1. Download and install the latest APK from [Releases](https://github.com/PickleHik3/termux-launcher/releases).
+    Optional companion apps:
+        - [Termux:API](https://github.com/PickleHik3/termux-api/releases)
+        - [Termux:Styling](https://github.com/PickleHik3/termux-styling/releases)
 
 2. Open the app normally at first to finish Termux's bootstrap process.
 
-   - If you want to change the package manager to pacman, do it before setting Termux Launcher as the Home app so that you can still get into fail-safe mode. See [Switching package manager](https://wiki.termux.com/wiki/Switching_package_manager).
-   - Switching to pacman has benefits, such as having all repositories preconfigured for you, including glibc, tur, etc.
-   - Speed-wise, there is no meaningful difference between pacman and the default pkg/apt setup, provided you have chosen a single fastest mirror for the default package manager.
+> [!NOTE]
+> If you want switching package managers (aka to pacman) do it before step 3 (setting as your Home app), so you can still access fail-safe mode as required. See [Switching package manager](https://wiki.termux.com/wiki/Switching_package_manager).
+> - Pacman simplifies repository setup by preconfiguring repositories such as glibc, TUR, and others.
+> - In terms of performance, pacman offers no meaningful speed advantage over the default pkg/apt setup, as long as the latter is configured to use a single fast mirror.
 
-3. Open Android settings and select Termux Launcher as the default Home app. There is also a shortcut available in Termux Launcher:
-
-   ```text
-   Long press on Terminal & more -> Apps Bar -> Set as home launcher
-   ```
+3. Long press terminal area -> select more -> Settings -> Apps & Access -> Set as home launcher -> Choose Termux Launcher.
 
 4. That's it to get started. Everything works as it would in native Termux.
 
+## Shell customization
+
+To recreate my shell configs which includes;
+
+- Fish shell
+- oh-my-posh prompt
+- tmux
+- eza
+- zoxide
+- btop (without root, uses local adb bridge `rish` provided by shizuku, more information [here](https://github.com/PickleHik3/termux-launcher/edit/dev/docs/en/Launcher_Getting_Started.md#btop with Real Android System Usage)
+
+### One shot yolo
+
+> [!NOTE]
+> install packages:
+> ```sh
+> pkg i -y tmux curl jq git fish oh-my-posh termux-api
+> ```
+> - Turn on **Material colors** from Settings -> Appearance settings.
+> - Ensure rish is available in your $PATH. learn more about setting up shizuku & rish
+>     1. [shizuku](https://shizuku.rikka.app/guide/setup/)
+>     2. [rish](https://github.com/RikkaApps/Shizuku-API/tree/master/rish?night=1).
+
+Run:
+
+```sh
+curl -fsSL "https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples/setup-tmux-btop" -o ~/setup-tmux-btop
+chmod 700 ~/setup-tmux-btop
+~/setup-tmux-btop
+```
+
+> [!NOTE]
+> If you have already completed this flow and later update the APK, refresh the shell helper scripts with:
+>
+> ```sh
+> launcherctl update-scripts
+> ```
+> This keeps your tmux config intact and updates only the repo-owned helper scripts.
+
+### Material colors in terminal
+
+**Material colors** toggle in Settings -> Appearance Menu
+
+Turn this on if you want the Termux shell to inherit the Material colors from the system. It will apply the color scheme to the terminal background, text, cursor, and ANSI colors. Turning this on will create `material-colors.properties` and `material-colors.sh` inside the `~/.termux` directory, which you can source for your specific needs.
+
+Read More: [Launcher Material Colors](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher-Material-Colors.md).
+
+### Terminal Multiplexer - [tmux](https://github.com/tmux/tmux/wiki)
+
+i've packaged my tmux theme as a TPM package, follow the steps at [termux-launcher-tmux](https://github.com/PickleHik3/termux-launcher-tmux)  which uses Material colors and the Shizuku backend for real system stats, at [tmux setup](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Tmux_Status_Setup.md).
+
+> [!NOTE]
+> You can create tmux key bindings to launch Android apps using the example below. In this example, `Alt + w` opens WhatsApp:
+>
+> ```tmux
+> bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl launch whatsapp >/dev/null 2>&1 || tmux display-message "Launch failed: WhatsApp"'
+> ```
+>
+> `Alt + e` opens a tmux keybinds quick reference. 
+
+
 ## Recommended Apps
 
-- [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) is recommended for terminal and tmux-heavy use.
+- [Unexpected Keyboard](https://github.com/Julow/Unexpected-Keyboard) is highly recommended for terminal and tmux-heavy use. Download it from [Play Store](https://play.google.com/store/apps/details?id=juloo.keyboard2)
 - [Shizuku](https://github.com/rikkaapps/shizuku) is optional. Install it only if you want the optional privileged features.
 
 Use these matching companion forks if you install Termux add-ons:
@@ -29,64 +90,6 @@ Use these matching companion forks if you install Termux add-ons:
 - [Termux:Styling](https://github.com/PickleHik3/termux-styling)
 
 Using mismatched Termux add-ons can cause shared UID or signing problems.
-
-## Notes on App Preferences
-
-You can long press on the terminal and click **More** to access relevant preference pages. A few noteworthy ones are listed below.
-
-### 1. Appearance
-
-Control the opacity and blur of the terminal, dock, and Termux sessions menu.
-
-- **Terminal Material colors toggle:** Turn this on if you want the Termux shell to inherit the Material colors from the system. It will apply the color scheme to the terminal background, text, cursor, and ANSI colors. Turning this on will create `material-colors.properties` and `material-colors.sh` inside the `~/.termux` directory, which you can source for your specific needs. More information is available at [Launcher Material Colors](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Material_Colors.md).
-- **Dock Blur:** Dock blur does not work if you are using a live wallpaper. It will be automatically disabled if a live wallpaper is detected.
-- **Dock Size:** Controls the height of the app icons row.
-- **Compact dock spacing:** Tightens the distance between various rows in the dock, including Extra Keys, the A-Z row, and app icons. It also uses a smaller page indicator. It is recommended to turn this on if you want two rows of Termux Extra Keys; otherwise, the terminal size becomes too small. You can find a few examples at [Termux Extra Keys](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Termux_Extrakeys.md).
-
-### 2. Apps Bar
-
-All launcher-specific settings are configured here.
-
-- **Double tap alphabets row lockscreen:** You have two options: Shizuku, which provides the system screen-off animation, and Accessibility service, which is the typical method used by other launchers but may cause the screen to flicker once.
-- **Search Strictness:** This is something inherited from TEL. I haven't seen a use for it yet.
-- **Input Split Character:** The default is `%`. Typing the character specified here will trigger app search, and the results will be displayed on the Apps Bar. It is recommended to choose a seldom-used character.
-- **Reset App Order:** By default, app icons are ranked based on the number of times each app has been launched. This was done to make it easier to launch apps with a swipe gesture from the A-Z row to the app icons. The most launched app icon will be directly above its respective alphabet, so you can swipe up to choose and launch it. This button resets the ranking.
-
-## Additional Notes
-
-This section is sort of guided setup for setting up tmux and btop (without root, using shizuku), you can read through and copy paste each snippet, or you can use the  optional installation script.
-
-Prerequisites;
-* turn on **Terminal Material colors** from Appearance settings first. 
-* ensure rish is available in your $PATH.
-
-Then run:
-
-```sh
-curl -fsSL "https://raw.githubusercontent.com/PickleHik3/termux-launcher/main/docs/en/examples/setup-tmux-btop" -o ~/setup-tmux-btop
-chmod 700 ~/setup-tmux-btop
-~/setup-tmux-btop
-```
-
-If you have already completed this flow and later update the APK, refresh the shell helper scripts with:
-
-```sh
-launcherctl update-scripts
-```
-
-This keeps your tmux config intact and updates only the repo-owned helper scripts.
-
-### Terminal Multiplexer
-
-[tmux](https://github.com/tmux/tmux/wiki) is recommended. You can read about my setup, which uses Material colors and the Shizuku backend for real system stats, at [tmux setup](https://github.com/PickleHik3/termux-launcher/blob/main/docs/en/Launcher_Tmux_Status_Setup.md).
-
-You can create tmux key bindings to launch Android apps using the example below. In this example, `Alt + w` opens WhatsApp:
-
-```tmux
-bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl launch whatsapp >/dev/null 2>&1 || tmux display-message "Launch failed: WhatsApp"'
-```
-
-Although you could use [zellij](https://zellij.dev/) as well, tmux may be slightly better for battery life.
 
 ### btop with Real Android System Usage
 
