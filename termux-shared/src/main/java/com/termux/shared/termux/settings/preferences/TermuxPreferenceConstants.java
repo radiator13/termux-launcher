@@ -122,21 +122,6 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_APP_LAUNCHER_BUTTON_COUNT = 7;
 
         /**
-         * Defines the key for app launcher search tolerance (0-100).
-         * Kept for legacy settings migration.
-         */
-        public static final String KEY_APP_LAUNCHER_SEARCH_TOLERANCE = "app_launcher_search_tolerance";
-
-        public static final int DEFAULT_APP_LAUNCHER_SEARCH_TOLERANCE = 70;
-
-        /**
-         * Defines the key for app launcher search mode.
-         */
-        public static final String KEY_APP_LAUNCHER_SEARCH_MODE = "app_launcher_search_mode";
-
-        public static final String DEFAULT_APP_LAUNCHER_SEARCH_MODE = "balanced";
-
-        /**
          * Defines the key for app launcher input split character.
          */
         public static final String KEY_APP_LAUNCHER_INPUT_CHAR = "app_launcher_input_char";
@@ -163,6 +148,13 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_APP_LAUNCHER_NOTIFICATION_DOTS = "app_launcher_notification_dots";
 
         public static final boolean DEFAULT_APP_LAUNCHER_NOTIFICATION_DOTS = false;
+
+        /**
+         * Defines the key for the optional dynamic "most used apps" dock page.
+         */
+        public static final String KEY_APP_LAUNCHER_MOST_USED_PAGE = "app_launcher_most_used_page";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_MOST_USED_PAGE = false;
 
         /**
          * Defines the key for app launcher bar height scale.

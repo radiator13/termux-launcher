@@ -541,15 +541,12 @@
 
                 <string name="termux_app_launcher_button_count_title">Icon count</string>
                 <string name="termux_app_launcher_button_count_summary">Set the number of icons shown in the app launcher bar.</string>
-                <string name="termux_app_launcher_search_mode_title">Search strictness</string>
-                <string name="termux_app_launcher_search_mode_summary">How aggressively typed letters narrow apps.</string>
-                <string name="termux_app_launcher_search_mode_strict">Strict</string>
-                <string name="termux_app_launcher_search_mode_balanced">Balanced</string>
-                <string name="termux_app_launcher_search_mode_loose">Loose</string>
                 <string name="termux_app_launcher_input_char_title">Input split character</string>
                 <string name="termux_app_launcher_input_char_summary">Character used to start app search when typing in the terminal. Default: %</string>
                 <string name="termux_app_launcher_default_buttons_title">Default apps</string>
-                <string name="termux_app_launcher_default_buttons_summary">Comma-separated list of default apps to pin (for example: phone, telegram, spotify).</string>
+                <string name="termux_app_launcher_default_buttons_summary">Choose and reorder the apps pinned to the dock.</string>
+                <string name="termux_app_launcher_most_used_page_title">Most-used apps page</string>
+                <string name="termux_app_launcher_most_used_page_summary">Add an extra dock page showing your most-used apps.</string>
                 <string name="termux_app_launcher_bw_icons_title">Black &amp; white icons</string>
                 <string name="termux_app_launcher_bw_icons_summary">Render app icons in grayscale.</string>
                 <string name="termux_app_launcher_unify_icons_title">Unify app icons</string>

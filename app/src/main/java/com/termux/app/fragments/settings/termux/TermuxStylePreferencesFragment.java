@@ -264,6 +264,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherNotificationDotsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "app_launcher_most_used_page":
+                mPreferences.setAppLauncherMostUsedPageEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "app_launcher_az_row_enabled":
                 mPreferences.setAppLauncherAzRowEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -302,6 +306,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isAppLauncherDisplayAppNamesEnabled();
             case "app_launcher_notification_dots":
                 return mPreferences.isAppLauncherNotificationDotsEnabled();
+            case "app_launcher_most_used_page":
+                return mPreferences.isAppLauncherMostUsedPageEnabled();
             case "app_launcher_az_row_enabled":
                 return mPreferences.isAppLauncherAzRowEnabled();
             case "app_launcher_az_double_tap_lock":
@@ -408,10 +414,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherButtonCount(DataUtils.getIntFromString(value, mPreferences.getAppLauncherButtonCount()));
                 scheduleTermuxActivityStylingSync(false);
                 break;
-            case "app_launcher_search_mode":
-                mPreferences.setAppLauncherSearchMode(value);
-                scheduleTermuxActivityStylingSync(false);
-                break;
             case "app_launcher_input_char":
                 mPreferences.setAppLauncherInputChar(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -491,8 +493,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return TermuxSharedProperties.getNightMode(mContext);
             case "app_launcher_button_count":
                 return Integer.toString(mPreferences.getAppLauncherButtonCount());
-            case "app_launcher_search_mode":
-                return mPreferences.getAppLauncherSearchMode();
             case "app_launcher_input_char":
                 return mPreferences.getAppLauncherInputChar();
             case "app_launcher_az_lock_method":

@@ -74,6 +74,13 @@ public final class AzScrubRowView extends AppCompatTextView {
     private float activeTouchX = -1f;
     private float waveStrength = 0f;
     private int accentColor = Color.WHITE;
+    // Softer than pure black: a desaturated near-black that keeps letters legible over any
+    // wallpaper without the harsh hard-edged look the old #000 stroke had.
+    private static final int OUTLINE_DARK = 0xFF1A1F2A;
+    // Continuous 0..1 hue phase driving the outline colour-shift while the row is being scrubbed.
+    private float interactionColorPhase = 0f;
+    @Nullable private ValueAnimator colorShiftAnimator;
+    private final float[] colorShiftHsv = new float[] {0f, 0.82f, 1f};
     @Nullable private ValueAnimator settleAnimator;
     private long lastTapUpTimeMs;
     private float lastTapUpX = Float.NaN;
@@ -209,7 +216,15 @@ public final class AzScrubRowView extends AppCompatTextView {
             letterOutlinePaint.setTextSize(letterPaint.getTextSize());
             letterOutlinePaint.setTypeface(letterPaint.getTypeface());
             letterOutlinePaint.setStrokeWidth(density * (1.3f + 0.5f * envelope * waveStrength));
-            letterOutlinePaint.setColor(withAlpha(Color.BLACK, activeFocus ? 215 : 195));
+            // Outline colour-shift: while scrubbing, letters near the finger blend their dark
+            // stroke toward a hue-cycling accent, easing back to the soft dark when idle/far.
+            float shiftAmount = clamp01(envelope * waveStrength);
+            int outlineBase = OUTLINE_DARK;
+            if (shiftAmount > 0.001f) {
+                colorShiftHsv[0] = (interactionColorPhase * 360f) % 360f;
+                outlineBase = blendColors(OUTLINE_DARK, Color.HSVToColor(colorShiftHsv), shiftAmount);
+            }
+            letterOutlinePaint.setColor(withAlpha(outlineBase, activeFocus ? 215 : 195));
             canvas.drawText(glyph, x, baseline, letterOutlinePaint);
             canvas.drawText(glyph, x, baseline, letterPaint);
         }
@@ -402,6 +417,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 stopSettleAnimation();
+                startColorShift();
                 updateInteractionRenderLayer(true);
                 activeTouchX = x;
                 activeLetterIndex = indexOfVisibleLetter(letter);
@@ -445,6 +461,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                     waveStrength = 0f;
                     activeTouchX = -1f;
                     activeLetterIndex = -1;
+                    stopColorShift();
                     updateInteractionRenderLayer(false);
                     invalidate();
                 }
@@ -459,6 +476,7 @@ public final class AzScrubRowView extends AppCompatTextView {
                     waveStrength = 0f;
                     activeTouchX = -1f;
                     activeLetterIndex = -1;
+                    stopColorShift();
                     updateInteractionRenderLayer(false);
                     invalidate();
                 }
@@ -473,6 +491,7 @@ public final class AzScrubRowView extends AppCompatTextView {
         if (!isAttachedToWindow()) {
             waveStrength = 0f;
             activeTouchX = -1f;
+            stopColorShift();
             updateInteractionRenderLayer(false);
             invalidate();
             return;
@@ -489,22 +508,47 @@ public final class AzScrubRowView extends AppCompatTextView {
             public void onAnimationEnd(android.animation.Animator animation) {
                 waveStrength = 0f;
                 activeTouchX = -1f;
+                stopColorShift();
                 updateInteractionRenderLayer(false);
                 invalidate();
             }
 
             @Override
             public void onAnimationCancel(android.animation.Animator animation) {
+                stopColorShift();
                 updateInteractionRenderLayer(false);
             }
         });
         settleAnimator.start();
     }
 
+    private void startColorShift() {
+        if (colorShiftAnimator != null && colorShiftAnimator.isRunning()) return;
+        if (!isAttachedToWindow()) return;
+        colorShiftAnimator = ValueAnimator.ofFloat(interactionColorPhase, interactionColorPhase + 1f);
+        colorShiftAnimator.setDuration(2400L);
+        colorShiftAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        colorShiftAnimator.setRepeatMode(ValueAnimator.RESTART);
+        colorShiftAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+        colorShiftAnimator.addUpdateListener(animation -> {
+            interactionColorPhase = (float) animation.getAnimatedValue();
+            if (waveStrength > 0.01f) invalidate();
+        });
+        colorShiftAnimator.start();
+    }
+
+    private void stopColorShift() {
+        if (colorShiftAnimator != null) {
+            colorShiftAnimator.cancel();
+            colorShiftAnimator = null;
+        }
+    }
+
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         stopSettleAnimation();
+        stopColorShift();
     }
 
     private void stopSettleAnimation() {

@@ -88,6 +88,7 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.app.launcher.PinnedAppsEditor;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
 import com.termux.app.launcher.data.IconPack;
@@ -172,6 +173,8 @@ public final class SuggestionBarView extends GridLayout {
     private LauncherIconResolver iconResolver;
     private IconPackRepository iconPackRepository;
     private List<PinnedItem> pinnedItems = new ArrayList<>();
+    private boolean mostUsedPageEnabled = false;
+    @Nullable private List<LauncherAppEntry> mostUsedEntriesCache;
     private List<SuggestionBarButton> injectedSuggestionButtons;
 
     private PopupWindow folderPopupWindow;
@@ -411,10 +414,6 @@ public final class SuggestionBarView extends GridLayout {
         this.unifyIcons = unifyIcons;
         normalizedIconCache.evictAll();
         lastSurfaceRenderSignature = 0;
-    }
-
-    public void setSearchTolerance(int searchTolerance) {
-        this.searchTolerance = searchTolerance;
     }
 
     public void setIconScale(float iconScale) {
@@ -1431,12 +1430,19 @@ public final class SuggestionBarView extends GridLayout {
             int totalPages = getPinnedPagesCount();
             pinnedPageIndex = clamp(pinnedPageIndex, 0, Math.max(0, totalPages - 1));
             pinnedPageOffset = pinnedPageIndex * pinnedItemsPerPage;
-            for (int i = pinnedPageOffset; i < pinnedItems.size() && pinnedForSlots.size() < pinnedItemsPerPage; i++) {
-                PinnedItem item = pinnedItems.get(i);
-                if (item != null) pinnedForSlots.add(item);
-            }
             buttonCount = Math.max(1, pinnedItemsPerPage);
-            entries = entriesForPinnedItems(pinnedForSlots);
+            if (isMostUsedDynamicPage(pinnedPageIndex)) {
+                // Dynamic most-used page: render ranked apps as launch-only buttons. pinnedForSlots
+                // stays empty so the render loop binds them with pinnedIndex -1 (no drag/reorder),
+                // and they are never written back to pinnedItems / persisted.
+                entries = new ArrayList<>(resolveMostUsedPageEntries());
+            } else {
+                for (int i = pinnedPageOffset; i < pinnedItems.size() && pinnedForSlots.size() < pinnedItemsPerPage; i++) {
+                    PinnedItem item = pinnedItems.get(i);
+                    if (item != null) pinnedForSlots.add(item);
+                }
+                entries = entriesForPinnedItems(pinnedForSlots);
+            }
         } else {
             pinnedItemsPerPage = 1;
             pinnedPageIndex = 0;
@@ -1567,7 +1573,7 @@ public final class SuggestionBarView extends GridLayout {
             hintParams.width = 0;
             hint.setLayoutParams(hintParams);
             hint.setOnLongClickListener(v -> {
-                showUnifiedPinEditor(0, null);
+                openPinEditor();
                 return true;
             });
             applyPinnedHintShimmer(hint);
@@ -1588,7 +1594,7 @@ public final class SuggestionBarView extends GridLayout {
                 if (!azPreview) {
                     final int slotIndex = i;
                     filler.setOnLongClickListener(v -> {
-                        showUnifiedPinEditor(slotIndex, null);
+                        openPinEditor();
                         return true;
                     });
                 }
@@ -1597,9 +1603,8 @@ public final class SuggestionBarView extends GridLayout {
         }
 
         if (!azPreview) {
-            final int slotIndex = pinnedItems == null ? 0 : pinnedItems.size();
             setOnLongClickListener(v -> {
-                showUnifiedPinEditor(slotIndex, null);
+                openPinEditor();
                 return true;
             });
             setOnDragListener(this::handlePinnedBarDragEvent);
@@ -1989,6 +1994,7 @@ public final class SuggestionBarView extends GridLayout {
             clearAzPreview();
         }
         getUsageStatsStore().recordLaunch(entry.appRef.stableId());
+        invalidateMostUsedCache();
 
         if (terminalView != null) {
             terminalView.clearInputLine();
@@ -2262,6 +2268,20 @@ public final class SuggestionBarView extends GridLayout {
             location[0] + target.getWidth(),
             location[1] + target.getHeight()
         );
+    }
+
+    /**
+     * Opens the modern, reusable pin editor (also used from Settings → Default apps). On save it
+     * re-reads pinned items from the repository and re-renders the dock.
+     */
+    public void openPinEditor() {
+        PinnedAppsEditor.show(getContext(), () -> {
+            if (configRepository != null) {
+                pinnedItems = configRepository.loadPinnedItems();
+            }
+            invalidateMostUsedCache();
+            reloadWithInput("", lastTerminalView);
+        });
     }
 
     private void showUnifiedPinEditor(final int slotIndex, @Nullable final PinnedItem pinnedAtSlot) {
@@ -5685,6 +5705,9 @@ public final class SuggestionBarView extends GridLayout {
             }
             return pageEntries;
         }
+        if (isMostUsedDynamicPage(pageIndex)) {
+            return new ArrayList<>(resolveMostUsedPageEntries());
+        }
         List<PinnedItem> pageItems = swipePreviewPinnedItems.isEmpty()
             ? buildSwipePreviewPinnedItems(pageIndex)
             : swipePreviewPinnedItems;
@@ -6451,6 +6474,7 @@ public final class SuggestionBarView extends GridLayout {
     private void invalidateAzRankCache() {
         azCachedRankLetter = null;
         azCachedRankedCandidates = new ArrayList<>();
+        invalidateMostUsedCache();
     }
 
     private void invalidateAzRenderState() {
@@ -6522,11 +6546,79 @@ public final class SuggestionBarView extends GridLayout {
         return Math.max(1, maxButtonCount);
     }
 
-    private int getPinnedPagesCount() {
+    /** Pages occupied by the user's persisted pinned items (excludes the dynamic most-used page). */
+    private int getRealPinnedPagesCount() {
         int totalPinned = pinnedItems == null ? 0 : pinnedItems.size();
         int perPage = Math.max(1, pinnedItemsPerPage);
         if (totalPinned <= 0) return 1;
         return (totalPinned + perPage - 1) / perPage;
+    }
+
+    private int getPinnedPagesCount() {
+        return getRealPinnedPagesCount() + (hasMostUsedDynamicPage() ? 1 : 0);
+    }
+
+    /**
+     * The optional dynamic page is shown only when the toggle is on AND there is at least one
+     * most-used candidate to fill it. Must NOT call {@link #getPinnedPagesCount()} (recursion).
+     */
+    private boolean hasMostUsedDynamicPage() {
+        return mostUsedPageEnabled && !resolveMostUsedPageEntries().isEmpty();
+    }
+
+    /** The dynamic page is always the trailing page, right after the real pinned pages. */
+    private boolean isMostUsedDynamicPage(int pageIndex) {
+        return hasMostUsedDynamicPage() && pageIndex == getRealPinnedPagesCount();
+    }
+
+    /** Page index of the dynamic most-used page, or -1 when it isn't shown. */
+    public int getPinnedDynamicPageIndex() {
+        return hasMostUsedDynamicPage() ? getRealPinnedPagesCount() : -1;
+    }
+
+    /** Top most-used apps (excluding currently pinned), filling one dock page. Cached until dirty. */
+    @NonNull
+    private List<LauncherAppEntry> resolveMostUsedPageEntries() {
+        if (!mostUsedPageEnabled) return java.util.Collections.emptyList();
+        if (mostUsedEntriesCache != null) return mostUsedEntriesCache;
+        List<LauncherAppEntry> result = new ArrayList<>();
+        if (allApps != null && !allApps.isEmpty()) {
+            Set<String> pinnedIds = new HashSet<>();
+            if (pinnedItems != null) {
+                for (PinnedItem item : pinnedItems) {
+                    if (item instanceof PinnedAppItem) {
+                        pinnedIds.add(((PinnedAppItem) item).appRef.stableId());
+                    } else if (item instanceof PinnedFolderItem) {
+                        for (PinnedAppItem folderApp : ((PinnedFolderItem) item).apps) {
+                            pinnedIds.add(folderApp.appRef.stableId());
+                        }
+                    }
+                }
+            }
+            List<LauncherAppEntry> candidates = new ArrayList<>();
+            for (LauncherAppEntry entry : allApps) {
+                if (!pinnedIds.contains(entry.appRef.stableId())) candidates.add(entry);
+            }
+            List<LauncherAppEntry> ranked = getUsageStatsStore().rankForAz(candidates);
+            int limit = computePinnedItemsPerPage();
+            for (int i = 0; i < ranked.size() && result.size() < limit; i++) {
+                result.add(ranked.get(i));
+            }
+        }
+        mostUsedEntriesCache = result;
+        return result;
+    }
+
+    private void invalidateMostUsedCache() {
+        mostUsedEntriesCache = null;
+    }
+
+    public void setMostUsedPageEnabled(boolean enabled) {
+        if (mostUsedPageEnabled == enabled) return;
+        mostUsedPageEnabled = enabled;
+        invalidateMostUsedCache();
+        // Caller (applySuggestionBarPreferences) re-renders afterwards; just keep the page index valid.
+        pinnedPageIndex = clamp(pinnedPageIndex, 0, Math.max(0, getPinnedPagesCount() - 1));
     }
 
     private int getAzPagesCount() {

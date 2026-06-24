@@ -3199,7 +3199,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setMaxButtonCount(maxButtons);
         mSuggestionBarView.setDefaultButtons(new ArrayList<>());
         mSuggestionBarView.setTextSize(10f);
-        mSuggestionBarView.setSearchTolerance(mPreferences.getAppLauncherSearchTolerance());
         mSuggestionBarView.setBandW(mPreferences.isAppLauncherBwIconsEnabled());
         mSuggestionBarView.setUnifyIcons(mPreferences.isAppLauncherUnifyIconsEnabled());
         mSuggestionBarView.setIconScale(resolveDerivedDockIconScale());
@@ -3209,6 +3208,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setBlurConfig(blurRadiusDp > 0, blurRadiusDp);
         mSuggestionBarView.setInheritedTintColor(resolveAccessoryGlassBaseColor());
         mSuggestionBarView.setNotificationBadgesEnabled(mPreferences.isAppLauncherNotificationDotsEnabled());
+        mSuggestionBarView.setMostUsedPageEnabled(mPreferences.isAppLauncherMostUsedPageEnabled());
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);
@@ -3645,6 +3645,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int pageCount = 1;
         boolean showPageIndicators = false;
         boolean subtlePageIndicators = false;
+        int dynamicPageIndex = -1;
         if (azOverflowActive) {
             canLeft = mSuggestionBarView.canAzPageLeft();
             canRight = mSuggestionBarView.canAzPageRight();
@@ -3660,6 +3661,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
             showPageIndicators = true;
             subtlePageIndicators = true;
+            dynamicPageIndex = mSuggestionBarView.getPinnedDynamicPageIndex();
         } else if (!mAzGestureActive && !mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
             canLeft = mSuggestionBarView.canPinnedPageLeft();
             canRight = mSuggestionBarView.canPinnedPageRight();
@@ -3668,6 +3670,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             showPageIndicators = true;
             interactionActive = true;
             subtlePageIndicators = true;
+            dynamicPageIndex = mSuggestionBarView.getPinnedDynamicPageIndex();
         }
         applyAzFxInteractionOverflowState(
             interactionActive,
@@ -3676,7 +3679,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             currentPagePosition,
             pageCount,
             showPageIndicators,
-            subtlePageIndicators
+            subtlePageIndicators,
+            dynamicPageIndex
         );
     }
 
@@ -3699,16 +3703,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float currentPagePosition,
         int pageCount,
         boolean showPageIndicators,
-        boolean subtlePinnedIndicators
+        boolean subtlePinnedIndicators,
+        int dynamicPageIndex
     ) {
         if (mLauncherAzGestureFxUnderlayView != null) {
             mLauncherAzGestureFxUnderlayView.setInteractionOverflowState(
-                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators
+                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators, dynamicPageIndex
             );
         }
         if (mLauncherAzGestureFxOverlayView != null) {
             mLauncherAzGestureFxOverlayView.setInteractionOverflowState(
-                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators
+                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators, dynamicPageIndex
             );
         }
     }

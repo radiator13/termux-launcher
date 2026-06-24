@@ -87,6 +87,7 @@ public final class LauncherAzGestureFxView extends View {
     private boolean interactionCanPageRight;
     private int interactionCurrentPageIndex;
     private int interactionPageCount = 1;
+    private int interactionDynamicPageIndex = -1;
     private float interactionPageIndicatorPosition;
     @Nullable private ValueAnimator interactionPageIndicatorAnimator;
     private boolean interactionShowsPageIndicators;
@@ -126,7 +127,7 @@ public final class LauncherAzGestureFxView extends View {
     private static final long FOCUS_HOLD_MS = 140L;
     private static final long PINNED_INDICATOR_IDLE_DELAY_MS = 5000L;
     private static final long PINNED_INDICATOR_FADE_DURATION_MS = 520L;
-    private static final float PINNED_INDICATOR_IDLE_ATTENTION = 0.72f;
+    private static final float PINNED_INDICATOR_IDLE_ATTENTION = 0.82f;
 
     private boolean launchBloomActive;
     private float launchBloomRawX;
@@ -247,8 +248,10 @@ public final class LauncherAzGestureFxView extends View {
         float currentPagePosition,
         int pageCount,
         boolean showPageIndicators,
-        boolean useSubtlePageIndicators
+        boolean useSubtlePageIndicators,
+        int dynamicPageIndex
     ) {
+        interactionDynamicPageIndex = dynamicPageIndex;
         int newPageCount = Math.max(1, pageCount);
         float newPagePosition = clamp(currentPagePosition, 0f, newPageCount - 1f);
         int newPageIndex = Math.min(Math.max(0, Math.round(newPagePosition)), newPageCount - 1);
@@ -389,6 +392,7 @@ public final class LauncherAzGestureFxView extends View {
             interactionCanPageRight = false;
             interactionCurrentPageIndex = 0;
             interactionPageCount = 1;
+            interactionDynamicPageIndex = -1;
             interactionPageIndicatorPosition = 0f;
             cancelPageIndicatorAnimations();
             cancelSubtlePageIndicatorIdleFade();
@@ -870,7 +874,7 @@ public final class LauncherAzGestureFxView extends View {
         boolean subtle = interactionUseSubtlePageIndicators;
         float attention = subtle ? clamp01(subtlePageIndicatorAttention) : 1f;
         // Both dock styles use the same "minimal ticks" indicator centred on the top edge.
-        drawPageTicksIndicator(canvas, interactionPageIndicatorPosition, interactionPageCount, attention);
+        drawPageTicksIndicator(canvas, interactionPageIndicatorPosition, interactionPageCount, attention, interactionDynamicPageIndex);
     }
 
     /**
@@ -881,7 +885,11 @@ public final class LauncherAzGestureFxView extends View {
      * transition at the midpoint). Pure function of (position, page count, accent); fades with the
      * indicator's attention. Applies to both dock styles.
      */
-    private void drawPageTicksIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention) {
+    // Distinct, attention-grabbing colour for the dynamic "most-used" page tick (Material Amber).
+    // Wallpaper-independent so it always reads as "special" against the edge-tint ticks.
+    private static final int DYNAMIC_PAGE_TICK_COLOR = 0xFFFFB300;
+
+    private void drawPageTicksIndicator(Canvas canvas, float activePagePosition, int totalPages, float attention, int dynamicPageIndex) {
         if (totalPages <= 1 || getWidth() <= 0) {
             return;
         }
@@ -890,12 +898,12 @@ public final class LauncherAzGestureFxView extends View {
             return;
         }
 
-        // Geometry (spec tokens).
-        float wInactive = dp(12f);
-        float wActive = dp(18f);
-        float h = dp(2f);
+        // Geometry (spec tokens) — widened/heightened vs the original for stronger presence.
+        float wInactive = dp(13f);
+        float wActive = dp(24f);
+        float h = dp(2.5f);
         float r = h * 0.5f;
-        float step = dp(21f); // 12 tick + 9 gap, centre-to-centre
+        float step = dp(22f); // 13 tick + 9 gap, centre-to-centre
         float cx = getWidth() * 0.5f;
         float cy = dp(7f); // in the dock's top band, just under the rim
 
@@ -908,8 +916,12 @@ public final class LauncherAzGestureFxView extends View {
         float boxLeft = cx - (totalW * 0.5f);
         float pos = clamp(activePagePosition, 0f, totalPages - 1f);
 
-        // Accent from the dock's wallpaper-derived edge tint, so it recolours with the dock glow.
-        int accent = edgeTintColor;
+        // Accent from the dock's wallpaper-derived edge tint, saturation-boosted so the ticks read
+        // clearly in both the active and sleeping states.
+        int accent = boostSaturation(edgeTintColor);
+        // When the active position sits over the dynamic page, the underglow takes its amber colour.
+        boolean dynamicActive = dynamicPageIndex >= 0 && Math.abs(pos - dynamicPageIndex) < 0.5f;
+        int glowColor = dynamicActive ? DYNAMIC_PAGE_TICK_COLOR : accent;
 
         // Underglow: a soft blob behind the active position (continuous), drawn first so the tick
         // sits on top of it.
@@ -917,26 +929,42 @@ public final class LauncherAzGestureFxView extends View {
             pageTickGlow = new BlurMaskFilter(dp(4f), BlurMaskFilter.Blur.NORMAL);
         }
         float glowCx = boxLeft + (pos * step) + (wInactive * 0.5f);
-        float glowHalfW = dp(8f);   // 16dp wide
-        float glowHalfH = dp(5f);   // 10dp tall
+        float glowHalfW = dp(9f);
+        float glowHalfH = dp(5.5f);
         pageIndicatorPaint.setStyle(Paint.Style.FILL);
-        pageIndicatorPaint.setColor(withAlpha(accent, Math.round(46f * master))); // ~0.18
+        pageIndicatorPaint.setColor(withAlpha(glowColor, Math.round(72f * master))); // ~0.28
         pageIndicatorPaint.setMaskFilter(pageTickGlow);
         tmpRect.set(glowCx - glowHalfW, cy - glowHalfH, glowCx + glowHalfW, cy + glowHalfH);
         canvas.drawRoundRect(tmpRect, glowHalfH, glowHalfH, pageIndicatorPaint);
         pageIndicatorPaint.setMaskFilter(null);
 
-        // Ticks: width and alpha interpolate by proximity to the active position.
+        // Ticks: width and alpha interpolate by proximity to the active position. Inactive floor is
+        // raised so unfocused pages stay legible.
         for (int p = 0; p < totalPages; p++) {
             float prox = Math.max(0f, 1f - Math.abs(p - pos));
             float width = wInactive + ((wActive - wInactive) * prox);
-            float alpha = 0.22f + (0.78f * prox);
+            float alpha = 0.40f + (0.60f * prox);
+            int tickColor = accent;
+            if (p == dynamicPageIndex) {
+                tickColor = DYNAMIC_PAGE_TICK_COLOR;
+                // Extra idle damp: the vivid amber only pops when this page is active; when it's
+                // sleeping (far from the active position) it must not steal attention.
+                alpha *= (0.55f + (0.45f * prox));
+            }
             float center = boxLeft + (p * step) + (wInactive * 0.5f);
             float left = center - (width * 0.5f);
-            pageIndicatorPaint.setColor(withAlpha(accent, Math.round(255f * alpha * master)));
+            pageIndicatorPaint.setColor(withAlpha(tickColor, Math.round(255f * alpha * master)));
             tmpRect.set(left, cy - r, left + width, cy + r);
             canvas.drawRoundRect(tmpRect, r, r, pageIndicatorPaint);
         }
+    }
+
+    /** Returns the colour with its HSV saturation boosted (clamped), for more vivid indicator ticks. */
+    private static int boostSaturation(int color) {
+        float[] hsv = new float[3];
+        Color.colorToHSV(color, hsv);
+        hsv[1] = Math.min(1f, hsv[1] * 1.35f + 0.10f);
+        return Color.HSVToColor(Color.alpha(color), hsv);
     }
 
     private void animateInteractionPageIndicatorTo(int pageIndex, boolean animate) {

@@ -25,6 +25,7 @@ import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.PillPreference;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
+import com.termux.app.launcher.PinnedAppsEditor;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.notifications.LauncherNotificationAccess;
 import com.termux.shared.android.PermissionUtils;
@@ -88,6 +89,15 @@ public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
                 if ("accessibility".equals(newValue) && !LauncherLockAccessibilityAccess.isEnabled(context)) {
                     showAccessibilityLockPrompt(context);
                 }
+                return true;
+            });
+        }
+
+        Preference defaultAppsPreference = findPreference("app_launcher_default_buttons");
+        if (defaultAppsPreference != null) {
+            defaultAppsPreference.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx != null) PinnedAppsEditor.show(ctx, null);
                 return true;
             });
         }
