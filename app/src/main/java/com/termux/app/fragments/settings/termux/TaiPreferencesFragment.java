@@ -855,10 +855,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         Preference importModel = findPreference("tai_model_import");
         if (importModel != null) {
-            importModel.setOnPreferenceClickListener(preference -> {
-                showImportFlowDialog(context, new ImportDraft());
-                return true;
-            });
+            importModel.setSummary(R.string.termux_ai_model_import_summary);
         }
 
         Preference refresh = findPreference("tai_models_refresh");

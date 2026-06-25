@@ -314,16 +314,16 @@ public final class TaiModelImporter {
         return value;
     }
 
-    /** Always-text-chat plus whatever modalities the user ticked at import time. */
+    /** Default to text chat only when the import flow did not declare explicit capabilities. */
     @NonNull
     private static Set<String> sourceCapabilities(@Nullable Set<String> declared) {
         LinkedHashSet<String> caps = new LinkedHashSet<>();
-        caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
         if (declared != null) {
             for (String capability : declared) {
                 if (capability != null && !capability.trim().isEmpty()) caps.add(capability.trim());
             }
         }
+        if (caps.isEmpty()) caps.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
         return caps;
     }
 
