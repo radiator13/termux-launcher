@@ -34,7 +34,49 @@ public final class TaiModelCatalog {
             new LinkedHashSet<>(spec.sourceCapabilities),
             new LinkedHashSet<>(spec.endpointCapabilities), spec.toolMode,
             "installed", "installed",
-            new LinkedHashSet<>(), "", "", false, false, "Already installed");
+            displayTagsFor(new LinkedHashSet<>(spec.sourceCapabilities)), "", "", false, false, "Already installed");
+    }
+
+    @Nullable
+    public static CatalogEntry downloadEntry(@NonNull JSONObject download) {
+        String modelId = download.optString("modelId", "").trim();
+        if (modelId.isEmpty() || entries().containsKey(modelId)) return null;
+        String path = download.optString("path", download.optString("url", ""));
+        String backend = download.optString("backend", TaiModelSpec.inferBackend(path));
+        String format = download.optString("format", TaiModelSpec.inferFormat(path));
+        LinkedHashSet<String> sourceCapabilities = capabilities(download.optJSONArray("capabilities"));
+        if (sourceCapabilities.isEmpty()) sourceCapabilities.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        long sizeBytes = download.optLong("totalBytes", download.optLong("bytesRead", 0L));
+        return new CatalogEntry(
+            modelId,
+            download.optString("displayName", modelId),
+            "Downloading model",
+            repoId(download.optString("url", "")),
+            "main",
+            null,
+            download.optString("license", "User accepted provider terms externally"),
+            Math.max(0L, sizeBytes),
+            false,
+            backend,
+            format,
+            download.optString("architecture", ""),
+            emptyToNull(download.optString("quantization", "")),
+            download.optInt("contextWindow", TaiModelSpec.defaultEndpointContextWindowFor(modelId, backend)),
+            download.optInt("contextWindow", TaiModelSpec.defaultEndpointContextWindowFor(modelId, backend)),
+            TaiModelSpec.defaultMaxOutputTokensFor(modelId, backend),
+            download.optInt("recommendedRamGb", 0),
+            emptyToNull(download.optString("sha256", "")),
+            sourceCapabilities,
+            null,
+            null,
+            "downloaded",
+            "downloaded",
+            displayTagsFor(sourceCapabilities),
+            sizeBytes > 0L ? "" : "unknown size",
+            "",
+            false,
+            false,
+            "Download in progress");
     }
 
     static synchronized void applyRemotePayload(@NonNull JSONObject payload, boolean allowEqualVersion) {
@@ -199,6 +241,38 @@ public final class TaiModelCatalog {
 
     private static LinkedHashSet<String> setOf(String... values) { return new LinkedHashSet<>(Arrays.asList(values)); }
     private static LinkedHashSet<String> tags(String... values) { return setOf(values); }
+    private static LinkedHashSet<String> capabilities(@Nullable JSONArray values) {
+        LinkedHashSet<String> caps = new LinkedHashSet<>();
+        if (values != null) for (int i = 0; i < values.length(); i++) {
+            String value = values.optString(i, "");
+            if (!value.isEmpty()) caps.add(value);
+        }
+        return caps;
+    }
+    private static LinkedHashSet<String> displayTagsFor(@NonNull LinkedHashSet<String> capabilities) {
+        LinkedHashSet<String> tags = new LinkedHashSet<>();
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT)) tags.add("Text");
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)) tags.add("Embeddings");
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT)) tags.add("Vision");
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_AUDIO_INPUT)) tags.add("Audio");
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_CODE)) tags.add("Code");
+        if (capabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE)) tags.add("Tools");
+        return tags;
+    }
+    private static String repoId(@NonNull String url) {
+        String prefix = "https://huggingface.co/";
+        if (!url.startsWith(prefix)) return "local/" + Integer.toHexString(url.hashCode());
+        String path = url.substring(prefix.length());
+        int resolve = path.indexOf("/resolve/");
+        if (resolve >= 0) path = path.substring(0, resolve);
+        String[] parts = path.split("/");
+        return parts.length >= 2 && !parts[0].isEmpty() && !parts[1].isEmpty()
+            ? parts[0] + "/" + parts[1]
+            : "local/" + Integer.toHexString(url.hashCode());
+    }
+    @Nullable private static String emptyToNull(@Nullable String value) {
+        return value == null || value.trim().isEmpty() ? null : value;
+    }
     private static LinkedHashSet<String> displayTags(@Nullable JSONArray values) throws Exception {
         LinkedHashSet<String> tags = new LinkedHashSet<>();
         if (values != null) for (int i = 0; i < values.length(); i++) tags.add(values.getString(i));

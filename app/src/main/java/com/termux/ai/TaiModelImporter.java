@@ -225,9 +225,9 @@ public final class TaiModelImporter {
         if (TaiModelSpec.BACKEND_LITERT_LM.equals(backend)) {
             ValidationResult base = validateSupportedImportFileName(fileName);
             if (!base.supported) return base;
-            if (lower.endsWith(".litertlm") || lower.endsWith(".task")) return ValidationResult.accepted(false);
+            if (lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.endsWith(".tflite")) return ValidationResult.accepted(false);
             return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
-                "LiteRT imports must be .litertlm or .task packages.");
+                "LiteRT imports must be .litertlm, .task, or .tflite packages.");
         }
         if (TaiModelSpec.BACKEND_MNN_LLM.equals(backend)) {
             if (lower.endsWith("config.json")) return ValidationResult.accepted(false);
@@ -260,7 +260,7 @@ public final class TaiModelImporter {
     }
 
     /** Accept the entry file of either backend from a direct /resolve/ URL: a LiteRT package
-     *  (.litertlm/.task) or an MNN config.json. Reject raw weights and native libraries. */
+     *  (.litertlm/.task/.tflite) or an MNN config.json. Reject raw weights and native libraries. */
     public static ValidationResult validateSupportedDownloadFileName(@NonNull String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".so") || lower.endsWith(".dylib") || lower.endsWith(".dll")) {
@@ -270,11 +270,11 @@ public final class TaiModelImporter {
             return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
                 "Raw weight files are not supported. Use a repo with a LiteRT .litertlm/.task package or an MNN config.json.");
         }
-        if (lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.equals("config.json")) {
+        if (lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.endsWith(".tflite") || lower.equals("config.json")) {
             return ValidationResult.accepted(false);
         }
         return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
-            "Hugging Face downloads must point at a LiteRT .litertlm/.task file or an MNN config.json.");
+            "Hugging Face downloads must point at a LiteRT .litertlm/.task/.tflite file or an MNN config.json.");
     }
 
     static boolean looksLikeHuggingFaceRepoUrl(@NonNull String url) {
@@ -298,11 +298,11 @@ public final class TaiModelImporter {
             return ValidationResult.rejected(ERROR_RAW_WEIGHTS_FORBIDDEN,
                 "Raw weight files are not supported. Select a LiteRT .litertlm/.task package or download an MNN config.json from the model market.");
         }
-        if (lower.endsWith(".litertlm") || lower.endsWith(".task")) {
+        if (lower.endsWith(".litertlm") || lower.endsWith(".task") || lower.endsWith(".tflite")) {
             return ValidationResult.accepted(false);
         }
         return ValidationResult.rejected(ERROR_UNSUPPORTED_MODEL_FILE,
-            "Select a LiteRT .litertlm/.task package. MNN models should be downloaded from their config.json URL.");
+            "Select a LiteRT .litertlm/.task/.tflite package. MNN models should be downloaded from their config.json URL.");
     }
 
     @NonNull
@@ -311,6 +311,7 @@ public final class TaiModelImporter {
         String lower = value.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".litertlm")) return value.substring(0, value.length() - ".litertlm".length());
         if (lower.endsWith(".task")) return value.substring(0, value.length() - ".task".length());
+        if (lower.endsWith(".tflite")) return value.substring(0, value.length() - ".tflite".length());
         return value;
     }
 

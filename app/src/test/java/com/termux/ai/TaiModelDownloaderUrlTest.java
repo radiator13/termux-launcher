@@ -40,6 +40,15 @@ public class TaiModelDownloaderUrlTest {
         taskOnly.add("model.task");
         assertEquals("model.task", TaiModelDownloader.chooseEntryFile(taskOnly));
 
+        LinkedHashSet<String> embeddingGemma = new LinkedHashSet<>();
+        embeddingGemma.add("README.md");
+        embeddingGemma.add("embeddinggemma-300M_seq1024_mixed-precision.google.tensor_g5.tflite");
+        embeddingGemma.add("embeddinggemma-300M_seq1024_mixed-precision.tflite");
+        embeddingGemma.add("embeddinggemma-300M_seq2048_mixed-precision.tflite");
+        embeddingGemma.add("sentencepiece.model");
+        assertEquals("embeddinggemma-300M_seq1024_mixed-precision.tflite",
+            TaiModelDownloader.chooseEntryFile(embeddingGemma));
+
         // config.json with no .mnn weight is not a usable MNN package -> empty.
         LinkedHashSet<String> bareConfig = new LinkedHashSet<>();
         bareConfig.add("config.json");

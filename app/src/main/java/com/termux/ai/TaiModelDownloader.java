@@ -82,7 +82,10 @@ public final class TaiModelDownloader {
         File output = new File(modelDir, fileNameFromUrl(url));
         String transferId = "download-" + safeModelId;
         TaiModelDownloadService.clearCancellation(safeModelId);
-        JSONObject transfer = transfer(transferId, safeModelId, url, output.getAbsolutePath(), TaiModelStore.STATE_QUEUED, 0L, expectedSizeBytes, "");
+        JSONObject transfer = withMetadata(transfer(transferId, safeModelId, url, output.getAbsolutePath(),
+            TaiModelStore.STATE_QUEUED, 0L, expectedSizeBytes, ""),
+            displayName, license, capabilities, backend, format, architecture, quantization, contextWindow,
+            recommendedRamGb, expectedSha256);
         store.upsertDownload(transfer);
 
         Intent intent = new Intent(appContext, TaiModelDownloadService.class);
@@ -287,8 +290,67 @@ public final class TaiModelDownloader {
     }
 
     private void persist(@NonNull JSONObject transfer, @Nullable ProgressCallback callback) {
-        store.upsertDownload(transfer);
+        store.upsertDownload(preserveMetadata(transfer));
         if (callback != null) callback.onProgress(transfer);
+    }
+
+    @NonNull
+    private JSONObject preserveMetadata(@NonNull JSONObject transfer) {
+        String id = transfer.optString("id", "");
+        JSONArray downloads = store.getDownloads();
+        for (int i = downloads.length() - 1; i >= 0; i--) {
+            JSONObject existing = downloads.optJSONObject(i);
+            if (existing == null || !id.equals(existing.optString("id", ""))) continue;
+            copyIfMissing(transfer, existing, "displayName");
+            copyIfMissing(transfer, existing, "license");
+            copyIfMissing(transfer, existing, "capabilities");
+            copyIfMissing(transfer, existing, "backend");
+            copyIfMissing(transfer, existing, "format");
+            copyIfMissing(transfer, existing, "architecture");
+            copyIfMissing(transfer, existing, "quantization");
+            copyIfMissing(transfer, existing, "contextWindow");
+            copyIfMissing(transfer, existing, "recommendedRamGb");
+            copyIfMissing(transfer, existing, "sha256");
+            break;
+        }
+        return transfer;
+    }
+
+    private void copyIfMissing(@NonNull JSONObject target, @NonNull JSONObject source, @NonNull String key) {
+        if (target.has(key) || !source.has(key)) return;
+        try {
+            target.put(key, source.opt(key));
+        } catch (JSONException ignored) {
+        }
+    }
+
+    @NonNull
+    private JSONObject withMetadata(
+        @NonNull JSONObject transfer,
+        @NonNull String displayName,
+        @NonNull String license,
+        @NonNull LinkedHashSet<String> capabilities,
+        @NonNull String backend,
+        @NonNull String format,
+        @Nullable String architecture,
+        @Nullable String quantization,
+        int contextWindow,
+        int recommendedRamGb,
+        @Nullable String sha256
+    ) throws JSONException {
+        transfer.put("displayName", displayName);
+        transfer.put("license", license);
+        JSONArray caps = new JSONArray();
+        for (String capability : capabilities) caps.put(capability);
+        transfer.put("capabilities", caps);
+        transfer.put("backend", backend);
+        transfer.put("format", format);
+        transfer.put("architecture", architecture == null ? "" : architecture);
+        transfer.put("quantization", quantization == null ? "" : quantization);
+        transfer.put("contextWindow", contextWindow);
+        transfer.put("recommendedRamGb", recommendedRamGb);
+        transfer.put("sha256", sha256 == null ? "" : sha256);
+        return transfer;
     }
 
     private boolean shouldAttachBearerToken(@NonNull String url, @Nullable String authToken) {
@@ -339,7 +401,7 @@ public final class TaiModelDownloader {
 
     private boolean looksLikeModelFile(@NonNull File file, @NonNull String originalName) {
         String lowerName = originalName.toLowerCase(Locale.ROOT);
-        if (!lowerName.endsWith(".litertlm") && !lowerName.endsWith(".task")) {
+        if (!lowerName.endsWith(".litertlm") && !lowerName.endsWith(".task") && !lowerName.endsWith(".tflite")) {
             return false;
         }
         if (file.length() < 1024L * 1024L) {
@@ -483,10 +545,30 @@ public final class TaiModelDownloader {
     static String chooseEntryFile(@NonNull LinkedHashSet<String> files) {
         for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".litertlm")) return f;
         for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".task")) return f;
+        String tflite = chooseLiteRtFlatbuffer(files);
+        if (!tflite.isEmpty()) return tflite;
         if (files.contains("config.json")) {
             for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".mnn")) return "config.json";
         }
         return "";
+    }
+
+    @NonNull
+    private static String chooseLiteRtFlatbuffer(@NonNull LinkedHashSet<String> files) {
+        String first = "";
+        String preferred = "";
+        for (String file : files) {
+            String lower = file.toLowerCase(Locale.ROOT);
+            if (!lower.endsWith(".tflite")) continue;
+            if (first.isEmpty()) first = file;
+            boolean generic = !lower.contains(".qualcomm.")
+                && !lower.contains(".mediatek.")
+                && !lower.contains(".google.");
+            if (generic && lower.contains("seq1024")) return file;
+            if (generic && preferred.isEmpty()) preferred = file;
+        }
+        // ponytail: flatbuffer repos lack a wrapper; prefer generic builds, chipset-specific if that's all there is.
+        return preferred.isEmpty() ? first : preferred;
     }
 
     @NonNull

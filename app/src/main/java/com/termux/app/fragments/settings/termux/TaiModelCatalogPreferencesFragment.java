@@ -49,7 +49,7 @@ import java.util.Map;
 public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragment {
     private static final String ROW_KEY_PREFIX = "tai_catalog_model_";
     private static final LinkedHashSet<String> ALLOWED_CAPABILITY_TAGS = new LinkedHashSet<>(Arrays.asList(
-        "Text", "Code", "Vision", "Audio", "Reasoning", "Tools", "Multilingual"));
+        "Text", "Embeddings", "Code", "Vision", "Audio", "Reasoning", "Tools", "Multilingual"));
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refreshRunnable = new Runnable() {
@@ -150,6 +150,14 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         for (TaiModelSpec spec : installed.values()) {
             if (!TaiModelCatalog.entries().containsKey(spec.id)) all.add(TaiModelCatalog.installedModelEntry(spec));
         }
+        for (int i = 0; i < downloads.length(); i++) {
+            JSONObject download = downloads.optJSONObject(i);
+            if (download == null || !isActiveDownload(download.optString("status", ""))) continue;
+            String modelId = download.optString("modelId", "");
+            if (modelId.isEmpty() || installed.containsKey(modelId) || TaiModelCatalog.entries().containsKey(modelId)) continue;
+            TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.downloadEntry(download);
+            if (entry != null) all.add(entry);
+        }
         List<TaiModelCatalog.CatalogEntry> entries = sortForDisplay(
             filterByInstallStatus(
                 filterEntries(all, backendFilter, searchQuery, installed, capabilities),
@@ -235,7 +243,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
         PreferenceCategory results = findPreference("tai_catalog_results_category");
         if (results == null) return;
         TaiModelStore store = new TaiModelStore(context);
-        Map<String, TaiModelSpec> installed = store.getInstalledUserModels();
+        Map<String, TaiModelSpec> installed = new java.util.LinkedHashMap<>();
+        installed.putAll(store.getDownloadedReadableModels());
+        installed.putAll(store.getInstalledUserModels());
         JSONArray downloads = store.getDownloads();
         String activeModelId = new TaiSettings(context).getDefaultAssistantModel();
         int count = results.getPreferenceCount();
@@ -244,10 +254,13 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             if (!(preference instanceof TaiModelPreference)) continue;
             String key = preference.getKey();
             if (key == null || !key.startsWith(ROW_KEY_PREFIX)) continue;
-            TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(key.substring(ROW_KEY_PREFIX.length()));
+            String modelId = key.substring(ROW_KEY_PREFIX.length());
+            TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(modelId);
+            JSONObject download = findDownload(downloads, modelId);
+            if (entry == null && download != null) entry = TaiModelCatalog.downloadEntry(download);
             if (entry == null) continue;
             applyRowState(context, (TaiModelPreference) preference, entry,
-                installed.get(entry.modelId), findDownload(downloads, entry.modelId), activeModelId);
+                installed.get(entry.modelId), download, activeModelId);
         }
     }
 
@@ -335,9 +348,9 @@ public class TaiModelCatalogPreferencesFragment extends MaterialPreferenceFragme
             case INSTALL:
                 return getString(R.string.termux_ai_catalog_action_install);
             case DOWNLOADING:
-                return getString(R.string.termux_ai_catalog_action_downloading, state.progressLabel);
+                return getString(R.string.termux_ai_model_download_cancel);
             case INSTALLED:
-                return getString(R.string.termux_ai_catalog_action_installed);
+                return getString(R.string.termux_ai_model_set_active_action);
             case ACTIVE:
                 return getString(R.string.termux_ai_catalog_action_active);
             case IMPORT_ONLY:

@@ -303,7 +303,7 @@
         <string name="termux_ai_catalog_empty_summary">Try a different filter or clear the search field.</string>
         <string name="termux_ai_catalog_action_install">Install</string>
         <string name="termux_ai_catalog_action_downloading">Downloading %1$s · Cancel</string>
-        <string name="termux_ai_catalog_action_installed">Installed · Set default</string>
+        <string name="termux_ai_catalog_action_installed">Set default</string>
         <string name="termux_ai_catalog_action_active">Default</string>
         <string name="termux_ai_catalog_action_import_only">Import only</string>
         <string name="termux_ai_catalog_action_mnn_unavailable">MNN runtime pending</string>
@@ -334,7 +334,8 @@
         <string name="termux_ai_model_import_mnn_local_unsupported">MNN folder packages must be downloaded from the catalog. Local MNN folder import is not supported yet.</string>
         <string name="termux_ai_model_import_invalid_model_id">Enter a valid model id.</string>
         <string name="termux_ai_model_import_copying">Copying selected model into app-private storage...</string>
-        <string name="termux_ai_model_import_invalid_file">Select a supported LiteRT .litertlm or .task package file</string>
+        <string name="termux_ai_model_import_invalid_file">Select a supported LiteRT .litertlm, .task, or .tflite package file</string>
+        <string name="termux_ai_import_source_label">Hugging Face or local file</string>
         <string name="termux_ai_import_cap_chat">Chat/completions</string>
         <string name="termux_ai_import_cap_embeddings">Text embeddings</string>
         <string name="termux_ai_import_cap_media">Vision/audio input</string>

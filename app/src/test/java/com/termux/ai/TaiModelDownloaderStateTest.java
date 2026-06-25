@@ -47,9 +47,11 @@ public class TaiModelDownloaderStateTest {
         TaiModelDownloadService.clearCancellation("state-test");
         TaiModelDownloadService.clearCancellation("cancel-test");
         TaiModelDownloadService.clearCancellation("retry-test");
+        TaiModelDownloadService.clearCancellation("metadata-test");
         store.deleteUserModel("state-test");
         store.deleteUserModel("cancel-test");
         store.deleteUserModel("retry-test");
+        store.deleteUserModel("metadata-test");
         store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E2B_IT);
         store.deleteUserModel(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT);
         store.deleteUserModel("Qwen2.5-Coder-1.5B-GGUF");
@@ -192,6 +194,36 @@ public class TaiModelDownloaderStateTest {
     }
 
     @Test
+    public void runDownload_preservesQueuedMetadataForCatalogRows() throws Exception {
+        byte[] model = modelBytes('m');
+        String url = serve(new FixedBytesHandler(model));
+        File output = output("metadata-test", "model.tflite");
+        LinkedHashSet<String> caps = new LinkedHashSet<>(Collections.singleton(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        store.upsertDownload(new JSONObject()
+            .put("id", "download-metadata-test")
+            .put("modelId", "metadata-test")
+            .put("url", url)
+            .put("path", output.getAbsolutePath())
+            .put("status", TaiModelStore.STATE_QUEUED)
+            .put("displayName", "Metadata Test")
+            .put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+            .put("format", TaiModelSpec.FORMAT_LITERTLM)
+            .put("capabilities", new org.json.JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)));
+
+        TaiModelDownloader downloader = new TaiModelDownloader(context, store);
+        downloader.runDownload("download-metadata-test", "metadata-test", url, output,
+            "Metadata Test", "license", caps, TaiModelSpec.BACKEND_LITERT_LM,
+            TaiModelSpec.FORMAT_LITERTLM, "", "", 4096, 0, "", 0L, null, transfer -> { });
+
+        JSONObject stored = latestDownload("download-metadata-test");
+        assertNotNull(stored);
+        assertEquals("Metadata Test", stored.getString("displayName"));
+        assertEquals(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS,
+            stored.getJSONArray("capabilities").getString(0));
+        assertTrue(store.getDownloadedReadableModels().containsKey("metadata-test"));
+    }
+
+    @Test
     public void staleInstalledE4bMetadata_isRebuiltFromCatalogFacts() throws Exception {
         File output = output(TaiModelRegistry.MODEL_GEMMA_4_E4B_IT, "gemma-4-E4B-it.litertlm");
         assertTrue(output.getParentFile().mkdirs() || output.getParentFile().isDirectory());
@@ -263,6 +295,15 @@ public class TaiModelDownloaderStateTest {
 
     private File output(String modelId, String name) {
         return new File(new File(store.getModelsDirectory(), modelId), name);
+    }
+
+    private JSONObject latestDownload(String transferId) {
+        org.json.JSONArray downloads = store.getDownloads();
+        for (int i = downloads.length() - 1; i >= 0; i--) {
+            JSONObject item = downloads.optJSONObject(i);
+            if (item != null && transferId.equals(item.optString("id", ""))) return item;
+        }
+        return null;
     }
 
     private static LinkedHashSet<String> capabilities() {

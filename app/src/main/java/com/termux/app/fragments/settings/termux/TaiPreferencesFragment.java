@@ -1644,6 +1644,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         // Backend is auto-detected: a Hugging Face URL resolves to LiteRT or MNN from the repo's
         // files; a local file is always a LiteRT package. No manual toggle.
+        layout.addView(importDialogLabel(context, R.string.termux_ai_import_source_label, 0));
         EditText hfUrlInput = new EditText(context);
         hfUrlInput.setSingleLine(true);
         hfUrlInput.setHint(R.string.termux_ai_model_import_hf_url_field_hint);
@@ -1660,6 +1661,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         TextView modalityLabel = new TextView(context);
         modalityLabel.setText(R.string.termux_ai_model_import_modalities_label);
+        modalityLabel.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorPrimary));
+        modalityLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         modalityLabel.setPadding(0, padding / 2, 0, 0);
         layout.addView(modalityLabel);
 
@@ -1701,6 +1704,7 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
         // Tap-to-set Hugging Face token (needed for gated/private repos).
         TextView tokenLine = new TextView(context);
         tokenLine.setPadding(0, padding / 2, 0, padding / 2);
+        tokenLine.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorPrimary));
         Runnable refreshTokenLine = () -> tokenLine.setText(
             new TaiSettings(context).getHuggingFaceToken().trim().isEmpty()
                 ? getString(R.string.termux_ai_model_import_token_unset)
@@ -1711,6 +1715,8 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
 
         TextView selectedFile = new TextView(context);
         selectedFile.setText(importSelectionText(context, draft));
+        selectedFile.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        selectedFile.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant));
         selectedFile.setPadding(0, padding / 2, 0, 0);
         layout.addView(selectedFile);
 
@@ -1761,6 +1767,17 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             modelPicker.launch(new String[]{"application/octet-stream", "application/json", "*/*"});
             dialog.dismiss();
         });
+    }
+
+    private TextView importDialogLabel(Context context, int textRes, int topPaddingDp) {
+        TextView label = new TextView(context);
+        label.setText(textRes);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        label.setTextColor(resolveAttrColor(com.termux.shared.R.attr.termuxColorPrimary));
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        int top = Math.round(topPaddingDp * context.getResources().getDisplayMetrics().density);
+        label.setPadding(0, top, 0, 0);
+        return label;
     }
 
     private void fillGuessedImportCapabilities(@NonNull LinkedHashSet<String> capabilities, @Nullable String source) {

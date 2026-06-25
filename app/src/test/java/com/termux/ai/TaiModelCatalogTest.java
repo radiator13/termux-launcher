@@ -1,5 +1,7 @@
 package com.termux.ai;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -110,6 +112,29 @@ public class TaiModelCatalogTest {
         assertTrue(mnn.downloadAvailable);
         assertEquals("taobao-mnn/Qwen2.5-Coder-1.5B-Instruct-MNN", mnn.repositoryId);
         assertNotNull(mnn.downloadUrl);
+    }
+
+    @Test
+    public void downloadEntry_buildsCatalogRowForActiveCustomDownload() throws Exception {
+        JSONObject download = new JSONObject()
+            .put("modelId", "embeddinggemma-300m")
+            .put("displayName", "EmbeddingGemma 300M")
+            .put("url", "https://huggingface.co/litert-community/embeddinggemma-300m/resolve/main/model.tflite")
+            .put("path", "/models/embeddinggemma-300m/model.tflite")
+            .put("status", TaiModelStore.STATE_DOWNLOADING)
+            .put("backend", TaiModelSpec.BACKEND_LITERT_LM)
+            .put("format", TaiModelSpec.FORMAT_LITERTLM)
+            .put("totalBytes", 123L)
+            .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+
+        TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.downloadEntry(download);
+
+        assertNotNull(entry);
+        assertEquals("embeddinggemma-300m", entry.modelId);
+        assertEquals("EmbeddingGemma 300M", entry.displayName);
+        assertEquals("litert-community/embeddinggemma-300m", entry.repositoryId);
+        assertTrue(entry.sourceCapabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertTrue(entry.displayCapabilityTags.contains("Embeddings"));
     }
 
     @Test

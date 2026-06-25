@@ -327,7 +327,7 @@ public final class TaiModelStore {
         String lowerName = modelFile.getName().toLowerCase(java.util.Locale.ROOT);
         return modelFile.isFile()
             && modelFile.canRead()
-            && (lowerName.endsWith(".litertlm") || lowerName.endsWith(".task"));
+            && (lowerName.endsWith(".litertlm") || lowerName.endsWith(".task") || lowerName.endsWith(".tflite"));
     }
 
     private boolean mnnPackageReadable(@NonNull File modelFile) {
