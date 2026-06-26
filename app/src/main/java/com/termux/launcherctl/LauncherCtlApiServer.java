@@ -1377,7 +1377,7 @@ public class LauncherCtlApiServer {
         }
 
         String script =
-            "#!/data/data/com.termux/files/usr/bin/sh\n" +
+            "#!/data/data/io.vaj.tl/files/usr/bin/sh\n" +
             "set -eu\n" +
             "cmd=\"${1:-status}\"\n" +
             "update_scripts_help=0\n" +
@@ -1640,7 +1640,7 @@ public class LauncherCtlApiServer {
         }
 
         String script =
-            "#!/data/data/com.termux/files/usr/bin/sh\n" +
+            "#!/data/data/io.vaj.tl/files/usr/bin/sh\n" +
             "set -eu\n" +
             "\n" +
             "if [ \"$#\" != \"0\" ]; then\n" +
@@ -1661,7 +1661,7 @@ public class LauncherCtlApiServer {
             "fi\n" +
             "\n" +
             "# Fallbacks for older app builds or pre-init LauncherCtl state.\n" +
-            "RESTART_CMD='am start -S -n com.termux/.app.TermuxActivity'\n" +
+            "RESTART_CMD='am start -S -n io.vaj.tl/com.termux.app.TermuxActivity'\n" +
             "if $RESTART_CMD >/dev/null 2>&1; then\n" +
             "  exit 0\n" +
             "fi\n" +
