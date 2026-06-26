@@ -7,14 +7,18 @@ import androidx.annotation.NonNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.List;
+
 public class MultiBackendTaiRuntime implements TaiRuntime {
     private final DualSlotTaiRuntime liteRt;
     private final MnnTaiRuntime mnn;
+    private final LiteRtEmbeddingRuntime embeddings;
     private TaiRuntime activeAssistant;
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
         liteRt = new DualSlotTaiRuntime(context);
         mnn = new MnnTaiRuntime(context);
+        embeddings = new LiteRtEmbeddingRuntime();
         activeAssistant = liteRt;
     }
 
@@ -59,6 +63,7 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     @NonNull @Override public synchronized JSONObject unload() throws JSONException {
         JSONObject assistant = activeAssistant.unload();
         JSONObject companion = activeAssistant == liteRt ? new JSONObject() : liteRt.unload();
+        embeddings.close();
         JSONObject result = new JSONObject();
         result.put("ok", assistant.optBoolean("ok", false) && (companion.length() == 0 || companion.optBoolean("ok", false)));
         result.put("runtime", "tai-multi-backend");
@@ -101,6 +106,21 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
         return response;
     }
 
+    @NonNull
+    public synchronized JSONObject embed(@NonNull TaiModelSpec model, @NonNull List<String> inputs, int dimensions) throws JSONException {
+        if (isLiteRtEmbeddingFlatbuffer(model)) return embeddings.embed(model, inputs, dimensions);
+        if (inputs.size() == 1 && dimensions <= 0) return embed(model.id, inputs.get(0));
+        JSONObject error = new JSONObject();
+        error.put("message", "Embeddings are not available for model '" + model.id + "'.");
+        error.put("type", "invalid_request_error");
+        error.put("param", "model");
+        error.put("code", "capability_not_supported");
+        JSONObject response = new JSONObject();
+        response.put("error", error);
+        response.put("_statusCode", 400);
+        return response;
+    }
+
     private synchronized TaiRuntime runtimeForId(String id) {
         if (isMobileActions(id)) return liteRt;
         TaiRuntimeState mnnState = mnn.getState();
@@ -113,6 +133,13 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     private TaiRuntime runtimeForModel(TaiModelSpec model) {
         if (TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)) return mnn;
         return liteRt;
+    }
+
+    private boolean isLiteRtEmbeddingFlatbuffer(@NonNull TaiModelSpec model) {
+        String path = model.localPath == null ? "" : model.localPath.toLowerCase(java.util.Locale.ROOT);
+        return TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend)
+            && model.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)
+            && path.endsWith(".tflite");
     }
 
     private boolean isMobileActions(String id) { return TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(id); }

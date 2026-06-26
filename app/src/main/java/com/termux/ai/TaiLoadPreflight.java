@@ -227,11 +227,11 @@ public final class TaiLoadPreflight {
             }
             String lowerName = file.getName().toLowerCase(Locale.ROOT);
             if (TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend)) {
-                boolean formatLooksRight = lowerName.endsWith(".litertlm") || lowerName.endsWith(".task");
+                boolean formatLooksRight = lowerName.endsWith(".litertlm") || lowerName.endsWith(".task") || lowerName.endsWith(".tflite");
                 check("model_format", formatLooksRight, "LiteRT-LM model package has an expected extension.",
-                    "LiteRT-LM models must be .litertlm or .task packages.");
+                    "LiteRT-LM models must be .litertlm, .task, or .tflite packages.");
                 if (!formatLooksRight) block("model_file_wrong_format",
-                    "LiteRT-LM models must be .litertlm or .task packages.");
+                    "LiteRT-LM models must be .litertlm, .task, or .tflite packages.");
             } else if (TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)) {
                 boolean configJson = "config.json".equals(lowerName);
                 check("model_format", configJson, "MNN model points at config.json.",

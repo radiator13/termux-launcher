@@ -231,10 +231,16 @@ class McpBridge:
             metadata = tools_by_openai_name.get(name, {})
             risk = metadata.get("risk", "low")
             requires_confirmation = bool(metadata.get("requiresConfirmation", False))
+            description = function.get("description", "")
+            if requires_confirmation:
+                description = (
+                    description
+                    + " Requires explicit user approval; pass _confirm: true only after approval."
+                )
             tools.append({
                 "name": name,
-                "description": function.get("description", ""),
-                "inputSchema": function.get("parameters", {"type": "object", "properties": {}}),
+                "description": description,
+                "inputSchema": self.input_schema(function, requires_confirmation),
                 "annotations": {
                     "readOnlyHint": risk == "low" and not requires_confirmation,
                     "destructiveHint": risk in ("high", "critical"),
@@ -242,6 +248,19 @@ class McpBridge:
                 },
             })
         return {"tools": tools}
+
+    def input_schema(self, function, requires_confirmation):
+        schema = json.loads(json.dumps(function.get("parameters", {"type": "object", "properties": {}})))
+        if not requires_confirmation:
+            return schema
+        if schema.get("type") != "object":
+            schema = {"type": "object", "properties": {}}
+        properties = schema.setdefault("properties", {})
+        properties.setdefault("_confirm", {
+            "type": "boolean",
+            "description": "Set to true only after the user explicitly approves this action.",
+        })
+        return schema
 
     def tools_call(self, params):
         if not isinstance(params, dict):

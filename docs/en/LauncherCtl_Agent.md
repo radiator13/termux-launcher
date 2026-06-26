@@ -116,6 +116,9 @@ LauncherCtl currently exposes these tools:
 
 Use `launcherctl tools` for the exact schema accepted by each tool.
 
+For MCP clients, see [LauncherCtl MCP](LauncherCtl_MCP) for client configs,
+MCP tool names, and live-verified JSON-RPC examples.
+
 ## Direct HTTP Use
 
 Scripts can call the authenticated localhost API directly:
@@ -163,7 +166,10 @@ MCP-capable clients can use LauncherCtl as a stdio tool server:
 launcherctl mcp
 ```
 
-The MCP bridge uses the same tools, token files, and confirmation gates as the HTTP API. A client should pass `_confirm: true` only after the user has approved the action.
+The MCP bridge uses the same tools, token files, and confirmation gates as the
+HTTP API. A client should pass `_confirm: true` only after the user has approved
+the action. See [LauncherCtl MCP](LauncherCtl_MCP) for setup snippets for Codex,
+OpenCode, Claude Code, Gemini CLI, Cursor, Windsurf, and other MCP clients.
 
 ## Local Model Clients
 

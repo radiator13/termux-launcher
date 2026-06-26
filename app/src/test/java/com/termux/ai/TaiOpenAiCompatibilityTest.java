@@ -257,6 +257,22 @@ public class TaiOpenAiCompatibilityTest {
         assertTrue(mnn.contains(TaiModelSpec.CAPABILITY_IMAGE_INPUT));
     }
 
+    @Test
+    public void endpointCapabilities_embeddingOnlyDoesNotBecomeChatModel() {
+        LinkedHashSet<String> declared = new LinkedHashSet<>();
+        declared.add(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS);
+
+        LinkedHashSet<String> liteRt = TaiModelSpec.endpointCapabilitiesFor(
+            "embeddinggemma-300m", TaiModelSpec.BACKEND_LITERT_LM, TaiModelSpec.FORMAT_LITERTLM, declared, "/models/model.tflite");
+        LinkedHashSet<String> mnn = TaiModelSpec.endpointCapabilitiesFor(
+            "qwen3-embedding", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, declared, "/models/config.json");
+
+        assertTrue(liteRt.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertTrue(mnn.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertFalse(liteRt.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
+        assertFalse(mnn.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
+    }
+
     private static TaiModelSpec spec(String id, String backend, String... capabilities) {
         LinkedHashSet<String> caps = new LinkedHashSet<>();
         caps.add("text_chat");

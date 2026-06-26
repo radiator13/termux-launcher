@@ -298,6 +298,7 @@ public final class TaiModelSpec {
 
         if (BACKEND_MNN_LLM.equals(backend)) {
             addIfPresent(endpoint, source, CAPABILITY_TEXT_CHAT, source.isEmpty());
+            addIfPresent(endpoint, source, CAPABILITY_TEXT_EMBEDDINGS, false);
             // MNN VL models (Qwen-VL, SmolVLM, MiniCPM-V) take images; the runtime injects them as
             // inline <img> markup. Audio/video have no MNN runtime path, so they stay source-only.
             addIfPresent(endpoint, source, CAPABILITY_IMAGE_INPUT, false);
@@ -317,6 +318,7 @@ public final class TaiModelSpec {
         }
 
         addIfPresent(endpoint, source, CAPABILITY_TEXT_CHAT, source.isEmpty());
+        addIfPresent(endpoint, source, CAPABILITY_TEXT_EMBEDDINGS, false);
         addIfPresent(endpoint, source, CAPABILITY_IMAGE_INPUT, false);
         addIfPresent(endpoint, source, CAPABILITY_AUDIO_INPUT, false);
         addIfPresent(endpoint, source, CAPABILITY_TOOL_USE, false);

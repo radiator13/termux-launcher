@@ -175,7 +175,7 @@ public final class TaiModelStore {
         if (children == null) return null;
         for (File child : children) {
             String name = child.getName().toLowerCase(java.util.Locale.ROOT);
-            if (child.isFile() && (name.endsWith(".litertlm") || name.endsWith(".task"))) return child;
+            if (child.isFile() && (name.endsWith(".litertlm") || name.endsWith(".task") || name.endsWith(".tflite"))) return child;
         }
         return null;
     }
@@ -392,13 +392,12 @@ public final class TaiModelStore {
         String sha256 = null;
         LinkedHashSet<String> endpointCapabilities = null;
         String toolMode = null;
+        LinkedHashSet<String> declaredCapabilities = capabilitiesFromArray(item.optJSONArray("capabilities"));
         if (entry != null) {
             displayName = entry.displayName;
             roleHint = entry.roleHint;
             license = entry.license;
             capabilities.addAll(entry.sourceCapabilities);
-            endpointCapabilities = new LinkedHashSet<>(TaiModelSpec.endpointCapabilitiesFor(
-                entry.modelId, entry.backend, entry.format, entry.sourceCapabilities, path));
             backend = entry.backend;
             format = entry.format;
             architecture = entry.architecture;
@@ -408,18 +407,16 @@ public final class TaiModelStore {
             defaultMaxOutputTokens = entry.defaultMaxOutputTokens;
             recommendedRamGb = entry.recommendedRamGb;
             sha256 = entry.sha256;
-            toolMode = TaiModelSpec.toolModeFor(entry.backend, endpointCapabilities);
         }
-        JSONArray capabilityArray = item.optJSONArray("capabilities");
-        if (entry == null && capabilityArray != null) {
+        if (!declaredCapabilities.isEmpty()) {
             capabilities.clear();
-            for (int i = 0; i < capabilityArray.length(); i++) {
-                String capability = capabilityArray.optString(i, "");
-                if (!capability.isEmpty()) capabilities.add(capability);
-            }
+            capabilities.addAll(declaredCapabilities);
         }
         if (sizeBytes <= 0L) sizeBytes = item.optLong("bytesRead", item.optLong("totalBytes", entry == null ? 0L : entry.sizeBytes));
         if (capabilities.isEmpty()) capabilities.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        endpointCapabilities = new LinkedHashSet<>(TaiModelSpec.endpointCapabilitiesFor(
+            modelId, backend, format, capabilities, path));
+        toolMode = TaiModelSpec.toolModeFor(backend, endpointCapabilities);
         try {
             return new TaiModelSpec(
                 modelId,
@@ -447,6 +444,17 @@ public final class TaiModelStore {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    @NonNull
+    private LinkedHashSet<String> capabilitiesFromArray(@Nullable JSONArray capabilityArray) {
+        LinkedHashSet<String> capabilities = new LinkedHashSet<>();
+        if (capabilityArray == null) return capabilities;
+        for (int i = 0; i < capabilityArray.length(); i++) {
+            String capability = capabilityArray.optString(i, "");
+            if (!capability.isEmpty()) capabilities.add(capability);
+        }
+        return capabilities;
     }
 
     @NonNull

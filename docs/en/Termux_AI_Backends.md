@@ -26,6 +26,13 @@ POST /v1/audio/speech
 
 `/v1/audio/speech` exists so clients get a clear OpenAI-shaped error. Local LiteRT-LM and MNN runners do not currently generate audio output, so audio-output requests return `unsupported_audio_output` with HTTP 501.
 
+`/v1/embeddings` accepts a string or an array of strings and returns float
+vectors in OpenAI's `embedding` list shape. Use it only with models whose
+`/v1/models` `_capabilities` include `text_embeddings`. LiteRT
+EmbeddingGemma `.tflite` packages need `sentencepiece.model` beside the model
+file; new downloads fetch that sidecar automatically. Older installs missing
+the sidecar return `embedding_tokenizer_missing`.
+
 ## Model IDs
 
 Use the exact IDs returned by:

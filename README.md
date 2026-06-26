@@ -7,7 +7,7 @@
 
 Termux Launcher is a terminal-first Android home launcher inspired by [TEL](https://github.com/t-e-l/tel), built on [termux-app](https://github.com/termux/termux-app) and [termux-monet](https://github.com/Termux-Monet/termux-monet).
 
-[Download builds](https://github.com/PickleHik3/termux-launcher/releases) | [Getting Started](docs/en/Launcher_Getting_Started.md) | [LauncherCtl](docs/en/LauncherCtl_API.md) | [Termux AI](docs/en/Termux_AI.md) | [Changelog](CHANGELOG.md)
+[Download builds](https://github.com/PickleHik3/termux-launcher/releases) | [Getting Started](docs/en/Launcher_Getting_Started.md) | [LauncherCtl](docs/en/LauncherCtl_API.md) | [LauncherCtl MCP](docs/en/LauncherCtl_MCP.md) | [Termux AI](docs/en/Termux_AI.md) | [Changelog](CHANGELOG.md)
 
 <img src="screenshots/demo.gif" alt="Launcher demo" width="360">
 
@@ -46,6 +46,7 @@ See [Getting Started](docs/en/Launcher_Getting_Started.md) for the setup flow.
 
 - [Getting Started](docs/en/Launcher_Getting_Started.md): install, launcher basics, tmux setup, rish setup, Extra Keys, and troubleshooting.
 - [LauncherCtl](docs/en/LauncherCtl_API.md): shell commands, endpoint files, API basics, and permissions.
+- [LauncherCtl MCP](docs/en/LauncherCtl_MCP.md): MCP client configs, tool names, and live-verified examples for local agents.
 - [Termux AI](docs/en/Termux_AI.md): local model setup, `tai`, OpenAI-compatible clients, and troubleshooting.
 - [Developer Docs](docs/en/Developer_Docs.md): advanced API routes, runtime notes, helper scripts, and security details.
 

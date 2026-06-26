@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -119,6 +120,31 @@ public class EmbeddingsEndpointTest {
         assertEquals(768, embedding.getJSONArray("embedding").length());
         assertEquals("embed-mnn", response.getString("model"));
         assertTrue(response.has("usage"));
+    }
+
+    @Test
+    public void embeddings_withArrayInput_returnsOneEmbeddingPerInput() throws Exception {
+        File tempFile = File.createTempFile("embed-array-model", ".mnn");
+        tempFile.deleteOnExit();
+        manager.importModel(new JSONObject()
+            .put("path", tempFile.getAbsolutePath())
+            .put("modelId", "embed-array-mnn")
+            .put("capabilities", new JSONArray().put(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS))
+            .toString());
+        fakeRuntime.addEmbeddingsCapableModel("embed-array-mnn");
+        manager.loadModel(new JSONObject().put("model", "embed-array-mnn").toString());
+
+        HttpURLConnection conn = post("/v1/embeddings", new JSONObject()
+            .put("model", "embed-array-mnn")
+            .put("input", new JSONArray().put("hello").put("world")));
+
+        assertEquals(200, conn.getResponseCode());
+        JSONObject response = new JSONObject(readBody(conn));
+        JSONArray data = response.getJSONArray("data");
+        assertEquals(2, data.length());
+        assertEquals(0, data.getJSONObject(0).getInt("index"));
+        assertEquals(1, data.getJSONObject(1).getInt("index"));
+        assertEquals(768, data.getJSONObject(0).getJSONArray("embedding").length());
     }
 
     @Test
@@ -255,6 +281,15 @@ public class EmbeddingsEndpointTest {
 
         @Override
         public JSONObject embed(String modelId, String input) throws org.json.JSONException {
+            return embeddingResponse(modelId, java.util.Collections.singletonList(input), 768);
+        }
+
+        @Override
+        public JSONObject embed(TaiModelSpec spec, List<String> inputs, int dimensions) throws org.json.JSONException {
+            return embeddingResponse(spec.id, inputs, dimensions > 0 ? dimensions : 768);
+        }
+
+        private JSONObject embeddingResponse(String modelId, List<String> inputs, int dimensions) throws org.json.JSONException {
             if (!loadedModels.contains(modelId)) {
                 JSONObject error = new JSONObject();
                 error.put("message", "Model not loaded.");
@@ -276,21 +311,23 @@ public class EmbeddingsEndpointTest {
                 response.put("_statusCode", 400);
                 return response;
             }
-            JSONArray embedding = new JSONArray();
-            for (int i = 0; i < 768; i++) embedding.put(i % 2 == 0 ? 0.1 : -0.1);
-            JSONObject item = new JSONObject();
-            item.put("object", "embedding");
-            item.put("embedding", embedding);
-            item.put("index", 0);
             JSONArray dataArray = new JSONArray();
-            dataArray.put(item);
+            for (int index = 0; index < inputs.size(); index++) {
+                JSONArray embedding = new JSONArray();
+                for (int i = 0; i < dimensions; i++) embedding.put(i % 2 == 0 ? 0.1 : -0.1);
+                JSONObject item = new JSONObject();
+                item.put("object", "embedding");
+                item.put("embedding", embedding);
+                item.put("index", index);
+                dataArray.put(item);
+            }
             JSONObject response = new JSONObject();
             response.put("object", "list");
             response.put("data", dataArray);
             response.put("model", modelId);
             JSONObject usage = new JSONObject();
-            usage.put("prompt_tokens", 4);
-            usage.put("total_tokens", 4);
+            usage.put("prompt_tokens", inputs.size() * 4);
+            usage.put("total_tokens", inputs.size() * 4);
             response.put("usage", usage);
             return response;
         }

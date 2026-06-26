@@ -89,9 +89,15 @@ metadata prefixed with an underscore so existing OpenAI clients ignore it:
 
 OpenAI-compatible embeddings endpoint. Embeddings support is model-capability
 dependent: only models that advertise `text_embeddings` in their `/v1/models`
-`_capabilities` array are accepted. The current LiteRT/MNN catalog does not
-advertise embeddings unless a loadable local model explicitly supports them.
-Other models return `capability_not_supported`.
+`_capabilities` array are accepted. `input` may be a string or an array of
+strings, and the response returns one OpenAI `embedding` item per input in the
+same order. Local output is float vectors only; `encoding_format:"base64"` is
+rejected with `unsupported_encoding_format`.
+
+LiteRT EmbeddingGemma `.tflite` installs require `sentencepiece.model` in the
+same model directory. New downloads fetch that sidecar automatically. Older
+installs that only contain the `.tflite` return `embedding_tokenizer_missing`
+until the model is re-downloaded or the sidecar is added.
 
 ### `GET /v1/status`
 Returns backend + LauncherCtl runtime status.
@@ -251,15 +257,16 @@ call time or storing it in a credentials manager.
   `_capabilities` metadata.
 - `POST /v1/chat/completions` — OpenAI chat completion.
 - `POST /v1/completions` — OpenAI legacy completion.
-- `POST /v1/embeddings` — OpenAI embeddings only when `_capabilities`
-  includes `text_embeddings`.
+- `POST /v1/embeddings` — OpenAI embeddings for local models whose
+  `_capabilities` include `text_embeddings`.
 - `POST /v1/audio/speech` — returns `unsupported_audio_output` until a local
   runner exposes generated audio.
 
 `/v1/embeddings` is model-capability dependent. Not all models support
 embeddings. Check each model's `_capabilities` field returned by
 `GET /v1/models` before calling this endpoint; unsupported models return a
-`capability_not_supported` error.
+`capability_not_supported` error. EmbeddingGemma `.tflite` packages also need
+the `sentencepiece.model` sidecar in the same model directory.
 
 ## MCP Stdio Bridge
 
@@ -273,6 +280,9 @@ launcherctl mcp
 ```
 
 It supports newline-delimited JSON-RPC and `Content-Length` framed JSON-RPC. Tool calls use the same confirmation gates as `/v1/agent/execute`; pass `_confirm: true` in MCP tool arguments only when the client has obtained explicit user confirmation.
+
+For user-facing MCP client setup, tool names, and examples, see
+[LauncherCtl MCP](LauncherCtl_MCP).
 
 ### LiteRT Backend Example
 

@@ -875,31 +875,66 @@ public final class TaiManager {
         if (shouldDelegateRuntime()) return runtimeRequest(TaiRuntimeIpc.OP_EMBEDDINGS, body);
         JSONObject request = parseBody(body);
         String modelId = requestedModelId(request, settings.getDefaultAssistantModel());
-        String input = request.optString("input", "");
+        String encodingFormat = request.optString("encoding_format", "float");
+        if (!encodingFormat.isEmpty() && !"float".equalsIgnoreCase(encodingFormat)) {
+            return openAiRequestError(400, "unsupported_encoding_format",
+                "Only encoding_format:\"float\" is supported for local embeddings.", "encoding_format");
+        }
+        boolean hasDimensions = request.has("dimensions");
+        int dimensions = hasDimensions ? request.optInt("dimensions", -1) : 0;
+        if (hasDimensions && dimensions <= 0) {
+            return openAiRequestError(400, "invalid_dimensions", "Embedding dimensions must be positive.", "dimensions");
+        }
+        List<String> inputs = embeddingInputs(request);
+        if (inputs == null) {
+            return openAiRequestError(400, "unsupported_embedding_input",
+                "Embeddings input must be a string or an array of strings.", "input");
+        }
         TaiModelSpec spec = resolveModel(modelId);
         if (spec == null) {
-            JSONObject error = new JSONObject();
-            error.put("message", "Unknown TAI model: " + modelId);
-            error.put("type", "invalid_request_error");
-            error.put("param", "model");
-            error.put("code", "model_not_found");
-            JSONObject response = new JSONObject();
-            response.put("error", error);
-            response.put("_statusCode", 404);
-            return response;
+            return openAiRequestError(404, "model_not_found", "Unknown TAI model: " + modelId, "model");
         }
         if (!spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)) {
-            JSONObject error = new JSONObject();
-            error.put("message", "Embeddings are not supported for model '" + modelId + "'.");
-            error.put("type", "invalid_request_error");
-            error.put("param", "model");
-            error.put("code", "capability_not_supported");
-            JSONObject response = new JSONObject();
-            response.put("error", error);
-            response.put("_statusCode", 501);
-            return response;
+            return openAiRequestError(501, "capability_not_supported",
+                "Embeddings are not supported for model '" + modelId + "'.", "model");
         }
-        return ((MultiBackendTaiRuntime) localRuntime()).embed(modelId, input);
+        return ((MultiBackendTaiRuntime) localRuntime()).embed(spec, inputs, dimensions);
+    }
+
+    @Nullable
+    private List<String> embeddingInputs(@NonNull JSONObject request) {
+        ArrayList<String> inputs = new ArrayList<>();
+        Object raw = request.opt("input");
+        if (raw == null || raw == JSONObject.NULL) {
+            inputs.add("");
+            return inputs;
+        }
+        if (raw instanceof String) {
+            inputs.add((String) raw);
+            return inputs;
+        }
+        if (!(raw instanceof JSONArray)) return null;
+        JSONArray array = (JSONArray) raw;
+        for (int i = 0; i < array.length(); i++) {
+            Object item = array.opt(i);
+            if (!(item instanceof String)) return null;
+            inputs.add((String) item);
+        }
+        return inputs;
+    }
+
+    @NonNull
+    private JSONObject openAiRequestError(int statusCode, @NonNull String code,
+                                          @NonNull String message, @Nullable String param) throws JSONException {
+        JSONObject error = new JSONObject();
+        error.put("message", message);
+        error.put("type", "invalid_request_error");
+        if (param != null) error.put("param", param);
+        error.put("code", code);
+        JSONObject response = new JSONObject();
+        response.put("error", error);
+        response.put("_statusCode", statusCode);
+        return response;
     }
 
     @NonNull

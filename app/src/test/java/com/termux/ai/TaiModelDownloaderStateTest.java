@@ -196,7 +196,7 @@ public class TaiModelDownloaderStateTest {
     @Test
     public void runDownload_preservesQueuedMetadataForCatalogRows() throws Exception {
         byte[] model = modelBytes('m');
-        String url = serve(new FixedBytesHandler(model));
+        String url = serveEmbeddingPackage(model, new byte[] {'s', 'p', 'm'});
         File output = output("metadata-test", "model.tflite");
         LinkedHashSet<String> caps = new LinkedHashSet<>(Collections.singleton(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
         store.upsertDownload(new JSONObject()
@@ -220,7 +220,11 @@ public class TaiModelDownloaderStateTest {
         assertEquals("Metadata Test", stored.getString("displayName"));
         assertEquals(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS,
             stored.getJSONArray("capabilities").getString(0));
-        assertTrue(store.getDownloadedReadableModels().containsKey("metadata-test"));
+        assertTrue(new File(output.getParentFile(), "sentencepiece.model").isFile());
+        TaiModelSpec spec = store.getDownloadedReadableModels().get("metadata-test");
+        assertNotNull(spec);
+        assertTrue(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertFalse(spec.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
     }
 
     @Test
@@ -291,6 +295,14 @@ public class TaiModelDownloaderStateTest {
         server.createContext("/model.litertlm", handler);
         server.start();
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/model.litertlm";
+    }
+
+    private String serveEmbeddingPackage(byte[] model, byte[] tokenizer) throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/model.tflite", new FixedBytesHandler(model));
+        server.createContext("/sentencepiece.model", new FixedBytesHandler(tokenizer));
+        server.start();
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/model.tflite";
     }
 
     private File output(String modelId, String name) {

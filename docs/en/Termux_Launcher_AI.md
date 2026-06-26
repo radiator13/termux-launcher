@@ -105,7 +105,10 @@ POST /v1/audio/speech
 
 `/v1/audio/speech` returns a clear `unsupported_audio_output` error because the local runners do not currently generate audio output.
 
-`/v1/embeddings` is accepted only for installed models whose `/v1/models` `_capabilities` include `text_embeddings`. The current LiteRT/MNN catalog models are chat/completion models unless a local model explicitly advertises embeddings.
+`/v1/embeddings` is accepted only for installed models whose `/v1/models`
+`_capabilities` include `text_embeddings`. EmbeddingGemma `.tflite` installs
+also need `sentencepiece.model` in the same model directory; new downloads fetch
+that sidecar automatically.
 
 Most OpenAI-compatible CLI tools expect a base URL ending in `/v1`, so use:
 

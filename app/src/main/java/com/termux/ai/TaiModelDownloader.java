@@ -31,6 +31,9 @@ public final class TaiModelDownloader {
         "tokenizer.mtok",
         "tokenizer.txt"
     };
+    private static final String[] LITERT_EMBEDDING_SIDECARS = new String[] {
+        "sentencepiece.model"
+    };
 
     public interface ProgressCallback {
         void onProgress(@NonNull JSONObject transfer);
@@ -257,6 +260,11 @@ public final class TaiModelDownloader {
             }
             if (output.exists() && !output.delete()) throw new IllegalStateException("Could not replace model file.");
             if (!partial.renameTo(output)) throw new IllegalStateException("Could not finalize model download.");
+            long installedBytes = output.length();
+            if (requiresLiteRtEmbeddingTokenizer(output, capabilities)) {
+                installedBytes += downloadLiteRtEmbeddingSidecars(transferId, modelId, url, output, authToken,
+                    output.length(), expectedSizeBytes, callback);
+            }
 
             TaiModelSpec spec = new TaiModelSpec(
                 modelId,
@@ -265,7 +273,7 @@ public final class TaiModelDownloader {
                 "downloaded",
                 output.getAbsolutePath(),
                 license.isEmpty() ? "User accepted provider terms externally" : license,
-                output.length(),
+                installedBytes,
                 capabilities,
                 false,
                 null,
@@ -275,7 +283,7 @@ public final class TaiModelDownloader {
                 recommendedRamGb, emptyToNull(expectedSha256)
             );
             store.upsertUserModel(spec);
-            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_INSTALLED, output.length(), output.length(), ""), callback);
+            persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_INSTALLED, installedBytes, installedBytes, ""), callback);
         } catch (InterruptedException e) {
             try {
                 persist(transfer(transferId, modelId, url, output.getAbsolutePath(), TaiModelStore.STATE_CANCELLED, bytesRead, contentLength, "cancelled"), callback);
@@ -439,6 +447,59 @@ public final class TaiModelDownloader {
         return paramHint || urlHint;
     }
 
+    private boolean requiresLiteRtEmbeddingTokenizer(@NonNull File output, @NonNull LinkedHashSet<String> capabilities) {
+        String lowerName = output.getName().toLowerCase(Locale.ROOT);
+        return lowerName.endsWith(".tflite")
+            && capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS);
+    }
+
+    private long downloadLiteRtEmbeddingSidecars(@NonNull String transferId, @NonNull String modelId,
+                                                 @NonNull String url, @NonNull File output,
+                                                 @Nullable String authToken, long currentBytes,
+                                                 long expectedSizeBytes,
+                                                 @Nullable ProgressCallback callback) throws Exception {
+        String baseUrl = baseUrlFromUrl(url);
+        File modelDir = output.getParentFile();
+        if (modelDir == null) throw new IllegalStateException("Model directory is missing.");
+        long packageTotalBytes = expectedSizeBytes > 0L ? expectedSizeBytes : -1L;
+        long sidecarBytes = 0L;
+        for (String fileName : LITERT_EMBEDDING_SIDECARS) {
+            File fileOutput = new File(modelDir, fileName);
+            String fileUrl = baseUrl + encodeHuggingFacePath(fileName);
+            File filePartial = new File(fileOutput.getAbsolutePath() + ".part");
+            HttpURLConnection fileConn = open(fileUrl, authToken, 0);
+            int fileStatus = fileConn.getResponseCode();
+            if (fileStatus < 200 || fileStatus >= 300) {
+                throw new IllegalStateException("LiteRT embedding package missing tokenizer sidecar: " + fileName);
+            }
+            persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+            long fileBytes = 0L;
+            try (InputStream fileInput = new BufferedInputStream(fileConn.getInputStream());
+                 FileOutputStream fileOut = new FileOutputStream(filePartial)) {
+                byte[] buffer = new byte[1024 * 64];
+                int read;
+                while ((read = fileInput.read(buffer)) != -1) {
+                    if (TaiModelDownloadService.isCancelled(modelId)) throw new InterruptedException("Download cancelled.");
+                    fileOut.write(buffer, 0, read);
+                    currentBytes += read;
+                    fileBytes += read;
+                    if (currentBytes % (1024L * 1024L) < read) {
+                        persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                            TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                    }
+                }
+            }
+            if (fileBytes <= 0L) throw new IllegalStateException("Downloaded tokenizer sidecar is empty: " + fileName);
+            if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace tokenizer sidecar.");
+            if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize tokenizer sidecar download.");
+            sidecarBytes += fileBytes;
+            persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
+                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+        }
+        return sidecarBytes;
+    }
+
     @NonNull
     private LinkedHashSet<String> mnnPackageFilesFromHuggingFace(@NonNull String url, @Nullable String authToken) {
         LinkedHashSet<String> files = new LinkedHashSet<>();
@@ -474,9 +535,9 @@ public final class TaiModelDownloader {
     /**
      * Resolve a Hugging Face URL to a concrete downloadable file URL, auto-detecting the backend from
      * the repo's file list. A {@code .../resolve/...} URL is returned unchanged; a bare repo URL is
-     * resolved to the package entry point — a {@code .litertlm}/{@code .task} (LiteRT) if present,
-     * else {@code config.json} of an MNN package — so users never pick a backend or hunt the file
-     * list. Reports {@code authRequired} when the repo is gated/private (HTTP 401/403).
+     * resolved to the package entry point — a {@code .litertlm}/{@code .task}/{@code .tflite}
+     * (LiteRT) if present, else {@code config.json} of an MNN package — so users never pick a backend
+     * or hunt the file list. Reports {@code authRequired} when the repo is gated/private (HTTP 401/403).
      */
     @NonNull
     public HfResolve resolveHuggingFaceEntry(@NonNull String url, @Nullable String authToken) {
@@ -539,8 +600,9 @@ public final class TaiModelDownloader {
     }
 
     /** Pick the package entry file from a repo's file list, auto-detecting the backend: a LiteRT
-     *  package ({@code .litertlm}/{@code .task}) wins; otherwise an MNN package ({@code config.json}
-     *  alongside a {@code .mnn} weight). Returns "" when the repo holds no supported model. */
+     *  package ({@code .litertlm}/{@code .task}/{@code .tflite}) wins; otherwise an MNN package
+     *  ({@code config.json} alongside a {@code .mnn} weight). Returns "" when the repo holds no
+     *  supported model. */
     @NonNull
     static String chooseEntryFile(@NonNull LinkedHashSet<String> files) {
         for (String f : files) if (f.toLowerCase(Locale.ROOT).endsWith(".litertlm")) return f;

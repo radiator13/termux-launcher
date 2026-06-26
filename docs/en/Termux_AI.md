@@ -23,6 +23,8 @@ TAI currently handles:
 - OpenAI-compatible `GET /v1/models`
 - OpenAI-compatible `POST /v1/chat/completions`
 - OpenAI-compatible `POST /v1/completions`
+- OpenAI-compatible `POST /v1/embeddings` for installed models that advertise
+  `text_embeddings`
 - streaming SSE responses for chat and completion requests
 - LiteRT-LM image and audio input for models that advertise those capabilities
 - MNN chat and tool-call compatibility through the local OpenAI endpoint
@@ -34,7 +36,8 @@ TAI does not currently:
 - summarize notifications
 - generate audio output
 - run GGUF/raw weight files
-- expose embeddings unless a local model advertises `text_embeddings` in `/v1/models`
+- expose embeddings for chat-only models or EmbeddingGemma `.tflite` installs
+  missing `sentencepiece.model`
 - expose Gallery skills or benchmark UI
 
 Android/device actions are exposed separately through LauncherCtl capability, agent, and MCP APIs instead of being hidden inside the `tai` shell helper or the OpenAI-compatible model endpoints. FunctionGemma can return mobile-action tool calls, but TAI does not automatically execute Android actions.
@@ -162,7 +165,7 @@ The endpoint URL and bearer token are stored at:
 ~/.launcherctl/token
 ```
 
-MCP-capable clients can use `launcherctl mcp` for the Android tool surface. That bridge is separate from the OpenAI-compatible TAI chat/completions endpoints and uses the same `~/.launcherctl` endpoint/token files.
+MCP-capable clients can use `launcherctl mcp` for the Android tool surface. That bridge is separate from the OpenAI-compatible TAI chat/completions endpoints and uses the same `~/.launcherctl` endpoint/token files. See [LauncherCtl MCP](LauncherCtl_MCP) for agent client configuration and tool examples.
 
 ## Importing and Downloading Models
 
