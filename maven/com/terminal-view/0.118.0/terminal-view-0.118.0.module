@@ -1,0 +1,236 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.termux",
+    "module": "terminal-view",
+    "version": "0.118.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.2.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "debugVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "com.termux",
+          "module": "terminal-emulator",
+          "version": {
+            "requires": "0.118.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-debug.aar",
+          "url": "terminal-view-0.118.0-debug.aar",
+          "size": 60175,
+          "sha512": "33bac5493db404b75be32dcd6e0f3f93fd1b5fc812db465a31255eae7f2731310e168e13fb7c1643e9da86d0aa9c1b6eff6aa15df89923992f0c62cf3da22cd1",
+          "sha256": "b935a14e3e9b7b5f3948a0125421e3a60929391ba6868d95e17af4ff3b773bac",
+          "sha1": "7b9c899c1bac67cc5d9e873262980fb0b5507521",
+          "md5": "39dd8b2762cdd2839f55ed51fcaaded7"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.9.0"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "terminal-emulator",
+          "version": {
+            "requires": "0.118.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-debug.aar",
+          "url": "terminal-view-0.118.0-debug.aar",
+          "size": 60175,
+          "sha512": "33bac5493db404b75be32dcd6e0f3f93fd1b5fc812db465a31255eae7f2731310e168e13fb7c1643e9da86d0aa9c1b6eff6aa15df89923992f0c62cf3da22cd1",
+          "sha256": "b935a14e3e9b7b5f3948a0125421e3a60929391ba6868d95e17af4ff3b773bac",
+          "sha1": "7b9c899c1bac67cc5d9e873262980fb0b5507521",
+          "md5": "39dd8b2762cdd2839f55ed51fcaaded7"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-debug-sources.jar",
+          "url": "terminal-view-0.118.0-debug-sources.jar",
+          "size": 35156,
+          "sha512": "d4b5dc257263bb03a28ea9c5118f8a41a1b1259c0bcf4815bfa37016d9cf52aab7415309e080c2cfb0a24fcfae0486e219af7186ec70615a8e647a90f760a161",
+          "sha256": "c6f93030b6fd742ab0b5c6e99f10cd240635e54eeb913bc1a1eddc5f256efd99",
+          "sha1": "e117d08ae779c17ea6bf0b88876d1d068ad93b1c",
+          "md5": "8507be54a7f63de927e80c0492d41cf1"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-debug-javadoc.jar",
+          "url": "terminal-view-0.118.0-debug-javadoc.jar",
+          "size": 364467,
+          "sha512": "a9f528095c27256c861aa6ce18d58b36fcbdcb00fcee0a27468a11dbf6bcca34516851e775af65a4b7531d318668e65e23189fd74ab3846e9b24eef021531ced",
+          "sha256": "e9f434e16f72cc19b4a5f0e7e29aed32f97f7306f8ef2b859cc67c58df75cbdb",
+          "sha1": "810ee59cfb0dbd892a1bc0f43d3921e8d32cca17",
+          "md5": "0273f314871da13f4ae5a9c54c464348"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "com.termux",
+          "module": "terminal-emulator",
+          "version": {
+            "requires": "0.118.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-release.aar",
+          "url": "terminal-view-0.118.0-release.aar",
+          "size": 57744,
+          "sha512": "29c44148693981c85c39c766a6d9786ccb79b91ba2618b76427f0a10b0e5c81072a63f9d57ce4370cf25c9fa17577ab0dc88a2e2ed4b180743d01ede6db17ce6",
+          "sha256": "7a590a54f38eccaf9292b6c14f109b3e575c7a89067d94f31231de88cc717e51",
+          "sha1": "cef786f23ed7ba43f8959707257944d8e91e28c2",
+          "md5": "c9454da65be3e9ce932a001160c19115"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.9.0"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "terminal-emulator",
+          "version": {
+            "requires": "0.118.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-release.aar",
+          "url": "terminal-view-0.118.0-release.aar",
+          "size": 57744,
+          "sha512": "29c44148693981c85c39c766a6d9786ccb79b91ba2618b76427f0a10b0e5c81072a63f9d57ce4370cf25c9fa17577ab0dc88a2e2ed4b180743d01ede6db17ce6",
+          "sha256": "7a590a54f38eccaf9292b6c14f109b3e575c7a89067d94f31231de88cc717e51",
+          "sha1": "cef786f23ed7ba43f8959707257944d8e91e28c2",
+          "md5": "c9454da65be3e9ce932a001160c19115"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-release-sources.jar",
+          "url": "terminal-view-0.118.0-release-sources.jar",
+          "size": 35143,
+          "sha512": "fd1f2984c4f71a327e27a09bc6969244d3678ee272c7e063b12dfe845d65c50c6e14a3d80bff85ee434e0a218bf6b1b0f9efc538701429196a6517e4c59841b8",
+          "sha256": "59892988c2e7a39120ed96cc1437d0749cf5f72059118ad947efad58032136d0",
+          "sha1": "147aabcefc8173adfca4a0fc4856934e382659e7",
+          "md5": "16608735cfa3aa43e439e3b5e29c558b"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "terminal-view-0.118.0-release-javadoc.jar",
+          "url": "terminal-view-0.118.0-release-javadoc.jar",
+          "size": 364467,
+          "sha512": "a9f528095c27256c861aa6ce18d58b36fcbdcb00fcee0a27468a11dbf6bcca34516851e775af65a4b7531d318668e65e23189fd74ab3846e9b24eef021531ced",
+          "sha256": "e9f434e16f72cc19b4a5f0e7e29aed32f97f7306f8ef2b859cc67c58df75cbdb",
+          "sha1": "810ee59cfb0dbd892a1bc0f43d3921e8d32cca17",
+          "md5": "0273f314871da13f4ae5a9c54c464348"
+        }
+      ]
+    }
+  ]
+}

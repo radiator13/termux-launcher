@@ -1,0 +1,186 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.termux",
+    "module": "termux-am",
+    "version": "2.0.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.2.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "debugVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-debug.aar",
+          "url": "termux-am-2.0.0-debug.aar",
+          "size": 17927,
+          "sha512": "3170b244a3a483a37d5a7f67d2e6dce0b7378d88cab744924679f80b003cfb97e1cbe6a54e68b96512fae06633b751f33f688490f8706fd197342954459b65a9",
+          "sha256": "10e85896f4a3e7e0ee5681d4655387dc61f9e4bc879c40f2b1b7a8d4ac2edef2",
+          "sha1": "3867c4b591c06e47f2094b82e5d8d5ceb4b58b0e",
+          "md5": "9df754c7dd918aaf7dc44d9d2cfcd074"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-debug.aar",
+          "url": "termux-am-2.0.0-debug.aar",
+          "size": 17927,
+          "sha512": "3170b244a3a483a37d5a7f67d2e6dce0b7378d88cab744924679f80b003cfb97e1cbe6a54e68b96512fae06633b751f33f688490f8706fd197342954459b65a9",
+          "sha256": "10e85896f4a3e7e0ee5681d4655387dc61f9e4bc879c40f2b1b7a8d4ac2edef2",
+          "sha1": "3867c4b591c06e47f2094b82e5d8d5ceb4b58b0e",
+          "md5": "9df754c7dd918aaf7dc44d9d2cfcd074"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-debug-sources.jar",
+          "url": "termux-am-2.0.0-debug-sources.jar",
+          "size": 9859,
+          "sha512": "05a677c5c5d264bb16712a1fa279797dbf612d4a7af68e0406e5ba209a3cffcaae1d56917fe51f457295361ed07fe6dbbb920b8695b216ba250e21eb57b87a2a",
+          "sha256": "6936ee8a72d2cea35523c5168d70d27801ac68249cf49e8bbc49b9fbea416458",
+          "sha1": "e548c13b420529340b1e7f11baa57d1fc545296a",
+          "md5": "89039d14d0c3edaefd57a1a320ef3037"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-debug-javadoc.jar",
+          "url": "termux-am-2.0.0-debug-javadoc.jar",
+          "size": 291275,
+          "sha512": "65cfec1229c6c8bbf658d955467f1d816e9c675729d2736f03ce9fa44236aacde86afc77df98fd5512534caea510aff504a544dc59e1e13a700f0fdd88abb133",
+          "sha256": "2aed74f9a8e096e9fc558112bf92ee7c8b801b55f765855cab2aee3dc25eff9e",
+          "sha1": "f51699d832258c486439313defd85ff1ccc9bc10",
+          "md5": "c58c9e2bff102242bcd072ef3d8f38f8"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-release.aar",
+          "url": "termux-am-2.0.0-release.aar",
+          "size": 17089,
+          "sha512": "7f4d6fa217353793159f7b82fd8df9e7bfacaccc229782b3541f6b2abe6435d8c3607d0d67e393288e172d75f741c3bbc9f3a1819f7ffe2b973009136e7af9a4",
+          "sha256": "a86dcaf08727ad51fa41b5625e4ad670490928ec65adb80924d3e94518edc47a",
+          "sha1": "bf03841a531fe5c98dbf77ebc70f4fa796a009e0",
+          "md5": "716d5588a62b6421e8130eee08786f39"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-release.aar",
+          "url": "termux-am-2.0.0-release.aar",
+          "size": 17089,
+          "sha512": "7f4d6fa217353793159f7b82fd8df9e7bfacaccc229782b3541f6b2abe6435d8c3607d0d67e393288e172d75f741c3bbc9f3a1819f7ffe2b973009136e7af9a4",
+          "sha256": "a86dcaf08727ad51fa41b5625e4ad670490928ec65adb80924d3e94518edc47a",
+          "sha1": "bf03841a531fe5c98dbf77ebc70f4fa796a009e0",
+          "md5": "716d5588a62b6421e8130eee08786f39"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-release-sources.jar",
+          "url": "termux-am-2.0.0-release-sources.jar",
+          "size": 9847,
+          "sha512": "be1d7abffffbbe095f2303ccba6dbbfbd63fcd002f6a42ac0c124a35670db801a78355440be43f97d1b4c219ecc3ca8a400cbbf99e5227f264b7def325f7df47",
+          "sha256": "e48bbdb80f18267d77f70c907a6688f6cf1d96b39aeba80b67e00e228c75ff90",
+          "sha1": "d11f95a7b830aad5fa966cf01c3af1d5cb196407",
+          "md5": "cc6f61c38c7dd78e0deba2c34d18e582"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-am-2.0.0-release-javadoc.jar",
+          "url": "termux-am-2.0.0-release-javadoc.jar",
+          "size": 291275,
+          "sha512": "65cfec1229c6c8bbf658d955467f1d816e9c675729d2736f03ce9fa44236aacde86afc77df98fd5512534caea510aff504a544dc59e1e13a700f0fdd88abb133",
+          "sha256": "2aed74f9a8e096e9fc558112bf92ee7c8b801b55f765855cab2aee3dc25eff9e",
+          "sha1": "f51699d832258c486439313defd85ff1ccc9bc10",
+          "md5": "c58c9e2bff102242bcd072ef3d8f38f8"
+        }
+      ]
+    }
+  ]
+}
