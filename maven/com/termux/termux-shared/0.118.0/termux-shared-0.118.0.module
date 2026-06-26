@@ -1,0 +1,386 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.termux",
+    "module": "termux-shared",
+    "version": "0.118.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.2.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "debugVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-debug.aar",
+          "url": "termux-shared-0.118.0-debug.aar",
+          "size": 1536200,
+          "sha512": "a3bb0a14acffcb6e72a10a6da7bc33a100feb74d617e115f275f2aa30546b8678dee46d66c08eb8eebe102c0f2ffd71c7c0c80f3fd1b8885ad1bc519fd853f46",
+          "sha256": "eb2fb54e751b93292c016683f67ada10d846938a8233380d37e7f38906a6ba28",
+          "sha1": "5dcbbca14478d0c098cf792a3d7b4ff1ef389102",
+          "md5": "2c4b8d0e8a5608464603b21df95bf151"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.appcompat",
+          "module": "appcompat",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.9.0"
+          }
+        },
+        {
+          "group": "androidx.core",
+          "module": "core",
+          "version": {
+            "requires": "1.13.1"
+          }
+        },
+        {
+          "group": "com.google.android.material",
+          "module": "material",
+          "version": {
+            "requires": "1.12.0"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "24.1-jre"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "core",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "ext-strikethrough",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "linkify",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "recycler",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "org.lsposed.hiddenapibypass",
+          "module": "hiddenapibypass",
+          "version": {
+            "requires": "6.1"
+          }
+        },
+        {
+          "group": "androidx.window",
+          "module": "window",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "commons-io",
+          "module": "commons-io",
+          "version": {
+            "requires": "2.16.1"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "terminal-view",
+          "version": {
+            "requires": "0.118.0"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "termux-am",
+          "version": {
+            "requires": "2.0.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-debug.aar",
+          "url": "termux-shared-0.118.0-debug.aar",
+          "size": 1536200,
+          "sha512": "a3bb0a14acffcb6e72a10a6da7bc33a100feb74d617e115f275f2aa30546b8678dee46d66c08eb8eebe102c0f2ffd71c7c0c80f3fd1b8885ad1bc519fd853f46",
+          "sha256": "eb2fb54e751b93292c016683f67ada10d846938a8233380d37e7f38906a6ba28",
+          "sha1": "5dcbbca14478d0c098cf792a3d7b4ff1ef389102",
+          "md5": "2c4b8d0e8a5608464603b21df95bf151"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-debug-sources.jar",
+          "url": "termux-shared-0.118.0-debug-sources.jar",
+          "size": 292144,
+          "sha512": "5f140f1683f7fd34bae863aea0cdd5ba88ad1c2db6797494ca53871353b7816f100326cc6888dba0cc496a42249825092776e2808181c97ed31e2ee256324cbc",
+          "sha256": "dbc45a06a3774d79ae2987133d12a1f677c6c67ccc326b89e9d81b1cc4ab15ca",
+          "sha1": "623b14d7cccc5934d17ec7a99b93542a30ae7aa6",
+          "md5": "39ab84effb9b549e93f56880dc9c9130"
+        }
+      ]
+    },
+    {
+      "name": "debugVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "debug",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-debug-javadoc.jar",
+          "url": "termux-shared-0.118.0-debug-javadoc.jar",
+          "size": 1221882,
+          "sha512": "3aad21a4fbfef975e0a9abad8cdbb37ccabf62ffbc5903b049567f92e18c60bd63b919b3e1593b86ab6ce514d55e662f493d09ba8796625533401eccebecc9bb",
+          "sha256": "8ef77bb791539facd51b2133b0594d00cf71aac9ec0ab81e868a10ecd55218f6",
+          "sha1": "fd9a515534a9f866484e0959cc5efac5a71c378b",
+          "md5": "fb4acf3994c1205a48ee635667878b0a"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultApiPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-release.aar",
+          "url": "termux-shared-0.118.0-release.aar",
+          "size": 1492796,
+          "sha512": "76590bad7a547beb73cbe7fd396f97d4bf9589b574c6a76a216cc98ae87cabbac91c2a01112b4e83d34fc24b71f98186678288632caed971251451a179b40be5",
+          "sha256": "14ec5a3b2c4711d14ace4858339bb4cb077d0d1570cac9c5a73e60c7d0aa8e8f",
+          "sha1": "40dda76a8d58d0accd24513627456cfed178896b",
+          "md5": "0f5a6c261c2ec15092e350a1147198b5"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultRuntimePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.appcompat",
+          "module": "appcompat",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.9.0"
+          }
+        },
+        {
+          "group": "androidx.core",
+          "module": "core",
+          "version": {
+            "requires": "1.13.1"
+          }
+        },
+        {
+          "group": "com.google.android.material",
+          "module": "material",
+          "version": {
+            "requires": "1.12.0"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "24.1-jre"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "core",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "ext-strikethrough",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "linkify",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "io.noties.markwon",
+          "module": "recycler",
+          "version": {
+            "requires": "4.6.2"
+          }
+        },
+        {
+          "group": "org.lsposed.hiddenapibypass",
+          "module": "hiddenapibypass",
+          "version": {
+            "requires": "6.1"
+          }
+        },
+        {
+          "group": "androidx.window",
+          "module": "window",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "commons-io",
+          "module": "commons-io",
+          "version": {
+            "requires": "2.16.1"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "terminal-view",
+          "version": {
+            "requires": "0.118.0"
+          }
+        },
+        {
+          "group": "com.termux",
+          "module": "termux-am",
+          "version": {
+            "requires": "2.0.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-release.aar",
+          "url": "termux-shared-0.118.0-release.aar",
+          "size": 1492796,
+          "sha512": "76590bad7a547beb73cbe7fd396f97d4bf9589b574c6a76a216cc98ae87cabbac91c2a01112b4e83d34fc24b71f98186678288632caed971251451a179b40be5",
+          "sha256": "14ec5a3b2c4711d14ace4858339bb4cb077d0d1570cac9c5a73e60c7d0aa8e8f",
+          "sha1": "40dda76a8d58d0accd24513627456cfed178896b",
+          "md5": "0f5a6c261c2ec15092e350a1147198b5"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultSourcePublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-release-sources.jar",
+          "url": "termux-shared-0.118.0-release-sources.jar",
+          "size": 292131,
+          "sha512": "ef2e63b6857515bd0a120dd168661653e6c1c38f7902c614b7abeee1feeff58e5a7c33eb9a4412194479f9a3c0fe15ccd2c04d526ddafc5740c7871364f56560",
+          "sha256": "a77c8a92f9fc5ae32d9fa9ad2d9da2960d1e2a65a7c7d076adf41aed6adddc43",
+          "sha1": "d5bbf1d622d499d02ea8c8e127249e041495fc9b",
+          "md5": "a4e8a4d7e641dd3f8db5e2717b0f85fc"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantDefaultJavaDocPublication",
+      "attributes": {
+        "com.android.build.api.attributes.BuildTypeAttr": "release",
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "termux-shared-0.118.0-release-javadoc.jar",
+          "url": "termux-shared-0.118.0-release-javadoc.jar",
+          "size": 1221882,
+          "sha512": "3aad21a4fbfef975e0a9abad8cdbb37ccabf62ffbc5903b049567f92e18c60bd63b919b3e1593b86ab6ce514d55e662f493d09ba8796625533401eccebecc9bb",
+          "sha256": "8ef77bb791539facd51b2133b0594d00cf71aac9ec0ab81e868a10ecd55218f6",
+          "sha1": "fd9a515534a9f866484e0959cc5efac5a71c378b",
+          "md5": "fb4acf3994c1205a48ee635667878b0a"
+        }
+      ]
+    }
+  ]
+}
