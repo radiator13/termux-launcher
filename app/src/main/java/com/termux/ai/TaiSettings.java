@@ -40,7 +40,6 @@ public final class TaiSettings {
     public static final String KEY_API_TOKEN = "tai_api_token";
     public static final String KEY_API_BIND_MODE = "tai_api_bind_mode";
     public static final String KEY_OPENAI_AUTO_LOAD = "tai_openai_auto_load";
-    public static final String KEY_COMPANION_AUTO_LOAD_ENABLED = "tai_companion_autoload_enabled";
 
     public static final String BIND_MODE_LOCALHOST = "localhost";
     public static final String BIND_MODE_LAN = "lan";
@@ -211,10 +210,6 @@ public final class TaiSettings {
 
     public boolean isOpenAiAutoLoadEnabled() {
         return preferences.getBoolean(KEY_OPENAI_AUTO_LOAD, true);
-    }
-
-    public boolean isCompanionAutoLoadEnabled() {
-        return preferences.getBoolean(KEY_COMPANION_AUTO_LOAD_ENABLED, false);
     }
 
     @NonNull
@@ -575,7 +570,6 @@ public final class TaiSettings {
         json.put("runtimeOptions", getRuntimeOptions().toJson());
         json.put("idleUnloadMinutes", getIdleUnloadMinutes());
         json.put("openAiAutoLoadEnabled", isOpenAiAutoLoadEnabled());
-        json.put("companionAutoLoadEnabled", isCompanionAutoLoadEnabled());
         json.put("huggingFaceTokenConfigured", !getHuggingFaceToken().trim().isEmpty());
         json.put("apiPort", getApiPort());
         String bindMode = getApiBindMode();

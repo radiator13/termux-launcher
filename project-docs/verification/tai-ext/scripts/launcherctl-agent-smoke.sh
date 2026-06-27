@@ -51,7 +51,7 @@ section "Status"
 launcherctl status | json_query '{ok, backendState, notificationListenerConnected, endpoint: .endpoint.supportedEndpoints}'
 
 section "Capabilities"
-launcherctl capabilities | json_query '{ok, device: {model: .device.model, sdkInt: .device.sdkInt, memoryGiB: .device.memoryGiB}, functionGemma, tools: (.availableTools | length), warnings, blockingReasons}'
+launcherctl capabilities | json_query '{ok, device: {model: .device.model, sdkInt: .device.sdkInt, memoryGiB: .device.memoryGiB}, tai, tools: (.availableTools | length), warnings, blockingReasons}'
 
 section "Tools"
 launcherctl tools | json_query '{ok, count, openAiNames: [.openAiTools[].function.name]}'

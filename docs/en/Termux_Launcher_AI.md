@@ -166,29 +166,11 @@ and unload manually:
 tai unload
 ```
 
-## Two Model Slots
+## One Active Model
 
-Termux Launcher AI supports two runtime slots:
+Termux Launcher AI keeps one chat/generation model active at a time. Loading a LiteRT-LM or MNN model unloads the previous chat model. FunctionGemma is a normal CPU-only catalog model and also replaces the active model when loaded.
 
-- one LiteRT-LM assistant model slot
-- one MobileActions model slot
-
-The assistant slot is for:
-
-```text
-gemma-4-e2b-it-litert-lm
-gemma-4-e4b-it-litert-lm
-```
-
-The MobileActions slot is for:
-
-```text
-functiongemma-270m-mobile-actions-litert-lm
-```
-
-This means the launcher can keep one main assistant model available while also keeping MobileActions available separately on CPU.
-
-The assistant model defaults to CPU on unknown devices. GPU is automatic only after a successful model/device GPU history, or you can test it explicitly with `tai load <model> --gpu`. MobileActions is always CPU and companion auto-load is disabled unless enabled in settings.
+Models default to CPU on unknown devices. GPU is automatic only after a successful model/device GPU history, or you can test it explicitly with `tai load <model> --gpu` when the model supports it.
 
 ## Settings
 
@@ -206,7 +188,6 @@ From there you can:
 - change generation defaults such as max output tokens and temperature
 - choose Auto, GPU, or CPU acceleration where supported
 - enable or disable OpenAI-compatible auto-load
-- opt into FunctionGemma/MobileActions companion auto-load
 - configure the API port
 - randomize the API port
 - view or edit the API bearer token

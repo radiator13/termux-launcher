@@ -1,216 +1,245 @@
-# TAI / Termux AI
+# Termux AI
 
-Termux-Launcher now has native AI backends powered by [Google LiteRT](https://developers.google.com/edge/litert)/[MediaPipe](https://developers.google.com/edge/mediapipe/solutions/guide) and [TaoBao/alibaba MNN](https://github.com/alibaba/mnn). 
+Termux AI (TAI) lets supported Android devices run language models locally. Your prompts and model output stay on the device unless you deliberately use a network service or expose the API to your local network.
 
-I wanted fast interference abovfe everything else and therefore, the LiteRT and MNN backends were chosen. I tried MLC backend as well, but it requires the model weights to be bundled along with the APK, and did not present any meaningful benefit for this tradeoff. 
+TAI is the model host. You can chat with it through an OpenAI- or Ollama-compatible app such as Codex, OpenCode, Crush, or AIChat. Android actions are provided separately through LauncherCtl and MCP.
 
-It does not support GGUF models, but you can always just use termux native llamacpp to run those. 
+## Quick start
 
-Provides you with a openai compatible API endpoint and key (bearer token), which you may plug into any cli AI apps/tools. 
-The app loads the requested models automatically upon first request and will be automatically unloaded after 10 minutes of no interaction. 
+1. Open **Settings → TAI / Termux AI**.
+2. Open the model catalog and choose a model that fits your device memory.
+3. Read and accept the model provider's terms when asked, then download the model.
+4. Tap the installed model and choose **Load**. You can also leave **OpenAI auto-load** enabled so the first API request loads it after safety checks pass.
+5. Use `tai status` in Termux to confirm that TAI is ready.
 
-TAI is the local on-device model endpoint for Termux Launcher. The localhost API stays in the launcher process, while native LiteRT-LM/MNN model loading and generation run in an isolated Android `:tai_runtime` process. This APK is a LiteRT-LM/MNN host; it is not a GGUF or llama.cpp runner.
+Models are not bundled in the APK. A download can be several gigabytes, so check the size and available storage first.
 
-TAI is intentionally not a shell agent. Use established shell/coding clients such as `aichat` or `tmuxai` for terminal workflows, pane context, command review, and coding UX. TAI provides the local model runtime those tools can call.
+## Choosing a model
 
-## Scope
+The catalog can change as compatible models are added. The following table explains the current built-in choices.
 
-TAI currently handles:
+| Model | Best for | Approximate download | Suggested device RAM | Notes |
+| --- | --- | ---: | ---: | --- |
+| Gemma 4 E2B IT | General chat, images, audio, and tools | 2.4 GB | 8 GB+ | Recommended general model |
+| Gemma 4 E4B IT | Better coding and reasoning | 3.7 GB | 12 GB+ | Larger and slower |
+| Qwen2.5 Coder 1.5B MNN | Coding and terminal clients | 1.3 GB | 4–6 GB+ | Recommended coding model; supports tools |
+| Qwen2.5 Coder 7B MNN | Higher-quality coding | 5.1 GB | 10–12 GB+ | Does not currently advertise tool use |
+| Qwen2.5 0.5B MNN | Very small, fast text model | 557 MB | 3 GB+ | Lower answer quality |
+| Qwen2.5 1.5B MNN | Lightweight general chat | 879 MB | 4–6 GB+ | Text and multilingual prompts |
+| Qwen2.5 3B MNN | Balanced general chat | 2.4 GB | 6–8 GB+ | Better quality than the smaller Qwen models |
+| DeepSeek-R1 1.5B MNN | Small reasoning tasks | 1.6 GB | 4–6 GB+ | Reasoning-focused |
+| DeepSeek-R1 Distill 1.5B LiteRT | Small reasoning tasks | 1.7 GB | 6 GB+ | LiteRT package |
+| FunctionGemma 270M | Choosing a function or device tool | 0.3 GB | 4 GB+ | CPU-only, 1,024-token context; not a general assistant |
+| Qwen2.5 1.5B LiteRT | Imported lightweight model | 1.5 GB | 6 GB+ | Import-only until a verified direct artifact is available |
 
-- model catalog metadata
-- explicit model import/download/delete
-- model load/unload/keep-warm/cancel lifecycle control
-- OpenAI-compatible `GET /v1/models`
-- OpenAI-compatible `POST /v1/chat/completions`
-- OpenAI-compatible `POST /v1/completions`
-- OpenAI-compatible `POST /v1/embeddings` for installed models that advertise
-  `text_embeddings`
-- streaming SSE responses for chat and completion requests
-- LiteRT-LM image and audio input for models that advertise those capabilities
-- MNN chat and tool-call compatibility through the local OpenAI endpoint
-- compatibility with the LauncherCtl agent/tool layer through the same localhost bridge
+Only one chat/generation model is active at a time. Loading FunctionGemma is the same as loading any other model: it replaces the currently loaded chat model. TAI does not silently load it beside another assistant.
 
-TAI does not currently:
+## Understanding model capabilities
 
-- plan or execute shell commands
-- summarize notifications
-- generate audio output
-- run GGUF/raw weight files
-- expose embeddings for chat-only models or EmbeddingGemma `.tflite` installs
-  missing `sentencepiece.model`
-- expose Gallery skills or benchmark UI
-
-Android/device actions are exposed separately through LauncherCtl capability, agent, and MCP APIs instead of being hidden inside the `tai` shell helper or the OpenAI-compatible model endpoints. FunctionGemma can return mobile-action tool calls, but TAI does not automatically execute Android actions.
-
-## Model Roles
-
-TAI keeps one default model assignment for requests that omit `model`:
-
-- `gemma-4-e2b-it-litert-lm`: default fast assistant model
-
-Open Settings -> TAI / Termux AI to change the default model and runtime overrides.
-
-Multimodal models are listed in `/v1/models` as modality-scoped ids that share one downloaded file: the canonical id (e.g. `gemma-4-e2b-it-litert-lm`) loads text-only chat, `<id>-vision` adds image input, and `<id>-audio` adds audio input. Pick the id matching what you want to send; only one modality loads at a time (matching Google AI Edge Gallery), which keeps the GPU load small enough to fit. See [Termux_AI_Backends.md](Termux_AI_Backends.md#per-modality-model-ids).
-
-TAI does not bundle model files in the APK. Downloads and imports must be explicit user actions, with license/terms awareness for gated or restricted models. Hugging Face tokens are never bundled; an optional user token can be saved in app-private settings for Hugging Face downloads.
-
-## Runtime Defaults
-
-TAI stores user overrides separately from model metadata. Runtime tunables default to `Auto / Gallery default`:
-
-- max output tokens
-- TopK
-- TopP
-- temperature
-- accelerator: Auto / GPU / CPU
-- thinking
-- speculative decoding
-- idle unload / keep-warm policy
-
-Before every load, TAI runs a hard preflight for ABI, Android API level, bundled native libraries, model-file readability/format, memory pressure, accelerator policy, and known per-device failures. Auto accelerator defaults to CPU on unknown devices. GPU is used automatically only after the same model/device/backend has loaded successfully on GPU before; explicit `--gpu` remains available for manual testing when the model profile and device support it. `functiongemma-270m-mobile-actions-litert-lm` is CPU-only with temperature 0.0, while Gemma 4 E2B/E4B retain their Gallery defaults.
-
-Device memory detection matches Gallery for advertised/total RAM and also checks current available memory. Low available memory is a hard guard before native runtime initialization; below-recommendation RAM is reported as a warning and prevents surprise OpenAI auto-loads.
-
-Known profiles are synchronized with Edge Gallery 1.0.15:
-
-- `gemma-4-e2b-it-litert-lm`: GPU, CPU; 8 GiB minimum; 4000 max output tokens; TopK 64; TopP 0.95; temperature 1.0.
-- `gemma-4-e4b-it-litert-lm`: GPU, CPU; 12 GiB minimum; 4000 max output tokens; TopK 64; TopP 0.95; temperature 1.0.
-- `functiongemma-270m-mobile-actions-litert-lm`: CPU only; 6 GiB minimum; 1024 max output tokens; TopK 64; TopP 0.95; temperature 0.0.
-
-Unknown imported models default to CPU, matching Gallery's import dialog. The import API accepts `runtimeProfile.compatibleAccelerators`, `defaultMaxTokens`, `defaultTopK`, `defaultTopP`, `defaultTemperature`, and `minDeviceMemoryInGb` when the user knows the package's requirements.
-
-The LiteRT-LM `Engine` remains loaded after `tai load`, and TAI reuses a `Conversation` while the model, prompt mode, system prompt, and sampling options remain compatible. One generation runs at a time. Use `tai cancel` or `POST /v1/ai/runtime/cancel` to stop an active generation.
-
-## Shell Command
-
-The launcher installs:
+Every installed model reports what the local endpoint can actually accept. Run:
 
 ```sh
-tai
+tai models
 ```
 
-Useful commands:
+For the complete machine-readable list, run:
 
 ```sh
-tai --json status
+endpoint="$(cat ~/.launcherctl/endpoint)"
+token="$(cat ~/.launcherctl/token)"
+curl -sS -H "Authorization: Bearer $token" "$endpoint/v1/models" | jq .
+```
+
+Common capability names are:
+
+| Capability | Meaning |
+| --- | --- |
+| `text_chat` | Normal text prompts and replies |
+| `image_input` | Images can be included in a prompt |
+| `audio_input` | Audio can be included in a prompt |
+| `tool_use` | The model can return structured function/tool calls |
+| `text_embeddings` | Converts text into embedding vectors instead of chat text |
+| `code` | Tuned or intended for programming tasks |
+| `reasoning` | Intended for multi-step reasoning |
+| `multilingual` | Intended for more than one language |
+| `llm_thinking` | Supports the backend's thinking mode |
+| `speculative_decoding` | Supports the LiteRT speculative-decoding option |
+| `mobile_actions` | Tuned to choose from compatible Android action tools |
+
+`_capabilities` in `/v1/models` is the important field for apps. `_source_capabilities` describes upstream claims, while `_endpoint_capabilities` describes what this APK can currently provide.
+
+### Images and audio
+
+Multimodal LiteRT models appear as separate IDs that share one downloaded file:
+
+- `model-id` for text
+- `model-id-vision` for image input
+- `model-id-audio` for audio input
+
+Choose the ID matching the input you intend to send. Only one mode is loaded at a time, which reduces memory use.
+
+### FunctionGemma and phone actions
+
+FunctionGemma is an optional catalog model. It can return structured tool calls when a client sends compatible tool definitions, but it does not execute those calls and it does not run beside another model.
+
+For phone-control tools in Codex, OpenCode, Crush, or another agent app, use the LauncherCtl MCP server instead:
+
+```sh
+launcherctl mcp
+```
+
+MCP keeps model generation and Android permissions separate. The client can show or request confirmation before performing sensitive actions. See [LauncherCtl MCP](LauncherCtl_MCP.md).
+
+## Connect an AI app
+
+TAI stores its current local address and secret token in:
+
+```text
+~/.launcherctl/endpoint
+~/.launcherctl/token
+```
+
+The address normally looks like `http://127.0.0.1:54298`. OpenAI-compatible clients usually need `/v1` appended to it.
+
+Generate a starter configuration with:
+
+```sh
+launcherctl client-config codex
+launcherctl client-config opencode
+launcherctl client-config crush
+launcherctl client-config aichat
+launcherctl client-config ollama
+```
+
+The generated examples refer to the `LAUNCHERCTL_TOKEN` environment variable instead of copying the secret into configuration files. Load it for the current shell with:
+
+```sh
+export LAUNCHERCTL_TOKEN="$(cat ~/.launcherctl/token)"
+```
+
+Use `/v1/responses` for current Codex-compatible Responses clients. Use `/v1/chat/completions` for OpenAI-compatible chat clients. Ollama-compatible clients use the same base address without adding `/v1`.
+
+## Available API endpoints
+
+You do not need these routes for normal use, but they help when configuring another app.
+
+### OpenAI-compatible
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/models` | List installed, loadable models and capabilities |
+| POST | `/v1/responses` | Responses API text, streaming, and function calls |
+| POST | `/v1/chat/completions` | Chat Completions text, streaming, media, and tools |
+| POST | `/v1/completions` | Legacy text completions |
+| POST | `/v1/embeddings` | Embeddings for models advertising `text_embeddings` |
+| POST | `/v1/audio/speech` | Returns an unsupported-operation error; speech output is not available |
+
+OpenAI streaming uses server-sent events and ends with `data: [DONE]`.
+
+### Ollama-compatible
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/version` | Compatibility version |
+| GET | `/api/tags` | List installed models |
+| POST | `/api/show` | Show one model's details and capabilities |
+| POST | `/api/chat` | Chat and tool calls |
+| POST | `/api/generate` | Prompt-style generation |
+| GET | `/api/ps` | Show the loaded model |
+| POST | `/api/embed` | Create embeddings when supported |
+
+Ollama streaming uses newline-delimited JSON. Ollama registry operations such as `pull`, `push`, `create`, and `copy` are not emulated. Install models from the TAI catalog or import flow instead.
+
+### Model management
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/ai/status` | Overall status, settings, and limitations |
+| GET | `/v1/ai/runtime` | Loaded model and runtime state |
+| GET | `/v1/ai/models` | Detailed TAI model registry |
+| POST | `/v1/ai/runtime/preflight` | Check whether a model can load safely |
+| POST | `/v1/ai/runtime/load` | Load a model |
+| POST | `/v1/ai/runtime/unload` | Unload the active model |
+| POST | `/v1/ai/runtime/keep-warm` | Keep a model loaded temporarily |
+| POST | `/v1/ai/runtime/cancel` | Cancel active generation |
+| POST | `/v1/ai/models/import` | Register a supported local package |
+| POST | `/v1/ai/models/download-catalog` | Download a catalog model |
+| GET | `/v1/ai/models/downloads` | Show download progress/history |
+| POST | `/v1/ai/models/delete` | Delete an installed user model |
+
+All routes require the bearer token. Keep localhost mode enabled unless you deliberately need LAN access. Anyone who can reach a LAN-exposed endpoint and knows its token can submit model requests.
+
+## Useful `tai` commands
+
+```sh
 tai status
 tai runtime
 tai models
-tai import ~/models/gemma.litertlm gemma-4-e2b-it-local
-tai download gemma-4-e2b-it-litert-lm https://example.invalid/path/to/model.litertlm --accept-terms
 tai downloads
-tai preflight gemma-4-e2b-it-litert-lm
-tai load gemma-4-e2b-it-litert-lm
-tai load gemma-4-e2b-it-litert-lm --gpu
-tai load gemma-4-e2b-it-litert-lm --cpu
-tai keep-warm gemma-4-e2b-it-litert-lm --minutes 30
+tai preflight MODEL_ID
+tai load MODEL_ID
+tai load MODEL_ID --cpu
+tai load MODEL_ID --gpu
+tai keep-warm MODEL_ID --minutes 30
 tai cancel
 tai unload
 tai doctor
 ```
 
-The `tai` CLI is a model-management helper, not the chat frontend. Use `tai --json <command>` when scripts or debugging need the raw authenticated API JSON response.
+`tai` manages models; it is not an interactive chat program. Add `--json` when you need raw output for a script.
 
-## Local API
+## Importing your own model
 
-TAI uses the same bearer-token local bridge as `launcherctl`.
+TAI supports complete packages for its included runtimes:
 
-Implemented endpoints:
+- LiteRT-LM `.litertlm` or `.task` files
+- MNN model directories containing `config.json` and all required sidecar files
+- LiteRT EmbeddingGemma `.tflite` packages with their required tokenizer files
 
-- `GET /v1/ai/status`
-- `GET /v1/ai/runtime`
-- `POST /v1/ai/runtime/preflight`
-- `POST /v1/ai/runtime/load`
-- `POST /v1/ai/runtime/unload`
-- `POST /v1/ai/runtime/keep-warm`
-- `POST /v1/ai/runtime/cancel`
-- `GET /v1/ai/models`
-- `POST /v1/ai/models/import`
-- `POST /v1/ai/models/download`
-- `POST /v1/ai/models/download-catalog`
-- `GET /v1/ai/models/downloads`
-- `POST /v1/ai/models/delete`
-- `POST /v1/ai/models/load`
-- `POST /v1/ai/models/unload`
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `POST /v1/responses`
-- `POST /v1/completions`
-- `POST /v1/embeddings`
-- `POST /v1/audio/speech`
-
-The same installed model registry is also available through Ollama-compatible discovery and
-generation endpoints: `/api/tags`, `/api/show`, `/api/chat`, `/api/generate`, `/api/ps`, and
-`/api/embed`. These are protocol adapters over the existing LiteRT-LM/MNN runtimes; they do not add
-GGUF support or access to the Ollama registry.
-
-Model import and download registry persistence is implemented. Downloaded or imported `.litertlm`/`.task` models can be loaded through the isolated Android LiteRT-LM adapter when preflight passes. Downloaded MNN catalog models load from their repository `config.json` package. GGUF, safetensors, PyTorch, ONNX, and other raw weight formats are rejected because this APK does not include a GGUF/llama.cpp backend.
-
-The runtime supports non-streaming JSON responses and streaming `text/event-stream` responses. Streaming emits OpenAI-style chunks and finishes with `data: [DONE]`. The app manifest declares the same optional native libraries as Edge Gallery: `libvndksupport.so`, `libOpenCL.so`, `libcdsprpc.so`, and `libedgetpu_litert.so`. LiteRT-LM's `Capabilities` API is checked inside `:tai_runtime` before speculative decoding is enabled. If native initialization crashes the runtime process, the launcher survives and reports the last attempted model/backend plus CPU/smaller-model fallback guidance.
-
-Reference implementation and metadata:
-
-- [Google AI Edge Gallery model allowlist 1.0.15](https://github.com/google-ai-edge/gallery/blob/main/model_allowlists/1_0_15.json)
-- [Gallery model allowlist/device policy](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/data/ModelAllowlist.kt)
-- [Gallery memory detection](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/common/MemoryWarning.kt)
-- [Gallery LiteRT-LM runtime](https://github.com/google-ai-edge/gallery/blob/main/Android/src/app/src/main/java/com/google/ai/edge/gallery/ui/llmchat/LlmChatModelHelper.kt)
-
-## External Clients
-
-For `aichat`, `tmuxai`, or other OpenAI-compatible clients, point the base URL at the authenticated LauncherCtl endpoint and use:
-
-```text
-/v1/chat/completions
-/v1/completions
-```
-
-Generate a capability-aware configuration for a supported TUI with:
+Example LiteRT import:
 
 ```sh
-launcherctl client-config aichat
-launcherctl client-config opencode
-launcherctl client-config crush
-launcherctl client-config codex
-launcherctl client-config ollama
+tai import /absolute/path/to/model.litertlm my-local-model
 ```
 
-The endpoint URL and bearer token are stored at:
+TAI does not run GGUF, safetensors, PyTorch, or ONNX weights. Use a separate compatible runtime, such as llama.cpp in Termux, for GGUF models.
+
+For gated Hugging Face models, first accept the agreement on the model's Hugging Face page. Then create a read token and save it under **Settings → TAI / Termux AI → Hugging Face token**. The token is used only for Hugging Face downloads.
+
+## Runtime and safety behavior
+
+Before loading a model, TAI checks:
+
+- Android and CPU compatibility
+- required native libraries
+- model package readability and format
+- available memory
+- requested CPU/GPU mode
+- previous failures for that model and device
+
+Unknown imported models default to CPU. Automatic GPU selection is conservative; you can explicitly test `tai load MODEL_ID --gpu` when the model profile supports it. A native runtime crash is isolated from the launcher, and TAI records fallback guidance for the next attempt.
+
+The active model normally unloads after 10 minutes without use. Change the idle timeout in TAI settings or use `tai keep-warm` when a client needs it available longer.
+
+## Troubleshooting
+
+Start with:
 
 ```sh
-~/.launcherctl/endpoint
-~/.launcherctl/token
+tai doctor
+tai status
+tai runtime
 ```
 
-MCP-capable clients can use `launcherctl mcp` for the Android tool surface. That bridge is separate from the OpenAI-compatible TAI chat/completions endpoints and uses the same `~/.launcherctl` endpoint/token files. See [LauncherCtl MCP](LauncherCtl_MCP) for agent client configuration and tool examples.
+Common problems:
 
-## Importing and Downloading Models
+- **Model not listed:** finish downloading or importing it, then check `tai models`.
+- **Model not loaded:** enable OpenAI auto-load or run `tai load MODEL_ID`.
+- **Not enough memory:** close other apps, choose CPU, or use a smaller model.
+- **GPU load crashes:** retry with `tai load MODEL_ID --cpu`.
+- **401 Unauthorized:** refresh your client with the current value from `~/.launcherctl/token`.
+- **Connection refused:** reopen Termux Launcher, check `~/.launcherctl/endpoint`, and run `launcherctl status`.
+- **Tools are ignored:** confirm the selected model advertises `tool_use`, or connect LauncherCtl through MCP.
+- **Image or audio rejected:** use the model's `-vision` or `-audio` ID from `/v1/models`.
 
-TAI supports two explicit model registration paths:
-
-```sh
-tai import /absolute/path/to/model.litertlm MyLocalModel
-tai download MyDownloadedModel https://provider.example/model.litertlm --accept-terms
-tai downloads
-```
-
-Import registers a readable local LiteRT-LM `.litertlm` or `.task` file path. It does not copy the file into app-private storage yet. MNN models should be installed from catalog/download URLs so TAI can fetch the `config.json` package and sidecar files.
-
-Download starts a foreground app-process transfer into app-private storage under `files/tai/models/`. Settings shows progress while the page is open, and Android shows a progress notification while the transfer runs. Downloads require:
-
-- an explicit HTTPS URL
-- an explicit model id
-- `--accept-terms`, meaning you reviewed the provider license/terms yourself
-
-For gated Hugging Face models, first accept the provider terms on Hugging Face, create a read token, and save it in Settings -> TAI / Termux AI -> Hugging Face token. TAI sends that token only as a Bearer token to Hugging Face download URLs. Do not put Hugging Face or other private tokens in shell history.
-
-## LLM Backends
-
-For backend-specific details, including LiteRT-LM GPU multimodal behavior, MNN config defaults, MNN tool-call handling, and OpenAI-compatible media errors, see:
-
-- [TAI LLM backends](Termux_AI_Backends)
-
-## Current Limitations / TODO
-
-- Expand benchmark counters and deeper runtime diagnostics.
-- Add copy-into-private-storage import mode and UI file picker.
-- Add pause/cancel/retry controls for foreground downloads.
+For advanced backend and model-package details, see [Termux AI backends](Termux_AI_Backends.md).

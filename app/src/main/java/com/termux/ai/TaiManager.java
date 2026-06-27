@@ -373,7 +373,6 @@ public final class TaiManager {
         TaiRuntimeOptions options = runtimeOptionsFromRequest(request, spec);
         if (hasInjectedRuntimeOverride()) {
             JSONObject result = localRuntime().load(spec, options);
-            appendCompanionMobileActions(result, spec.id);
             return result;
         }
         TaiLoadPreflight.Result preflight = TaiLoadPreflight.evaluate(appContext, spec, options, false);
@@ -386,7 +385,6 @@ public final class TaiManager {
         JSONObject result = localRuntime().load(spec, loadOptions);
         result.put("preflight", preflight.toJson());
         recordRuntimeResult(spec, preflight, result);
-        appendCompanionMobileActions(result, spec.id);
         return result;
     }
 
@@ -1031,7 +1029,6 @@ public final class TaiManager {
         if (spec == null) return error(404, "model_not_found", "Unknown TAI model: " + modelId);
         if (hasInjectedRuntimeOverride()) {
             JSONObject load = localRuntime().load(spec, options);
-            appendCompanionMobileActions(load, spec.id);
             if (!load.optBoolean("ok", false)) return load;
             return null;
         }
@@ -1049,31 +1046,8 @@ public final class TaiManager {
         JSONObject load = localRuntime().load(spec, loadOptions);
         load.put("preflight", preflight.toJson());
         recordRuntimeResult(spec, preflight, load);
-        appendCompanionMobileActions(load, spec.id);
         if (!load.optBoolean("ok", false)) return load;
         return null;
-    }
-
-    private void appendCompanionMobileActions(@NonNull JSONObject result, @NonNull String loadedModelId) throws JSONException {
-        if (!result.optBoolean("ok", false)) return;
-        if (TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(loadedModelId)) return;
-        if (!settings.isCompanionAutoLoadEnabled()) {
-            result.put("companionMobileActionsSkipped", "FunctionGemma companion auto-load is disabled.");
-            return;
-        }
-        if (localRuntime().isModelLoaded(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M)) return;
-        TaiModelSpec mobileActions = resolveModel(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
-        if (mobileActions == null || mobileActions.localPath == null || mobileActions.localPath.trim().isEmpty()) return;
-        TaiRuntimeOptions companionOptions = settings.getRuntimeOptions(mobileActions).withAccelerator("cpu");
-        TaiLoadPreflight.Result preflight = TaiLoadPreflight.evaluate(appContext, mobileActions, companionOptions, false);
-        if (preflight.blocked) {
-            result.put("companionMobileActionsSkipped", preflight.toJson());
-            return;
-        }
-        JSONObject companion = localRuntime().load(mobileActions, companionOptions);
-        companion.put("preflight", preflight.toJson());
-        recordRuntimeResult(mobileActions, preflight, companion);
-        result.put("companionMobileActions", companion);
     }
 
     @NonNull

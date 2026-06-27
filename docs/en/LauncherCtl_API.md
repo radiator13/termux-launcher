@@ -191,7 +191,6 @@ Returns device and integration capability metadata for scripts and agents:
 - ABI, SDK, RAM, device model, accelerator support, and backend warnings.
 - notification listener/access state.
 - TAI runtime state and loaded model id.
-- FunctionGemma mobile-actions availability and loaded state.
 - available LauncherCtl tool names.
 - integration hints including `openAiCompatible`, `mcpStdio`, and `mcpCommand`.
 
@@ -206,7 +205,7 @@ LauncherCtl exposes a shared tool registry for local agents, MCP clients, and sc
 
 Execution is confirmation-gated for medium/high/critical risk tools. `launcherctl agent --dry-run "open maps"` routes only. `launcherctl agent "open maps"` routes and executes with `confirm: true`, so use dry-run first when reviewing an action.
 
-FunctionGemma mobile-actions routing is used only when the model is already loaded and supported. LauncherCtl does not auto-download or auto-load it.
+Agent routing is deterministic and does not load or invoke a hidden secondary model. FunctionGemma is available separately through the normal TAI model catalog and generation APIs.
 
 ### Events
 Agent route/execute calls are audited to `~/.launcherctl/events.jsonl` and `~/.launcherctl/agent-runs.jsonl`.

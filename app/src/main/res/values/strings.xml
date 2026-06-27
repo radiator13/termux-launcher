@@ -265,7 +265,6 @@
         <string name="termux_ai_model_pill_installed">INSTALLED</string>
         <string name="termux_ai_model_pill_active">Default</string>
         <string name="termux_ai_model_state_loaded">Loaded</string>
-        <string name="termux_ai_model_state_companion">Companion</string>
         <string name="termux_ai_model_pill_downloading">DOWNLOADING</string>
         <string name="termux_ai_model_pill_gated">GATED</string>
         <string name="termux_ai_runtime_status_title">Runtime status</string>
@@ -450,9 +449,6 @@
         <string name="termux_ai_openai_auto_load_title">OpenAI auto-load</string>
         <string name="termux_ai_openai_auto_load_summary_off">OpenAI-compatible requests return model_not_loaded until you load a model explicitly.</string>
         <string name="termux_ai_openai_auto_load_summary_on">OpenAI-compatible requests auto-load only after a clean preflight.</string>
-        <string name="termux_ai_companion_auto_load_title">FunctionGemma companion auto-load</string>
-        <string name="termux_ai_companion_auto_load_summary_off">Assistant loads do not automatically load the MobileActions companion model.</string>
-        <string name="termux_ai_companion_auto_load_summary_on">Assistant loads may also load MobileActions after its own preflight passes.</string>
         <string name="termux_ai_parameters_model_configs_title">Model configs</string>
         <string name="termux_ai_caps_title">Modalities &amp; capabilities</string>
         <string name="termux_ai_caps_vision">Image input (vision)</string>

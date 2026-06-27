@@ -81,7 +81,6 @@ public class LauncherCtlAgentToolsEndpointsTest {
         assertTrue(response.has("device"));
         assertTrue(response.has("notifications"));
         assertTrue(response.has("tai"));
-        assertTrue(response.has("functionGemma"));
         assertTrue(response.has("availableTools"));
         assertTrue(response.has("warnings"));
         assertTrue(response.has("blockingReasons"));
@@ -93,13 +92,6 @@ public class LauncherCtlAgentToolsEndpointsTest {
         JSONArray tools = response.getJSONArray("availableTools");
         assertTrue(tools.length() >= 14);
 
-        JSONObject functionGemma = response.getJSONObject("functionGemma");
-        assertEquals("functiongemma-270m-mobile-actions-litert-lm", functionGemma.getString("modelId"));
-        assertTrue(functionGemma.has("catalog"));
-        assertTrue(functionGemma.has("backendSupported"));
-        assertTrue(functionGemma.has("modelAvailable"));
-        assertTrue(functionGemma.has("modelLoaded"));
-        assertTrue(functionGemma.has("usable"));
     }
 
     @Test

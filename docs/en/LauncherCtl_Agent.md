@@ -33,7 +33,7 @@ launcherctl capabilities
 launcherctl tools
 ```
 
-`status` shows whether the localhost bridge is reachable. `capabilities` shows device support, notification listener state, TAI runtime state, FunctionGemma availability, warnings, and blocking reasons. `tools` lists the agent tools and their JSON schemas.
+`status` shows whether the localhost bridge is reachable. `capabilities` shows device support, notification listener state, TAI runtime state, warnings, and blocking reasons. `tools` lists the agent tools and their JSON schemas.
 
 If `launcherctl` says the endpoint or token file is missing, open Termux Launcher and then run the command again.
 
@@ -184,16 +184,11 @@ export OPENAI_API_KEY="$TOKEN"
 
 This is separate from the LauncherCtl agent tools. Model clients call `/v1/chat/completions`; agent clients call `/v1/agent/route`, `/v1/agent/execute`, or `launcherctl mcp`.
 
-## FunctionGemma Routing
+## Model tools and LauncherCtl tools
 
-Deterministic keyword routing is used first. If FunctionGemma mobile-actions is already loaded and supported, LauncherCtl may use it as a best-effort fallback for routing unclear requests.
+LauncherCtl's built-in route endpoint uses deterministic matching. It does not silently call a second model. FunctionGemma remains available as a normal TAI catalog model for clients that want to send it function definitions directly.
 
-LauncherCtl does not auto-download or auto-load FunctionGemma. To check availability:
-
-```sh
-launcherctl capabilities
-tai status
-```
+For agent apps, prefer `launcherctl mcp`. It exposes the Android tool surface separately from the selected chat model and preserves confirmation checks for sensitive actions.
 
 ## Event History
 

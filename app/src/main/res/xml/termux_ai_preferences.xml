@@ -72,12 +72,6 @@
             app:summaryOff="@string/termux_ai_openai_auto_load_summary_off"
             app:summaryOn="@string/termux_ai_openai_auto_load_summary_on"
             app:defaultValue="true"/>
-        <androidx.preference.SwitchPreferenceCompat
-            app:key="tai_companion_autoload_enabled"
-            app:title="@string/termux_ai_companion_auto_load_title"
-            app:summaryOff="@string/termux_ai_companion_auto_load_summary_off"
-            app:summaryOn="@string/termux_ai_companion_auto_load_summary_on"
-            app:defaultValue="false"/>
         <com.termux.app.fragments.settings.termux.TaiOverridesPreference
             app:key="tai_runtime_overrides"
             app:persistent="false"

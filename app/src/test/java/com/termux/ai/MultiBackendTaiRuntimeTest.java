@@ -42,7 +42,7 @@ public class MultiBackendTaiRuntimeTest {
     }
 
     @Test
-    public void runtimeForId_preservesMobileActionsOnLiteRt() throws Exception {
+    public void runtimeForId_routesFunctionGemmaAsNormalLiteRtModel() throws Exception {
         MultiBackendTaiRuntime runtime = new MultiBackendTaiRuntime(context);
 
         assertSame(field(runtime, "liteRt"), runtimeForId(runtime, TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M));

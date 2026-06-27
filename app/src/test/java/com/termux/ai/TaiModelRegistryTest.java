@@ -205,36 +205,4 @@ public class TaiModelRegistryTest {
         assertTrue(!TaiSettings.isValidApiToken("12345678 90abcdef"));
     }
 
-    @Test
-    public void runtimeStateJson_canExposeDualSlotDetails() throws Exception {
-        JSONObject slots = new JSONObject();
-        slots.put("assistant", new JSONObject().put("loadedModelId", "Gemma-4-E2B-it"));
-        slots.put("mobileActions", new JSONObject().put("loadedModelId", "MobileActions-270M"));
-        JSONObject extra = new JSONObject().put("slots", slots);
-
-        TaiRuntimeState state = new TaiRuntimeState(
-            true,
-            "Gemma-4-E2B-it + MobileActions-270M",
-            "litert-lm-dual-slot",
-            "loaded",
-            "Both slots loaded.",
-            "GPU+CPU",
-            null,
-            null,
-            false,
-            null,
-            0L,
-            0L,
-            0L,
-            0L,
-            0L,
-            extra
-        );
-
-        JSONObject json = state.toJson();
-
-        assertEquals("litert-lm-dual-slot", json.getString("runtimeName"));
-        assertEquals("MobileActions-270M",
-            json.getJSONObject("slots").getJSONObject("mobileActions").getString("loadedModelId"));
-    }
 }

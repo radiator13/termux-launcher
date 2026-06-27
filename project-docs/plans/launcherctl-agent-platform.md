@@ -11,7 +11,7 @@
 ## Implementation Status
 
 - Implemented notification history storage/query APIs and CLI commands.
-- Implemented hardware/model capabilities endpoint with FunctionGemma availability.
+- Implemented hardware, runtime, and integration capabilities endpoint; model availability remains in the TAI model APIs.
 - Implemented shared tool registry and OpenAI-compatible function schemas.
 - Implemented agent route/execute APIs with deterministic fallback and confirmation gating.
 - Implemented append-only event/audit storage plus event tail APIs.
@@ -41,7 +41,7 @@
   - Add APIs/CLI for recent, since, search, and stats.
 - Add hardware/model gating:
   - `GET /v1/launcher/capabilities`.
-  - Include ABI, SDK, RAM, accelerator support, TAI status, FunctionGemma availability, notification access, warnings, and blocking reasons.
+  - Include ABI, SDK, RAM, accelerator support, TAI status, notification access, warnings, and blocking reasons.
   - Fail early with structured errors for unsupported backend/model loads.
 - Add shared tool registry:
   - Tool metadata: name, description, JSON schema, risk level, confirmation requirement, executor.
@@ -53,10 +53,7 @@
   - `GET /v1/events`
   - `POST /v1/events/tail`
   - `GET /v1/events/stream`
-- Add FunctionGemma routing:
-  - Use `functiongemma-270m-mobile-actions-litert-lm` only when already loaded and supported.
-  - No auto-download or auto-load in v1.
-  - Deterministic fallback for app launch, notifications, media, and resources.
+- Keep agent routing deterministic. FunctionGemma is exposed as a normal catalog model rather than a hidden routing companion.
 - Extend `launcherctl`:
   - `launcherctl capabilities`
   - `launcherctl tools`
@@ -74,7 +71,7 @@
 
 Notes:
 - `GET /v1/events/stream` is implemented as a snapshot SSE stream ending with `data: [DONE]`; it does not keep a long-lived poll loop open in this first pass.
-- FunctionGemma routing is opportunistic: it is used only when the supported mobile-actions model is already loaded.
+- FunctionGemma companion routing was removed; model clients can select it explicitly, while Android tools are exposed through LauncherCtl and MCP.
 
 ## Opencode Worker Plan
 
@@ -96,7 +93,7 @@ opencode run -m opencode-go/kimi-k2.7-code "<focused prompt>"
   3. Capabilities endpoint and hardware gating.
   4. Shared tool registry and `/v1/agent/tools`.
   5. Agent route/execute with deterministic fallback.
-  6. FunctionGemma routing integration.
+  6. FunctionGemma catalog integration without hidden companion routing.
   7. Events APIs and CLI.
   8. MCP adapter.
   9. Docs and final review.

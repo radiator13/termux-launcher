@@ -5,10 +5,6 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.termux.ai.TaiManager;
-import com.termux.ai.TaiModelRegistry;
-import com.termux.ai.TaiRuntimeState;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -19,9 +15,7 @@ import java.util.Locale;
  * Handles agent route and execute logic for the LauncherCtl API.
  *
  * <p>Routing is deterministic and never executes. It maps obvious user intents to
- * registered tools using keyword matching. If FunctionGemma is already loaded in
- * the TAI runtime, route may optionally call it through the OpenAI-compatible
- * chat completions endpoint with compact OpenAI tool schemas.
+ * registered tools using keyword matching.
  *
  * <p>Execution enforces confirmation gating for tools that require it or carry
  * medium/high/critical risk, then delegates to a {@link LauncherToolRegistry.ToolExecutionHandler}.
@@ -64,12 +58,6 @@ public final class LauncherCtlAgentHandler {
 
         // Prefer deterministic keyword routing first.
         RouteMatch match = deterministicRoute(userText.toLowerCase(Locale.US), registry);
-
-        // Fall back to FunctionGemma only when it is already loaded. We never
-        // auto-download or auto-load models here.
-        if (match == null && isFunctionGemmaLoaded()) {
-            match = functionGemmaRoute(userText, registry);
-        }
 
         if (match == null) {
             match = new RouteMatch(
@@ -249,160 +237,6 @@ public final class LauncherCtlAgentHandler {
         }
 
         return null;
-    }
-
-    @Nullable
-    private RouteMatch functionGemmaRoute(@NonNull String userText, @NonNull LauncherToolRegistry registry) {
-        try {
-            JSONObject request = new JSONObject();
-            request.put("model", TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
-            request.put("tool_choice", "auto");
-            request.put("max_tokens", 128);
-
-            JSONArray messages = new JSONArray();
-            JSONObject system = new JSONObject();
-            system.put("role", "system");
-            system.put("content", "Pick one launcher tool for the user request. Return a tool call only.");
-            messages.put(system);
-            JSONObject user = new JSONObject();
-            user.put("role", "user");
-            user.put("content", userText);
-            messages.put(user);
-            request.put("messages", messages);
-            request.put("tools", compactFunctionGemmaTools(registry));
-
-            JSONObject response = TaiManager.getInstance(context).openAiChatCompletions(request.toString());
-            JSONObject message = response.optJSONArray("choices") != null
-                ? response.optJSONArray("choices").optJSONObject(0)
-                : null;
-            if (message == null) return null;
-            message = message.optJSONObject("message");
-            if (message == null) return null;
-
-            JSONArray toolCalls = message.optJSONArray("tool_calls");
-            if (toolCalls == null || toolCalls.length() == 0) return null;
-
-            JSONObject call = toolCalls.optJSONObject(0);
-            JSONObject function = call != null ? call.optJSONObject("function") : null;
-            if (function == null) return null;
-
-            String openAiName = function.optString("name", "");
-            if (openAiName.isEmpty()) return null;
-
-            LauncherToolRegistry.ToolMetadata tool = registry.getToolByOpenAiName(openAiName);
-            if (tool == null) return null;
-
-            JSONObject arguments;
-            Object argsValue = function.opt("arguments");
-            if (argsValue instanceof JSONObject) {
-                arguments = (JSONObject) argsValue;
-            } else {
-                String argsText = argsValue == null ? "{}" : String.valueOf(argsValue);
-                arguments = argsText.trim().isEmpty() ? new JSONObject() : new JSONObject(argsText);
-            }
-
-            return new RouteMatch(tool, arguments,
-                "FunctionGemma selected tool '" + tool.name + "'.");
-        } catch (Exception e) {
-            // FunctionGemma routing is best-effort; fall back to deterministic behavior.
-            return null;
-        }
-    }
-
-    @NonNull
-    private JSONArray compactFunctionGemmaTools(@NonNull LauncherToolRegistry registry) throws JSONException {
-        JSONArray tools = new JSONArray();
-        String[] names = {
-            LauncherToolRegistry.TOOL_APPS_LAUNCH,
-            LauncherToolRegistry.TOOL_APPS_SEARCH,
-            LauncherToolRegistry.TOOL_INTENT_OPEN,
-            LauncherToolRegistry.TOOL_NOTIFICATIONS_RECENT,
-            LauncherToolRegistry.TOOL_NOTIFICATIONS_SEARCH,
-            LauncherToolRegistry.TOOL_NOTIFICATIONS_STATS,
-            LauncherToolRegistry.TOOL_MEDIA_NOW_PLAYING,
-            LauncherToolRegistry.TOOL_SYSTEM_RESOURCES,
-            LauncherToolRegistry.TOOL_CAPABILITIES_GET
-        };
-        for (String name : names) {
-            LauncherToolRegistry.ToolMetadata tool = registry.getTool(name);
-            if (tool != null) {
-                tools.put(compactTool(tool));
-            }
-        }
-        return tools;
-    }
-
-    @NonNull
-    private JSONObject compactTool(@NonNull LauncherToolRegistry.ToolMetadata tool) throws JSONException {
-        JSONObject function = new JSONObject();
-        function.put("name", tool.openAiName());
-        function.put("description", compactDescription(tool.name));
-        function.put("parameters", compactSchema(tool.name));
-        JSONObject wrapper = new JSONObject();
-        wrapper.put("type", "function");
-        wrapper.put("function", function);
-        return wrapper;
-    }
-
-    @NonNull
-    private String compactDescription(@NonNull String toolName) {
-        switch (toolName) {
-            case LauncherToolRegistry.TOOL_APPS_LAUNCH:
-                return "Launch app by name.";
-            case LauncherToolRegistry.TOOL_APPS_SEARCH:
-                return "Search apps.";
-            case LauncherToolRegistry.TOOL_INTENT_OPEN:
-                return "Open Android URI intent.";
-            case LauncherToolRegistry.TOOL_NOTIFICATIONS_RECENT:
-                return "Recent notifications.";
-            case LauncherToolRegistry.TOOL_NOTIFICATIONS_SEARCH:
-                return "Search notifications.";
-            case LauncherToolRegistry.TOOL_NOTIFICATIONS_STATS:
-                return "Notification stats.";
-            case LauncherToolRegistry.TOOL_MEDIA_NOW_PLAYING:
-                return "Now playing media.";
-            case LauncherToolRegistry.TOOL_SYSTEM_RESOURCES:
-                return "Device resources.";
-            case LauncherToolRegistry.TOOL_CAPABILITIES_GET:
-                return "Launcher capabilities.";
-            default:
-                return toolName;
-        }
-    }
-
-    @NonNull
-    private JSONObject compactSchema(@NonNull String toolName) throws JSONException {
-        JSONObject schema = new JSONObject();
-        JSONObject properties = new JSONObject();
-        JSONArray required = new JSONArray();
-        schema.put("type", "object");
-        schema.put("properties", properties);
-        schema.put("additionalProperties", false);
-
-        if (LauncherToolRegistry.TOOL_APPS_LAUNCH.equals(toolName)
-            || LauncherToolRegistry.TOOL_APPS_SEARCH.equals(toolName)
-            || LauncherToolRegistry.TOOL_NOTIFICATIONS_SEARCH.equals(toolName)) {
-            properties.put("query", new JSONObject().put("type", "string"));
-            required.put("query");
-        } else if (LauncherToolRegistry.TOOL_INTENT_OPEN.equals(toolName)) {
-            properties.put("data", new JSONObject().put("type", "string"));
-            properties.put("action", new JSONObject().put("type", "string"));
-            required.put("data");
-        }
-
-        if (required.length() > 0) {
-            schema.put("required", required);
-        }
-        return schema;
-    }
-
-    private boolean isFunctionGemmaLoaded() {
-        try {
-            TaiRuntimeState state = TaiManager.getInstance(context).getRuntimeState();
-            return state.loaded && TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(state.loadedModelId);
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private boolean isElevatedRisk(LauncherToolRegistry.ToolRisk risk) {

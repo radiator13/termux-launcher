@@ -26,10 +26,6 @@ import com.termux.ai.TaiApiCompatibility;
 import com.termux.ai.TaiCliFormatter;
 import com.termux.ai.TaiDeviceCapabilities;
 import com.termux.ai.TaiManager;
-import com.termux.ai.TaiModelCatalog;
-import com.termux.ai.TaiModelRegistry;
-import com.termux.ai.TaiModelSpec;
-import com.termux.ai.TaiRuntimeState;
 import com.termux.ai.TaiSettings;
 import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
@@ -740,8 +736,6 @@ public class LauncherCtlApiServer {
         }
         data.put("tai", tai);
 
-        data.put("functionGemma", buildFunctionGemmaInfo(context, device));
-
         LauncherToolRegistry registry = LauncherToolRegistry.getInstance();
         JSONArray toolNames = new JSONArray();
         for (LauncherToolRegistry.ToolMetadata tool : registry.getTools()) {
@@ -767,49 +761,6 @@ public class LauncherCtlApiServer {
 
         writeDebugSnapshot(registry, data);
         return data;
-    }
-
-    private JSONObject buildFunctionGemmaInfo(Context context, TaiDeviceCapabilities device) throws JSONException {
-        JSONObject info = new JSONObject();
-        String modelId = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M;
-        info.put("modelId", modelId);
-
-        TaiModelCatalog.CatalogEntry catalogEntry = TaiModelCatalog.get(modelId);
-        if (catalogEntry != null) {
-            JSONObject catalog = new JSONObject();
-            catalog.put("displayName", catalogEntry.displayName);
-            catalog.put("roleHint", catalogEntry.roleHint);
-            catalog.put("sizeBytes", catalogEntry.sizeBytes);
-            catalog.put("recommendedRamGb", catalogEntry.recommendedRamGb);
-            catalog.put("downloadAvailable", catalogEntry.downloadAvailable);
-            catalog.put("backend", catalogEntry.backend);
-            info.put("catalog", catalog);
-        } else {
-            info.put("catalog", JSONObject.NULL);
-        }
-
-        boolean backendSupported = device.liteRtLmAbiSupported
-            && device.liteRtLmNativeLibrariesAvailable
-            && TaiModelSpec.BACKEND_LITERT_LM.equals(catalogEntry != null ? catalogEntry.backend : "");
-        info.put("backendSupported", backendSupported);
-
-        boolean modelAvailable = false;
-        try {
-            modelAvailable = TaiManager.getInstance(context).isModelAvailable(modelId);
-        } catch (Exception ignored) {
-        }
-        info.put("modelAvailable", modelAvailable);
-
-        boolean modelLoaded = false;
-        try {
-            TaiRuntimeState state = TaiManager.getInstance(context).getRuntimeState();
-            modelLoaded = state.loaded && modelId.equals(state.loadedModelId);
-        } catch (Exception ignored) {
-        }
-        info.put("modelLoaded", modelLoaded);
-
-        info.put("usable", backendSupported && modelAvailable);
-        return info;
     }
 
     private JSONObject buildAgentTools() throws JSONException {

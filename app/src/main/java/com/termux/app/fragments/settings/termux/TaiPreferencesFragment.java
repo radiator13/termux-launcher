@@ -1034,12 +1034,9 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
             row.setSummary(buildModelRowSummary(model.roleHint, model.backend));
             row.setMetaLine(buildInstalledMetaLine(context, model));
             boolean modelLoaded = model.id.equals(loadedId);
-            boolean companion = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(model.id);
             String pill;
             if (modelLoaded) {
                 pill = getString(R.string.termux_ai_model_state_loaded);
-            } else if (companion) {
-                pill = getString(R.string.termux_ai_model_state_companion);
             } else if (model.id.equals(activeModelId)) {
                 pill = getString(R.string.termux_ai_model_pill_active);
             } else {
@@ -1328,14 +1325,11 @@ public class TaiPreferencesFragment extends MaterialPreferenceFragment {
     private void showInstalledModelActions(Context context, TaiModelSpec model) {
         boolean active = model.id.equals(new TaiSettings(context).getDefaultAssistantModel());
         boolean loaded = isModelLoaded(model.id);
-        boolean companion = TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(model.id);
         String stateLine = loaded
             ? getString(R.string.termux_ai_model_state_loaded)
-            : companion
-                ? getString(R.string.termux_ai_model_state_companion)
-                : active
-                    ? getString(R.string.termux_ai_model_pill_active)
-                    : getString(R.string.termux_ai_model_pill_installed);
+            : active
+                ? getString(R.string.termux_ai_model_pill_active)
+                : getString(R.string.termux_ai_model_pill_installed);
         CharSequence[] actions = new CharSequence[] {
             getString(R.string.termux_ai_model_load_action),
             active ? getString(R.string.termux_ai_model_active_action) : getString(R.string.termux_ai_model_set_active_action),

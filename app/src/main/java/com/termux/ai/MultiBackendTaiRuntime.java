@@ -10,38 +10,20 @@ import org.json.JSONObject;
 import java.util.List;
 
 public class MultiBackendTaiRuntime implements TaiRuntime {
-    private final DualSlotTaiRuntime liteRt;
+    private final LiteRtTaiRuntime liteRt;
     private final MnnTaiRuntime mnn;
     private final LiteRtEmbeddingRuntime embeddings;
     private TaiRuntime activeAssistant;
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
-        liteRt = new DualSlotTaiRuntime(context);
+        liteRt = new LiteRtTaiRuntime(context);
         mnn = new MnnTaiRuntime(context);
         embeddings = new LiteRtEmbeddingRuntime();
         activeAssistant = liteRt;
     }
 
     @NonNull @Override public synchronized TaiRuntimeState getState() {
-        TaiRuntimeState assistant = activeAssistant.getState();
-        TaiRuntimeState liteState = liteRt.getState();
-        TaiRuntimeState mnnState = mnn.getState();
-        boolean includeLiteRtCompanion = activeAssistant != liteRt && liteState.loaded && liteState.loadedModelId != null
-            && liteState.loadedModelId.contains(TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M);
-        boolean includeMnn = activeAssistant != mnn && (mnnState.loaded || mnnState.activeGeneration || !"unloaded".equals(mnnState.state));
-        if (!includeLiteRtCompanion && !includeMnn) return assistant;
-        JSONObject extra = new JSONObject();
-        try {
-            extra.put("assistant", assistant.toJson());
-            if (includeLiteRtCompanion) extra.put("mobileActions", liteState.toJson());
-            if (includeMnn) extra.put("mnn", mnnState.toJson());
-        } catch (JSONException ignored) {}
-        return new TaiRuntimeState(assistant.loaded || liteState.loaded || mnnState.loaded, assistant.loadedModelId,
-            "tai-multi-backend", assistant.state, assistant.status, assistant.backend,
-            assistant.backendFallbackReason, assistant.loadedModelPath,
-            assistant.activeGeneration || liteState.activeGeneration || mnnState.activeGeneration, assistant.activeGenerationId,
-            assistant.activeGenerationStartedAtMs, assistant.keepWarmUntilMs, assistant.idleUnloadAtMs,
-            assistant.loadedAtMs, assistant.lastUsedAtMs, extra);
+        return activeAssistant.getState();
     }
 
     @Override public synchronized boolean isModelLoaded(@NonNull String modelId) {
@@ -50,7 +32,6 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
 
     @NonNull @Override public synchronized JSONObject load(@NonNull TaiModelSpec model, @NonNull TaiRuntimeOptions options) throws JSONException {
         TaiRuntime target = runtimeForModel(model);
-        if (isMobileActions(model.id)) return liteRt.load(model, options);
         if (target != activeAssistant) {
             TaiRuntimeState current = activeAssistant.getState();
             if (current.activeGeneration) return error("generation_active", "Cancel active generation before switching AI backends.");
@@ -61,20 +42,16 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     }
 
     @NonNull @Override public synchronized JSONObject unload() throws JSONException {
-        JSONObject assistant = activeAssistant.unload();
-        JSONObject companion = activeAssistant == liteRt ? new JSONObject() : liteRt.unload();
+        JSONObject result = activeAssistant.unload();
         embeddings.close();
-        JSONObject result = new JSONObject();
-        result.put("ok", assistant.optBoolean("ok", false) && (companion.length() == 0 || companion.optBoolean("ok", false)));
-        result.put("runtime", "tai-multi-backend");
-        result.put("assistant", assistant);
-        if (companion.length() > 0) result.put("mobileActions", companion);
         return result;
     }
 
     @NonNull @Override public synchronized JSONObject keepWarm(@NonNull TaiModelSpec model, @NonNull TaiRuntimeOptions options, int minutes) throws JSONException {
         TaiRuntime target = runtimeForModel(model);
-        if (target != activeAssistant && !isMobileActions(model.id)) {
+        if (target != activeAssistant) {
+            TaiRuntimeState current = activeAssistant.getState();
+            if (current.activeGeneration) return error("generation_active", "Cancel active generation before switching AI backends.");
             activeAssistant.unload();
             activeAssistant = target;
         }
@@ -82,9 +59,7 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     }
 
     @NonNull @Override public synchronized JSONObject cancel() throws JSONException {
-        JSONObject assistant = activeAssistant.cancel();
-        if (activeAssistant != liteRt) liteRt.cancel();
-        return assistant;
+        return activeAssistant.cancel();
     }
 
     @NonNull @Override public synchronized JSONObject chat(@NonNull String id, @NonNull String system, @NonNull String user, @NonNull TaiRuntimeOptions options) throws JSONException { return runtimeForId(id).chat(id, system, user, options); }
@@ -122,7 +97,6 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     }
 
     private synchronized TaiRuntime runtimeForId(String id) {
-        if (isMobileActions(id)) return liteRt;
         TaiRuntimeState mnnState = mnn.getState();
         if (mnnState.loadedModelId != null && mnnState.loadedModelId.equals(id)) return mnn;
         TaiModelCatalog.CatalogEntry entry = TaiModelCatalog.get(id);
@@ -141,8 +115,6 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
             && model.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)
             && path.endsWith(".tflite");
     }
-
-    private boolean isMobileActions(String id) { return TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M.equals(id); }
 
     private JSONObject error(String code, String message) throws JSONException {
         JSONObject result = new JSONObject();

@@ -215,7 +215,7 @@ MobileActions uses the LiteRT-LM runner but has its own profile:
 | --- | --- | ---: | ---: | ---: | ---: |
 | `functiongemma-270m-mobile-actions-litert-lm` | CPU only | 1024 | 64 | 0.95 | 0.0 |
 
-TAI keeps MobileActions in a separate CPU companion slot when available. Companion auto-load is opt-in in settings; loading a Gemma assistant model no longer loads MobileActions automatically unless that setting is enabled and preflight passes.
+FunctionGemma is loaded like any other generation model. Loading it unloads the previous LiteRT-LM or MNN chat model; it is not kept in a companion slot.
 
 TAI does not execute Android actions or shell commands by itself. It returns tool calls for the client to handle.
 
