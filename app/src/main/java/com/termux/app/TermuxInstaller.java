@@ -26,9 +26,9 @@ import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -150,8 +150,8 @@ final class TermuxInstaller {
                     Logger.logInfo(LOG_TAG, "Extracting bootstrap zip to prefix staging directory \"" + TERMUX_STAGING_PREFIX_DIR_PATH + "\".");
                     final byte[] buffer = new byte[8096];
                     final List<Pair<String, String>> symlinks = new ArrayList<>(50);
-                    final URL zipUrl = determineZipUrl();
-                    try (ZipInputStream zipInput = new ZipInputStream(zipUrl.openStream())) {
+                    try (InputStream bootstrapInput = openBootstrapInputStream(activity);
+                         ZipInputStream zipInput = new ZipInputStream(bootstrapInput)) {
                         ZipEntry zipEntry;
                         while ((zipEntry = zipInput.getNextEntry()) != null) {
                             if (zipEntry.getName().equals("SYMLINKS.txt")) {
@@ -359,10 +359,13 @@ final class TermuxInstaller {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
     }
 
-    private static URL determineZipUrl() throws MalformedURLException {
+    private static InputStream openBootstrapInputStream(Activity activity) throws IOException {
         String archName = determineTermuxArchName();
-        String url = "https://github.com/termux/termux-packages/releases/latest/download/bootstrap-" + archName + ".zip";
-        return new URL(url);
+        if (!"aarch64".equals(archName)) {
+            throw new RuntimeException("Unsupported architecture for embedded bootstrap: " + archName);
+        }
+        Logger.logInfo(LOG_TAG, "Loading embedded bootstrap asset for architecture: " + archName);
+        return activity.getAssets().open("bootstrap-aarch64.zip");
     }
 
     private static String determineTermuxArchName() {
