@@ -1289,7 +1289,7 @@ public final class TaiManager {
     }
 
     @NonNull
-    private static JSONObject generationCapabilityError(@NonNull TaiModelSpec spec) throws JSONException {
+    private JSONObject generationCapabilityError(@NonNull TaiModelSpec spec) throws JSONException {
         return error(400, "capability_not_supported",
             "Model " + spec.id + " does not support chat or text generation. Use an embeddings endpoint for embedding-only models.");
     }
