@@ -214,8 +214,8 @@ configurations.implementation {
 }
 
 def BOOTSTRAP_ARCH = "aarch64"
-def BOOTSTRAP_SHA256 = "e2bfd31fd9b7c35b6f40702168793759166220b7c21fe94f79f8d0a4744823f9"
-def BOOTSTRAP_URL = "https://github.com/PickleHik3/vaj-bootstrap-artifacts/releases/download/bootstrap-aarch64-e2bfd31fd9b7/bootstrap-aarch64.zip"
+def BOOTSTRAP_SHA256 = "caa769569c22f7e5cddcb8c0544f24385ec5e65298e3bbf700a07af0a8e6cade"
+def BOOTSTRAP_URL = "https://github.com/PickleHik3/vaj-bootstrap-artifacts/releases/download/bootstrap-aarch64-caa769569c22/bootstrap-aarch64.zip"
 def BOOTSTRAP_OUTPUT_DIR = new File(projectDir, "build/generated/bootstrapAssets")
 def BOOTSTRAP_OUTPUT_FILE = new File(BOOTSTRAP_OUTPUT_DIR, "bootstrap-" + BOOTSTRAP_ARCH + ".zip")
 
