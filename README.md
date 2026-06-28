@@ -1,6 +1,8 @@
 # Termux Launcher
 
-⚠️🤖 This project is mostly vibe-coded and experimental, but it is in a very usable state. A couple of GPT-5.5 security review passes have been done, and it does not seem to affect my Nothing Phone 2 battery life. It started because I liked TEL so much. 🤖⚠️
+⚠️🤖 This project is entirely vibe-coded, I have been dailying this as a launcher (nothing phone 2), its been rock solid and does not seem to affect my battery life 🤖⚠️
+
+⚠️ The native AI backends Google/LiteRT & alibaba/MNN are highly experimental, be mindful of your device's system RAM & Processor capability when choosing models ⚠️
 
 ❗ this app cannot be installed alongside your existing termux app ❗
 ❗ if terminal slows down, run termux-reload-settings ❗
