@@ -149,6 +149,8 @@ public final class SuggestionBarView extends GridLayout {
     private static final int ICON_SHADOW_COLOR = 0x73000000;
     /** Cache of harmonized icon drawables so resting and swipe-preview icons are identical (no size jump) and we don't rebuild bitmaps per frame. */
     private final LruCache<String, Drawable> normalizedIconCache = new LruCache<>(96);
+    /** Visible alpha bounds per drawable; avoids rescanning custom/icon-pack artwork on every drag event. */
+    private final Map<Drawable, RectF> drawableVisibleBoundsCache = new WeakHashMap<>();
     private int searchTolerance = 70;
     private float iconScale = 1.0f;
     private int appBarOpacity = 80;
@@ -983,19 +985,127 @@ public final class SuggestionBarView extends GridLayout {
         View launchView = viewRef == null ? null : viewRef.get();
         RectF bounds = null;
         if (launchView != null && launchView.isAttachedToWindow()) {
-            int[] viewLoc = new int[2];
-            launchView.getLocationOnScreen(viewLoc);
-            bounds = new RectF(
-                viewLoc[0],
-                viewLoc[1],
-                viewLoc[0] + launchView.getWidth(),
-                viewLoc[1] + launchView.getHeight()
-            );
+            bounds = resolveVisibleIconBoundsOnScreen(launchView);
         }
         if (bounds == null) {
             bounds = approximateAzSlotIconBounds(slot, azRenderedSlotCount, location, width, height);
         }
         return new AzDragFocusResult(entry, bounds, launchView, edge, pageLeft, pageRight);
+    }
+
+    /**
+     * Returns the visible artwork bounds instead of the ImageButton's touch rectangle. Icon packs
+     * and legacy/custom Android icons commonly include asymmetric transparent padding; using the
+     * whole view makes the focus ring oversized and visibly off-center.
+     */
+    @Nullable
+    private RectF resolveVisibleIconBoundsOnScreen(@NonNull View launchView) {
+        int[] viewLoc = new int[2];
+        launchView.getLocationOnScreen(viewLoc);
+        RectF fallback = new RectF(
+            viewLoc[0],
+            viewLoc[1],
+            viewLoc[0] + launchView.getWidth(),
+            viewLoc[1] + launchView.getHeight()
+        );
+        if (!(launchView instanceof ImageView)) {
+            return fallback;
+        }
+
+        ImageView imageView = (ImageView) launchView;
+        Drawable drawable = imageView.getDrawable();
+        if (drawable == null) {
+            return fallback;
+        }
+        Rect drawableBounds = drawable.getBounds();
+        if (drawableBounds.isEmpty()) {
+            return fallback;
+        }
+
+        RectF normalizedVisibleBounds = drawableVisibleBoundsCache.get(drawable);
+        if (normalizedVisibleBounds == null) {
+            normalizedVisibleBounds = measureDrawableVisibleBounds(drawable);
+            drawableVisibleBoundsCache.put(drawable, normalizedVisibleBounds);
+        }
+        RectF mapped = new RectF(
+            drawableBounds.left + (normalizedVisibleBounds.left * drawableBounds.width()),
+            drawableBounds.top + (normalizedVisibleBounds.top * drawableBounds.height()),
+            drawableBounds.left + (normalizedVisibleBounds.right * drawableBounds.width()),
+            drawableBounds.top + (normalizedVisibleBounds.bottom * drawableBounds.height())
+        );
+        imageView.getImageMatrix().mapRect(mapped);
+        mapped.offset(
+            viewLoc[0] + imageView.getPaddingLeft(),
+            viewLoc[1] + imageView.getPaddingTop()
+        );
+        return mapped.width() > 0f && mapped.height() > 0f ? mapped : fallback;
+    }
+
+    @NonNull
+    private RectF measureDrawableVisibleBounds(@NonNull Drawable drawable) {
+        final int scanSize = 128;
+        int intrinsicWidth = drawable.getIntrinsicWidth();
+        int intrinsicHeight = drawable.getIntrinsicHeight();
+        float aspect = intrinsicWidth > 0 && intrinsicHeight > 0
+            ? intrinsicWidth / (float) intrinsicHeight
+            : 1f;
+        int width = aspect >= 1f ? scanSize : Math.max(1, Math.round(scanSize * aspect));
+        int height = aspect >= 1f ? Math.max(1, Math.round(scanSize / aspect)) : scanSize;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+
+        Drawable scanDrawable = drawable;
+        Drawable.ConstantState state = drawable.getConstantState();
+        if (state != null) {
+            scanDrawable = state.newDrawable(getResources()).mutate();
+        }
+        Rect oldBounds = new Rect(scanDrawable.getBounds());
+        scanDrawable.setBounds(0, 0, width, height);
+        scanDrawable.draw(canvas);
+        scanDrawable.setBounds(oldBounds);
+
+        Rect visible = findVisibleAlphaBounds(bitmap);
+        bitmap.recycle();
+        if (visible.isEmpty()) {
+            return new RectF(0f, 0f, 1f, 1f);
+        }
+        return new RectF(
+            visible.left / (float) width,
+            visible.top / (float) height,
+            visible.right / (float) width,
+            visible.bottom / (float) height
+        );
+    }
+
+    /** Alpha threshold excludes the dock's soft icon shadow while retaining antialiased artwork. */
+    @NonNull
+    static Rect findVisibleAlphaBounds(@NonNull Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int[] pixels = new int[width * height];
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+        int maxAlpha = 0;
+        for (int pixel : pixels) {
+            maxAlpha = Math.max(maxAlpha, pixel >>> 24);
+        }
+        int threshold = Math.max(8, Math.round(maxAlpha * 0.25f));
+        int left = width;
+        int top = height;
+        int right = -1;
+        int bottom = -1;
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                if ((pixels[row + x] >>> 24) < threshold) continue;
+                left = Math.min(left, x);
+                top = Math.min(top, y);
+                right = Math.max(right, x);
+                bottom = Math.max(bottom, y);
+            }
+        }
+        return right >= left && bottom >= top
+            ? new Rect(left, top, right + 1, bottom + 1)
+            : new Rect();
     }
 
     @NonNull

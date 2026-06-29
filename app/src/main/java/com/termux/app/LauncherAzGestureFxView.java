@@ -498,22 +498,18 @@ public final class LauncherAzGestureFxView extends View {
         }
     }
 
-    /**
-     * 2dp accent ring hugging the app icon currently under the finger while scrubbing the icon
-     * row — the design's "active app" marker (focused-during-scrub only). Snaps to each icon as
-     * the focus moves; the apps are circular, so a circular ring 3dp outside the icon reads clean.
-     */
+    /** Accent outline around the visible artwork, not the icon button's larger touch target. */
     private void drawFocusedIconRing(Canvas canvas) {
         float left = focusRawRect.left - locationOnScreen[0];
         float top = focusRawRect.top - locationOnScreen[1];
         float right = focusRawRect.right - locationOnScreen[0];
         float bottom = focusRawRect.bottom - locationOnScreen[1];
-        float cx = (left + right) * 0.5f;
-        float cy = (top + bottom) * 0.5f;
-        float radius = (Math.min(right - left, bottom - top) * 0.5f) + dp(3f);
+        focusDisplayRect.set(left, top, right, bottom);
+        focusDisplayRect.inset(-dp(2f), -dp(2f));
+        float radius = Math.min(focusDisplayRect.width(), focusDisplayRect.height()) * 0.5f;
         glassStrokePaint.setStrokeWidth(dp(2f));
         glassStrokePaint.setColor(withAlpha(boostColor(edgeTintColor, 1.22f, 1.10f), 235));
-        canvas.drawCircle(cx, cy, radius, glassStrokePaint);
+        canvas.drawRoundRect(focusDisplayRect, radius, radius, glassStrokePaint);
     }
 
     private void drawFocusedAppPreviewIcon(Canvas canvas) {
