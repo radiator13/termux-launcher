@@ -9,6 +9,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
 public class SuggestionBarIconBoundsTest {
@@ -38,5 +39,25 @@ public class SuggestionBarIconBoundsTest {
 
         assertEquals(new Rect(4, 3, 8, 7), SuggestionBarView.findVisibleAlphaBounds(bitmap));
         bitmap.recycle();
+    }
+
+    @Test
+    public void focusOutlineMask_followsArtworkInsteadOfBoundingCircle() {
+        Bitmap source = Bitmap.createBitmap(7, 7, Bitmap.Config.ARGB_8888);
+        for (int y = 2; y <= 4; y++) {
+            for (int x = 2; x <= 4; x++) {
+                source.setPixel(x, y, Color.WHITE);
+            }
+        }
+
+        Bitmap outline = SuggestionBarView.buildFocusOutlineMask(source, 1, 1);
+        // Source starts at (4,4) in the padded output. The one-pixel gap and source stay clear.
+        assertEquals(0, Color.alpha(outline.getPixel(5, 5)));
+        assertEquals(0, Color.alpha(outline.getPixel(3, 5)));
+        // The next pixel is the external contour generated from the actual square silhouette.
+        assertTrue(Color.alpha(outline.getPixel(2, 5)) > 0);
+
+        outline.recycle();
+        source.recycle();
     }
 }

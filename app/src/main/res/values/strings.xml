@@ -564,7 +564,7 @@
                 <string name="termux_app_launcher_icon_pack_title">Icon pack</string>
                 <string name="termux_app_launcher_icon_pack_summary">Use icons from an installed launcher icon pack.</string>
                 <string name="termux_app_launcher_pinned_icon_pack_title">Pinned icon pack</string>
-                <string name="termux_app_launcher_pinned_icon_pack_summary">Use a different icon pack for pinned apps only.</string>
+                <string name="termux_app_launcher_pinned_icon_pack_summary">Optional override for pinned apps. Otherwise they use the global icon pack.</string>
                 <string name="termux_app_launcher_apps_row_enabled_title">Apps bar</string>
                 <string name="termux_app_launcher_apps_row_enabled_summary">Show the app icons row above extra keys.</string>
                 <string name="termux_app_launcher_terminal_swipe_enabled_title">Full-screen lateral swipes</string>

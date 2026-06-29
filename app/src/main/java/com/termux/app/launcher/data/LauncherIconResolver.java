@@ -63,15 +63,32 @@ public final class LauncherIconResolver {
 
     @Nullable
     public Drawable resolvePinned(@NonNull AppRef ref, @Nullable PinnedIconOverride override) {
+        return resolvePinned(ref, override, resolve(ref, null));
+    }
+
+    /**
+     * Applies pinned-only choices over the already-resolved global icon. Keeping that baseline
+     * explicit prevents pinned pages from drifting back to a system icon when no pinned pack is
+     * selected.
+     */
+    @Nullable
+    public Drawable resolvePinned(
+        @NonNull AppRef ref,
+        @Nullable PinnedIconOverride override,
+        @Nullable Drawable globalIcon
+    ) {
         Drawable icon = loadOverride(override);
         if (icon != null) return icon;
 
         if (preferences != null) {
-            icon = loadFromPack(preferences.getAppLauncherPinnedIconPackPackage(), ref);
-            if (icon != null) return icon;
+            String pinnedPack = preferences.getAppLauncherPinnedIconPackPackage();
+            if (pinnedPack != null && !pinnedPack.trim().isEmpty()) {
+                icon = loadFromPack(pinnedPack, ref);
+                if (icon != null) return icon;
+            }
         }
 
-        return resolve(ref, null);
+        return globalIcon != null ? globalIcon : resolve(ref, null);
     }
 
     @Nullable

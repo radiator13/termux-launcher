@@ -3565,6 +3565,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } else {
             focusBounds = focusResult == null ? null : focusResult.iconBounds;
         }
+        if (mLauncherAzGestureFxOverlayView != null) {
+            mLauncherAzGestureFxOverlayView.setFocusedIconOutline(
+                focusResult == null ? null : focusResult.iconOutlineMask,
+                focusResult == null ? null : focusResult.iconOutlineBounds
+            );
+        }
         boolean overflowActive = mSuggestionBarView != null && mSuggestionBarView.hasAzOverflowPages();
         boolean canLeft = mSuggestionBarView != null && mSuggestionBarView.canAzPageLeft();
         boolean canRight = mSuggestionBarView != null && mSuggestionBarView.canAzPageRight();

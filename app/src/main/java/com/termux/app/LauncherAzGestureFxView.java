@@ -7,6 +7,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -53,6 +55,7 @@ public final class LauncherAzGestureFxView extends View {
     /** Soft underglow blur for the active page tick; lazily built once the density is known. */
     private BlurMaskFilter pageTickGlow;
     private final Paint previewFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint focusedIconOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final TextPaint previewLabelPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final Path liquidBridgePath = new Path();
 
@@ -117,6 +120,8 @@ public final class LauncherAzGestureFxView extends View {
     private boolean focusedAppPreviewLaunchDismissing;
     private boolean focusedAppPreviewLabelEnabled;
     private boolean focusedIconRingEnabled = true;
+    @Nullable private android.graphics.Bitmap focusedIconOutlineMask;
+    private final RectF focusedIconOutlineRawBounds = new RectF();
     @Nullable private String focusedAppPreviewLabel;
     private boolean darkThemeActive = true;
     private boolean capsuleDockStyle;
@@ -357,6 +362,16 @@ public final class LauncherAzGestureFxView extends View {
         invalidate();
     }
 
+    public void setFocusedIconOutline(@Nullable android.graphics.Bitmap mask, @Nullable RectF rawBounds) {
+        focusedIconOutlineMask = mask;
+        if (mask != null && rawBounds != null) {
+            focusedIconOutlineRawBounds.set(rawBounds);
+        } else {
+            focusedIconOutlineRawBounds.setEmpty();
+        }
+        invalidate();
+    }
+
     public void setDarkThemeActive(boolean active) {
         if (darkThemeActive == active) {
             return;
@@ -500,6 +515,15 @@ public final class LauncherAzGestureFxView extends View {
 
     /** Accent outline around the visible artwork, not the icon button's larger touch target. */
     private void drawFocusedIconRing(Canvas canvas) {
+        if (focusedIconOutlineMask != null && !focusedIconOutlineRawBounds.isEmpty()) {
+            focusDisplayRect.set(focusedIconOutlineRawBounds);
+            focusDisplayRect.offset(-locationOnScreen[0], -locationOnScreen[1]);
+            int color = withAlpha(boostColor(edgeTintColor, 1.22f, 1.10f), 235);
+            focusedIconOutlinePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+            canvas.drawBitmap(focusedIconOutlineMask, null, focusDisplayRect, focusedIconOutlinePaint);
+            focusedIconOutlinePaint.setColorFilter(null);
+            return;
+        }
         float left = focusRawRect.left - locationOnScreen[0];
         float top = focusRawRect.top - locationOnScreen[1];
         float right = focusRawRect.right - locationOnScreen[0];

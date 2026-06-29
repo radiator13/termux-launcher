@@ -27,6 +27,8 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Point;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -151,6 +153,7 @@ public final class SuggestionBarView extends GridLayout {
     private final LruCache<String, Drawable> normalizedIconCache = new LruCache<>(96);
     /** Visible alpha bounds per drawable; avoids rescanning custom/icon-pack artwork on every drag event. */
     private final Map<Drawable, RectF> drawableVisibleBoundsCache = new WeakHashMap<>();
+    private final Map<Drawable, FocusOutlineVisual> focusOutlineVisualCache = new WeakHashMap<>();
     private int searchTolerance = 70;
     private float iconScale = 1.0f;
     private int appBarOpacity = 80;
@@ -264,6 +267,8 @@ public final class SuggestionBarView extends GridLayout {
     public static final class AzDragFocusResult {
         @Nullable public final LauncherAppEntry entry;
         @Nullable public final RectF iconBounds;
+        @Nullable public final Bitmap iconOutlineMask;
+        @Nullable public final RectF iconOutlineBounds;
         @Nullable public final View launchView;
         public final int edge;
         public final boolean canPageLeft;
@@ -272,6 +277,8 @@ public final class SuggestionBarView extends GridLayout {
         AzDragFocusResult(
             @Nullable LauncherAppEntry entry,
             @Nullable RectF iconBounds,
+            @Nullable Bitmap iconOutlineMask,
+            @Nullable RectF iconOutlineBounds,
             @Nullable View launchView,
             int edge,
             boolean canPageLeft,
@@ -279,6 +286,8 @@ public final class SuggestionBarView extends GridLayout {
         ) {
             this.entry = entry;
             this.iconBounds = iconBounds;
+            this.iconOutlineMask = iconOutlineMask;
+            this.iconOutlineBounds = iconOutlineBounds;
             this.launchView = launchView;
             this.edge = edge;
             this.canPageLeft = canPageLeft;
@@ -287,6 +296,20 @@ public final class SuggestionBarView extends GridLayout {
 
         public boolean hasFocusEntry() {
             return entry != null;
+        }
+    }
+
+    private static final class FocusOutlineVisual {
+        @NonNull final Bitmap mask;
+        final int viewWidth;
+        final int viewHeight;
+        final int outerPadding;
+
+        FocusOutlineVisual(@NonNull Bitmap mask, int viewWidth, int viewHeight, int outerPadding) {
+            this.mask = mask;
+            this.viewWidth = viewWidth;
+            this.viewHeight = viewHeight;
+            this.outerPadding = outerPadding;
         }
     }
 
@@ -932,7 +955,7 @@ public final class SuggestionBarView extends GridLayout {
         boolean pageRight = canAzPageRight();
         if (!isAzPreviewActive() || !azPreviewRendered || azRenderedSlotCount <= 0) {
             lastAzResolvedSlot = -1;
-            return new AzDragFocusResult(null, null, null, AZ_EDGE_NONE, pageLeft, pageRight);
+            return new AzDragFocusResult(null, null, null, null, null, AZ_EDGE_NONE, pageLeft, pageRight);
         }
 
         int[] location = new int[2];
@@ -952,7 +975,7 @@ public final class SuggestionBarView extends GridLayout {
 
         if (localY < -dp(24) || localY > height + dp(24)) {
             lastAzResolvedSlot = -1;
-            return new AzDragFocusResult(null, null, null, edge, pageLeft, pageRight);
+            return new AzDragFocusResult(null, null, null, null, null, edge, pageLeft, pageRight);
         }
 
         float clampedX = Math.max(0f, Math.min(width - 1f, localX));
@@ -976,7 +999,7 @@ public final class SuggestionBarView extends GridLayout {
         LauncherAppEntry entry = azRenderedSlotEntries.get(slot);
         if (entry == null) {
             lastAzResolvedSlot = -1;
-            return new AzDragFocusResult(null, null, null, edge, pageLeft, pageRight);
+            return new AzDragFocusResult(null, null, null, null, null, edge, pageLeft, pageRight);
         }
         lastAzResolvedSlot = slot;
 
@@ -984,13 +1007,108 @@ public final class SuggestionBarView extends GridLayout {
         WeakReference<View> viewRef = azRenderedEntryTargets.get(key);
         View launchView = viewRef == null ? null : viewRef.get();
         RectF bounds = null;
+        Bitmap outlineMask = null;
+        RectF outlineBounds = null;
         if (launchView != null && launchView.isAttachedToWindow()) {
             bounds = resolveVisibleIconBoundsOnScreen(launchView);
+            if (launchView instanceof ImageView) {
+                FocusOutlineVisual visual = resolveFocusOutlineVisual((ImageView) launchView);
+                if (visual != null) {
+                    int[] viewLoc = new int[2];
+                    launchView.getLocationOnScreen(viewLoc);
+                    outlineMask = visual.mask;
+                    outlineBounds = new RectF(
+                        viewLoc[0] - visual.outerPadding,
+                        viewLoc[1] - visual.outerPadding,
+                        viewLoc[0] + visual.viewWidth + visual.outerPadding,
+                        viewLoc[1] + visual.viewHeight + visual.outerPadding
+                    );
+                }
+            }
         }
         if (bounds == null) {
             bounds = approximateAzSlotIconBounds(slot, azRenderedSlotCount, location, width, height);
         }
-        return new AzDragFocusResult(entry, bounds, launchView, edge, pageLeft, pageRight);
+        return new AzDragFocusResult(entry, bounds, outlineMask, outlineBounds, launchView, edge, pageLeft, pageRight);
+    }
+
+    @Nullable
+    private FocusOutlineVisual resolveFocusOutlineVisual(@NonNull ImageView imageView) {
+        Drawable drawable = imageView.getDrawable();
+        int width = imageView.getWidth();
+        int height = imageView.getHeight();
+        if (drawable == null || width <= 0 || height <= 0 || drawable.getBounds().isEmpty()) {
+            return null;
+        }
+        FocusOutlineVisual cached = focusOutlineVisualCache.get(drawable);
+        if (cached != null && cached.viewWidth == width && cached.viewHeight == height) {
+            return cached;
+        }
+
+        Bitmap source = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas sourceCanvas = new Canvas(source);
+        sourceCanvas.translate(imageView.getPaddingLeft(), imageView.getPaddingTop());
+        sourceCanvas.concat(imageView.getImageMatrix());
+        drawable.draw(sourceCanvas);
+        int gap = Math.max(1, dp(1));
+        int stroke = Math.max(1, dp(2));
+        Bitmap mask = buildFocusOutlineMask(source, gap, stroke);
+        source.recycle();
+        FocusOutlineVisual built = new FocusOutlineVisual(mask, width, height, gap + stroke);
+        focusOutlineVisualCache.put(drawable, built);
+        return built;
+    }
+
+    /** Builds a crisp external contour from the icon alpha, including irregular icon-pack shapes. */
+    @NonNull
+    static Bitmap buildFocusOutlineMask(@NonNull Bitmap source, int gap, int stroke) {
+        int safeGap = Math.max(0, gap);
+        int safeStroke = Math.max(1, stroke);
+        int outer = safeGap + safeStroke;
+        int width = source.getWidth();
+        int height = source.getHeight();
+        int[] pixels = new int[width * height];
+        source.getPixels(pixels, 0, width, 0, 0, width, height);
+        int maxAlpha = 0;
+        for (int pixel : pixels) maxAlpha = Math.max(maxAlpha, pixel >>> 24);
+        int threshold = Math.max(8, Math.round(maxAlpha * 0.25f));
+        for (int i = 0; i < pixels.length; i++) {
+            pixels[i] = (pixels[i] >>> 24) >= threshold ? 0xFFFFFFFF : 0x00000000;
+        }
+        Bitmap binary = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        binary.setPixels(pixels, 0, width, 0, 0, width, height);
+        Bitmap result = Bitmap.createBitmap(width + (outer * 2), height + (outer * 2), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(result);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        drawDilatedMask(canvas, binary, paint, outer, outer);
+        if (safeGap > 0) {
+            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+            drawDilatedMask(canvas, binary, paint, outer, safeGap);
+            paint.setXfermode(null);
+        } else {
+            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+            canvas.drawBitmap(binary, outer, outer, paint);
+            paint.setXfermode(null);
+        }
+        binary.recycle();
+        return result;
+    }
+
+    private static void drawDilatedMask(
+        @NonNull Canvas canvas,
+        @NonNull Bitmap mask,
+        @NonNull Paint paint,
+        int origin,
+        int radius
+    ) {
+        int radiusSquared = radius * radius;
+        for (int y = -radius; y <= radius; y++) {
+            for (int x = -radius; x <= radius; x++) {
+                if ((x * x) + (y * y) <= radiusSquared) {
+                    canvas.drawBitmap(mask, origin + x, origin + y, paint);
+                }
+            }
+        }
     }
 
     /**
@@ -2178,7 +2296,7 @@ public final class SuggestionBarView extends GridLayout {
         if (entry == null) {
             return entry;
         }
-        Drawable pinnedIcon = getIconResolver().resolvePinned(entry.appRef, item.iconOverride);
+        Drawable pinnedIcon = getIconResolver().resolvePinned(entry.appRef, item.iconOverride, entry.icon);
         if (pinnedIcon == null || pinnedIcon == entry.icon) {
             return entry;
         }

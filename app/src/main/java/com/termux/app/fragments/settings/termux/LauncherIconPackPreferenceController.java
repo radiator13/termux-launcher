@@ -36,7 +36,9 @@ final class LauncherIconPackPreferenceController {
         List<IconPackInfo> packs = new IconPackRepository(context).discoverIconPacks();
         List<CharSequence> entries = new ArrayList<>();
         List<CharSequence> values = new ArrayList<>();
-        entries.add("System default");
+        entries.add("app_launcher_pinned_icon_pack_package".equals(preference.getKey())
+            ? "Use global icon pack"
+            : "System default");
         values.add("");
         for (IconPackInfo pack : packs) {
             if (themedOnly && !pack.themed) continue;
