@@ -4751,19 +4751,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
+        applyWallpaperModePreferences(preferences, enabled);
+        requestTermuxActivityStylingOnNextResume(context, true);
+    }
+
+    static void applyWallpaperModePreferences(@NonNull TermuxAppSharedPreferences preferences, boolean enabled) {
         if (enabled) {
             preferences.setUseSystemWallpaperEnabled(true);
             preferences.setTerminalBackgroundOpacity(preferences.getWallpaperEnabledTerminalBackgroundOpacity());
             preferences.setAppBarOpacity(preferences.getWallpaperEnabledAppBarOpacity());
+            preferences.setExtraKeysBlurRadius(preferences.getWallpaperEnabledExtraKeysBlurRadius());
         } else {
             preferences.setWallpaperEnabledTerminalBackgroundOpacity(preferences.getTerminalBackgroundOpacity());
             preferences.setWallpaperEnabledAppBarOpacity(preferences.getAppBarOpacity());
+            preferences.setWallpaperEnabledExtraKeysBlurRadius(preferences.getExtraKeysBlurRadius());
             preferences.setUseSystemWallpaperEnabled(false);
             preferences.setTerminalBackgroundOpacity(100);
             preferences.setAppBarOpacity(100);
+            preferences.setExtraKeysBlurRadius(0);
         }
-
-        requestTermuxActivityStylingOnNextResume(context, true);
     }
 
     private void openLookAndFeelSettings() {

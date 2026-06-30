@@ -423,6 +423,16 @@ public final class TermuxPreferenceConstants {
         public static final int DEFAULT_VALUE_WALLPAPER_ENABLED_APP_BAR_OPACITY = 50;
 
         /**
+         * Stores the user's preferred dock blur radius while wallpaper mode is enabled so it can
+         * be restored after temporarily disabling wallpaper.
+         */
+        public static final String KEY_WALLPAPER_ENABLED_EXTRAKEYS_BLUR_RADIUS =
+            "wallpaper_enabled_extrakeys_blur_radius";
+
+        public static final int DEFAULT_VALUE_WALLPAPER_ENABLED_EXTRAKEYS_BLUR_RADIUS =
+            DEFAULT_VALUE_EXTRAKEYS_BLUR_RADIUS;
+
+        /**
          * Stores the system wallpaper id for the last wallpaper set through the in-app picker, so
          * exact dock blur can be used only while that wallpaper is still active.
          */
