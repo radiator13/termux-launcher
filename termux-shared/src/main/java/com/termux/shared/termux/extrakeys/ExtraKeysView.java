@@ -37,7 +37,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.ViewPropertyAnimator;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
@@ -657,9 +656,11 @@ public final class ExtraKeysView extends GridLayout {
                         case MotionEvent.ACTION_DOWN:
                             popupSwipeDownRawY[0] = event.getRawY();
                             popupSwipeDownRawX[0] = event.getRawX();
-                            // Do NOT claim the gesture from the parent ViewPager here: a horizontal
-                            // drag must still page over to the text-input field. We only disallow
-                            // interception once a deliberate VERTICAL swipe-up (the popup) is detected.
+                            // Leave interception enabled for the parent ViewPager. It only intercepts
+                            // horizontal-dominant movement, while vertical movement remains here for
+                            // the popup gesture. Locking the full ancestor chain on an early upward
+                            // movement prevents a gesture that continues left from reaching the
+                            // toolbar text-input page.
                             // Instant press feedback: the key's glyphs glow up.
                             glowKeyPress(button);
                             animateKeyCapDip(button, KeyVisualState.PRESSED);
@@ -674,16 +675,12 @@ public final class ExtraKeysView extends GridLayout {
                         case MotionEvent.ACTION_MOVE:
                             float upwardTravelPx = popupSwipeDownRawY[0] - event.getRawY();
                             float horizontalTravelPx = Math.abs(event.getRawX() - popupSwipeDownRawX[0]);
-                            // A vertical-dominant swipe past the threshold is the popup gesture; only
-                            // then do we claim the touch from the ViewPager. A horizontal-dominant drag
-                            // is left for the pager to intercept (→ swipe to the text-input page), and
-                            // the button receives ACTION_CANCEL.
+                            // A vertical-dominant swipe past the threshold is the popup gesture. A
+                            // horizontal-dominant drag remains available for the pager to intercept
+                            // (→ swipe to the text-input page), and the button receives ACTION_CANCEL.
                             boolean verticalPopupGesture = buttonInfo.getPopup() != null
                                 && upwardTravelPx >= popupSwipeThresholdPx
                                 && upwardTravelPx > horizontalTravelPx;
-                            if (mBubbleArmed || verticalPopupGesture) {
-                                requestParentDisallowIntercept(view, true);
-                            }
                             if (buttonInfo.getPopup() != null) {
                                 // Arm the swipe-up travel only on a DELIBERATE upward swipe past the
                                 // threshold; below that a plain press-and-hold stays a hold.
@@ -701,7 +698,6 @@ public final class ExtraKeysView extends GridLayout {
                             }
                             return true;
                         case MotionEvent.ACTION_CANCEL:
-                            requestParentDisallowIntercept(view, false);
                             stopScheduledExecutors();
                             animateKeyCapDip(button, KeyVisualState.RESTING);
                             dismissTravelPopup(false);
@@ -711,7 +707,6 @@ public final class ExtraKeysView extends GridLayout {
                             releaseKeyGlow(button, isSpecialLatched(buttonInfo));
                             return true;
                         case MotionEvent.ACTION_UP:
-                            requestParentDisallowIntercept(view, false);
                             stopScheduledExecutors();
                             animateKeyCapDip(button, KeyVisualState.RESTING);
                             if (mBubbleArmed) {
@@ -753,14 +748,6 @@ public final class ExtraKeysView extends GridLayout {
                 button.setLayoutParams(param);
                 addView(button);
             }
-        }
-    }
-
-    private static void requestParentDisallowIntercept(View view, boolean disallowIntercept) {
-        ViewParent parent = view == null ? null : view.getParent();
-        while (parent != null) {
-            parent.requestDisallowInterceptTouchEvent(disallowIntercept);
-            parent = parent.getParent();
         }
     }
 
