@@ -178,6 +178,11 @@ install_tmux_plugin() {
     if [ ! -d "$PLUGIN_DIR/.git" ]; then
         mkdir -p "$(dirname "$PLUGIN_DIR")"
         git clone "$PLUGIN_REPO" "$PLUGIN_DIR"
+    elif [ -n "$(git -C "$PLUGIN_DIR" status --porcelain)" ]; then
+        fail "tmux plugin has local changes; clean or back up $PLUGIN_DIR before updating"
+    else
+        log "Updating existing Termux Launcher tmux plugin..."
+        git -C "$PLUGIN_DIR" pull --ff-only
     fi
 
     ensure_tmux_conf_line "PickleHik3/termux-launcher-tmux" \
