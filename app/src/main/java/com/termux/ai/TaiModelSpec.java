@@ -303,6 +303,12 @@ public final class TaiModelSpec {
         String normalizedId = normalizedIdentity(id);
 
         if (BACKEND_MNN_LLM.equals(backend)) {
+            // MNN embedding packages (config.json declaring text_embeddings) route to MnnEmbeddingRuntime,
+            // not the chat engine, so they expose embeddings exclusively.
+            if (source.contains(CAPABILITY_TEXT_EMBEDDINGS)) {
+                endpoint.add(CAPABILITY_TEXT_EMBEDDINGS);
+                return endpoint;
+            }
             addIfPresent(endpoint, source, CAPABILITY_TEXT_CHAT, source.isEmpty());
             // MNN VL models (Qwen-VL, SmolVLM, MiniCPM-V) take images; the runtime injects them as
             // inline <img> markup. Audio/video have no MNN runtime path, so they stay source-only.
