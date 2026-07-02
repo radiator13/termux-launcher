@@ -13,8 +13,8 @@
         android:name="mark"
         android:pivotX="54"
         android:pivotY="54"
-        android:scaleX="0.62"
-        android:scaleY="0.62">
+        android:scaleX="0.56"
+        android:scaleY="0.56">
 
         <!-- chevron -->
         <path
