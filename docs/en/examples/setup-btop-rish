@@ -1,8 +1,9 @@
-#!/data/data/com.termux/files/usr/bin/sh
+#!/system/bin/sh
 
 set -eu
 
-PREFIX_DIR="${PREFIX:-/data/data/com.termux/files/usr}"
+PREFIX_DIR="${PREFIX:?PREFIX is not set; run this script inside Termux}"
+SHELL_BIN="${SHELL_BIN:-$PREFIX_DIR/bin/sh}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/btop-rish"
 TMP_DIR="${TMPDIR:-$HOME/.tmp}/btop-rish"
 RISH_BIN="${RISH_BIN:-}"
@@ -227,14 +228,15 @@ install_remote() {
 }
 
 install_wrappers() {
+    [ -x "$SHELL_BIN" ] || fail "shell is not executable: $SHELL_BIN"
     mkdir -p "$PREFIX_DIR/bin"
     rish_quoted="$(shell_quote "$RISH_BIN")"
     cat > "$PREFIX_DIR/bin/btop-shizuku" <<WRAP
-#!/data/data/com.termux/files/usr/bin/sh
+#!$SHELL_BIN
 exec $rish_quoted -c "XDG_CONFIG_HOME=/data/local/tmp/btop-config /data/local/tmp/btop/btop --force-utf"
 WRAP
     cat > "$PREFIX_DIR/bin/mini-btop-shizuku" <<WRAP
-#!/data/data/com.termux/files/usr/bin/sh
+#!$SHELL_BIN
 exec $rish_quoted -c "XDG_CONFIG_HOME=/data/local/tmp/btop-mini /data/local/tmp/btop/btop --force-utf"
 WRAP
     chmod 755 "$PREFIX_DIR/bin/btop-shizuku" "$PREFIX_DIR/bin/mini-btop-shizuku"

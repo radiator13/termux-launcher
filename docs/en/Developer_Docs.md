@@ -254,7 +254,9 @@ Expected local setup:
 
 - `rish` is executable and in `$PATH`, or `RISH_BIN` points to it.
 - `rish_shizuku.dex` is beside it as Shizuku generated.
-- the bottom of `rish` uses `RISH_APPLICATION_ID="com.termux"`.
+- the bottom of `rish` uses the current value of `$TERMUX_APP__PACKAGE_NAME`
+  for `RISH_APPLICATION_ID` (`com.termux` for the standard edition or
+  `io.vaj.tl` for the VAJ edition).
 - Shizuku permission has been granted once.
 
 Diagnostics:

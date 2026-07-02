@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/sh
+#!/system/bin/sh
 
 set -eu
 
@@ -9,6 +9,25 @@ TPM_DIR="${TPM_DIR:-$HOME/.tmux/plugins/tpm}"
 PLUGIN_DIR="${TERMUX_LAUNCHER_TMUX_DIR:-$HOME/.tmux/plugins/termux-launcher-tmux}"
 TMUX_CONF="${TMUX_CONF:-$HOME/.tmux.conf}"
 BTOP_SETUP="${BTOP_SETUP:-$HOME/setup-btop-rish}"
+
+termux_package_name() {
+    if [ -n "${TERMUX_APP__PACKAGE_NAME:-}" ]; then
+        printf '%s\n' "$TERMUX_APP__PACKAGE_NAME"
+        return
+    fi
+
+    prefix_dir="${PREFIX:-}"
+    case "$prefix_dir" in
+        */files/usr)
+            basename "$(dirname "$(dirname "$prefix_dir")")"
+            ;;
+        *)
+            printf 'com.termux\n'
+            ;;
+    esac
+}
+
+TERMUX_PACKAGE_NAME="${TERMUX_PACKAGE_NAME:-$(termux_package_name)}"
 
 log() { printf '%s\n' "$*"; }
 warn() { printf 'setup-tmux-btop: %s\n' "$*" >&2; }
@@ -34,7 +53,7 @@ EOF
 }
 
 show_rish_help() {
-    cat >&2 <<'EOF'
+    cat >&2 <<EOF
 
 rish is required for the Shizuku btop helper.
 
@@ -46,9 +65,9 @@ Set it up first:
        ~/.local/bin
      only if that directory is already in PATH or you add it to PATH.
   5. Make rish executable if needed:
-       chmod +x "$(command -v rish)"
-  6. Edit the bottom of rish so it uses:
-       RISH_APPLICATION_ID="com.termux"
+       chmod +x "\$(command -v rish)"
+  6. Edit the bottom of rish so it uses this app's package name:
+       RISH_APPLICATION_ID="$TERMUX_PACKAGE_NAME"
   7. Run rish once and grant the Shizuku permission prompt.
   8. Run this setup script again.
 
@@ -191,7 +210,7 @@ install_btop_helper() {
 
     curl -fsSL "$RAW_BASE/setup-btop-rish" -o "$BTOP_SETUP"
     chmod 700 "$BTOP_SETUP"
-    "$BTOP_SETUP"
+    sh "$BTOP_SETUP"
 }
 
 print_extra_keys() {

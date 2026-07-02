@@ -175,10 +175,23 @@ If `~/.local/bin` is not already in your path, add this to your shell startup fi
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Then edit the bottom of `rish` and set:
+Check the current launcher's Android package name:
+
+```sh
+printf '%s\n' "$TERMUX_APP__PACKAGE_NAME"
+```
+
+Then edit the bottom of `rish` and set `RISH_APPLICATION_ID` to that value. For
+the standard edition it is:
 
 ```sh
 RISH_APPLICATION_ID="com.termux"
+```
+
+For the VAJ edition it is:
+
+```sh
+RISH_APPLICATION_ID="io.vaj.tl"
 ```
 
 Make `rish` executable and run it once:
