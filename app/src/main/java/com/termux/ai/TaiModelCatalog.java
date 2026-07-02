@@ -152,6 +152,15 @@ public final class TaiModelCatalog {
             "Mobile actions tool-call model", "litert-community/functiongemma-270m-ft-mobile-actions", "38942192c9b723af836d489074823ff33d4a3e7a",
             "mobile_actions_q8_ekv1024.litertlm", "Gemma Terms of Use", 288_964_608L, "0.3 GB", "6GB+", true,
             tags("Tools"), setOf("text_chat", "tool_use", "mobile_actions")));
+        // EmbeddingGemma is a raw .tflite served by LiteRtEmbeddingRuntime, not a chat .litertlm package.
+        // The text_embeddings capability + .tflite artifact make the downloader fetch the sentencepiece.model
+        // sidecar and route requests to the embedding runtime rather than the LiteRT-LM chat engine.
+        entries.put("embeddinggemma-300m", liteRtAvailable(
+            "embeddinggemma-300m", "EmbeddingGemma 300M", "embedding", "embedding_default", false,
+            "Text embeddings", "litert-community/embeddinggemma-300m", "870cbe05ef460385363c6b574c851ae5d8989ce3",
+            "embeddinggemma-300M_seq1024_mixed-precision.tflite", "Gemma Terms of Use", 183_329_528L, "183 MB", "4GB+", true,
+            "gemma", null, null,
+            tags("Embeddings"), setOf(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)));
 
         entries.put("qwen2.5-coder-1.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-1.5b-instruct-mnn", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,

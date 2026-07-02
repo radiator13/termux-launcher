@@ -31,8 +31,14 @@ public final class TaiModelDownloader {
         "tokenizer.mtok",
         "tokenizer.txt"
     };
-    private static final String[] LITERT_EMBEDDING_SIDECARS = new String[] {
-        "sentencepiece.model"
+    // The embedding runtime always loads the tokenizer from a file named exactly "sentencepiece.model"
+    // next to the .tflite. Different HF repos publish that SentencePiece model under different names,
+    // so we try each candidate and persist whichever we find under the canonical local name.
+    private static final String LITERT_EMBEDDING_TOKENIZER = "sentencepiece.model";
+    private static final String[] LITERT_EMBEDDING_TOKENIZER_CANDIDATES = new String[] {
+        "sentencepiece.model",
+        "tokenizer.model",
+        "spiece.model"
     };
 
     public interface ProgressCallback {
@@ -448,9 +454,10 @@ public final class TaiModelDownloader {
     }
 
     private boolean requiresLiteRtEmbeddingTokenizer(@NonNull File output, @NonNull LinkedHashSet<String> capabilities) {
-        String lowerName = output.getName().toLowerCase(Locale.ROOT);
-        return lowerName.endsWith(".tflite")
-            && capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS);
+        // A raw .tflite artifact is only ever a LiteRT embedding model in this app (chat packages are
+        // .litertlm/.task containers), so it always needs its SentencePiece tokenizer sidecar — no matter
+        // how capabilities were declared or whether the download URL carried a ?download= query.
+        return output.getName().toLowerCase(Locale.ROOT).endsWith(".tflite");
     }
 
     private long downloadLiteRtEmbeddingSidecars(@NonNull String transferId, @NonNull String modelId,
@@ -462,21 +469,21 @@ public final class TaiModelDownloader {
         File modelDir = output.getParentFile();
         if (modelDir == null) throw new IllegalStateException("Model directory is missing.");
         long packageTotalBytes = expectedSizeBytes > 0L ? expectedSizeBytes : -1L;
-        long sidecarBytes = 0L;
-        for (String fileName : LITERT_EMBEDDING_SIDECARS) {
-            File fileOutput = new File(modelDir, fileName);
-            String fileUrl = baseUrl + encodeHuggingFacePath(fileName);
-            File filePartial = new File(fileOutput.getAbsolutePath() + ".part");
+
+        File tokenizerOutput = new File(modelDir, LITERT_EMBEDDING_TOKENIZER);
+        if (tokenizerOutput.isFile() && tokenizerOutput.length() > 0L) return 0L;
+        File tokenizerPartial = new File(tokenizerOutput.getAbsolutePath() + ".part");
+
+        for (String candidate : LITERT_EMBEDDING_TOKENIZER_CANDIDATES) {
+            String fileUrl = baseUrl + encodeHuggingFacePath(candidate);
             HttpURLConnection fileConn = open(fileUrl, authToken, 0);
             int fileStatus = fileConn.getResponseCode();
-            if (fileStatus < 200 || fileStatus >= 300) {
-                throw new IllegalStateException("LiteRT embedding package missing tokenizer sidecar: " + fileName);
-            }
+            if (fileStatus < 200 || fileStatus >= 300) continue;
             persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
-                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), candidate), callback);
             long fileBytes = 0L;
             try (InputStream fileInput = new BufferedInputStream(fileConn.getInputStream());
-                 FileOutputStream fileOut = new FileOutputStream(filePartial)) {
+                 FileOutputStream fileOut = new FileOutputStream(tokenizerPartial)) {
                 byte[] buffer = new byte[1024 * 64];
                 int read;
                 while ((read = fileInput.read(buffer)) != -1) {
@@ -486,18 +493,22 @@ public final class TaiModelDownloader {
                     fileBytes += read;
                     if (currentBytes % (1024L * 1024L) < read) {
                         persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
-                            TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                            TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), candidate), callback);
                     }
                 }
             }
-            if (fileBytes <= 0L) throw new IllegalStateException("Downloaded tokenizer sidecar is empty: " + fileName);
-            if (fileOutput.exists() && !fileOutput.delete()) throw new IllegalStateException("Could not replace tokenizer sidecar.");
-            if (!filePartial.renameTo(fileOutput)) throw new IllegalStateException("Could not finalize tokenizer sidecar download.");
-            sidecarBytes += fileBytes;
+            if (fileBytes <= 0L) {
+                if (tokenizerPartial.exists() && !tokenizerPartial.delete()) { /* best effort */ }
+                continue;
+            }
+            if (tokenizerOutput.exists() && !tokenizerOutput.delete()) throw new IllegalStateException("Could not replace tokenizer sidecar.");
+            if (!tokenizerPartial.renameTo(tokenizerOutput)) throw new IllegalStateException("Could not finalize tokenizer sidecar download.");
             persist(withCurrentFile(transfer(transferId, modelId, url, output.getAbsolutePath(),
-                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), fileName), callback);
+                TaiModelStore.STATE_DOWNLOADING, currentBytes, packageTotalBytes, ""), LITERT_EMBEDDING_TOKENIZER), callback);
+            return fileBytes;
         }
-        return sidecarBytes;
+        throw new IllegalStateException("LiteRT embedding model is missing a SentencePiece tokenizer "
+            + "(looked for sentencepiece.model, tokenizer.model, spiece.model next to the .tflite).");
     }
 
     @NonNull

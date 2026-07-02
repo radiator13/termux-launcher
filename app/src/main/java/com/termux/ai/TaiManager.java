@@ -1814,6 +1814,13 @@ public final class TaiManager {
         }
         if (capabilities.isEmpty()) {
             String normalized = artifactHint == null ? "" : artifactHint.toLowerCase(Locale.ROOT);
+            // Strip any URL query/fragment (e.g. "...tflite?download=true") before matching the extension,
+            // otherwise a downloaded embedding model is misclassified as a chat model and never gets its
+            // SentencePiece tokenizer sidecar.
+            int cut = normalized.indexOf('?');
+            if (cut >= 0) normalized = normalized.substring(0, cut);
+            cut = normalized.indexOf('#');
+            if (cut >= 0) normalized = normalized.substring(0, cut);
             if (normalized.endsWith(".tflite")) {
                 capabilities.add(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS);
             } else {
