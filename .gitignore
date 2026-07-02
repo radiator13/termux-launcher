@@ -75,3 +75,9 @@ reference-repos/
 .omo/
 *.mp4
 WhatsApp Video*
+
+# CLI-tool local settings (do not commit)
+.claude/settings.local.json
+
+# Reference-only handoff bundles (not part of app source)
+.artifacts/
