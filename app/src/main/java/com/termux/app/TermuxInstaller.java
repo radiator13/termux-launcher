@@ -23,12 +23,19 @@ import com.termux.shared.android.PackageUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxUtils;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -61,6 +68,13 @@ import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR
 final class TermuxInstaller {
 
     private static final String LOG_TAG = "TermuxInstaller";
+
+    // VAJ bootstrap is downloaded on first run (not embedded in the APK). Keep the URL and hash in
+    // sync with the accepted bootstrap in the VAJ workspace (CURRENT_STATE.md).
+    private static final String BOOTSTRAP_ARCH = "aarch64";
+    private static final String BOOTSTRAP_SHA256 = "88985cead42037536291fc2575dc04e22e4bceb1b4f1c6601e3c008ed09dc204";
+    private static final String BOOTSTRAP_URL = "https://github.com/PickleHik3/vaj-bootstrap-artifacts/releases/download/bootstrap-aarch64-88985cead420/bootstrap-aarch64.zip";
+
     private static final String BOOTSTRAP_SECOND_STAGE_OLD_PATH = "etc/termux/bootstrap/termux-bootstrap-second-stage.sh";
     private static final String BOOTSTRAP_SECOND_STAGE_NEW_PATH = "etc/termux/termux-bootstrap/second-stage/termux-bootstrap-second-stage.sh";
 
@@ -359,13 +373,80 @@ final class TermuxInstaller {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
     }
 
+    /**
+     * The VAJ bootstrap is not embedded in the APK. It is downloaded on first run from the VAJ
+     * bootstrap-artifacts release and verified against the accepted SHA-256 before extraction, so a
+     * corrupted or tampered download can never reach the prefix.
+     */
     private static InputStream openBootstrapInputStream(Activity activity) throws IOException {
         String archName = determineTermuxArchName();
-        if (!"aarch64".equals(archName)) {
-            throw new RuntimeException("Unsupported architecture for embedded bootstrap: " + archName);
+        if (!BOOTSTRAP_ARCH.equals(archName)) {
+            throw new RuntimeException("Unsupported architecture for VAJ bootstrap: " + archName);
         }
-        Logger.logInfo(LOG_TAG, "Loading embedded bootstrap asset for architecture: " + archName);
-        return activity.getAssets().open("bootstrap-aarch64.zip");
+
+        File cacheFile = new File(activity.getCacheDir(), "bootstrap-" + BOOTSTRAP_ARCH + ".zip");
+        if (!cacheFile.exists() || !verifyBootstrapChecksum(cacheFile, BOOTSTRAP_SHA256)) {
+            if (cacheFile.exists() && !cacheFile.delete()) {
+                throw new IOException("Failed to delete stale bootstrap cache file: " + cacheFile);
+            }
+            Logger.logInfo(LOG_TAG, "Downloading VAJ bootstrap for " + archName + " from " + BOOTSTRAP_URL);
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new IOException("SHA-256 algorithm unavailable", e);
+            }
+            // URL.openStream() follows the GitHub release -> CDN redirect by default.
+            try (InputStream in = new URL(BOOTSTRAP_URL).openStream();
+                 DigestInputStream digestInput = new DigestInputStream(in, digest);
+                 OutputStream out = new BufferedOutputStream(new FileOutputStream(cacheFile))) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = digestInput.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+            } catch (IOException e) {
+                cacheFile.delete();
+                throw e;
+            }
+            String checksum = toHex(digest.digest());
+            if (!checksum.equals(BOOTSTRAP_SHA256)) {
+                cacheFile.delete();
+                throw new IOException("VAJ bootstrap checksum mismatch: expected " + BOOTSTRAP_SHA256 + ", actual " + checksum);
+            }
+            Logger.logInfo(LOG_TAG, "VAJ bootstrap downloaded and verified: " + checksum);
+        } else {
+            Logger.logInfo(LOG_TAG, "Reusing cached VAJ bootstrap for " + archName);
+        }
+
+        InputStream bootstrapStream = new FileInputStream(cacheFile);
+        // Unlink the on-disk copy now: the open descriptor keeps the ~180 MB readable through
+        // extraction, and the space is reclaimed as soon as the caller closes the stream.
+        cacheFile.delete();
+        return bootstrapStream;
+    }
+
+    private static boolean verifyBootstrapChecksum(File file, String expectedChecksum) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = new FileInputStream(file);
+                 DigestInputStream digestInput = new DigestInputStream(input, digest)) {
+                byte[] buffer = new byte[8192];
+                while (digestInput.read(buffer) != -1) { /* consume */ }
+            }
+            return toHex(digest.digest()).equals(expectedChecksum);
+        } catch (IOException | NoSuchAlgorithmException e) {
+            return false;
+        }
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+            sb.append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
     }
 
     private static String determineTermuxArchName() {

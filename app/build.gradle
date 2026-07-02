@@ -213,65 +213,6 @@ configurations.implementation {
    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
 }
 
-def BOOTSTRAP_ARCH = "aarch64"
-def BOOTSTRAP_SHA256 = "88985cead42037536291fc2575dc04e22e4bceb1b4f1c6601e3c008ed09dc204"
-def BOOTSTRAP_URL = "https://github.com/PickleHik3/vaj-bootstrap-artifacts/releases/download/bootstrap-aarch64-88985cead420/bootstrap-aarch64.zip"
-def BOOTSTRAP_OUTPUT_DIR = new File(projectDir, "build/generated/bootstrapAssets")
-def BOOTSTRAP_OUTPUT_FILE = new File(BOOTSTRAP_OUTPUT_DIR, "bootstrap-" + BOOTSTRAP_ARCH + ".zip")
-
-def verifyBootstrapChecksum(File file, String expectedChecksum) {
-    def digest = java.security.MessageDigest.getInstance("SHA-256")
-    file.withInputStream { input ->
-        byte[] buffer = new byte[8192]
-        int read
-        while ((read = input.read(buffer)) != -1) {
-            digest.update(buffer, 0, read)
-        }
-    }
-    def checksum = new BigInteger(1, digest.digest()).toString(16).padLeft(64, '0')
-    return checksum == expectedChecksum
-}
-
-tasks.register("downloadBootstrapAsset") {
-    outputs.file BOOTSTRAP_OUTPUT_FILE
-    doLast {
-        if (BOOTSTRAP_OUTPUT_FILE.exists()) {
-            if (verifyBootstrapChecksum(BOOTSTRAP_OUTPUT_FILE, BOOTSTRAP_SHA256)) {
-                logger.quiet("Bootstrap asset already present and verified: " + BOOTSTRAP_OUTPUT_FILE)
-                return
-            } else {
-                logger.quiet("Existing bootstrap asset has wrong hash; re-downloading.")
-                BOOTSTRAP_OUTPUT_FILE.delete()
-            }
-        }
-        BOOTSTRAP_OUTPUT_DIR.mkdirs()
-        logger.quiet("Downloading bootstrap asset from " + BOOTSTRAP_URL + " ...")
-        def digest = java.security.MessageDigest.getInstance("SHA-256")
-        def connection = new URL(BOOTSTRAP_URL).openConnection()
-        connection.setInstanceFollowRedirects(true)
-        def digestStream = new java.security.DigestInputStream(connection.inputStream, digest)
-        BOOTSTRAP_OUTPUT_FILE.withOutputStream { output ->
-            byte[] buffer = new byte[8192]
-            int read
-            while ((read = digestStream.read(buffer)) != -1) {
-                output.write(buffer, 0, read)
-            }
-        }
-        def checksum = new BigInteger(1, digest.digest()).toString(16).padLeft(64, '0')
-        if (checksum != BOOTSTRAP_SHA256) {
-            BOOTSTRAP_OUTPUT_FILE.delete()
-            throw new GradleException("Bootstrap checksum mismatch: expected " + BOOTSTRAP_SHA256 + ", actual " + checksum)
-        }
-        logger.quiet("Bootstrap asset downloaded and verified: " + checksum)
-    }
-}
-
-android {
-    sourceSets {
-        main {
-            assets.srcDirs += ["$buildDir/generated/bootstrapAssets"]
-        }
-    }
-}
-
-preBuild.dependsOn downloadBootstrapAsset
+// The VAJ bootstrap is NOT embedded in the APK. It is downloaded and SHA-256 verified on first run
+// by TermuxInstaller (openBootstrapInputStream), mirroring how the com.termux edition fetches its
+// bootstrap at runtime. Keep the URL/hash there in sync with the accepted bootstrap.
