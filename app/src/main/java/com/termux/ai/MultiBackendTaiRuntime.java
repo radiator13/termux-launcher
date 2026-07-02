@@ -13,12 +13,14 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     private final LiteRtTaiRuntime liteRt;
     private final MnnTaiRuntime mnn;
     private final LiteRtEmbeddingRuntime embeddings;
+    private final MnnEmbeddingRuntime mnnEmbeddings;
     private TaiRuntime activeAssistant;
 
     public MultiBackendTaiRuntime(@NonNull Context context) {
         liteRt = new LiteRtTaiRuntime(context);
         mnn = new MnnTaiRuntime(context);
         embeddings = new LiteRtEmbeddingRuntime();
+        mnnEmbeddings = new MnnEmbeddingRuntime();
         activeAssistant = liteRt;
     }
 
@@ -44,6 +46,7 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     @NonNull @Override public synchronized JSONObject unload() throws JSONException {
         JSONObject result = activeAssistant.unload();
         embeddings.close();
+        mnnEmbeddings.close();
         return result;
     }
 
@@ -86,6 +89,7 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
     @NonNull
     public synchronized JSONObject embed(@NonNull TaiModelSpec model, @NonNull List<String> inputs, int dimensions) throws JSONException {
         if (isLiteRtEmbeddingFlatbuffer(model)) return embeddings.embed(model, inputs, dimensions);
+        if (isMnnEmbeddingModel(model)) return mnnEmbeddings.embed(model, inputs, dimensions);
         if (inputs.size() == 1 && dimensions <= 0) return embed(model.id, inputs.get(0));
         JSONObject error = new JSONObject();
         error.put("message", "Embeddings are not available for model '" + model.id + "'.");
@@ -116,6 +120,13 @@ public class MultiBackendTaiRuntime implements TaiRuntime {
         return TaiModelSpec.BACKEND_LITERT_LM.equals(model.backend)
             && model.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)
             && path.endsWith(".tflite");
+    }
+
+    private boolean isMnnEmbeddingModel(@NonNull TaiModelSpec model) {
+        String path = model.localPath == null ? "" : model.localPath.toLowerCase(java.util.Locale.ROOT);
+        return TaiModelSpec.BACKEND_MNN_LLM.equals(model.backend)
+            && model.capabilities.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)
+            && path.endsWith("config.json");
     }
 
     private JSONObject error(String code, String message) throws JSONException {

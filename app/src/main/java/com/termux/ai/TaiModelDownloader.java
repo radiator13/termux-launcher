@@ -662,6 +662,9 @@ public final class TaiModelDownloader {
             || lower.endsWith(".mnn.json")
             || lower.endsWith(".json")
             || lower.endsWith(".mtok")
+            // MNN embedding packages ship a quantized weight table alongside the graph, e.g.
+            // embeddings_int4.bin — pull raw .bin model data so embedding models import completely.
+            || lower.endsWith(".bin")
             || lower.startsWith("tokenizer."));
     }
 

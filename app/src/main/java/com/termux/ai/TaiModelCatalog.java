@@ -161,6 +161,12 @@ public final class TaiModelCatalog {
             "embeddinggemma-300M_seq1024_mixed-precision.tflite", "Gemma Terms of Use", 183_329_528L, "183 MB", "4GB+", true,
             "gemma", null, null,
             tags("Embeddings"), setOf(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)));
+        // MNN-format embedding model — routes to MnnEmbeddingRuntime via the MNN Transformer::Embedding
+        // engine. config.json + text_embeddings capability make it an embedding package, not a chat model.
+        entries.put("qwen3-embedding-0.6b-mnn", mnnAvailable(
+            "qwen3-embedding-0.6b-mnn", "Qwen3 Embedding 0.6B", "embedding", "embedding_mnn", false,
+            "Text embeddings (MNN)", "taobao-mnn/Qwen3-Embedding-0.6B-MNN", 377_998_519L,
+            "378 MB", "4GB+", "qwen3", "int4", tags("Embeddings"), setOf(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS)));
 
         entries.put("qwen2.5-coder-1.5b-instruct-mnn", mnnAvailable(
             "qwen2.5-coder-1.5b-instruct-mnn", "Qwen2.5-Coder 1.5B", "coding", "recommended_coder", true,

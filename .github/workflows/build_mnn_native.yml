@@ -36,10 +36,19 @@ jobs:
       - name: Apply UTF-8 stream-processor patch
         run: |
           set -euxo pipefail
-          DST="mnn/apps/Android/MnnLlmChat/app/src/main/cpp/utf8_stream_processor.hpp"
+          CPP="mnn/apps/Android/MnnLlmChat/app/src/main/cpp"
+          DST="$CPP/utf8_stream_processor.hpp"
           cp -v self/ci/mnn-patch/utf8_stream_processor.hpp "$DST"
           grep -q "0xC0) != 0x80" "$DST"   # fail fast if the patch didn't land
           echo "--- patched header ---"; cat "$DST"
+
+          # TAI embedding JNI: bind MNN Transformer::Embedding into libmnnllmapp.so so MNN-format
+          # embedding models work through MnnEmbeddingSession. Add the source and register it in CMake.
+          cp -v self/ci/mnn-patch/embedding_jni.cpp "$CPP/embedding_jni.cpp"
+          if ! grep -q "embedding_jni.cpp" "$CPP/CMakeLists.txt"; then
+            sed -i 's/        llm_mnn_jni.cpp/        llm_mnn_jni.cpp\n        embedding_jni.cpp/' "$CPP/CMakeLists.txt"
+          fi
+          grep -q "embedding_jni.cpp" "$CPP/CMakeLists.txt"   # fail fast if the source did not register
 
       - name: Setup Android NDK 27.2.12479018
         id: ndk
