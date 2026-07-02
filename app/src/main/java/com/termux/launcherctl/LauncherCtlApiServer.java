@@ -1693,7 +1693,7 @@ public class LauncherCtlApiServer {
         }
 
         String taiScript =
-            "#!/data/data/com.termux/files/usr/bin/sh\n" +
+            "#!/data/data/io.vaj.tl/files/usr/bin/sh\n" +
             "set -eu\n" +
             "print_help() {\n" +
             "  cat <<'EOF'\n" +

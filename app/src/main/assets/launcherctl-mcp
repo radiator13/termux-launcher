@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/python3
+#!/data/data/io.vaj.tl/files/usr/bin/python3
 """MCP stdio bridge for LauncherCtl tools.
 
 The bridge exposes the local LauncherCtl agent tools over JSON-RPC so MCP
