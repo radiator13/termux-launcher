@@ -179,7 +179,7 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_APP_LAUNCHER_DISPLAY_APP_NAMES = "app_launcher_display_app_names";
 
-        public static final boolean DEFAULT_APP_LAUNCHER_DISPLAY_APP_NAMES = false;
+        public static final boolean DEFAULT_APP_LAUNCHER_DISPLAY_APP_NAMES = true;
 
         /**
          * Defines the key for app launcher black and white icons.
@@ -474,7 +474,7 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_TERMINAL_DYNAMIC_COLORS_ENABLED = "terminal_dynamic_colors_enabled";
 
-        public static final boolean DEFAULT_VALUE_TERMINAL_DYNAMIC_COLORS_ENABLED = false;
+        public static final boolean DEFAULT_VALUE_TERMINAL_DYNAMIC_COLORS_ENABLED = true;
 
         /**
          * Defines the key for whether the system wallpaper should be used.

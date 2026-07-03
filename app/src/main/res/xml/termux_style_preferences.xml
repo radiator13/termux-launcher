@@ -29,7 +29,7 @@
             app:key="terminal_dynamic_colors_enabled"
             app:title="@string/termux_terminal_dynamic_colors_title"
             app:summary="@string/termux_terminal_dynamic_colors_summary"
-            android:defaultValue="false" />
+            android:defaultValue="true" />
 
         <androidx.preference.SeekBarPreference
             app:key="terminal_background_opacity"
@@ -100,7 +100,7 @@
             app:key="app_launcher_display_app_names"
             app:title="@string/termux_app_launcher_display_app_names_title"
             app:summary="@string/termux_app_launcher_display_app_names_summary"
-            android:defaultValue="false" />
+            android:defaultValue="true" />
 
     </PreferenceCategory>
 
