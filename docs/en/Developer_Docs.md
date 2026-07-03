@@ -222,7 +222,7 @@ The helper scripts in `docs/en/examples/` are not installed by the APK. The begi
 
 Scripts:
 
-- `setup-tmux-btop`: interactive installer for tmux theme/plugin setup and optional Shizuku `btop`.
+- `setup-tmux-btop`: interactive installer for Fish + Oh My Posh, tmux theme/plugin setup, and optional Shizuku `btop`.
 - `launcher-system-monitor`: cached CPU/RAM formatter for tmux status bars.
 - `launcher-weather-widget`: cached weather formatter using wttr.in.
 - `setup-btop-rish`: installs Linux `btop` under `/data/local/tmp` through Shizuku `rish`.

@@ -1,5 +1,9 @@
 MNN native runtime libraries for the arm64-v8a MNN backend.
 
+MNN is Copyright 2018 Alibaba Group and licensed under Apache-2.0. These are modified object-code
+builds; the corresponding upstream source, local patch, and build recipe are identified below.
+See the repository's `THIRD_PARTY_NOTICES.md` and `LICENSE-TERMINAL-EMULATOR` (Apache-2.0 text).
+
 These binaries are built from upstream MNN **3.6.0** (tag `3.6.0`) by the
 `.github/workflows/build_mnn_native.yml` GitHub Actions workflow:
 

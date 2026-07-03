@@ -687,7 +687,9 @@
 
     <!-- About Preference -->
     <string name="about_preference_title">About</string>
-    <string name="about_preference_summary">Version, build, licenses</string>
+    <string name="about_preference_summary">Version, build, project source</string>
+    <string name="open_source_licenses_preference_title">Open-source licenses</string>
+    <string name="open_source_licenses_preference_summary">Libraries, upstream projects, and license texts</string>
 
     <!-- Donate Preference -->
     <string name="donate_preference_title">Donate</string>

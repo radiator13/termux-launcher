@@ -43,7 +43,7 @@ mv usr-n/ usr/
 
 ```bash
 pacman -Syu wget git fd ripgrep nodejs npm python python-pynvim rust perl \
-  neovim-nightly stylua base-devel curl glow yazi tmux fish starship \
+  neovim-nightly stylua base-devel curl glow yazi tmux fish oh-my-posh \
   peaclock timg python-pip yq jq termux-api termux-tools aichat which \
   openssh termux-services fzf eza golang gh lazygit diff-so-fancy bat uv
 ```

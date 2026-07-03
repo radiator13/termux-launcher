@@ -1,6 +1,8 @@
+// Copyright 2018 Alibaba Group
+// Licensed under the Apache License, Version 2.0.
 //
 // Created by ruoyi.sjd on 2025/4/18.
-// Patched (termux-launcher): validate UTF-8 continuation bytes before emitting a chunk, so a
+// Modified by Termux Launcher on 2026/06/24: validate UTF-8 continuation bytes before emitting a chunk, so a
 // malformed multibyte sequence produced by the model (e.g. an eagle/byte-BPE model emitting only
 // 3 of an emoji's 4 bytes followed by ',') can never reach JNI NewStringUTF, which aborts the
 // process (SIGABRT) on invalid Modified UTF-8. Malformed lead bytes are dropped instead.

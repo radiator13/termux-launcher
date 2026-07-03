@@ -105,3 +105,10 @@ bind -n M-w run-shell 'tmux display-message "Opening WhatsApp"; launcherctl laun
 - [termux-app](https://github.com/termux/termux-app)
 - [termux-monet](https://github.com/Termux-Monet/termux-monet)
 - [TEL](https://github.com/t-e-l/tel)
+
+## License and Attributions
+
+Termux Launcher is a modified Termux/Termux:Monet distribution, developed from 2026 onward and
+released under GPLv3-only. See [LICENSE](LICENSE), [license exceptions](LICENSE-EXCEPTIONS.md), and
+[open-source notices](THIRD_PARTY_NOTICES.md). The Android app exposes the same notices under
+**Settings > Open-source licenses**.

@@ -142,6 +142,10 @@ android {
     buildFeatures {
         buildConfig true
     }
+
+    sourceSets {
+        main.res.srcDir "$buildDir/generated/license-resources"
+    }
 }
 
 dependencies {
@@ -158,7 +162,6 @@ dependencies {
     implementation "io.noties.markwon:linkify:$markwonVersion"
     implementation "io.noties.markwon:recycler:$markwonVersion"
     implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
-    implementation "me.xdrop:fuzzywuzzy:1.4.0"
     implementation "com.google.ai.edge.litertlm:litertlm-android:0.12.0"
     implementation "com.google.ai.edge.litert:litert:1.4.2"
     implementation("io.github.eix128:sentencepiece4j:1.0.2") {
@@ -211,6 +214,32 @@ def validateVersionName(String versionName) {
 // https://stackoverflow.com/questions/75274720/a-failure-occurred-while-executing-appcheckdebugduplicateclasses/
 configurations.implementation {
    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
+tasks.register("generateLicenseResources", Copy) {
+    into "$buildDir/generated/license-resources/raw"
+    from(rootProject.file("THIRD_PARTY_NOTICES.md")) {
+        rename { "third_party_notices.txt" }
+    }
+    from(rootProject.file("LICENSE")) {
+        rename { "license_gpl_3.txt" }
+    }
+    from(rootProject.file("LICENSE-TERMINAL-EMULATOR")) {
+        rename { "license_apache_2.txt" }
+    }
+    from(rootProject.file("LICENSE-TERMUX-SHARED")) {
+        rename { "license_mit.txt" }
+    }
+    from(rootProject.file("LICENSE-LIBCORE-OJLUNI")) {
+        rename { "license_gpl_2_classpath.txt" }
+    }
+    from(rootProject.file("LICENSE-BSD-2-CLAUSE")) {
+        rename { "license_bsd_2_clause.txt" }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn tasks.named("generateLicenseResources")
 }
 
 // The VAJ bootstrap is NOT embedded in the APK. It is downloaded and SHA-256 verified on first run
