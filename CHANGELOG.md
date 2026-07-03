@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.2.26-rc.1-vaj
+
+VAJ edition (`io.vaj.tl`), pinned to the verified aarch64 APT bootstrap and the signed `https://repo.pathayam.xyz stable main` repository.
+
+### Fixed
+- Launcher icon-pack changes now refresh immediately, including pinned-icon pack changes and resetting per-app icon overrides, without requiring `termux-reload-settings`.
+
 ## 0.2.25
 
-VAJ edition (`io.vaj.tl`) — a standalone Termux launcher package you can install **alongside** your existing upstream Termux app. It uses its own embedded bootstrap and pulls packages from a self-hosted APT repo at `repo.pathaym.xyz` (packages were rebuilt locally, so updates there are not guaranteed to be frequent). This edition is largely untested; the standard `com.termux` edition remains the recommended one.
+VAJ edition (`io.vaj.tl`) — a standalone Termux launcher package you can install **alongside** your existing upstream Termux app. It uses its own embedded bootstrap and pulls packages from a self-hosted APT repo at `repo.pathayam.xyz` (packages were rebuilt locally, so updates there are not guaranteed to be frequent). This edition is largely untested; the standard `com.termux` edition remains the recommended one.
 
 Companion add-ons must be the matching `-vaj`-tagged forks (separate `io.vaj.tl` prefix):
 - Termux:API — https://github.com/PickleHik3/termux-api/releases
