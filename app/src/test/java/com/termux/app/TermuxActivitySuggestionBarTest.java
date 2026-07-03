@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.util.ReflectionHelpers;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 
 @RunWith(RobolectricTestRunner.class)
@@ -45,5 +46,31 @@ public class TermuxActivitySuggestionBarTest {
         int expectedMax = configuredMax > 0 ? configuredMax : TermuxActivity.calculateSuggestionBarMaxButtons(metrics);
 
         assertEquals(expectedMax, appliedMax);
+    }
+
+    @Test
+    public void refreshLauncherIconsIfPreferencesChanged_reconcilesPersistedPackChange() {
+        TermuxActivity activity = Robolectric.buildActivity(TermuxActivity.class).get();
+        activity.setContentView(R.layout.activity_termux);
+        TermuxAppSharedPreferences preferences = ReflectionHelpers.callConstructor(
+            TermuxAppSharedPreferences.class,
+            ReflectionHelpers.ClassParameter.from(Context.class, activity)
+        );
+        assertNotNull(preferences);
+        ReflectionHelpers.setField(activity, "mPreferences", preferences);
+        activity.mSuggestionBarView = new SuggestionBarView(activity, null);
+
+        ReflectionHelpers.callInstanceMethod(activity, "applySuggestionBarPreferences");
+        int initialSignature = ReflectionHelpers.getField(activity, "mLastLauncherIconPreferencesSignature");
+
+        preferences.setAppLauncherIconPackPackage("com.example.changed.iconpack");
+        ReflectionHelpers.callInstanceMethod(activity, "refreshLauncherIconsIfPreferencesChanged");
+
+        int refreshedSignature = ReflectionHelpers.getField(activity, "mLastLauncherIconPreferencesSignature");
+        assertNotEquals(initialSignature, refreshedSignature);
+        assertEquals(
+            "com.example.changed.iconpack",
+            preferences.getAppLauncherIconPackPackage()
+        );
     }
 }
