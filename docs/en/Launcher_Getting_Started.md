@@ -104,7 +104,7 @@ Install the common packages first if you want that style of setup:
 pkg i -y tmux curl jq git fish oh-my-posh eza zoxide termux-api
 ```
 
-Before running the setup, turn on Material colors if you want the tmux theme to follow your wallpaper:
+Terminal Material colors are enabled by default. Leave the toggle on if you want the tmux theme to follow your wallpaper:
 
 ```text
 Long press Terminal -> More -> Appearance -> Terminal Material colors
