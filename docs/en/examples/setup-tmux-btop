@@ -23,12 +23,12 @@ require_cmd() {
 show_material_colors_help() {
     cat >&2 <<'EOF'
 
-Terminal Material colors are recommended for the tmux theme.
+Terminal Material colors are enabled by default and recommended for the tmux theme.
 
 To use wallpaper-derived colors in Termux Launcher:
   1. Long press Terminal.
   2. Open More -> Settings -> Appearance.
-  3. Turn on Terminal Material colors.
+  3. Make sure Terminal Material colors is on.
   4. Return to the terminal and run this script again.
 
 Plain Termux users can continue with the built-in fallback colors.
@@ -64,7 +64,7 @@ Termux Launcher optional shell, tmux, and btop setup
 
 Before the tmux theme will use wallpaper-derived colors:
   - Open Settings -> Appearance in Termux Launcher.
-  - Turn on Terminal Material colors.
+  - Keep Terminal Material colors on (it is enabled by default).
   - Start Shizuku for launcher resource widgets such as CPU and RAM.
     In plain Termux without Termux Launcher, the status helper can fall back
     to rish, but that path is less efficient than launcherctl.
