@@ -790,6 +790,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTermuxTerminalSessionActivityClient.refreshMaterialTerminalColors(true);
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
+        refreshLauncherIconsIfPreferencesChanged();
         maybeRecoverFromEmptySession("onResume");
 
         updateWindowBackgroundForCurrentSession();
@@ -3261,6 +3262,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         signature = (31 * signature) + (mPreferences.isAppLauncherBwIconsEnabled() ? 1 : 0);
         signature = (31 * signature) + (mPreferences.isAppLauncherUnifyIconsEnabled() ? 1 : 0);
         return signature;
+    }
+
+    /**
+     * Reconciles icon-pack changes even when the styling broadcast was sent while this activity
+     * was stopped. The settings activity writes preferences directly, so the persisted signature
+     * is the durable source of truth; the broadcast is only a fast path.
+     */
+    private void refreshLauncherIconsIfPreferencesChanged() {
+        if (mSuggestionBarView == null || mPreferences == null) {
+            return;
+        }
+        int iconPreferencesSignature = computeLauncherIconPreferencesSignature();
+        if (mLastLauncherIconPreferencesSignature == iconPreferencesSignature) {
+            return;
+        }
+        applySuggestionBarPreferences();
     }
 
     private static int stringSignature(@Nullable String value) {
