@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.25
+
+VAJ edition (`io.vaj.tl`) — a standalone Termux launcher package you can install **alongside** your existing upstream Termux app. It uses its own embedded bootstrap and pulls packages from a self-hosted APT repo at `repo.pathaym.xyz` (packages were rebuilt locally, so updates there are not guaranteed to be frequent). This edition is largely untested; the standard `com.termux` edition remains the recommended one.
+
+Companion add-ons must be the matching `-vaj`-tagged forks (separate `io.vaj.tl` prefix):
+- Termux:API — https://github.com/PickleHik3/termux-api/releases
+- Termux:Styling — https://github.com/PickleHik3/termux-styling/releases
+
+### Added
+- **Termux AI** — run LLMs locally, on-device, right inside the terminal. Two native backends, Google **LiteRT** and Alibaba's **MNN**, serve models over OpenAI- and Ollama-compatible APIs. Works on devices with a supported SoC and enough RAM (Snapdragon 8+ Gen 1 or newer recommended). Quickest start: `pkg i -y aichat`.
+- New **Valerie capsule** dock, with better AGSL glass blur, smoother dock physics, and refreshed animations and lighting.
+- New app icon.
+
+### Changed
+- The optional one-script setup now installs **oh-my-posh** as the shell prompt.
+- Dynamic terminal colors and app-name labels are now on by default.
+- Reworked open-source attribution and license notices; replaced the fuzzy app-search library with an in-house ranking engine.
+
 ## 0.2.23
 
 First release shipped in two editions: the **Termux edition** (`com.termux`, tag `v0.2.23`) compatible with the upstream Termux package ecosystem, and the **VAJ edition** (`io.vaj.tl`, tag `v0.2.23-vaj`) installable alongside official Termux with its own embedded aarch64 bootstrap and VAJ APT repository. See the README's Editions section.
