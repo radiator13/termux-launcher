@@ -10,8 +10,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-import me.xdrop.fuzzywuzzy.FuzzySearch;
-
 public final class LauncherRankingEngine {
     private LauncherRankingEngine() {}
 
@@ -27,18 +25,19 @@ public final class LauncherRankingEngine {
         List<ScoredEntry> scored = new ArrayList<>();
         for (LauncherAppEntry entry : entries) {
             int tier = matchTier(entry, input, normalizedInput);
-            if (tier < 0) {
-                continue;
-            }
-
             int score = 100;
             if (fuzzy) {
                 score = computeScore(entry, input, normalizedInput);
-                if (tier <= 3) {
+                if (tier < 0) {
+                    if (score < tolerance) continue;
+                    tier = 7;
+                } else if (tier <= 3) {
                     score = Math.max(score, tolerance);
                 } else if (score < tolerance) {
                     continue;
                 }
+            } else if (tier < 0) {
+                continue;
             }
             scored.add(new ScoredEntry(entry, score, tier));
         }
@@ -60,13 +59,54 @@ public final class LauncherRankingEngine {
     }
 
     private static int computeScore(@NonNull LauncherAppEntry entry, @NonNull String input, @NonNull String normalizedInput) {
-        int best = FuzzySearch.partialRatio(input, entry.labelLower);
-        best = Math.max(best, FuzzySearch.partialRatio(input, entry.packageLower));
-        best = Math.max(best, FuzzySearch.partialRatio(input, entry.activityLower));
+        int best = similarity(input, entry.labelLower);
+        best = Math.max(best, similarity(input, entry.packageLower));
+        best = Math.max(best, similarity(input, entry.activityLower));
         if (!normalizedInput.isEmpty()) {
-            best = Math.max(best, FuzzySearch.partialRatio(normalizedInput, entry.labelNormalized));
+            best = Math.max(best, similarity(normalizedInput, entry.labelNormalized));
+            for (String word : entry.normalizedWords) {
+                best = Math.max(best, similarity(normalizedInput, word));
+            }
         }
         return best;
+    }
+
+    /**
+     * Levenshtein similarity with an exact-substring fast path. Existing substring matches retain
+     * their previous perfect score, while typo-only matches use the full label or an individual
+     * label word. Launcher strings are short, so O(query * candidate) has predictable low cost.
+     */
+    static int similarity(@NonNull String query, @NonNull String candidate) {
+        if (query.isEmpty()) return 100;
+        if (candidate.isEmpty()) return 0;
+        if (candidate.contains(query)) return 100;
+
+        int queryLength = query.length();
+        int candidateLength = candidate.length();
+        int[] previous = new int[candidateLength + 1];
+        int[] current = new int[candidateLength + 1];
+        for (int candidateIndex = 0; candidateIndex <= candidateLength; candidateIndex++) {
+            previous[candidateIndex] = candidateIndex;
+        }
+
+        for (int queryIndex = 1; queryIndex <= queryLength; queryIndex++) {
+            current[0] = queryIndex;
+            char queryChar = query.charAt(queryIndex - 1);
+            for (int candidateIndex = 1; candidateIndex <= candidateLength; candidateIndex++) {
+                int substitution = previous[candidateIndex - 1]
+                    + (queryChar == candidate.charAt(candidateIndex - 1) ? 0 : 1);
+                int deletion = previous[candidateIndex] + 1;
+                int insertion = current[candidateIndex - 1] + 1;
+                current[candidateIndex] = Math.min(substitution, Math.min(deletion, insertion));
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+
+        int distance = previous[candidateLength];
+        int longest = Math.max(queryLength, candidateLength);
+        return Math.max(0, Math.round(100f * (longest - distance) / longest));
     }
 
     private static int matchTier(@NonNull LauncherAppEntry entry, @NonNull String input, @NonNull String normalizedInput) {

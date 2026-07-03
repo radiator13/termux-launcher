@@ -53,6 +53,39 @@ public class LauncherRankingEngineTest {
     }
 
     @Test
+    public void filterAndRank_matchesTyposAfterExactMatches() {
+        List<LauncherAppEntry> entries = Arrays.asList(
+            entry("com.example.whatsapp", "com.example.whatsapp.MainActivity", "WhatsApp"),
+            entry("com.example.what", "com.example.what.MainActivity", "Whtsapp Notes")
+        );
+
+        List<LauncherAppEntry> ranked = LauncherRankingEngine.filterAndRank(entries, "whtsapp", 70);
+
+        assertEquals(2, ranked.size());
+        assertEquals("com.example.what", ranked.get(0).appRef.packageName);
+        assertEquals("com.example.whatsapp", ranked.get(1).appRef.packageName);
+    }
+
+    @Test
+    public void filterAndRank_rejectsWeakFuzzyMatches() {
+        List<LauncherAppEntry> entries = Arrays.asList(
+            entry("com.example.calendar", "com.example.calendar.MainActivity", "Calendar"),
+            entry("com.example.camera", "com.example.camera.MainActivity", "Camera")
+        );
+
+        List<LauncherAppEntry> ranked = LauncherRankingEngine.filterAndRank(entries, "music", 70);
+
+        assertTrue(ranked.isEmpty());
+    }
+
+    @Test
+    public void similarity_scoresExactSubstringsAndSingleEdits() {
+        assertEquals(100, LauncherRankingEngine.similarity("termux", "my termux app"));
+        assertEquals(88, LauncherRankingEngine.similarity("whtsapp", "whatsapp"));
+        assertEquals(0, LauncherRankingEngine.similarity("abc", "xyz"));
+    }
+
+    @Test
     public void normalizeLookupValue_collapsesPunctuationToSpaces() {
         assertEquals("termux api", LauncherRankingEngine.normalizeLookupValue("Termux:API"));
         assertEquals("foo bar baz", LauncherRankingEngine.normalizeLookupValue(" Foo__Bar/Baz "));

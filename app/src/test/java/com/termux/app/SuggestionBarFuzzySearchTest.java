@@ -18,11 +18,7 @@ import org.robolectric.annotation.LooperMode;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
-
-import me.xdrop.fuzzywuzzy.FuzzySearch;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -78,18 +74,14 @@ public class SuggestionBarFuzzySearchTest {
                 new TestButton("zzzz")
         );
 
-        List<TestButton> expected = buildExpectedFuzzyOrder(buttons, "termx", 70);
         suggestionBarView.setSuggestionButtons(new ArrayList<>(buttons));
-        suggestionBarView.setMaxButtonCount(expected.size());
+        suggestionBarView.setMaxButtonCount(buttons.size());
 
         suggestionBarView.reloadWithInput("termx", null);
-        awaitChildCount(suggestionBarView, expected.size());
+        awaitChildCount(suggestionBarView, 1);
 
-        assertEquals(expected.size(), suggestionBarView.getChildCount());
-        for (int i = 0; i < expected.size(); i++) {
-            String label = findContentDescription(suggestionBarView.getChildAt(i));
-            assertEquals(expected.get(i).getText(), label);
-        }
+        assertEquals(1, suggestionBarView.getChildCount());
+        assertEquals("termux", findContentDescription(suggestionBarView.getChildAt(0)));
     }
 
     private static void awaitChildCount(SuggestionBarView suggestionBarView, int expectedCount) throws Exception {
@@ -99,32 +91,6 @@ public class SuggestionBarFuzzySearchTest {
             Thread.sleep(10L);
         }
         shadowOf(Looper.getMainLooper()).idle();
-    }
-
-    private static List<TestButton> buildExpectedFuzzyOrder(List<TestButton> buttons, String input, int tolerance) {
-        List<TestButton> expected = new ArrayList<>();
-        String lowered = input == null ? "" : input.toLowerCase();
-        for (TestButton button : buttons) {
-            int ratio = FuzzySearch.partialRatio(lowered, button.getText().toLowerCase());
-            button.setRatio(ratio);
-            if (ratio >= tolerance) {
-                expected.add(button);
-            }
-        }
-        Collections.sort(expected, new Comparator<TestButton>() {
-            @Override
-            public int compare(TestButton first, TestButton second) {
-                int r1 = first.getRatio();
-                int r2 = second.getRatio();
-                if (r1 > r2) {
-                    return -1;
-                } else if (r1 < r2) {
-                    return 1;
-                }
-                return 0;
-            }
-        });
-        return expected;
     }
 
     private static String findContentDescription(View view) {

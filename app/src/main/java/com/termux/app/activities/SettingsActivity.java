@@ -36,6 +36,11 @@ import com.termux.shared.activity.media.AppCompatActivityUtils;
 import com.termux.shared.theme.NightMode;
 import com.termux.shared.theme.ThemeUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
 public class SettingsActivity extends AppCompatActivity {
 
     public static final String EXTRA_INITIAL_FRAGMENT = "settings_initial_fragment";
@@ -163,6 +168,7 @@ public class SettingsActivity extends AppCompatActivity {
             configureTermuxTaskerPreference(context);
             configureTermuxWidgetPreference(context);
             configureAboutPreference(context);
+            configureOpenSourceLicensesPreference(context);
             configureDonatePreference(context);
         }
 
@@ -252,6 +258,10 @@ public class SettingsActivity extends AppCompatActivity {
                         public void run() {
                             String title = "About";
                             StringBuilder aboutString = new StringBuilder();
+                            aboutString.append("## Termux Launcher\n\n");
+                            aboutString.append("Modified Termux/Termux:Monet distribution, licensed GPLv3-only.  \n");
+                            aboutString.append("[Project source](https://github.com/PickleHik3/termux-launcher) · ");
+                            aboutString.append("[Releases](https://github.com/PickleHik3/termux-launcher/releases)  \n\n");
                             aboutString.append(TermuxUtils.getAppInfoMarkdownString(context, TermuxUtils.AppInfoMode.TERMUX_AND_PLUGIN_PACKAGES));
                             aboutString.append("\n\n").append(AndroidUtils.getDeviceInfoMarkdownString(context, true));
                             aboutString.append("\n\n").append(TermuxUtils.getImportantLinksMarkdownString(context));
@@ -266,6 +276,56 @@ public class SettingsActivity extends AppCompatActivity {
                     }.start();
                     return true;
                 });
+            }
+        }
+
+        private void configureOpenSourceLicensesPreference(@NonNull Context context) {
+            Preference licensesPreference = findPreference("open_source_licenses");
+            if (licensesPreference == null) return;
+
+            licensesPreference.setOnPreferenceClickListener(preference -> {
+                new Thread(() -> {
+                    String title = context.getString(R.string.open_source_licenses_preference_title);
+                    String licenses = buildOpenSourceLicensesMarkdown(context);
+                    ReportInfo reportInfo = new ReportInfo("OpenSourceLicenses",
+                        TermuxConstants.TERMUX_APP.TERMUX_SETTINGS_ACTIVITY_NAME, title);
+                    reportInfo.setReportString(licenses);
+                    if (isAdded() && getActivity() != null) {
+                        getActivity().runOnUiThread(() -> ReportActivity.startReportActivity(context, reportInfo));
+                    }
+                }).start();
+                return true;
+            });
+        }
+
+        private static String buildOpenSourceLicensesMarkdown(@NonNull Context context) {
+            StringBuilder licenses = new StringBuilder(readRawText(context, R.raw.third_party_notices));
+            appendLicense(licenses, "GNU General Public License v3", readRawText(context, R.raw.license_gpl_3));
+            appendLicense(licenses, "Apache License 2.0", readRawText(context, R.raw.license_apache_2));
+            appendLicense(licenses, "MIT License", readRawText(context, R.raw.license_mit));
+            appendLicense(licenses, "GPLv2 with Classpath exception", readRawText(context, R.raw.license_gpl_2_classpath));
+            appendLicense(licenses, "BSD 2-Clause License", readRawText(context, R.raw.license_bsd_2_clause));
+            return licenses.toString();
+        }
+
+        private static void appendLicense(@NonNull StringBuilder output, @NonNull String title,
+                                          @NonNull String body) {
+            output.append("\n\n## ").append(title).append("\n\n```text\n")
+                .append(body).append("\n```\n");
+        }
+
+        @NonNull
+        private static String readRawText(@NonNull Context context, int resourceId) {
+            try (InputStream input = context.getResources().openRawResource(resourceId);
+                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, count);
+                }
+                return new String(output.toByteArray(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                return "Unable to read bundled license text: " + e.getMessage();
             }
         }
 

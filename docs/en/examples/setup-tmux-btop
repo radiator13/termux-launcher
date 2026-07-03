@@ -9,6 +9,8 @@ TPM_DIR="${TPM_DIR:-$HOME/.tmux/plugins/tpm}"
 PLUGIN_DIR="${TERMUX_LAUNCHER_TMUX_DIR:-$HOME/.tmux/plugins/termux-launcher-tmux}"
 TMUX_CONF="${TMUX_CONF:-$HOME/.tmux.conf}"
 BTOP_SETUP="${BTOP_SETUP:-$HOME/setup-btop-rish}"
+FISH_CONFIG="${FISH_CONFIG:-$HOME/.config/fish/config.fish}"
+OMP_CONFIG="${OMP_CONFIG:-$HOME/.config/ohmyposh/termux-launcher.omp.json}"
 
 termux_package_name() {
     if [ -n "${TERMUX_APP__PACKAGE_NAME:-}" ]; then
@@ -77,7 +79,7 @@ EOF
 
 welcome() {
     cat <<'EOF'
-Termux Launcher optional tmux and btop setup
+Termux Launcher optional shell, tmux, and btop setup
 
 Before the tmux theme will use wallpaper-derived colors:
   - Open Settings -> Appearance in Termux Launcher.
@@ -89,8 +91,8 @@ Before the tmux theme will use wallpaper-derived colors:
 Before the Shizuku btop helper can be installed:
   - Put rish in your PATH and grant it Shizuku access.
 
-This script can install missing Termux packages with pkg, install TPM and the
-Termux Launcher TPM plugin, and run the rish-backed btop setup helper.
+This script can install Fish, Oh My Posh and their matching configs, install
+TPM and the Termux Launcher TPM plugin, and run the rish-backed btop helper.
 EOF
 }
 
@@ -98,7 +100,7 @@ choose_setup() {
     cat >&2 <<'EOF'
 
 Choose what to set up:
-  1) All
+  1) All (Fish + Oh My Posh, tmux, and btop)
   2) tmux only
   3) btop only
   4) Exit
@@ -131,6 +133,33 @@ install_missing_packages() {
     log "Installing missing Termux packages:$missing_packages"
     # pkg fronts apt and pacman Termux installs.
     pkg install -y $missing_packages
+}
+
+install_if_missing() {
+    source_url="$1"
+    destination="$2"
+    label="$3"
+
+    if [ -e "$destination" ]; then
+        log "Keeping existing $label: $destination"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$destination")"
+    curl -fsSL "$source_url" -o "$destination"
+    log "Installed $label: $destination"
+}
+
+install_shell_setup() {
+    log
+    log "Setting up Fish and Oh My Posh..."
+    install_missing_packages fish:fish oh-my-posh:oh-my-posh curl:curl eza:eza zoxide:zoxide
+    require_cmd curl
+
+    install_if_missing "$RAW_BASE/config.fish" "$FISH_CONFIG" "Fish config"
+    install_if_missing "$RAW_BASE/termux-launcher.omp.json" "$OMP_CONFIG" "Oh My Posh theme"
+
+    log "Shell setup complete. Start it with: exec fish"
 }
 
 material_colors_ready() {
@@ -276,6 +305,7 @@ main() {
     selection="$(choose_setup)"
     case "$selection" in
         all)
+            install_shell_setup
             install_tmux_plugin
             install_btop_helper
             ;;

@@ -20,7 +20,7 @@ install_essential_packages() {
     # Core packages
     local core_packages=(
         wget git fd ripgrep nodejs python rust perl
-        neovim stylua base-devel curl glow yazi tmux fish starship
+        neovim stylua base-devel curl glow yazi tmux fish oh-my-posh
         peaclock timg python-pip yq jq termux-api termux-tools which
         openssh termux-services fzf eza golang gh lazygit bat uv
     )

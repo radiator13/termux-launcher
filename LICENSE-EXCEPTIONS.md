@@ -5,3 +5,8 @@ The `termux/termux-app` repository and its fork, `Termux-Monet/termux-monet`, ar
 - [Terminal Emulator for Android](https://github.com/jackpal/Android-Terminal-Emulator) code is used which is released under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license. Check [`terminal-view`](terminal-view) and [`terminal-emulator`](terminal-emulator) libraries.
 - Check [`termux-shared/LICENSE.md`](termux-shared/LICENSE.md) for `termux-shared` library related exceptions.
 - The `termux-am-library` library is released under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license.
+- Launcher gesture-navigation compatibility is adapted from AOSP Launcher3 and Lawnchair under Apache 2.0. See [`docs/launcher-animation-attribution.md`](docs/launcher-animation-attribution.md).
+- The vendored RealtimeBlurView implementation is based on [mmin18/RealtimeBlurView](https://github.com/mmin18/RealtimeBlurView), Copyright 2016 Tu Yimin, under Apache 2.0.
+- The bundled arm64 MNN native runtime is built from [alibaba/MNN 3.6.0](https://github.com/alibaba/MNN/tree/3.6.0), Copyright 2018 Alibaba Group, under Apache 2.0. It includes a Termux Launcher modification to the UTF-8 stream processor.
+
+See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for runtime dependency notices.

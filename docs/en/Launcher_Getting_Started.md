@@ -132,7 +132,7 @@ chmod 700 ~/setup-tmux-btop
 
 The script asks what to install:
 
-- **All:** tmux theme plus the optional Shizuku `btop` helper.
+- **All:** Fish + Oh My Posh config, tmux theme, and the optional Shizuku `btop` helper.
 - **tmux only:** theme and status helpers only.
 - **btop only:** only the Shizuku `btop` helper.
 
