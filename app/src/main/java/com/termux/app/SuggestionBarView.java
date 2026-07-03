@@ -439,14 +439,19 @@ public final class SuggestionBarView extends GridLayout {
     public void setUnifyIcons(boolean unifyIcons) {
         if (this.unifyIcons == unifyIcons) return;
         this.unifyIcons = unifyIcons;
-        normalizedIconCache.evictAll();
-        lastSurfaceRenderSignature = 0;
+        invalidateRenderedIconCaches();
     }
 
     public void setIconShadowEnabled(boolean enabled) {
         if (this.iconShadowEnabled == enabled) return;
         this.iconShadowEnabled = enabled;
+        invalidateRenderedIconCaches();
+    }
+
+    private void invalidateRenderedIconCaches() {
         normalizedIconCache.evictAll();
+        drawableVisibleBoundsCache.clear();
+        focusOutlineVisualCache.clear();
         lastSurfaceRenderSignature = 0;
     }
 
@@ -642,7 +647,7 @@ public final class SuggestionBarView extends GridLayout {
 
     public void clearAppCache() {
         allApps = new ArrayList<>();
-        lastSurfaceRenderSignature = 0;
+        invalidateRenderedIconCaches();
         activeAzLetter = null;
         activeAzCandidates = new ArrayList<>();
         activeAzPageIndex = 0;
@@ -3809,7 +3814,7 @@ public final class SuggestionBarView extends GridLayout {
             pinnedItems = configRepository.loadPinnedItems();
         }
         pendingPinnedMutationFeedback = true;
-        lastSurfaceRenderSignature = 0;
+        invalidateRenderedIconCaches();
         reloadWithInput("", lastTerminalView);
     }
 
