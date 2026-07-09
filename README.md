@@ -28,6 +28,8 @@ All credits go to the amazing developers and contributors of Termux, TEL, and Te
 - App dock with terminal app search
 - Android Material theme integration for launcher surfaces and Termux shell theming
 - `launcherctl` shell bridge for launching apps and reading launcher/system data
+- LauncherCtl agent tools, including optional stdio MCP-backed tools from `~/.config/termux-launcher/mcp.json`
+- Cloned/work-profile app discovery where Android exposes launcher profiles
 - On-device LLM backends using Google's LiteRT and Alibaba's MNN
 - Optional Shizuku integration for screen lock and privileged status helpers
 

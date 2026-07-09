@@ -136,6 +136,10 @@ public class LauncherCtlApiServer {
         try {
             initializeRateLimiters();
             appContext = context.getApplicationContext();
+            LauncherCtlMcpBridge.getInstance().setContext(appContext);
+            if (!LauncherCtlMcpPreferences.PROVIDER_OFF.equals(LauncherCtlMcpPreferences.getWebProvider(appContext))) {
+                LauncherCtlMcpPreferences.writePresetConfig(appContext);
+            }
             TaiSettings settings = new TaiSettings(appContext);
             token = settings.getOrCreateApiToken();
             String bindMode = settings.getApiBindMode();
@@ -518,6 +522,12 @@ public class LauncherCtlApiServer {
             item.put("packageName", entry.appRef.packageName);
             item.put("activityName", entry.appRef.activityName == null ? "" : entry.appRef.activityName);
             item.put("stableId", entry.appRef.stableId());
+            item.put("userId", entry.appRef.userId);
+            item.put("userSerialNumber", entry.appRef.userSerialNumber);
+            item.put("clonedProfile", entry.appRef.clonedProfile);
+            if (entry.appRef.profileLabel != null && !entry.appRef.profileLabel.isEmpty()) {
+                item.put("profileLabel", entry.appRef.profileLabel);
+            }
             item.put("launchable", true);
             item.put("systemApp", isSystemApp(packageManager, entry.appRef.packageName));
             payloadApps.put(item);
@@ -741,6 +751,9 @@ public class LauncherCtlApiServer {
         for (LauncherToolRegistry.ToolMetadata tool : registry.getTools()) {
             toolNames.put(tool.name);
         }
+        for (LauncherToolRegistry.ToolMetadata tool : LauncherCtlMcpBridge.getInstance().getToolMetadata()) {
+            toolNames.put(tool.name);
+        }
         data.put("availableTools", toolNames);
 
         JSONArray warnings = new JSONArray();
@@ -764,9 +777,32 @@ public class LauncherCtlApiServer {
     }
 
     private JSONObject buildAgentTools() throws JSONException {
+        if (appContext != null) {
+            LauncherCtlMcpBridge.getInstance().setContext(appContext);
+        }
         LauncherToolRegistry registry = LauncherToolRegistry.getInstance();
         registry.writeDebugToolsJson();
-        return registry.toResponseJson();
+        List<LauncherToolRegistry.ToolMetadata> tools = new ArrayList<>(registry.getTools());
+        tools.addAll(LauncherCtlMcpBridge.getInstance().getToolMetadata());
+        JSONArray internal = new JSONArray();
+        JSONArray openAi = new JSONArray();
+        for (LauncherToolRegistry.ToolMetadata tool : tools) {
+            internal.put(tool.toInternalJson());
+            openAi.put(tool.toOpenAiTool());
+        }
+        JSONObject data = new JSONObject();
+        data.put("ok", true);
+        data.put("count", tools.size());
+        data.put("tools", internal);
+        data.put("openAiTools", openAi);
+        data.put("mcpConfigPath", LauncherCtlStorage.getMcpConfigJsonFile().getAbsolutePath());
+        try {
+            JSONObject snapshot = new JSONObject(data.toString());
+            snapshot.put("generatedAtMs", System.currentTimeMillis());
+            writeTextFile(LauncherCtlStorage.getToolsJsonFile().getAbsolutePath(), snapshot.toString(2));
+        } catch (Exception ignored) {
+        }
+        return data;
     }
 
     private JSONObject runAgentRoute(Context context, String body) throws JSONException {
@@ -776,7 +812,9 @@ public class LauncherCtlApiServer {
     }
 
     private JSONObject runAgentExecute(Context context, String body) throws JSONException {
-        JSONObject result = new LauncherCtlAgentHandler(context, new LauncherToolExecutionHandler(context)).execute(body);
+        LauncherCtlMcpBridge.getInstance().setContext(context);
+        JSONObject result = new LauncherCtlAgentHandler(context, new LauncherToolExecutionHandler(context),
+            LauncherCtlMcpBridge.getInstance()).execute(body);
         appendAgentAudit("agent.execute", body, result);
         return result;
     }
@@ -923,6 +961,9 @@ public class LauncherCtlApiServer {
             error.put("label", match.entry.label);
             error.put("packageName", match.entry.appRef.packageName);
             error.put("activityName", match.entry.appRef.activityName);
+            error.put("stableId", match.entry.appRef.stableId());
+            error.put("userId", match.entry.appRef.userId);
+            error.put("clonedProfile", match.entry.appRef.clonedProfile);
             return error;
         }
 
@@ -932,6 +973,9 @@ public class LauncherCtlApiServer {
         data.put("label", match.entry.label);
         data.put("packageName", match.entry.appRef.packageName);
         data.put("activityName", match.entry.appRef.activityName);
+        data.put("stableId", match.entry.appRef.stableId());
+        data.put("userId", match.entry.appRef.userId);
+        data.put("clonedProfile", match.entry.appRef.clonedProfile);
         return data;
     }
 
@@ -2725,6 +2769,9 @@ public class LauncherCtlApiServer {
             item.put("label", entry.label);
             item.put("packageName", entry.appRef.packageName);
             item.put("activityName", entry.appRef.activityName);
+            item.put("stableId", entry.appRef.stableId());
+            item.put("userId", entry.appRef.userId);
+            item.put("clonedProfile", entry.appRef.clonedProfile);
             candidates.put(item);
         }
         return AppLaunchMatch.error(409, "ambiguous", "Multiple launcher apps matched query", candidates);
@@ -2910,6 +2957,8 @@ public class LauncherCtlApiServer {
                 item.put("packageName", entry.appRef.packageName);
                 item.put("activityName", entry.appRef.activityName == null ? "" : entry.appRef.activityName);
                 item.put("stableId", entry.appRef.stableId());
+                item.put("userId", entry.appRef.userId);
+                item.put("clonedProfile", entry.appRef.clonedProfile);
                 results.put(item);
                 count++;
             }

@@ -187,6 +187,59 @@ approved the action.
 
 Use `launcherctl tools` or MCP `tools/list` for the exact live schema.
 
+## External MCP Servers for Agent Tools
+
+The launcher app can also consume external stdio MCP servers and expose selected
+tools through the HTTP agent API used by clients such as Tooie:
+
+```text
+GET  /v1/agent/tools
+POST /v1/agent/execute
+```
+
+Configure inbound MCP servers at:
+
+```text
+~/.config/termux-launcher/mcp.json
+```
+
+Example web-search configuration:
+
+```json
+{
+  "servers": {
+    "web": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "some-web-search-mcp"],
+      "env": {
+        "SEARCH_API_KEY": "$SEARCH_API_KEY"
+      },
+      "tools": {
+        "allow": ["web.search"],
+        "deny": []
+      },
+      "timeout_ms": 10000
+    }
+  }
+}
+```
+
+Termux Launcher can generate Brave Search and SearXNG presets from the app UI:
+
+```text
+Settings -> Launcher -> Agent web search
+```
+
+The preset stores secrets in app preferences and writes placeholders into
+`mcp.json`, for example `$LAUNCHERCTL_BRAVE_API_KEY`. LauncherCtl resolves those
+placeholders when it starts the stdio MCP process.
+
+Keep allowlists narrow. LauncherCtl bounds search-style calls to a small result
+count and compacts MCP responses to short rows such as `title`, `url`, and
+`snippet`. Unknown or state-changing tool names are marked non-low-risk and
+confirmation-required.
+
 ## Live-Verified Examples
 
 These examples use newline-delimited JSON-RPC over stdio. They were verified

@@ -50,6 +50,7 @@ public final class LauncherToolRegistry {
         INTENT("intent"),
         MEMORY("memory"),
         EVENTS("events"),
+        MCP("mcp"),
         USER("user");
 
         public final String label;

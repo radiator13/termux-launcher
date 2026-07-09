@@ -71,6 +71,25 @@ public class LauncherConfigRepositoryTest {
     }
 
     @Test
+    public void pinnedAppRoundTrip_preservesClonedProfileIdentity() {
+        List<PinnedItem> items = new ArrayList<>();
+        items.add(new PinnedAppItem(new AppRef("com.example.chat", "Main",
+            10, 42L, true, "Clone 10")));
+
+        repository.savePinnedItems(items);
+        List<PinnedItem> loaded = repository.loadPinnedItems();
+
+        assertEquals(1, loaded.size());
+        PinnedAppItem item = (PinnedAppItem) loaded.get(0);
+        assertEquals("com.example.chat", item.appRef.packageName);
+        assertEquals("Main", item.appRef.activityName);
+        assertEquals(10, item.appRef.userId);
+        assertEquals(42L, item.appRef.userSerialNumber);
+        assertTrue(item.appRef.clonedProfile);
+        assertEquals("com.example.chat/Main#user=10", item.appRef.stableId());
+    }
+
+    @Test
     public void folderRoundTrip_preservesGridAndTint() {
         List<PinnedItem> items = new ArrayList<>();
         PinnedFolderItem folder = new PinnedFolderItem("folder-1", "Media");

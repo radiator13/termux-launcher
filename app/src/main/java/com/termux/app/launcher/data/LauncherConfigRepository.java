@@ -73,7 +73,7 @@ public final class LauncherConfigRepository {
                 if (item == null) continue;
                 String type = item.optString("type", "");
                 if ("app".equals(type)) {
-                    AppRef ref = new AppRef(item.optString("packageName", ""), item.optString("activityName", ""));
+                    AppRef ref = appRefFromJson(item);
                     if (!ref.packageName.isEmpty()) {
                         out.add(new PinnedAppItem(ref, parseIconOverride(item.optJSONObject("iconOverride"))));
                     }
@@ -94,7 +94,7 @@ public final class LauncherConfigRepository {
                             String activityName = app.optString("activityName", "");
                             if (!packageName.isEmpty()) {
                                 folder.apps.add(new PinnedAppItem(
-                                    new AppRef(packageName, activityName),
+                                    appRefFromJson(app),
                                     parseIconOverride(app.optJSONObject("iconOverride"))
                                 ));
                             }
@@ -123,6 +123,7 @@ public final class LauncherConfigRepository {
                     item.put("type", "app");
                     item.put("packageName", appItem.appRef.packageName);
                     item.put("activityName", appItem.appRef.activityName);
+                    putAppRefProfile(item, appItem.appRef);
                     putIconOverrideIfValid(item, appItem.iconOverride);
                     items.put(item);
                 } catch (JSONException ignored) {
@@ -137,6 +138,7 @@ public final class LauncherConfigRepository {
                         AppRef ref = folderApp.appRef;
                         app.put("packageName", ref.packageName);
                         app.put("activityName", ref.activityName);
+                        putAppRefProfile(app, ref);
                         putIconOverrideIfValid(app, folderApp.iconOverride);
                         apps.put(app);
                     } catch (JSONException ignored) {
@@ -183,6 +185,31 @@ public final class LauncherConfigRepository {
         }
         savePinnedItems(out);
         return out;
+    }
+
+    @NonNull
+    private static AppRef appRefFromJson(@NonNull JSONObject item) {
+        return new AppRef(
+            item.optString("packageName", ""),
+            item.optString("activityName", ""),
+            item.optInt("userId", -1),
+            item.optLong("userSerialNumber", -1L),
+            item.optBoolean("clonedProfile", false),
+            item.optString("profileLabel", "")
+        );
+    }
+
+    private static void putAppRefProfile(@NonNull JSONObject target, @NonNull AppRef ref) throws JSONException {
+        if (ref.userId < 0 && ref.userSerialNumber < 0 && !ref.clonedProfile
+            && (ref.profileLabel == null || ref.profileLabel.isEmpty())) {
+            return;
+        }
+        target.put("userId", ref.userId);
+        target.put("userSerialNumber", ref.userSerialNumber);
+        target.put("clonedProfile", ref.clonedProfile);
+        if (ref.profileLabel != null && !ref.profileLabel.isEmpty()) {
+            target.put("profileLabel", ref.profileLabel);
+        }
     }
 
     private static int clamp(int value, int min, int max) {

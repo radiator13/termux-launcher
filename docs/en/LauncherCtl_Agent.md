@@ -116,6 +116,61 @@ LauncherCtl currently exposes these tools:
 
 Use `launcherctl tools` for the exact schema accepted by each tool.
 
+## MCP-Backed Tools
+
+LauncherCtl can also load external stdio MCP servers and expose their low-risk
+tools through the same HTTP agent API:
+
+```text
+GET  /v1/agent/tools
+POST /v1/agent/execute
+```
+
+Put server config in:
+
+```text
+~/.config/termux-launcher/mcp.json
+```
+
+Example:
+
+```json
+{
+  "servers": {
+    "web": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "some-web-search-mcp"],
+      "env": {
+        "SEARCH_API_KEY": "$SEARCH_API_KEY"
+      },
+      "tools": {
+        "allow": ["web.search"],
+        "deny": []
+      },
+      "timeout_ms": 10000
+    }
+  }
+}
+```
+
+The launcher settings page can generate this file for the built-in web-search
+presets:
+
+```text
+Settings -> Launcher -> Agent web search
+```
+
+Choose Brave Search or SearXNG, then enter the required key/URL. API keys are
+stored in app preferences and injected into the MCP server environment at
+runtime; the generated `mcp.json` contains only `$LAUNCHERCTL_...` placeholders.
+
+Only stdio MCP servers are supported initially. Use `tools.allow` to keep the
+surface small. Search/read/fetch-style tools are exposed as low risk; unknown or
+state-changing names are marked confirmation-required. Results are compacted for
+small local models: bounded result counts, short snippets, and source URLs when
+the MCP server provides them.
+
 For MCP clients, see [LauncherCtl MCP](LauncherCtl_MCP) for client configs,
 MCP tool names, and live-verified JSON-RPC examples.
 

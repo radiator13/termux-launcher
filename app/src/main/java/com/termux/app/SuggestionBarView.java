@@ -90,6 +90,7 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
+import com.termux.app.launcher.LauncherAppLauncher;
 import com.termux.app.launcher.PinnedAppsEditor;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
@@ -2176,6 +2177,29 @@ public final class SuggestionBarView extends GridLayout {
             return;
         }
         Context context = getContext();
+        if (entry.appRef.clonedProfile) {
+            LaunchAnimationContext launchAnimationContext = shouldUseTouchLaunchAnimation(launchSourceView)
+                ? buildLaunchAnimationContext(launchSourceView)
+                : null;
+            Bundle options = launchAnimationContext != null ? launchAnimationContext.options : null;
+            if (!LauncherAppLauncher.tryStartProfileMainActivity(context, entry, options)) {
+                Log.w(LOG_TAG, "Failed to launch cloned/profile package " + entry.appRef.packageName
+                    + " activity=" + entry.appRef.activityName + " user=" + entry.appRef.userId);
+                return;
+            }
+            if (activeAzLetter != null) {
+                clearAzPreview();
+            }
+            getUsageStatsStore().recordLaunch(entry.appRef.stableId());
+            invalidateMostUsedCache();
+            if (terminalView != null) {
+                terminalView.clearInputLine();
+            }
+            dismissFolderPopup();
+            dismissAppContextPopup();
+            dismissShortcutsPopup();
+            return;
+        }
         PackageManager packageManager = context.getPackageManager();
         String activityName = entry.appRef.activityName;
         if (!TextUtils.isEmpty(activityName) && activityName.startsWith(".")) {
@@ -5686,7 +5710,7 @@ public final class SuggestionBarView extends GridLayout {
         if (item instanceof PinnedAppItem) {
             PinnedAppItem appItem = (PinnedAppItem) item;
             AppRef ref = appItem.appRef;
-            return new PinnedAppItem(new AppRef(ref.packageName, ref.activityName), appItem.iconOverride);
+            return new PinnedAppItem(ref.copy(), appItem.iconOverride);
         }
         if (item instanceof PinnedFolderItem) {
             PinnedFolderItem folder = (PinnedFolderItem) item;
@@ -5697,7 +5721,7 @@ public final class SuggestionBarView extends GridLayout {
             copy.tintColor = folder.tintColor;
             for (PinnedAppItem folderApp : folder.apps) {
                 AppRef ref = folderApp.appRef;
-                copy.apps.add(new PinnedAppItem(new AppRef(ref.packageName, ref.activityName), folderApp.iconOverride));
+                copy.apps.add(new PinnedAppItem(ref.copy(), folderApp.iconOverride));
             }
             return copy;
         }

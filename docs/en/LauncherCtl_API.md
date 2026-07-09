@@ -128,8 +128,17 @@ Each entry includes:
 - `packageName`
 - `activityName`
 - `stableId`
+- `userId`
+- `userSerialNumber`
+- `clonedProfile`
+- `profileLabel` when available
 - `systemApp`
 - `launchable`
+
+Normal primary-user apps keep their existing stable id format:
+`package/activity`. Cloned or work/profile variants are returned as separate
+launchable entries when Android exposes them to the launcher, with stable ids
+like `package/activity#user=10` and labels such as `WhatsApp · Clone 10`.
 
 The top-level payload also includes:
 - `count`: number of launchable activities

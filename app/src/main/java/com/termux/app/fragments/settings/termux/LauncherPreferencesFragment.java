@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceManager;
@@ -28,6 +29,7 @@ import com.termux.app.launcher.LauncherLockAccessibilityAccess;
 import com.termux.app.launcher.PinnedAppsEditor;
 import com.termux.app.launcher.data.LauncherUsageStatsStore;
 import com.termux.app.launcher.notifications.LauncherNotificationAccess;
+import com.termux.launcherctl.LauncherCtlMcpPreferences;
 import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.termux.TermuxConstants;
 
@@ -39,6 +41,10 @@ public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
     private static final String KEY_ACCESSIBILITY_LOCK = "app_launcher_accessibility_lock_access";
     private static final String KEY_NOTIFICATION_SETTINGS = "app_launcher_notification_settings";
     private static final String KEY_APP_PERMISSIONS = "app_launcher_app_permissions";
+    private static final String KEY_MCP_PROVIDER = LauncherCtlMcpPreferences.KEY_WEB_PROVIDER;
+    private static final String KEY_MCP_BRAVE_API_KEY = LauncherCtlMcpPreferences.KEY_BRAVE_API_KEY;
+    private static final String KEY_MCP_SEARXNG_URL = LauncherCtlMcpPreferences.KEY_SEARXNG_URL;
+    private static final String KEY_MCP_SEARXNG_API_KEY = LauncherCtlMcpPreferences.KEY_SEARXNG_API_KEY;
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -50,6 +56,7 @@ public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
         setPreferencesFromResource(R.xml.launcher_preferences, rootKey);
         SettingsLayoutUtils.applyScreenLayout(this);
         configurePermissionActions(context);
+        configureMcpWebPreferences(context);
         updatePermissionSummaries(context);
 
         SwitchPreferenceCompat appsRowPreference = findPreference("app_launcher_apps_row_enabled");
@@ -138,9 +145,81 @@ public class LauncherPreferencesFragment extends MaterialPreferenceFragment {
             getActivity().setTitle(R.string.termux_launcher_preferences_title);
         }
         updatePermissionSummaries(context);
+        updateMcpWebPreferences(context);
         SwitchPreferenceCompat notificationDotsPreference = findPreference("app_launcher_notification_dots");
         if (notificationDotsPreference != null) {
             updateNotificationDotsSummary(context, notificationDotsPreference);
+        }
+    }
+
+    private void configureMcpWebPreferences(@NonNull Context context) {
+        ListPreference provider = findPreference(KEY_MCP_PROVIDER);
+        if (provider != null) {
+            provider.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+            provider.setOnPreferenceChangeListener((preference, newValue) -> {
+                LauncherCtlMcpPreferences.putString(context, KEY_MCP_PROVIDER, String.valueOf(newValue));
+                LauncherCtlMcpPreferences.writePresetConfig(context);
+                updateMcpWebPreferences(context, String.valueOf(newValue));
+                Toast.makeText(context, R.string.launcherctl_mcp_config_written, Toast.LENGTH_SHORT).show();
+                return true;
+            });
+        }
+        configureMcpTextPreference(context, KEY_MCP_BRAVE_API_KEY, true);
+        configureMcpTextPreference(context, KEY_MCP_SEARXNG_URL, false);
+        configureMcpTextPreference(context, KEY_MCP_SEARXNG_API_KEY, true);
+        updateMcpWebPreferences(context);
+    }
+
+    private void configureMcpTextPreference(@NonNull Context context, @NonNull String key, boolean secret) {
+        EditTextPreference preference = findPreference(key);
+        if (preference == null) return;
+        preference.setOnPreferenceChangeListener((pref, newValue) -> {
+            LauncherCtlMcpPreferences.putString(context, key, String.valueOf(newValue));
+            LauncherCtlMcpPreferences.writePresetConfig(context);
+            updateMcpTextSummary(context, preference, key, secret);
+            Toast.makeText(context, R.string.launcherctl_mcp_config_written, Toast.LENGTH_SHORT).show();
+            return true;
+        });
+        updateMcpTextSummary(context, preference, key, secret);
+    }
+
+    private void updateMcpWebPreferences(@NonNull Context context) {
+        updateMcpWebPreferences(context, LauncherCtlMcpPreferences.getWebProvider(context));
+    }
+
+    private void updateMcpWebPreferences(@NonNull Context context, @NonNull String provider) {
+        setVisible(KEY_MCP_BRAVE_API_KEY, LauncherCtlMcpPreferences.PROVIDER_BRAVE.equals(provider));
+        boolean searxng = LauncherCtlMcpPreferences.PROVIDER_SEARXNG.equals(provider);
+        setVisible(KEY_MCP_SEARXNG_URL, searxng);
+        setVisible(KEY_MCP_SEARXNG_API_KEY, searxng);
+        updateMcpTextSummary(context, findPreference(KEY_MCP_BRAVE_API_KEY), KEY_MCP_BRAVE_API_KEY, true);
+        updateMcpTextSummary(context, findPreference(KEY_MCP_SEARXNG_URL), KEY_MCP_SEARXNG_URL, false);
+        updateMcpTextSummary(context, findPreference(KEY_MCP_SEARXNG_API_KEY), KEY_MCP_SEARXNG_API_KEY, true);
+    }
+
+    private void setVisible(@NonNull String key, boolean visible) {
+        Preference preference = findPreference(key);
+        if (preference != null) {
+            preference.setVisible(visible);
+        }
+    }
+
+    private void updateMcpTextSummary(@NonNull Context context,
+                                      Preference preference,
+                                      @NonNull String key,
+                                      boolean secret) {
+        if (preference == null) return;
+        String value = LauncherCtlMcpPreferences.getSecret(context, key);
+        if (secret) {
+            preference.setSummary(value.isEmpty()
+                ? R.string.launcherctl_mcp_secret_missing
+                : R.string.launcherctl_mcp_secret_set);
+        } else if (value.isEmpty()) {
+            if (KEY_MCP_SEARXNG_URL.equals(key)) {
+                preference.setSummary(R.string.launcherctl_mcp_searxng_url_summary);
+            }
+        } else {
+            preference.setSummary(value);
         }
     }
 
