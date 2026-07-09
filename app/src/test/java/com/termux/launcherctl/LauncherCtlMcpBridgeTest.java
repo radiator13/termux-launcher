@@ -52,6 +52,22 @@ public class LauncherCtlMcpBridgeTest {
     }
 
     @Test
+    public void normalizeSchema_addsLimitAliasForCountBasedSearchTools() throws Exception {
+        JSONObject schema = LauncherCtlMcpBridge.normalizeSchema(new JSONObject()
+            .put("type", "object")
+            .put("properties", new JSONObject()
+                .put("query", new JSONObject().put("type", "string"))
+                .put("count", new JSONObject().put("type", "number"))));
+
+        JSONObject properties = schema.getJSONObject("properties");
+        JSONObject count = properties.getJSONObject("count");
+        JSONObject limit = properties.getJSONObject("limit");
+        assertEquals("integer", count.getString("type"));
+        assertEquals(8, count.getInt("maximum"));
+        assertEquals(5, limit.getInt("default"));
+    }
+
+    @Test
     public void compactToolResult_returnsShortSearchRows() throws Exception {
         JSONObject result = new JSONObject()
             .put("content", new JSONArray()

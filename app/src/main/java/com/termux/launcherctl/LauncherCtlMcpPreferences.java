@@ -105,6 +105,7 @@ public final class LauncherCtlMcpPreferences {
             try (FileOutputStream stream = new FileOutputStream(file, false)) {
                 stream.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
             }
+            LauncherCtlMcpBridge.getInstance().setContext(context);
             LauncherCtlMcpBridge.getInstance().refresh();
         } catch (Exception ignored) {
         }
@@ -114,7 +115,7 @@ public final class LauncherCtlMcpPreferences {
     private static JSONObject braveServer() throws Exception {
         return new JSONObject()
             .put("transport", "stdio")
-            .put("command", "npx")
+            .put("command", termuxCommand("npx"))
             .put("args", new JSONArray()
                 .put("-y")
                 .put("@modelcontextprotocol/server-brave-search"))
@@ -132,7 +133,7 @@ public final class LauncherCtlMcpPreferences {
     private static JSONObject searxngServer() throws Exception {
         return new JSONObject()
             .put("transport", "stdio")
-            .put("command", "npx")
+            .put("command", termuxCommand("npx"))
             .put("args", new JSONArray()
                 .put("-y")
                 .put("mcp-searxng"))
@@ -149,5 +150,10 @@ public final class LauncherCtlMcpPreferences {
                     .put("web.searxng_web_search"))
                 .put("deny", new JSONArray()))
             .put("timeout_ms", 10000);
+    }
+
+    @NonNull
+    private static String termuxCommand(@NonNull String command) {
+        return "/data/data/com.termux/files/usr/bin/" + command;
     }
 }

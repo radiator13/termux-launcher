@@ -77,39 +77,6 @@
     </PreferenceCategory>
 
     <PreferenceCategory
-        app:key="launcherctl_mcp_web"
-        app:title="@string/launcherctl_mcp_web_header">
-
-        <ListPreference
-            app:key="launcherctl_mcp_web_provider"
-            app:title="@string/launcherctl_mcp_web_provider_title"
-            app:summary="@string/launcherctl_mcp_web_provider_summary"
-            app:dialogTitle="@string/launcherctl_mcp_web_provider_title"
-            android:defaultValue="off"
-            app:entries="@array/launcherctl_mcp_web_provider_entries"
-            app:entryValues="@array/launcherctl_mcp_web_provider_values" />
-
-        <EditTextPreference
-            app:key="launcherctl_mcp_brave_api_key"
-            app:title="@string/launcherctl_mcp_brave_api_key_title"
-            app:summary="@string/launcherctl_mcp_brave_api_key_summary"
-            android:inputType="textPassword" />
-
-        <EditTextPreference
-            app:key="launcherctl_mcp_searxng_url"
-            app:title="@string/launcherctl_mcp_searxng_url_title"
-            app:summary="@string/launcherctl_mcp_searxng_url_summary"
-            android:inputType="textUri" />
-
-        <EditTextPreference
-            app:key="launcherctl_mcp_searxng_api_key"
-            app:title="@string/launcherctl_mcp_searxng_api_key_title"
-            app:summary="@string/launcherctl_mcp_searxng_api_key_summary"
-            android:inputType="textPassword" />
-
-    </PreferenceCategory>
-
-    <PreferenceCategory
         app:key="apps_bar_permissions"
         app:title="@string/apps_bar_permissions_header">
 
