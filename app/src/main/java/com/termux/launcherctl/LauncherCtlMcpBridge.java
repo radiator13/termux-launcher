@@ -132,7 +132,9 @@ public final class LauncherCtlMcpBridge {
         LauncherCtlMcpConfig config = LauncherCtlMcpConfig.load(configFile);
         Map<String, McpTool> tools = new LinkedHashMap<>();
         for (LauncherCtlMcpConfig.Server server : config.servers.values()) {
-            tools.putAll(discoverServerTools(server));
+            Map<String, McpTool> serverTools = discoverServerTools(server);
+            addFallbackTools(server, serverTools);
+            tools.putAll(serverTools);
         }
         synchronized (lock) {
             cachedTools = tools;
@@ -171,6 +173,68 @@ public final class LauncherCtlMcpBridge {
             Log.w(LOG_TAG, "MCP discovery failed for server " + server.name + ": " + messageOf(e), e);
         }
         return out;
+    }
+
+    private void addFallbackTools(@NonNull LauncherCtlMcpConfig.Server server,
+                                  @NonNull Map<String, McpTool> tools) {
+        try {
+            if (isBraveSearchServer(server)
+                && server.allows("brave_web_search")
+                && !tools.containsKey(server.name + ".brave_web_search")) {
+                McpTool fallback = fallbackSearchTool(
+                    server,
+                    "brave_web_search",
+                    "Search the web with Brave Search through the configured MCP server.");
+                tools.put(fallback.metadata.name, fallback);
+                Log.i(LOG_TAG, "Registered fallback MCP tool " + fallback.metadata.name);
+            }
+            if (isSearxngServer(server)
+                && (server.allows("search") || server.allows("web_search") || server.allows("searxng_web_search"))) {
+                String remoteName = server.allow.contains("searxng_web_search") ? "searxng_web_search"
+                    : (server.allow.contains("web_search") ? "web_search" : "search");
+                String exposedName = server.name + "." + remoteName;
+                if (!tools.containsKey(exposedName)) {
+                    McpTool fallback = fallbackSearchTool(
+                        server,
+                        remoteName,
+                        "Search the web with SearXNG through the configured MCP server.");
+                    tools.put(fallback.metadata.name, fallback);
+                    Log.i(LOG_TAG, "Registered fallback MCP tool " + fallback.metadata.name);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(LOG_TAG, "Failed to register fallback MCP tools for server " + server.name + ": " + messageOf(e), e);
+        }
+    }
+
+    @NonNull
+    private McpTool fallbackSearchTool(@NonNull LauncherCtlMcpConfig.Server server,
+                                       @NonNull String remoteName,
+                                       @NonNull String description) throws Exception {
+        JSONObject schema = new JSONObject()
+            .put("type", "object")
+            .put("properties", new JSONObject()
+                .put("query", new JSONObject()
+                    .put("type", "string")
+                    .put("description", "Search query"))
+                .put("limit", new JSONObject()
+                    .put("type", "integer")
+                    .put("minimum", 1)
+                    .put("maximum", MAX_RESULT_LIMIT)
+                    .put("default", DEFAULT_RESULT_LIMIT)
+                    .put("description", "Maximum number of results to return.")))
+            .put("required", new JSONArray().put("query"))
+            .put("additionalProperties", false);
+        String exposedName = remoteName.contains(".") ? remoteName : server.name + "." + remoteName;
+        LauncherToolRegistry.ToolMetadata metadata = new LauncherToolRegistry.ToolMetadata(
+            exposedName,
+            description,
+            schema,
+            LauncherToolRegistry.ToolRisk.LOW,
+            false,
+            LauncherToolRegistry.ToolExecutor.MCP
+        );
+        return new McpTool(server, remoteName, metadata);
     }
 
     @Nullable
@@ -502,6 +566,23 @@ public final class LauncherCtlMcpBridge {
         String value = descriptor.toString();
         return value.contains("@modelcontextprotocol/server-brave-search")
             || value.contains("mcp-searxng");
+    }
+
+    private static boolean isBraveSearchServer(@NonNull LauncherCtlMcpConfig.Server server) {
+        return serverDescriptor(server).contains("@modelcontextprotocol/server-brave-search");
+    }
+
+    private static boolean isSearxngServer(@NonNull LauncherCtlMcpConfig.Server server) {
+        return serverDescriptor(server).contains("mcp-searxng");
+    }
+
+    @NonNull
+    private static String serverDescriptor(@NonNull LauncherCtlMcpConfig.Server server) {
+        StringBuilder descriptor = new StringBuilder(server.command.toLowerCase(Locale.US));
+        for (String arg : server.args) {
+            descriptor.append(' ').append(arg.toLowerCase(Locale.US));
+        }
+        return descriptor.toString();
     }
 
     @NonNull
