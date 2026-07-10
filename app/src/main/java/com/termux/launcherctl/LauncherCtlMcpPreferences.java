@@ -36,7 +36,10 @@ public final class LauncherCtlMcpPreferences {
 
     @NonNull
     private static SharedPreferences prefs(@NonNull Context context) {
-        return context.getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return context.getApplicationContext().getSharedPreferences(
+            PREFS_NAME,
+            Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS
+        );
     }
 
     @NonNull

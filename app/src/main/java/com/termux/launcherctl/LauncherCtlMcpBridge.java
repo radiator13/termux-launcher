@@ -513,6 +513,7 @@ public final class LauncherCtlMcpBridge {
         if (context != null) {
             env.putAll(appEnv);
         }
+        logSecretPresence(server, env);
         builder.directory(new File(LauncherCtlStorage.getHomeDir().getAbsolutePath()));
         java.lang.Process process = builder.start();
         Future<?> stderrDrain = LauncherCtlMcpBridge.getInstance().executor.submit(() -> drainStream(process));
@@ -547,12 +548,37 @@ public final class LauncherCtlMcpBridge {
             : pathPrefix + ":" + existingPath);
     }
 
+    private static void logSecretPresence(@NonNull LauncherCtlMcpConfig.Server server,
+                                          @NonNull Map<String, String> env) {
+        if (isBraveSearchServer(server)) {
+            Log.i(LOG_TAG, "Starting Brave MCP server; BRAVE_API_KEY configured="
+                + !env.getOrDefault("BRAVE_API_KEY", "").isEmpty());
+        }
+        if (isSearxngServer(server)) {
+            Log.i(LOG_TAG, "Starting SearXNG MCP server; SEARXNG_URL configured="
+                + !env.getOrDefault("SEARXNG_URL", "").isEmpty());
+        }
+    }
+
     private static void drainStream(@NonNull java.lang.Process process) {
         try {
-            byte[] buffer = new byte[1024];
+            ByteArrayOutputStream line = new ByteArrayOutputStream();
             BufferedInputStream stream = new BufferedInputStream(process.getErrorStream());
-            while (stream.read(buffer) != -1) {
-                // Drain stderr so noisy MCP servers cannot block on a full error pipe.
+            int b;
+            int logged = 0;
+            while ((b = stream.read()) != -1) {
+                if (b == '\n') {
+                    if (line.size() > 0 && logged < 8) {
+                        Log.w(LOG_TAG, "MCP stderr: " + compact(line.toString(StandardCharsets.UTF_8.name()), 240));
+                        logged++;
+                    }
+                    line.reset();
+                } else if (b != '\r' && line.size() < 512) {
+                    line.write(b);
+                }
+            }
+            if (line.size() > 0 && logged < 8) {
+                Log.w(LOG_TAG, "MCP stderr: " + compact(line.toString(StandardCharsets.UTF_8.name()), 240));
             }
         } catch (Exception ignored) {
         }
