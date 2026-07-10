@@ -116,12 +116,20 @@ public final class LauncherCtlMcpPreferences {
 
     @NonNull
     private static JSONObject braveServer() throws Exception {
+        String cachedBraveServer = findCachedPackageEntry("@modelcontextprotocol/server-brave-search", "dist/index.js");
+        JSONArray args = new JSONArray();
+        String command;
+        if (cachedBraveServer != null) {
+            command = termuxCommand("node");
+            args.put(cachedBraveServer);
+        } else {
+            command = termuxCommand("npx");
+            args.put("-y").put("@modelcontextprotocol/server-brave-search");
+        }
         return new JSONObject()
             .put("transport", "stdio")
-            .put("command", termuxCommand("npx"))
-            .put("args", new JSONArray()
-                .put("-y")
-                .put("@modelcontextprotocol/server-brave-search"))
+            .put("command", command)
+            .put("args", args)
             .put("env", new JSONObject()
                 .put("BRAVE_API_KEY", "$" + ENV_BRAVE_API_KEY))
             .put("tools", new JSONObject()
@@ -158,5 +166,19 @@ public final class LauncherCtlMcpPreferences {
     @NonNull
     private static String termuxCommand(@NonNull String command) {
         return "/data/data/com.termux/files/usr/bin/" + command;
+    }
+
+    @Nullable
+    private static String findCachedPackageEntry(@NonNull String packageName, @NonNull String relativeEntry) {
+        File npxCache = new File(LauncherCtlStorage.getHomeDir(), ".npm/_npx");
+        File[] cacheEntries = npxCache.listFiles();
+        if (cacheEntries == null) return null;
+        for (File entry : cacheEntries) {
+            File candidate = new File(new File(new File(entry, "node_modules"), packageName), relativeEntry);
+            if (candidate.isFile()) {
+                return candidate.getAbsolutePath();
+            }
+        }
+        return null;
     }
 }

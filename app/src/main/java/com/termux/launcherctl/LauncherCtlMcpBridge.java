@@ -497,9 +497,7 @@ public final class LauncherCtlMcpBridge {
     @NonNull
     private static JSONObject withSession(@NonNull LauncherCtlMcpConfig.Server server,
                                           @NonNull SessionCallback callback) throws Exception {
-        List<String> command = new ArrayList<>();
-        command.add(resolveCommand(server.command));
-        command.addAll(server.args);
+        List<String> command = resolveServerCommand(server);
         ProcessBuilder builder = new ProcessBuilder(command);
         Map<String, String> env = builder.environment();
         applyTermuxProcessEnvironment(env);
@@ -532,6 +530,35 @@ public final class LauncherCtlMcpBridge {
         File termuxCommand = new File("/data/data/com.termux/files/usr/bin", command);
         if (termuxCommand.canExecute()) return termuxCommand.getAbsolutePath();
         return command;
+    }
+
+    @NonNull
+    private static List<String> resolveServerCommand(@NonNull LauncherCtlMcpConfig.Server server) {
+        if (isBraveSearchServer(server)) {
+            File cachedBraveServer = findCachedPackageEntry("@modelcontextprotocol/server-brave-search", "dist/index.js");
+            if (cachedBraveServer != null) {
+                List<String> command = new ArrayList<>();
+                command.add(resolveCommand("node"));
+                command.add(cachedBraveServer.getAbsolutePath());
+                return command;
+            }
+        }
+        List<String> command = new ArrayList<>();
+        command.add(resolveCommand(server.command));
+        command.addAll(server.args);
+        return command;
+    }
+
+    @Nullable
+    private static File findCachedPackageEntry(@NonNull String packageName, @NonNull String relativeEntry) {
+        File npxCache = new File(LauncherCtlStorage.getHomeDir(), ".npm/_npx");
+        File[] cacheEntries = npxCache.listFiles();
+        if (cacheEntries == null) return null;
+        for (File entry : cacheEntries) {
+            File candidate = new File(new File(new File(entry, "node_modules"), packageName), relativeEntry);
+            if (candidate.isFile()) return candidate;
+        }
+        return null;
     }
 
     private static void applyTermuxProcessEnvironment(@NonNull Map<String, String> env) {
