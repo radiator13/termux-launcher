@@ -52,6 +52,7 @@ import android.view.DragEvent;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.LruCache;
+import android.util.TypedValue;
 import android.view.VelocityTracker;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -73,6 +74,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.GridLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -5083,20 +5085,35 @@ public final class SuggestionBarView extends GridLayout {
 
     @NonNull
     private PopupWindow buildPopupWindow(@NonNull View content, int tintBase, boolean tightWrap, @Nullable Runnable onDismiss) {
+        return buildPopupWindow(content, tintBase, tightWrap, onDismiss, -1);
+    }
+
+    @NonNull
+    private PopupWindow buildPopupWindow(
+        @NonNull View content,
+        int tintBase,
+        boolean tightWrap,
+        @Nullable Runnable onDismiss,
+        int requestedWidth
+    ) {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
         int maxWidth = popupMaxWidth(screenW);
         int minWidth = popupMinWidth(screenW, tightWrap);
         int maxHeight = popupMaxHeight(screenH);
+        int fixedWidth = requestedWidth > 0 ? clamp(requestedWidth, minWidth, maxWidth) : -1;
 
         // Measure the full vertical content before imposing the popup viewport. Measuring the
         // content itself with AT_MOST can clamp a LinearLayout before it enters the ScrollView,
         // leaving trailing action rows laid out beyond its reported bounds and therefore clipped.
         content.measure(
-            View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST),
+            fixedWidth > 0
+                ? View.MeasureSpec.makeMeasureSpec(fixedWidth, View.MeasureSpec.EXACTLY)
+                : View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         );
-        int desiredWidth = clamp(content.getMeasuredWidth(), minWidth, maxWidth);
+        int desiredWidth = fixedWidth > 0
+            ? fixedWidth : clamp(content.getMeasuredWidth(), minWidth, maxWidth);
         int desiredHeight = Math.max(dp(36), Math.min(content.getMeasuredHeight(), maxHeight));
 
         ScrollView scrollView = new ScrollView(getContext());
@@ -5106,7 +5123,8 @@ public final class SuggestionBarView extends GridLayout {
         scrollView.setScrollbarFadingEnabled(false);
         scrollView.setFadingEdgeLength(dp(18));
         scrollView.setVerticalFadingEdgeEnabled(true);
-        scrollView.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        scrollView.addView(content, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         FrameLayout popupRoot = new FrameLayout(getContext());
         GradientDrawable panelBg = new GradientDrawable();
@@ -5309,13 +5327,14 @@ public final class SuggestionBarView extends GridLayout {
 
         int tintBase = inheritedTintColor & 0x00FFFFFF;
         final PopupWindow[] holder = new PopupWindow[1];
+        int popupWidth = notificationPopupWidth(notifications);
         notificationPopupWindow = buildPopupWindow(shell, tintBase, false, () -> {
             if (notificationPopupWindow == holder[0]) {
                 notificationPopupWindow = null;
                 notificationPopupPackage = null;
                 notificationPopupKeys = Collections.emptySet();
             }
-        });
+        }, popupWidth);
         holder[0] = notificationPopupWindow;
         notificationPopupPackage = entry.appRef.packageName;
         Set<String> shownKeys = new HashSet<>();
@@ -5327,6 +5346,54 @@ public final class SuggestionBarView extends GridLayout {
         // terminal IME, moves the dock, and leaves a popup positioned against stale coordinates.
         // Inline reply promotes the popup to a focusable IME target only when Reply is touched.
         showPopupAtAnchor(notificationPopupWindow, anchor);
+    }
+
+    private int notificationPopupWidth(@NonNull List<StatusBarNotification> notifications) {
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int preferredWidth = screenWidth / 2;
+        int requiredActionWidth = 0;
+        Paint actionTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        actionTextPaint.setTextSize(11.5f * getResources().getDisplayMetrics().scaledDensity);
+        actionTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        for (StatusBarNotification sbn : notifications) {
+            Notification notification = sbn.getNotification();
+            if (notification == null) continue;
+            int rowWidth = dp(28);
+            int actionCount = 0;
+            if (notification.actions != null) {
+                for (Notification.Action action : notification.actions) {
+                    if (action == null || action.actionIntent == null) continue;
+                    String title = TextUtils.isEmpty(action.title) ? "Action" : action.title.toString();
+                    rowWidth += notificationActionMeasuredWidth(actionTextPaint, title);
+                    actionCount++;
+                }
+            }
+            if (sbn.isClearable()) {
+                rowWidth += notificationActionMeasuredWidth(actionTextPaint, "Dismiss");
+                actionCount++;
+            }
+            if (actionCount > 1) rowWidth += dp(4) * (actionCount - 1);
+            requiredActionWidth = Math.max(requiredActionWidth, rowWidth);
+        }
+        return adaptiveNotificationPopupWidth(
+            preferredWidth,
+            requiredActionWidth,
+            popupMinWidth(screenWidth, false),
+            popupMaxWidth(screenWidth)
+        );
+    }
+
+    static int adaptiveNotificationPopupWidth(
+        int preferredWidth,
+        int requiredActionWidth,
+        int minimumWidth,
+        int maximumWidth
+    ) {
+        return clamp(Math.max(preferredWidth, requiredActionWidth), minimumWidth, maximumWidth);
+    }
+
+    private int notificationActionMeasuredWidth(@NonNull Paint paint, @NonNull String title) {
+        return Math.max(dp(52), (int) Math.ceil(paint.measureText(title)) + dp(20));
     }
 
     private void addNotificationCard(
@@ -5343,7 +5410,11 @@ public final class SuggestionBarView extends GridLayout {
 
         LinearLayout card = new LinearLayout(getContext());
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(2), dp(9), dp(2), dp(4));
+        card.setPadding(dp(2), dp(7), dp(2), dp(2));
+
+        LinearLayout message = new LinearLayout(getContext());
+        message.setOrientation(LinearLayout.VERTICAL);
+        message.setPadding(0, 0, 0, dp(2));
         if (!TextUtils.isEmpty(title)) {
             TextView titleView = new TextView(getContext());
             titleView.setText(title);
@@ -5352,24 +5423,23 @@ public final class SuggestionBarView extends GridLayout {
             titleView.setTypeface(Typeface.DEFAULT_BOLD);
             titleView.setMaxLines(2);
             titleView.setEllipsize(TextUtils.TruncateAt.END);
-            card.addView(titleView);
+            message.addView(titleView);
         }
         if (!TextUtils.isEmpty(text)) {
             TextView textView = new TextView(getContext());
             textView.setText(text);
             textView.setTextColor(resolveLauncherSubtleTextColor());
             textView.setTextSize(12.5f);
-            textView.setMaxLines(5);
+            textView.setMaxLines(4);
             textView.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             textLp.topMargin = dp(3);
-            card.addView(textView, textLp);
+            message.addView(textView, textLp);
         }
-
         if (notification.contentIntent != null) {
-            card.setClickable(true);
-            card.setOnClickListener(v -> {
+            message.setClickable(true);
+            message.setOnClickListener(v -> {
                 sendNotificationIntent(notification.contentIntent, null, null);
                 if ((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0) {
                     LauncherCtlNotificationListener.dismissNotification(sbn.getKey());
@@ -5377,22 +5447,38 @@ public final class SuggestionBarView extends GridLayout {
                 dismissNotificationPopup();
             });
         }
+        card.addView(message, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        Notification.Action[] actions = notification.actions;
-        if (actions != null) {
-            for (Notification.Action action : actions) {
+        FrameLayout actionHost = new FrameLayout(getContext());
+        LinearLayout actionRow = new LinearLayout(getContext());
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        HorizontalScrollView actionScroller = new HorizontalScrollView(getContext());
+        actionScroller.setFillViewport(false);
+        actionScroller.setHorizontalScrollBarEnabled(false);
+        actionScroller.setOverScrollMode(OVER_SCROLL_NEVER);
+        actionScroller.addView(actionRow, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        actionHost.addView(actionScroller, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        int actionIndex = 0;
+        if (notification.actions != null) {
+            for (Notification.Action action : notification.actions) {
                 if (action == null || action.actionIntent == null) continue;
+                String actionTitle = TextUtils.isEmpty(action.title) ? "Action" : action.title.toString();
+                Button actionButton = notificationActionButton(actionTitle);
                 RemoteInput[] remoteInputs = action.getRemoteInputs();
                 RemoteInput freeform = firstFreeformRemoteInput(remoteInputs);
                 if (freeform != null) {
-                    addInlineReply(card, action, remoteInputs, freeform);
+                    actionButton.setOnClickListener(v ->
+                        showInlineReply(actionHost, action, remoteInputs, freeform));
                 } else {
-                    Button actionButton = notificationActionButton(
-                        TextUtils.isEmpty(action.title) ? "Action" : action.title.toString());
                     actionButton.setOnClickListener(v ->
                         sendNotificationIntent(action.actionIntent, null, null));
-                    card.addView(actionButton, notificationActionLayoutParams());
                 }
+                actionRow.addView(actionButton, notificationActionLayoutParams(actionIndex++ > 0));
             }
         }
 
@@ -5407,14 +5493,20 @@ public final class SuggestionBarView extends GridLayout {
                     }
                 }, 180L);
             });
-            card.addView(dismiss, notificationActionLayoutParams());
+            actionRow.addView(dismiss, notificationActionLayoutParams(actionIndex++ > 0));
+        }
+        if (actionIndex > 0) {
+            LinearLayout.LayoutParams hostLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            hostLp.topMargin = dp(3);
+            card.addView(actionHost, hostLp);
         }
         shell.addView(card, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
-    private void addInlineReply(
-        @NonNull LinearLayout card,
+    private void showInlineReply(
+        @NonNull FrameLayout actionHost,
         @NonNull Notification.Action action,
         @NonNull RemoteInput[] remoteInputs,
         @NonNull RemoteInput freeform
@@ -5442,8 +5534,7 @@ public final class SuggestionBarView extends GridLayout {
         });
         row.addView(reply, new LinearLayout.LayoutParams(0, dp(38), 1f));
 
-        Button send = notificationActionButton(
-            TextUtils.isEmpty(action.title) ? "Send" : action.title.toString());
+        Button send = notificationActionButton("Send");
         LinearLayout.LayoutParams sendLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
         sendLp.leftMargin = dp(6);
@@ -5454,10 +5545,10 @@ public final class SuggestionBarView extends GridLayout {
             sendNotificationIntent(action.actionIntent, remoteInputs, value);
             reply.setText("");
         });
-        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rowLp.topMargin = dp(8);
-        card.addView(row, rowLp);
+        actionHost.removeAllViews();
+        actionHost.addView(row, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        enableNotificationReplyInput(reply);
     }
 
     private void enableNotificationReplyInput(@NonNull EditText reply) {
@@ -5531,22 +5622,30 @@ public final class SuggestionBarView extends GridLayout {
         button.setTextColor(resolveLauncherTextColor());
         button.setTextSize(11.5f);
         button.setAllCaps(false);
+        button.setSingleLine(true);
+        button.setEllipsize(TextUtils.TruncateAt.END);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setMinHeight(0);
         button.setMinimumHeight(0);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
         button.setPadding(dp(10), 0, dp(10), 0);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(9));
-        bg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0x66));
-        bg.setStroke(Math.max(1, dp(1)), withAlphaComponent(resolveLauncherOutlineColor(), 0x55));
-        button.setBackground(bg);
+        TypedValue selectableBackground = new TypedValue();
+        if (getContext().getTheme().resolveAttribute(
+            android.R.attr.selectableItemBackgroundBorderless, selectableBackground, true)
+            && selectableBackground.resourceId != 0) {
+            button.setBackgroundResource(selectableBackground.resourceId);
+        } else {
+            button.setBackgroundColor(0x00000000);
+        }
         return button;
     }
 
     @NonNull
-    private LinearLayout.LayoutParams notificationActionLayoutParams() {
+    private LinearLayout.LayoutParams notificationActionLayoutParams(boolean withStartGap) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
-        lp.topMargin = dp(7);
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
+        if (withStartGap) lp.leftMargin = dp(4);
         return lp;
     }
 
