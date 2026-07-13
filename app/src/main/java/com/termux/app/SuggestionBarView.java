@@ -4057,7 +4057,6 @@ public final class SuggestionBarView extends GridLayout {
                 }
                 if (state != null && state.sourceView == pressTarget && !state.menuShown
                     && notificationSwipeAction != null
-                    && notificationBadgesEnabled
                     && LauncherNotificationBadgeStore.hasBadge(notificationPackage)) {
                     float dx = event.getRawX() - state.downRawX;
                     float dy = event.getRawY() - state.downRawY;
@@ -4267,8 +4266,7 @@ public final class SuggestionBarView extends GridLayout {
             PinnedAppItem topPinnedApp = pinnedAppAt(targetPinnedIndex);
             boolean pinnedHasCustomIcon = topPinnedApp != null
                 && getIconResolver().loadOverride(topPinnedApp.iconOverride) != null;
-            if (notificationBadgesEnabled
-                && LauncherNotificationBadgeStore.hasBadge(context.entry.appRef.packageName)) {
+            if (LauncherNotificationBadgeStore.hasBadge(context.entry.appRef.packageName)) {
                 TextView notificationsRow = addPopupActionRow(shell, "Notifications", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
                     dismissAppContextPopup();
                     showNotificationPopup(context.entry, context.anchor);
