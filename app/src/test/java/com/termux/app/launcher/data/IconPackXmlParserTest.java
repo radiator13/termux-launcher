@@ -18,6 +18,9 @@ public class IconPackXmlParserTest {
         String appfilter = "<resources>"
             + "<item component=\"ComponentInfo{com.example/.MainActivity}\" drawable=\"ic_example\"/>"
             + "<calendar component=\"ComponentInfo{com.calendar/com.calendar.Main}\" prefix=\"calendar_\"/>"
+            + "<iconback img1=\"back_one\" img2=\"back_two\"/>"
+            + "<iconmask img1=\"mask_one\"/>"
+            + "<iconupon img1=\"upon_one\" img2=\"upon_two\"/>"
             + "<scale factor=\"0.85\"/>"
             + "</resources>";
 
@@ -26,6 +29,10 @@ public class IconPackXmlParserTest {
         assertEquals("ic_example", pack.drawableForComponent("com.example", ".MainActivity", 15));
         assertEquals("calendar_15", pack.drawableForComponent("com.calendar", "com.calendar.Main", 15));
         assertEquals(0.85f, pack.scale, 0.001f);
+        assertEquals(2, pack.iconBacks.size());
+        assertEquals("back_two", pack.iconBacks.get(1));
+        assertEquals("mask_one", pack.iconMasks.get(0));
+        assertEquals(2, pack.iconUpons.size());
     }
 
     @Test

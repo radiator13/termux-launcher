@@ -38,6 +38,26 @@ public class LauncherCtlApiServerTest {
         assertEquals("com.example.alpha/com.example.alpha.MainActivity",
             payload.getJSONArray("apps").getJSONObject(0).getString("stableId"));
         assertEquals(true, payload.getJSONArray("apps").getJSONObject(0).getBoolean("launchable"));
+        assertEquals(false, payload.getJSONArray("apps").getJSONObject(0).getBoolean("clonedProfile"));
+        assertEquals(-1, payload.getJSONArray("apps").getJSONObject(0).getInt("userId"));
+    }
+
+    @Test
+    public void buildLaunchableAppsPayload_distinguishesClonedProfileApps() throws Exception {
+        List<LauncherAppEntry> apps = Arrays.asList(
+            entry("com.example.chat", "com.example.chat.MainActivity", "Chat"),
+            new LauncherAppEntry(new AppRef("com.example.chat", "com.example.chat.MainActivity",
+                10, 10L, true, "Clone 10"), "Chat · Clone 10", null)
+        );
+
+        JSONObject payload = LauncherCtlApiServer.buildLaunchableAppsPayload(apps, null);
+
+        assertEquals(2, payload.getInt("count"));
+        JSONObject clone = payload.getJSONArray("apps").getJSONObject(1);
+        assertEquals("Chat · Clone 10", clone.getString("label"));
+        assertEquals("com.example.chat/com.example.chat.MainActivity#user=10", clone.getString("stableId"));
+        assertEquals(10, clone.getInt("userId"));
+        assertEquals(true, clone.getBoolean("clonedProfile"));
     }
 
     @Test

@@ -27,6 +27,7 @@ public final class LauncherCtlStorage {
     public static final String TOOLS_JSON_NAME = "tools.json";
     public static final String CAPABILITIES_JSON_NAME = "capabilities.json";
     public static final String CONFIG_JSON_NAME = "config.json";
+    public static final String MCP_CONFIG_JSON_NAME = "mcp.json";
 
     private static File sTestBaseDir = null;
 
@@ -101,5 +102,9 @@ public final class LauncherCtlStorage {
 
     public static File getConfigJsonFile() {
         return new File(ensureLauncherCtlDir(), CONFIG_JSON_NAME);
+    }
+
+    public static File getMcpConfigJsonFile() {
+        return new File(new File(new File(getHomeDir(), ".config"), "termux-launcher"), MCP_CONFIG_JSON_NAME);
     }
 }

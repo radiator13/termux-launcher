@@ -8,6 +8,7 @@ import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Process;
+import android.os.UserHandle;
 import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
@@ -25,6 +26,9 @@ public final class LauncherAppLauncher {
     public static boolean launchEntry(@NonNull Context context, @NonNull LauncherAppEntry entry) {
         if (entry.appRef.packageName.startsWith("injected.test")) {
             return false;
+        }
+        if (entry.appRef.clonedProfile && tryStartProfileMainActivity(context, entry, null)) {
+            return true;
         }
 
         PackageManager packageManager = context.getPackageManager();
@@ -102,6 +106,64 @@ public final class LauncherAppLauncher {
         }
 
         return false;
+    }
+
+    public static boolean tryStartProfileMainActivity(@NonNull Context context,
+                                                      @NonNull LauncherAppEntry entry,
+                                                      @Nullable android.os.Bundle options) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || entry.appRef.userId < 0) {
+            return false;
+        }
+        String activityName = entry.appRef.activityName;
+        if (!TextUtils.isEmpty(activityName) && activityName.startsWith(".")) {
+            activityName = entry.appRef.packageName + activityName;
+        }
+        if (TextUtils.isEmpty(activityName)) {
+            return false;
+        }
+        try {
+            LauncherApps launcherApps = (LauncherApps) context.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (launcherApps == null) {
+                return false;
+            }
+            launcherApps.startMainActivity(
+                new ComponentName(entry.appRef.packageName, activityName),
+                userHandleFor(entry.appRef.userId),
+                null,
+                options
+            );
+            return true;
+        } catch (Throwable ignored) {
+            return tryStartProfileWithAm(entry.appRef.userId, entry.appRef.packageName, activityName);
+        }
+    }
+
+    @NonNull
+    private static UserHandle userHandleFor(int userId) throws Exception {
+        java.lang.reflect.Method method = UserHandle.class.getDeclaredMethod("of", int.class);
+        method.setAccessible(true);
+        Object value = method.invoke(null, userId);
+        if (value instanceof UserHandle) {
+            return (UserHandle) value;
+        }
+        throw new IllegalStateException("UserHandle.of did not return a handle");
+    }
+
+    private static boolean tryStartProfileWithAm(int userId, @NonNull String packageName, @NonNull String activityName) {
+        if (userId < 0) {
+            return false;
+        }
+        try {
+            String component = packageName + "/" + activityName;
+            java.lang.Process process = new ProcessBuilder("am", "start", "--user",
+                String.valueOf(userId), "-n", component)
+                .redirectErrorStream(true)
+                .start();
+            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            return finished && process.exitValue() == 0;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static boolean sameComponent(@Nullable ComponentName first, @Nullable ComponentName second) {

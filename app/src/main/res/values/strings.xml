@@ -621,6 +621,21 @@
                 <string name="termux_app_launcher_reset_usage_ranking_confirm_title">Reset ranking?</string>
                 <string name="termux_app_launcher_reset_usage_ranking_confirm_message">This will clear app usage ranking for A-Z launch suggestions.</string>
                 <string name="termux_app_launcher_reset_usage_ranking_done">Adaptive A-Z ranking reset</string>
+                <string name="launcherctl_mcp_web_header">Agent web search</string>
+                <string name="launcherctl_mcp_web_provider_title">Web search provider</string>
+                <string name="launcherctl_mcp_web_provider_summary">Generate a LauncherCtl MCP preset for grounded web search tools.</string>
+                <string name="launcherctl_mcp_web_provider_off">Off</string>
+                <string name="launcherctl_mcp_web_provider_brave">Brave Search</string>
+                <string name="launcherctl_mcp_web_provider_searxng">SearXNG</string>
+                <string name="launcherctl_mcp_brave_api_key_title">Brave Search API key</string>
+                <string name="launcherctl_mcp_brave_api_key_summary">Stored in app preferences and injected into the MCP server environment.</string>
+                <string name="launcherctl_mcp_searxng_url_title">SearXNG URL</string>
+                <string name="launcherctl_mcp_searxng_url_summary">Your SearXNG instance URL, for example https://search.example.com.</string>
+                <string name="launcherctl_mcp_searxng_api_key_title">SearXNG API key</string>
+                <string name="launcherctl_mcp_searxng_api_key_summary">Optional. Only needed for instances that require an API key.</string>
+                <string name="launcherctl_mcp_secret_set">Configured</string>
+                <string name="launcherctl_mcp_secret_missing">Not configured</string>
+                <string name="launcherctl_mcp_config_written">MCP preset updated</string>
                 
             <!-- Sessions Category -->
             <string name="termux_sessions_header">Termux Sessions Menu</string>

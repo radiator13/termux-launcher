@@ -4,11 +4,17 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.LauncherActivityInfo;
+import android.content.pm.LauncherApps;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
+import android.os.UserHandle;
+import android.os.UserManager;
 import android.util.LruCache;
 
 import androidx.annotation.NonNull;
@@ -21,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -235,8 +242,9 @@ public final class LauncherAppDataProvider {
             CharSequence labelSequence = info.loadLabel(packageManager);
             String label = labelSequence != null ? labelSequence.toString() : info.packageName;
             AppRef ref = new AppRef(info.packageName, info.name);
-            Drawable icon = iconResolver.resolve(ref);
-            LauncherAppEntry entry = new LauncherAppEntry(ref, label, icon);
+            LauncherIconResolver.ResolvedIcon resolvedIcon = iconResolver.resolveDetailed(ref, null, null);
+            Drawable icon = resolvedIcon.drawable;
+            LauncherAppEntry entry = new LauncherAppEntry(ref, label, icon, resolvedIcon.iconPackArtwork);
             snapshot.apps.add(entry);
             snapshot.byId.put(ref.stableId(), entry);
             if (!snapshot.firstByPackage.containsKey(ref.packageName)) {
@@ -264,7 +272,145 @@ public final class LauncherAppDataProvider {
             }
             bucket.add(entry);
         }
+        addProfileApps(snapshot, packageManager, defaultComponentsByPackage);
         return snapshot;
+    }
+
+    private void addProfileApps(@NonNull Snapshot snapshot,
+                                @NonNull PackageManager packageManager,
+                                @NonNull Map<String, ComponentName> defaultComponentsByPackage) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return;
+        }
+        try {
+            LauncherApps launcherApps = (LauncherApps) context.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            UserManager userManager = (UserManager) context.getSystemService(Context.USER_SERVICE);
+            if (launcherApps == null || userManager == null) {
+                return;
+            }
+            // Some OEM/private-space profiles are launcher-visible before (or without) appearing
+            // in UserManager#getUserProfiles. Use the union so every profile Android exposes to a
+            // launcher gets the same identity treatment.
+            LinkedHashSet<UserHandle> profiles = new LinkedHashSet<>();
+            List<UserHandle> userManagerProfiles = userManager.getUserProfiles();
+            if (userManagerProfiles != null) profiles.addAll(userManagerProfiles);
+            List<UserHandle> launcherProfiles = launcherApps.getProfiles();
+            if (launcherProfiles != null) profiles.addAll(launcherProfiles);
+            if (profiles.isEmpty()) {
+                return;
+            }
+            UserHandle currentUser = Process.myUserHandle();
+            for (UserHandle profile : profiles) {
+                if (profile == null || profile.equals(currentUser)) {
+                    continue;
+                }
+                addProfileAppsForUser(snapshot, packageManager, launcherApps, userManager,
+                    profile, defaultComponentsByPackage);
+            }
+        } catch (Throwable ignored) {
+            // Profile access varies by Android build. Primary-user discovery above remains valid.
+        }
+    }
+
+    private void addProfileAppsForUser(@NonNull Snapshot snapshot,
+                                       @NonNull PackageManager packageManager,
+                                       @NonNull LauncherApps launcherApps,
+                                       @NonNull UserManager userManager,
+                                       @NonNull UserHandle profile,
+                                       @NonNull Map<String, ComponentName> defaultComponentsByPackage) {
+        try {
+            List<LauncherActivityInfo> activities = launcherApps.getActivityList(null, profile);
+            if (activities == null || activities.isEmpty()) {
+                return;
+            }
+            int userId = userIdOf(profile);
+            long serial = userManager.getSerialNumberForUser(profile);
+            String suffix = profileSuffix(userId, serial);
+            for (LauncherActivityInfo activity : activities) {
+                if (activity == null || activity.getComponentName() == null) continue;
+                ComponentName component = activity.getComponentName();
+                String packageName = component.getPackageName();
+                String activityName = component.getClassName();
+                if (packageName == null || packageName.isEmpty()
+                    || activityName == null || activityName.isEmpty()) {
+                    continue;
+                }
+                String rawLabel = activity.getLabel() != null
+                    ? activity.getLabel().toString() : packageName;
+                String label = rawLabel + suffix;
+                AppRef ref = new AppRef(packageName, activityName, userId, serial, true, suffix.trim());
+                Drawable icon = null;
+                try {
+                    icon = activity.getIcon(0);
+                } catch (Throwable ignored) {
+                }
+                // Resolve icon-pack and per-app choices for the exact profile, while keeping the
+                // LauncherApps-provided profile icon as the system fallback.
+                LauncherIconResolver.ResolvedIcon resolvedIcon = iconResolver.resolveDetailed(ref, null, icon);
+                icon = resolvedIcon.drawable;
+                addEntry(snapshot, packageManager, defaultComponentsByPackage,
+                    new LauncherAppEntry(ref, label, icon, resolvedIcon.iconPackArtwork));
+            }
+        } catch (SecurityException ignored) {
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @NonNull
+    private static String profileSuffix(int userId, long serial) {
+        if (userId >= 0) {
+            return " · Clone " + userId;
+        }
+        if (serial >= 0) {
+            return " · Clone " + serial;
+        }
+        return " · Clone";
+    }
+
+    public static int userIdOf(@NonNull UserHandle userHandle) {
+        try {
+            java.lang.reflect.Method method = UserHandle.class.getDeclaredMethod("getIdentifier");
+            method.setAccessible(true);
+            Object value = method.invoke(userHandle);
+            if (value instanceof Integer) {
+                return (Integer) value;
+            }
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    private void addEntry(@NonNull Snapshot snapshot,
+                          @NonNull PackageManager packageManager,
+                          @NonNull Map<String, ComponentName> defaultComponentsByPackage,
+                          @NonNull LauncherAppEntry entry) {
+        AppRef ref = entry.appRef;
+        snapshot.apps.add(entry);
+        snapshot.byId.put(ref.stableId(), entry);
+        if (!snapshot.firstByPackage.containsKey(ref.packageName)) {
+            snapshot.firstByPackage.put(ref.packageName, entry);
+        }
+        ComponentName defaultComponent = defaultComponentsByPackage.get(ref.packageName);
+        if (!defaultComponentsByPackage.containsKey(ref.packageName)) {
+            Intent defaultIntent = packageManager.getLaunchIntentForPackage(ref.packageName);
+            defaultComponent = defaultIntent == null ? null : defaultIntent.getComponent();
+            defaultComponentsByPackage.put(ref.packageName, defaultComponent);
+        }
+        if (!ref.clonedProfile && defaultComponent != null
+            && ref.packageName.equals(defaultComponent.getPackageName())
+            && normalizeActivityName(ref).equals(defaultComponent.getClassName())) {
+            snapshot.defaultByPackage.put(ref.packageName, entry);
+        }
+        if (entry.icon != null) {
+            snapshot.iconById.put(ref.stableId(), entry.icon);
+        }
+        char key = normalizeLetter(entry.label.isEmpty() ? '#' : entry.label.charAt(0));
+        List<LauncherAppEntry> bucket = snapshot.letterBuckets.get(key);
+        if (bucket == null) {
+            bucket = new ArrayList<>();
+            snapshot.letterBuckets.put(key, bucket);
+        }
+        bucket.add(entry);
     }
 
     @NonNull
@@ -293,7 +439,7 @@ public final class LauncherAppDataProvider {
         if (icon == entry.icon) {
             return entry;
         }
-        return new LauncherAppEntry(entry.appRef, entry.label, icon);
+        return new LauncherAppEntry(entry.appRef, entry.label, icon, entry.iconPackArtwork);
     }
 
     private static char normalizeLetter(char c) {

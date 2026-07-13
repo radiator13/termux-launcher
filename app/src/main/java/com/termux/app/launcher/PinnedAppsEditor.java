@@ -388,7 +388,7 @@ public final class PinnedAppsEditor {
             removePinnedByStableId(orderedSelected, stable);
         } else {
             selectedIds.add(stable);
-            orderedSelected.add(new PinnedAppItem(new AppRef(entry.appRef.packageName, entry.appRef.activityName)));
+            orderedSelected.add(new PinnedAppItem(entry.appRef.copy()));
         }
     }
 
@@ -409,7 +409,7 @@ public final class PinnedAppsEditor {
                     result.add(clonePinnedItem(item));
                 } else if (item instanceof PinnedAppItem) {
                     PinnedAppItem app = (PinnedAppItem) item;
-                    folder.apps.add(new PinnedAppItem(new AppRef(app.appRef.packageName, app.appRef.activityName)));
+                    folder.apps.add(new PinnedAppItem(app.appRef.copy()));
                 }
             }
             if (!folder.apps.isEmpty()) result.add(folder);
@@ -667,7 +667,7 @@ public final class PinnedAppsEditor {
     private static PinnedItem clonePinnedItem(@NonNull PinnedItem item) {
         if (item instanceof PinnedAppItem) {
             PinnedAppItem app = (PinnedAppItem) item;
-            return new PinnedAppItem(new AppRef(app.appRef.packageName, app.appRef.activityName), app.iconOverride);
+            return new PinnedAppItem(app.appRef.copy(), app.iconOverride);
         }
         if (item instanceof PinnedFolderItem) {
             PinnedFolderItem folder = (PinnedFolderItem) item;
@@ -678,7 +678,7 @@ public final class PinnedAppsEditor {
             copy.tintColor = folder.tintColor;
             for (PinnedAppItem folderApp : folder.apps) {
                 copy.apps.add(new PinnedAppItem(
-                    new AppRef(folderApp.appRef.packageName, folderApp.appRef.activityName), folderApp.iconOverride));
+                    folderApp.appRef.copy(), folderApp.iconOverride));
             }
             return copy;
         }

@@ -10,6 +10,7 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.os.Build;
+import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class IconPackRepository {
+    private static final long CACHE_VERSION_RECHECK_MS = 10_000L;
     public static final String ACTION_NOVA_THEME = "com.novalauncher.THEME";
     public static final String ACTION_ADW_ACTIVITY_STARTER_THEME = "org.adw.ActivityStarter.THEMES";
     public static final String ACTION_ADW_THEME = "org.adw.launcher.THEMES";
@@ -48,6 +50,7 @@ public final class IconPackRepository {
     private final Context context;
     private final PackageManager packageManager;
     private final Map<String, IconPack> parsedPacks = new LinkedHashMap<>();
+    private final Map<String, Long> lastVersionChecks = new LinkedHashMap<>();
 
     public IconPackRepository(@NonNull Context context) {
         this.context = context.getApplicationContext();
@@ -75,9 +78,19 @@ public final class IconPackRepository {
     public IconPack loadIconPack(@Nullable String packageName) {
         if (packageName == null || packageName.trim().isEmpty()) return null;
         IconPack cached = parsedPacks.get(packageName);
-        if (cached != null) return cached;
+        long now = SystemClock.elapsedRealtime();
+        Long checkedAt = lastVersionChecks.get(packageName);
+        if (checkedAt != null && now - checkedAt < CACHE_VERSION_RECHECK_MS) {
+            return cached;
+        }
         IconPackInfo info = buildInfo(packageName, isThemedPackage(packageName));
-        if (info == null) return null;
+        lastVersionChecks.put(packageName, now);
+        if (info == null) {
+            parsedPacks.remove(packageName);
+            return null;
+        }
+        if (cached != null && cached.info.versionCode == info.versionCode) return cached;
+        parsedPacks.remove(packageName);
 
         XmlResourceParser appfilterRes = null;
         XmlResourceParser drawableRes = null;
@@ -133,6 +146,7 @@ public final class IconPackRepository {
 
     public void clearCache() {
         parsedPacks.clear();
+        lastVersionChecks.clear();
     }
 
     @Nullable

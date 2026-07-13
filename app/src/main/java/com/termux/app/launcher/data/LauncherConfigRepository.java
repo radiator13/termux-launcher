@@ -18,13 +18,17 @@ import java.util.List;
 import java.util.UUID;
 
 public final class LauncherConfigRepository {
-    public static final int SCHEMA_VERSION = 3;
+    public static final int SCHEMA_VERSION = 4;
 
     public interface PreferencesStore {
         String getPinnedItemsV2();
         void setPinnedItemsV2(String value);
         void setPinnedItemsSchemaVersion(int version);
         String getLegacyDefaultButtons();
+    }
+
+    public interface IconOverrideValidator {
+        boolean isAvailable(@NonNull PinnedIconOverride iconOverride);
     }
 
     private final PreferencesStore preferences;
@@ -73,7 +77,7 @@ public final class LauncherConfigRepository {
                 if (item == null) continue;
                 String type = item.optString("type", "");
                 if ("app".equals(type)) {
-                    AppRef ref = new AppRef(item.optString("packageName", ""), item.optString("activityName", ""));
+                    AppRef ref = appRefFromJson(item);
                     if (!ref.packageName.isEmpty()) {
                         out.add(new PinnedAppItem(ref, parseIconOverride(item.optJSONObject("iconOverride"))));
                     }
@@ -94,7 +98,7 @@ public final class LauncherConfigRepository {
                             String activityName = app.optString("activityName", "");
                             if (!packageName.isEmpty()) {
                                 folder.apps.add(new PinnedAppItem(
-                                    new AppRef(packageName, activityName),
+                                    appRefFromJson(app),
                                     parseIconOverride(app.optJSONObject("iconOverride"))
                                 ));
                             }
@@ -113,7 +117,9 @@ public final class LauncherConfigRepository {
     }
 
     public void savePinnedItems(@NonNull List<PinnedItem> pinnedItems) {
-        JSONObject root = new JSONObject();
+        // App-wide icon choices live beside (not inside) the pin list. Preserve them whenever the
+        // dock is reordered so changing dock membership can never silently reset app theming.
+        JSONObject root = readRoot();
         JSONArray items = new JSONArray();
         for (PinnedItem pinnedItem : pinnedItems) {
             if (pinnedItem instanceof PinnedAppItem) {
@@ -123,6 +129,7 @@ public final class LauncherConfigRepository {
                     item.put("type", "app");
                     item.put("packageName", appItem.appRef.packageName);
                     item.put("activityName", appItem.appRef.activityName);
+                    putAppRefProfile(item, appItem.appRef);
                     putIconOverrideIfValid(item, appItem.iconOverride);
                     items.put(item);
                 } catch (JSONException ignored) {
@@ -137,6 +144,7 @@ public final class LauncherConfigRepository {
                         AppRef ref = folderApp.appRef;
                         app.put("packageName", ref.packageName);
                         app.put("activityName", ref.activityName);
+                        putAppRefProfile(app, ref);
                         putIconOverrideIfValid(app, folderApp.iconOverride);
                         apps.put(app);
                     } catch (JSONException ignored) {
@@ -166,6 +174,121 @@ public final class LauncherConfigRepository {
         }
     }
 
+    /** Returns the app-wide icon override for this exact app/profile, if one was selected. */
+    public PinnedIconOverride loadAppIconOverride(@NonNull AppRef ref) {
+        JSONArray overrides = readRoot().optJSONArray("appIconOverrides");
+        if (overrides == null) return null;
+        String targetId = ref.stableId();
+        for (int i = 0; i < overrides.length(); i++) {
+            JSONObject item = overrides.optJSONObject(i);
+            if (item == null) continue;
+            AppRef storedRef = appRefFromJson(item);
+            if (targetId.equals(storedRef.stableId())) {
+                return parseIconOverride(item.optJSONObject("iconOverride"));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Stores an app-wide icon without changing whether the app is pinned. A null/invalid value
+     * removes the override. Clone/profile identity is retained so the primary and cloned app may
+     * be themed independently.
+     */
+    public void saveAppIconOverride(@NonNull AppRef ref, PinnedIconOverride iconOverride) {
+        JSONObject root = readRoot();
+        JSONArray current = root.optJSONArray("appIconOverrides");
+        JSONArray updated = new JSONArray();
+        String targetId = ref.stableId();
+        if (current != null) {
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject item = current.optJSONObject(i);
+                if (item == null || targetId.equals(appRefFromJson(item).stableId())) continue;
+                updated.put(item);
+            }
+        }
+        if (iconOverride != null && iconOverride.isValid()) {
+            JSONObject item = new JSONObject();
+            try {
+                item.put("packageName", ref.packageName);
+                item.put("activityName", ref.activityName);
+                putAppRefProfile(item, ref);
+                putIconOverrideIfValid(item, iconOverride);
+                updated.put(item);
+            } catch (JSONException ignored) {
+            }
+        }
+        try {
+            root.put("schemaVersion", SCHEMA_VERSION);
+            root.put("appIconOverrides", updated);
+            preferences.setPinnedItemsV2(root.toString());
+            preferences.setPinnedItemsSchemaVersion(SCHEMA_VERSION);
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** Removes overrides whose pack or drawable no longer exists, without changing dock order. */
+    public boolean pruneInvalidIconOverrides(@NonNull IconOverrideValidator validator) {
+        JSONObject root = readRoot();
+        boolean changed = false;
+
+        JSONArray appOverrides = root.optJSONArray("appIconOverrides");
+        if (appOverrides != null) {
+            JSONArray valid = new JSONArray();
+            for (int i = 0; i < appOverrides.length(); i++) {
+                JSONObject item = appOverrides.optJSONObject(i);
+                PinnedIconOverride override = item == null ? null
+                    : parseIconOverride(item.optJSONObject("iconOverride"));
+                if (item != null && override != null && validator.isAvailable(override)) {
+                    valid.put(item);
+                } else {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                try {
+                    root.put("appIconOverrides", valid);
+                } catch (JSONException ignored) {
+                }
+            }
+        }
+
+        JSONArray items = root.optJSONArray("items");
+        if (items != null) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null) continue;
+                if (removeInvalidOverride(item, validator)) changed = true;
+                JSONArray folderApps = item.optJSONArray("apps");
+                if (folderApps == null) continue;
+                for (int j = 0; j < folderApps.length(); j++) {
+                    JSONObject folderApp = folderApps.optJSONObject(j);
+                    if (folderApp != null && removeInvalidOverride(folderApp, validator)) changed = true;
+                }
+            }
+        }
+        if (!changed) return false;
+        try {
+            root.put("schemaVersion", SCHEMA_VERSION);
+            preferences.setPinnedItemsV2(root.toString());
+            preferences.setPinnedItemsSchemaVersion(SCHEMA_VERSION);
+        } catch (JSONException ignored) {
+        }
+        return true;
+    }
+
+    private static boolean removeInvalidOverride(
+        @NonNull JSONObject item,
+        @NonNull IconOverrideValidator validator
+    ) {
+        JSONObject raw = item.optJSONObject("iconOverride");
+        if (raw == null) return false;
+        PinnedIconOverride override = parseIconOverride(raw);
+        if (override != null && validator.isAvailable(override)) return false;
+        item.remove("iconOverride");
+        return true;
+    }
+
     public List<PinnedItem> migrateFromLegacyIfNeeded() {
         List<PinnedItem> out = new ArrayList<>();
         String legacy = preferences.getLegacyDefaultButtons();
@@ -185,8 +308,44 @@ public final class LauncherConfigRepository {
         return out;
     }
 
+    @NonNull
+    private static AppRef appRefFromJson(@NonNull JSONObject item) {
+        return new AppRef(
+            item.optString("packageName", ""),
+            item.optString("activityName", ""),
+            item.optInt("userId", -1),
+            item.optLong("userSerialNumber", -1L),
+            item.optBoolean("clonedProfile", false),
+            item.optString("profileLabel", "")
+        );
+    }
+
+    private static void putAppRefProfile(@NonNull JSONObject target, @NonNull AppRef ref) throws JSONException {
+        if (ref.userId < 0 && ref.userSerialNumber < 0 && !ref.clonedProfile
+            && (ref.profileLabel == null || ref.profileLabel.isEmpty())) {
+            return;
+        }
+        target.put("userId", ref.userId);
+        target.put("userSerialNumber", ref.userSerialNumber);
+        target.put("clonedProfile", ref.clonedProfile);
+        if (ref.profileLabel != null && !ref.profileLabel.isEmpty()) {
+            target.put("profileLabel", ref.profileLabel);
+        }
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    @NonNull
+    private JSONObject readRoot() {
+        String raw = preferences.getPinnedItemsV2();
+        if (raw == null || raw.trim().isEmpty()) return new JSONObject();
+        try {
+            return new JSONObject(raw);
+        } catch (JSONException ignored) {
+            return new JSONObject();
+        }
     }
 
     private static PinnedIconOverride parseIconOverride(JSONObject raw) {

@@ -17,9 +17,9 @@ public final class IconPack {
     private final Map<String, String> componentDrawables;
     private final Map<String, String> calendarPrefixes;
     private final Map<String, IconPackDrawableItem> drawableItems;
-    @Nullable public final String iconBack;
-    @Nullable public final String iconMask;
-    @Nullable public final String iconUpon;
+    @NonNull public final List<String> iconBacks;
+    @NonNull public final List<String> iconMasks;
+    @NonNull public final List<String> iconUpons;
     public final float scale;
 
     IconPack(
@@ -27,18 +27,18 @@ public final class IconPack {
         @NonNull Map<String, String> componentDrawables,
         @NonNull Map<String, String> calendarPrefixes,
         @NonNull Map<String, IconPackDrawableItem> drawableItems,
-        @Nullable String iconBack,
-        @Nullable String iconMask,
-        @Nullable String iconUpon,
+        @NonNull List<String> iconBacks,
+        @NonNull List<String> iconMasks,
+        @NonNull List<String> iconUpons,
         float scale
     ) {
         this.info = info;
         this.componentDrawables = Collections.unmodifiableMap(new LinkedHashMap<>(componentDrawables));
         this.calendarPrefixes = Collections.unmodifiableMap(new LinkedHashMap<>(calendarPrefixes));
         this.drawableItems = Collections.unmodifiableMap(new LinkedHashMap<>(drawableItems));
-        this.iconBack = iconBack;
-        this.iconMask = iconMask;
-        this.iconUpon = iconUpon;
+        this.iconBacks = Collections.unmodifiableList(new ArrayList<>(iconBacks));
+        this.iconMasks = Collections.unmodifiableList(new ArrayList<>(iconMasks));
+        this.iconUpons = Collections.unmodifiableList(new ArrayList<>(iconUpons));
         this.scale = scale <= 0f ? 1f : scale;
     }
 

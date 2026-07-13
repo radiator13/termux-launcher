@@ -24,13 +24,23 @@ public final class LauncherCtlAgentHandler {
 
     private final Context context;
     private final LauncherToolRegistry.ToolExecutionHandler executionHandler;
+    @Nullable private final LauncherCtlMcpBridge mcpBridge;
 
     public LauncherCtlAgentHandler(
         @NonNull Context context,
         @NonNull LauncherToolRegistry.ToolExecutionHandler executionHandler
     ) {
+        this(context, executionHandler, null);
+    }
+
+    public LauncherCtlAgentHandler(
+        @NonNull Context context,
+        @NonNull LauncherToolRegistry.ToolExecutionHandler executionHandler,
+        @Nullable LauncherCtlMcpBridge mcpBridge
+    ) {
         this.context = context.getApplicationContext();
         this.executionHandler = executionHandler;
+        this.mcpBridge = mcpBridge;
     }
 
     /**
@@ -99,6 +109,11 @@ public final class LauncherCtlAgentHandler {
         if (tool == null) {
             tool = registry.getToolByOpenAiName(toolName);
         }
+        boolean mcpTool = false;
+        if (tool == null && mcpBridge != null) {
+            tool = mcpBridge.findTool(toolName);
+            mcpTool = tool != null;
+        }
         if (tool == null) {
             return errorResponse(404, "not_found", "Unknown tool: " + toolName);
         }
@@ -122,8 +137,17 @@ public final class LauncherCtlAgentHandler {
         }
 
         try {
-            LauncherToolRegistry.ToolExecutionResult execResult = executionHandler.execute(tool, arguments);
-            return execResult.toJson();
+            LauncherToolRegistry.ToolExecutionResult execResult = mcpTool
+                ? mcpBridge.executeTool(tool.name, arguments)
+                : executionHandler.execute(tool, arguments);
+            JSONObject json = execResult.toJson();
+            if (mcpTool) {
+                JSONObject result = json.optJSONObject("result");
+                if (result != null && result.has("results")) {
+                    json.put("results", result.optJSONArray("results"));
+                }
+            }
+            return json;
         } catch (Exception e) {
             return errorResponse(500, "execution_failed",
                 e.getMessage() != null ? e.getMessage() : "Tool execution failed");

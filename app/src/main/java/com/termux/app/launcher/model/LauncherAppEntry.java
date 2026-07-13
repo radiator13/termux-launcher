@@ -11,6 +11,8 @@ public final class LauncherAppEntry {
     public final AppRef appRef;
     public final String label;
     @Nullable public final Drawable icon;
+    /** True when artwork came from an icon pack and should not receive launcher saturation tuning. */
+    public final boolean iconPackArtwork;
     @NonNull public final String labelLower;
     @NonNull public final String labelNormalized;
     @NonNull public final String packageLower;
@@ -19,9 +21,19 @@ public final class LauncherAppEntry {
     @NonNull public final String[] normalizedWords;
 
     public LauncherAppEntry(@NonNull AppRef appRef, @NonNull String label, @Nullable Drawable icon) {
+        this(appRef, label, icon, false);
+    }
+
+    public LauncherAppEntry(
+        @NonNull AppRef appRef,
+        @NonNull String label,
+        @Nullable Drawable icon,
+        boolean iconPackArtwork
+    ) {
         this.appRef = appRef;
         this.label = label;
         this.icon = icon;
+        this.iconPackArtwork = iconPackArtwork;
         this.labelLower = label.toLowerCase(Locale.US);
         this.labelNormalized = normalizeLookupValue(label);
         this.packageLower = appRef.packageName.toLowerCase(Locale.US);
