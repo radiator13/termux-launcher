@@ -23,6 +23,7 @@ public final class LauncherIconResolver {
     private final Context context;
     private final PackageManager packageManager;
     private final IconPackRepository iconPackRepository;
+    @Nullable private final LauncherConfigRepository configRepository;
     @Nullable private final TermuxAppSharedPreferences preferences;
     @Nullable private final SystemIconLoader systemIconLoader;
 
@@ -41,6 +42,7 @@ public final class LauncherIconResolver {
         this.iconPackRepository = iconPackRepository;
         this.preferences = preferences;
         this.systemIconLoader = systemIconLoader;
+        this.configRepository = preferences == null ? null : new LauncherConfigRepository(preferences);
     }
 
     @Nullable
@@ -50,15 +52,30 @@ public final class LauncherIconResolver {
 
     @Nullable
     public Drawable resolve(@NonNull AppRef ref, @Nullable PinnedIconOverride override) {
+        return resolve(ref, override, null);
+    }
+
+    /** Resolves app-wide theming while retaining a profile-specific system icon as the fallback. */
+    @Nullable
+    public Drawable resolve(
+        @NonNull AppRef ref,
+        @Nullable PinnedIconOverride override,
+        @Nullable Drawable systemFallback
+    ) {
         Drawable icon = loadOverride(override);
         if (icon != null) return icon;
 
-        if (preferences != null) {
-            icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref);
+        if (configRepository != null) {
+            icon = loadOverride(configRepository.loadAppIconOverride(ref));
             if (icon != null) return icon;
         }
 
-        return loadSystemIcon(ref);
+        if (preferences != null) {
+            icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref, systemFallback);
+            if (icon != null) return icon;
+        }
+
+        return systemFallback != null ? systemFallback : loadSystemIcon(ref);
     }
 
     @Nullable
@@ -113,6 +130,15 @@ public final class LauncherIconResolver {
 
     @Nullable
     public Drawable loadFromPack(@Nullable String packageName, @NonNull AppRef ref) {
+        return loadFromPack(packageName, ref, null);
+    }
+
+    @Nullable
+    private Drawable loadFromPack(
+        @Nullable String packageName,
+        @NonNull AppRef ref,
+        @Nullable Drawable systemFallback
+    ) {
         IconPack pack = iconPackRepository.loadIconPack(packageName);
         if (pack == null) return null;
         String drawableName = pack.drawableForComponent(ref.packageName, ref.activityName, Calendar.getInstance().get(Calendar.DAY_OF_MONTH));
@@ -120,13 +146,17 @@ public final class LauncherIconResolver {
             Drawable mapped = loadDrawableFromPack(pack.info.packageName, drawableName);
             if (mapped != null) return mapped;
         }
-        return composeUnmappedIcon(pack, ref);
+        return composeUnmappedIcon(pack, ref, systemFallback);
     }
 
     @Nullable
-    private Drawable composeUnmappedIcon(@NonNull IconPack pack, @NonNull AppRef ref) {
+    private Drawable composeUnmappedIcon(
+        @NonNull IconPack pack,
+        @NonNull AppRef ref,
+        @Nullable Drawable systemFallback
+    ) {
         if (pack.iconBack == null && pack.iconUpon == null && pack.iconMask == null) return null;
-        Drawable systemIcon = loadSystemIcon(ref);
+        Drawable systemIcon = systemFallback != null ? systemFallback : loadSystemIcon(ref);
         if (systemIcon == null) return null;
         Drawable back = loadDrawableFromPack(pack.info.packageName, pack.iconBack);
         Drawable upon = loadDrawableFromPack(pack.info.packageName, pack.iconUpon);

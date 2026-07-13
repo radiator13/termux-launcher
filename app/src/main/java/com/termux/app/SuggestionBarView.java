@@ -2038,16 +2038,22 @@ public final class SuggestionBarView extends GridLayout {
     @Nullable
     private Drawable iconForDisplay(@NonNull LauncherAppEntry entry, int sizePx) {
         Drawable raw = entry.icon != null ? entry.icon : getContext().getPackageManager().getDefaultActivityIcon();
-        // Both harmonization and the standalone shadow rebuild the bitmap; if neither is on, pass through.
-        if ((!unifyIcons && !iconShadowEnabled) || sizePx <= 0) {
+        if (sizePx <= 0) {
             return raw;
         }
-        String key = (unifyIcons ? "u" : "") + (iconShadowEnabled ? "s" : "") + stableEntryKey(entry) + "@" + sizePx;
+        boolean cloneBadge = entry.appRef.clonedProfile;
+        // Both harmonization and the standalone shadow rebuild the bitmap. Clone/profile apps also
+        // rebuild once so their identity marker is consistent across dock, A-Z and swipe previews.
+        if (!unifyIcons && !iconShadowEnabled && !cloneBadge) return raw;
+        String key = (unifyIcons ? "u" : "") + (iconShadowEnabled ? "s" : "")
+            + (cloneBadge ? "c" : "") + stableEntryKey(entry) + "@" + sizePx;
         Drawable cached = normalizedIconCache.get(key);
         if (cached != null) {
             return cached;
         }
-        Drawable built = unifyIcons ? normalizeIcon(raw, sizePx) : shadowedIcon(raw, sizePx);
+        Drawable built = unifyIcons ? normalizeIcon(raw, sizePx)
+            : (iconShadowEnabled ? shadowedIcon(raw, sizePx) : rasterizedIcon(raw, sizePx));
+        if (cloneBadge && built != null) built = addCloneBadge(built, sizePx);
         if (built != null) {
             normalizedIconCache.put(key, built);
         }
@@ -2073,8 +2079,10 @@ public final class SuggestionBarView extends GridLayout {
         // its native shape (adaptive icons draw their own masked bg+fg here, so shape is preserved).
         Bitmap iconBmp = Bitmap.createBitmap(iconRect.width(), iconRect.height(), Bitmap.Config.ARGB_8888);
         Canvas iconCanvas = new Canvas(iconBmp);
+        Rect oldBounds = new Rect(src.getBounds());
         src.setBounds(0, 0, iconBmp.getWidth(), iconBmp.getHeight());
         src.draw(iconCanvas);
+        src.setBounds(oldBounds);
 
         if (iconShadowEnabled) {
             drawIconShadow(canvas, iconBmp, iconRect, sizePx);
@@ -2102,12 +2110,60 @@ public final class SuggestionBarView extends GridLayout {
             Math.round(sizePx - inset), Math.round(sizePx - inset));
         Bitmap iconBmp = Bitmap.createBitmap(iconRect.width(), iconRect.height(), Bitmap.Config.ARGB_8888);
         Canvas iconCanvas = new Canvas(iconBmp);
+        Rect oldBounds = new Rect(src.getBounds());
         src.setBounds(0, 0, iconBmp.getWidth(), iconBmp.getHeight());
         src.draw(iconCanvas);
+        src.setBounds(oldBounds);
         drawIconShadow(canvas, iconBmp, iconRect, sizePx);
         Paint iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         canvas.drawBitmap(iconBmp, null, iconRect, iconPaint);
         iconBmp.recycle();
+        return new BitmapDrawable(getResources(), out);
+    }
+
+    @Nullable
+    private Drawable rasterizedIcon(@Nullable Drawable src, int sizePx) {
+        if (src == null || sizePx <= 0) return src;
+        Bitmap out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Rect oldBounds = new Rect(src.getBounds());
+        src.setBounds(0, 0, sizePx, sizePx);
+        src.draw(canvas);
+        src.setBounds(oldBounds);
+        return new BitmapDrawable(getResources(), out);
+    }
+
+    /** Small, neutral double-tile badge that remains legible over both bright and dark icons. */
+    @Nullable
+    private Drawable addCloneBadge(@Nullable Drawable src, int sizePx) {
+        if (src == null || sizePx <= 0) return src;
+        Bitmap out = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Rect oldBounds = new Rect(src.getBounds());
+        src.setBounds(0, 0, sizePx, sizePx);
+        src.draw(canvas);
+        src.setBounds(oldBounds);
+
+        float radius = Math.max(dp(6f), sizePx * 0.19f);
+        float cx = sizePx - radius - Math.max(dp(1f), sizePx * 0.025f);
+        float cy = sizePx - radius - Math.max(dp(1f), sizePx * 0.025f);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xF2FFFFFF);
+        canvas.drawCircle(cx, cy, radius, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(dp(1f), sizePx * 0.025f));
+        paint.setColor(0x70000000);
+        canvas.drawCircle(cx, cy, radius - (paint.getStrokeWidth() * 0.5f), paint);
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xD9202020);
+        float tile = radius * 0.82f;
+        float corner = tile * 0.22f;
+        canvas.drawRoundRect(cx - tile * 0.58f, cy - tile * 0.58f,
+            cx + tile * 0.22f, cy + tile * 0.22f, corner, corner, paint);
+        paint.setColor(0xFF5B6CFF);
+        canvas.drawRoundRect(cx - tile * 0.20f, cy - tile * 0.20f,
+            cx + tile * 0.60f, cy + tile * 0.60f, corner, corner, paint);
         return new BitmapDrawable(getResources(), out);
     }
 
@@ -4097,7 +4153,7 @@ public final class SuggestionBarView extends GridLayout {
             PinnedAppItem folderApp = findFolderApp(context.sourceFolder, context.folderEntryRef);
             boolean folderHasCustomIcon = folderApp != null
                 && getIconResolver().loadOverride(folderApp.iconOverride) != null;
-            TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+            TextView changeIconRow = addPopupActionRow(shell, "Change icon in folder", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 changeFolderAppIcon(context);
             });
@@ -4107,7 +4163,7 @@ public final class SuggestionBarView extends GridLayout {
             }, false));
 
             if (folderHasCustomIcon) {
-                TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
+                TextView resetIconRow = addPopupActionRow(shell, "Reset icon in folder", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
                     dismissAppContextPopup();
                     resetFolderAppIcon(context);
                 });
@@ -4116,6 +4172,8 @@ public final class SuggestionBarView extends GridLayout {
                     resetFolderAppIcon(context);
                 }, false));
             }
+
+            addAppWideIconRows(shell, context.entry, tintBase);
 
             TextView moveToDockRow = addPopupActionRow(shell, "Move to dock", R.drawable.ic_dock_menu_move, false, tintBase, () -> {
                 dismissAppContextPopup();
@@ -4139,7 +4197,7 @@ public final class SuggestionBarView extends GridLayout {
             PinnedAppItem topPinnedApp = pinnedAppAt(targetPinnedIndex);
             boolean pinnedHasCustomIcon = topPinnedApp != null
                 && getIconResolver().loadOverride(topPinnedApp.iconOverride) != null;
-            TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+            TextView changeIconRow = addPopupActionRow(shell, "Change dock icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
                 if (pinnedApp != null) {
@@ -4155,7 +4213,7 @@ public final class SuggestionBarView extends GridLayout {
             }, false));
 
             if (pinnedHasCustomIcon) {
-                TextView resetIconRow = addPopupActionRow(shell, "Reset icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
+                TextView resetIconRow = addPopupActionRow(shell, "Reset dock icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
                     dismissAppContextPopup();
                     PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
                     if (pinnedApp != null) {
@@ -4170,6 +4228,8 @@ public final class SuggestionBarView extends GridLayout {
                     }
                 }, false));
             }
+
+            addAppWideIconRows(shell, context.entry, tintBase);
 
             TextView unpinRow = addPopupActionRow(shell, "Unpin", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
                 dismissAppContextPopup();
@@ -4189,16 +4249,15 @@ public final class SuggestionBarView extends GridLayout {
                 pinEntryToTopLevel(context.entry);
             }, false));
 
-            // Change icon is available on every app. For a not-yet-pinned app, choosing an icon
-            // pins it with that override (the override is stored on the pinned entry).
-            TextView changeIconRow = addPopupActionRow(shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+            TextView changeIconRow = addPopupActionRow(shell, "Change app icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
-                changeIconForEntry(context.entry);
+                changeAppIconForEntry(context.entry);
             });
             appContextRows.add(new MenuActionRow(changeIconRow, () -> {
                 dismissAppContextPopup();
-                changeIconForEntry(context.entry);
+                changeAppIconForEntry(context.entry);
             }, false));
+            addResetAppIconRowIfNeeded(shell, context.entry, tintBase);
         }
 
         if (hasShortcuts) {
@@ -4548,24 +4607,61 @@ public final class SuggestionBarView extends GridLayout {
         persistPinsAndReload();
     }
 
-    /**
-     * Change-icon entry point for any app, pinned or not. Opens the icon-pack picker; applying an
-     * icon pins the app with that override (updating it in place if it is already pinned), since the
-     * override is persisted on the pinned entry.
-     */
-    private void changeIconForEntry(@NonNull LauncherAppEntry entry) {
+    private void changeAppIconForEntry(@NonNull LauncherAppEntry entry) {
         AppRef ref = resolveForSelectionRef(entry.appRef);
         showIconPackPicker(new PinnedAppItem(ref), override -> {
-            int existing = findPinnedAppIndex(entry.appRef);
-            if (existing >= 0) {
-                PinnedAppItem current = pinnedAppAt(existing);
-                AppRef pinnedRef = current != null ? current.appRef : ref;
-                pinnedItems.set(existing, new PinnedAppItem(pinnedRef, override));
-            } else {
-                pinnedItems.add(new PinnedAppItem(ref, override));
-            }
-            persistPinsAndReload();
+            if (configRepository == null) return;
+            configRepository.saveAppIconOverride(ref, override);
+            refreshAfterAppIconOverride();
         });
+    }
+
+    private void resetAppIcon(@NonNull LauncherAppEntry entry) {
+        if (configRepository == null) return;
+        configRepository.saveAppIconOverride(resolveForSelectionRef(entry.appRef), null);
+        refreshAfterAppIconOverride();
+    }
+
+    private void refreshAfterAppIconOverride() {
+        dismissAppContextPopup();
+        invalidateRenderedIconCaches();
+        resolvedRefCache.clear();
+        if (appDataProvider != null) appDataProvider.invalidate();
+        allApps = new ArrayList<>();
+        reloadAllApps();
+    }
+
+    private void addAppWideIconRows(
+        @NonNull LinearLayout shell,
+        @NonNull LauncherAppEntry entry,
+        int tintBase
+    ) {
+        TextView change = addPopupActionRow(shell, "Change app icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+            dismissAppContextPopup();
+            changeAppIconForEntry(entry);
+        });
+        appContextRows.add(new MenuActionRow(change, () -> {
+            dismissAppContextPopup();
+            changeAppIconForEntry(entry);
+        }, false));
+        addResetAppIconRowIfNeeded(shell, entry, tintBase);
+    }
+
+    private void addResetAppIconRowIfNeeded(
+        @NonNull LinearLayout shell,
+        @NonNull LauncherAppEntry entry,
+        int tintBase
+    ) {
+        if (configRepository == null
+            || configRepository.loadAppIconOverride(resolveForSelectionRef(entry.appRef)) == null) return;
+        TextView reset = addPopupActionRow(shell, "Reset app icon", R.drawable.ic_dock_menu_reset, false, tintBase, () -> {
+            dismissAppContextPopup();
+            resetAppIcon(entry);
+        });
+        appContextRows.add(new MenuActionRow(reset, () -> {
+            dismissAppContextPopup();
+            resetAppIcon(entry);
+        }, false));
     }
 
     private TextView addPopupActionRow(@NonNull LinearLayout shell, @NonNull String title, int tintBase, @NonNull Runnable action) {
@@ -5914,13 +6010,24 @@ public final class SuggestionBarView extends GridLayout {
         }
         int pageDelta = dx < 0f ? 1 : -1;
         boolean canMove = canMoveGesturePage(pageDelta);
+        if (!canMove) {
+            // Do not stage a fake neighbouring page at either end of the pinned row. The old edge
+            // resistance translated the current page and then snapped it back, which looked like a
+            // completed page scroll that mysteriously landed on the same content.
+            cancelSwipePreviewRebound();
+            swipePageDragging = false;
+            swipePagePosition = resolveCurrentSwipePagePosition();
+            clearSwipePagePreview();
+            invalidate();
+            return;
+        }
         float width = Math.max(1f, getWidth());
         float commitDistance = Math.max(dp(42f), width * 0.30f);
         float rawProgress = clamp01(Math.abs(dx) / commitDistance);
         float easedProgress = (float) Math.sin(rawProgress * (Math.PI * 0.5f));
-        float resistance = canMove ? 1f : 0.28f;
-        float visualDx = dx * resistance;
-        float maxTravel = Math.max(dp(18f), width * (canMove ? 0.38f : 0.075f));
+        float resistance = 1f;
+        float visualDx = dx;
+        float maxTravel = Math.max(dp(18f), width * 0.38f);
         visualDx = clampFloat(visualDx, -maxTravel, maxTravel);
 
         swipePageDragging = true;

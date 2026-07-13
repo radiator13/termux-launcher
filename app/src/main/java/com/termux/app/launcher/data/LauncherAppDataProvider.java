@@ -335,9 +335,9 @@ public final class LauncherAppDataProvider {
                     icon = activity.getIcon(0);
                 } catch (Throwable ignored) {
                 }
-                if (icon == null) {
-                    icon = iconResolver.resolve(new AppRef(packageName, activityName));
-                }
+                // Resolve icon-pack and per-app choices for the exact profile, while keeping the
+                // LauncherApps-provided profile icon as the system fallback.
+                icon = iconResolver.resolve(ref, null, icon);
                 addEntry(snapshot, packageManager, defaultComponentsByPackage,
                     new LauncherAppEntry(ref, label, icon));
             }
