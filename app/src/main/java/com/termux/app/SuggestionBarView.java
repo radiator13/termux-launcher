@@ -10,6 +10,9 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.Dialog;
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
@@ -41,6 +44,7 @@ import android.os.Bundle;
 import android.os.Process;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.service.notification.StatusBarNotification;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.TextUtils;
@@ -110,6 +114,7 @@ import com.termux.app.launcher.model.PinnedFolderItem;
 import com.termux.app.launcher.model.PinnedItem;
 import com.termux.shared.theme.ThemeUtils;
 import com.termux.view.TerminalView;
+import com.termux.launcherctl.LauncherCtlNotificationListener;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -188,6 +193,9 @@ public final class SuggestionBarView extends GridLayout {
     private PopupWindow folderPopupWindow;
     private PopupWindow appContextPopupWindow;
     private PopupWindow shortcutsPopupWindow;
+    private PopupWindow notificationPopupWindow;
+    @Nullable private String notificationPopupPackage;
+    @NonNull private Set<String> notificationPopupKeys = Collections.emptySet();
     @Nullable private Dialog iconPickerDialog;
 
     private String lastInput = "";
@@ -552,6 +560,14 @@ public final class SuggestionBarView extends GridLayout {
         }
         notificationBadgeListener = packages -> post(() -> {
             notificationBadgePackages = notificationBadgesEnabled ? packages : Collections.emptySet();
+            if (notificationPopupPackage != null) {
+                Set<String> currentKeys = new HashSet<>();
+                for (StatusBarNotification sbn :
+                    LauncherNotificationBadgeStore.getNotificationsForPackage(notificationPopupPackage)) {
+                    currentKeys.add(sbn.getKey() + "@" + sbn.getPostTime());
+                }
+                if (!currentKeys.equals(notificationPopupKeys)) dismissNotificationPopup();
+            }
             invalidateNotificationBadgeViews();
         });
         LauncherNotificationBadgeStore.addListener(notificationBadgeListener);
@@ -616,6 +632,7 @@ public final class SuggestionBarView extends GridLayout {
         dismissShortcutsPopup();
         dismissAppContextPopup();
         dismissFolderPopup();
+        dismissNotificationPopup();
         dismissIconPickerPopup();
     }
 
@@ -935,11 +952,11 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     public boolean canPinnedPageLeft() {
-        return hasPinnedOverflowPages() && pinnedPageIndex > 0;
+        return hasPinnedOverflowPages();
     }
 
     public boolean canPinnedPageRight() {
-        return hasPinnedOverflowPages() && pinnedPageIndex < (getPinnedPagesCount() - 1);
+        return hasPinnedOverflowPages();
     }
 
     public int getPinnedCurrentPageIndex() {
@@ -1513,7 +1530,7 @@ public final class SuggestionBarView extends GridLayout {
                 } else if (pinnedItemsPerPage > 0) {
                     int totalPages = getPinnedPagesCount();
                     if (totalPages > 1) {
-                        int next = clamp(pinnedPageIndex + pageDelta, 0, totalPages - 1);
+                        int next = wrapPageIndex(pinnedPageIndex + pageDelta, totalPages);
                         if (next != pinnedPageIndex) {
                             animatePageSwitch(pageDelta, Math.max(Math.abs(vx), Math.abs(dx) * 8f));
                             if (swipeVelocityTracker != null) {
@@ -3976,10 +3993,13 @@ public final class SuggestionBarView extends GridLayout {
         @Nullable AppRef folderEntryRef,
         boolean allowDragPickup
     ) {
+        Runnable notificationSwipeAction = pinnedIndex >= 0
+            ? () -> showNotificationPopup(entry, pressTarget)
+            : null;
         bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, () -> {
             dismissShortcutsPopup();
             showAppContextPopup(new AppMenuContext(entry, pressTarget, pinnedIndex, sourceFolder, folderEntryRef));
-        });
+        }, notificationSwipeAction, entry.appRef.packageName);
     }
 
     private void bindFolderContextLongPress(
@@ -3991,14 +4011,16 @@ public final class SuggestionBarView extends GridLayout {
         bindContextLongPressGesture(pressTarget, pinnedIndex, allowDragPickup, () -> {
             dismissFolderPopup();
             showFolderContextPopup(folder, pinnedIndex, pressTarget);
-        });
+        }, null, null);
     }
 
     private void bindContextLongPressGesture(
         @NonNull View pressTarget,
         int pinnedIndex,
         boolean allowDragPickup,
-        @NonNull Runnable showContextPopup
+        @NonNull Runnable showContextPopup,
+        @Nullable Runnable notificationSwipeAction,
+        @Nullable String notificationPackage
     ) {
         pressTarget.setLongClickable(true);
         pressTarget.setOnLongClickListener(v -> {
@@ -4030,6 +4052,25 @@ public final class SuggestionBarView extends GridLayout {
                 );
             } else if (action == MotionEvent.ACTION_MOVE) {
                 LongPressPickupState state = activeLongPressPickupState;
+                if (state != null && state.sourceView == pressTarget && state.notificationSwipeStarted) {
+                    return true;
+                }
+                if (state != null && state.sourceView == pressTarget && !state.menuShown
+                    && notificationSwipeAction != null
+                    && notificationBadgesEnabled
+                    && LauncherNotificationBadgeStore.hasBadge(notificationPackage)) {
+                    float dx = event.getRawX() - state.downRawX;
+                    float dy = event.getRawY() - state.downRawY;
+                    int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                    if (dy <= -(slop * 1.8f) && Math.abs(dy) > Math.abs(dx) * 1.15f) {
+                        state.notificationSwipeStarted = true;
+                        suppressContextLongPressForSwipe = true;
+                        pressTarget.cancelLongPress();
+                        animateLaunchReleaseBounce(pressTarget);
+                        notificationSwipeAction.run();
+                        return true;
+                    }
+                }
                 if (state != null && state.sourceView == pressTarget && state.menuShown && !state.dragStarted) {
                     float rawX = event.getRawX();
                     float rawY = event.getRawY();
@@ -4086,6 +4127,11 @@ public final class SuggestionBarView extends GridLayout {
                 animateLaunchReleaseBounce(pressTarget);
                 LongPressPickupState state = activeLongPressPickupState;
                 if (state != null && state.sourceView == pressTarget) {
+                    if (state.notificationSwipeStarted) {
+                        activeLongPressPickupState = null;
+                        suppressContextLongPressForSwipe = false;
+                        return true;
+                    }
                     if (action == MotionEvent.ACTION_UP && state.menuShown && !state.dragStarted) {
                         if (state.selectionArmed) {
                             updateMenuHighlightForRaw(event.getRawX(), event.getRawY(), true, true);
@@ -4221,6 +4267,17 @@ public final class SuggestionBarView extends GridLayout {
             PinnedAppItem topPinnedApp = pinnedAppAt(targetPinnedIndex);
             boolean pinnedHasCustomIcon = topPinnedApp != null
                 && getIconResolver().loadOverride(topPinnedApp.iconOverride) != null;
+            if (notificationBadgesEnabled
+                && LauncherNotificationBadgeStore.hasBadge(context.entry.appRef.packageName)) {
+                TextView notificationsRow = addPopupActionRow(shell, "Notifications", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
+                    dismissAppContextPopup();
+                    showNotificationPopup(context.entry, context.anchor);
+                });
+                appContextRows.add(new MenuActionRow(notificationsRow, () -> {
+                    dismissAppContextPopup();
+                    showNotificationPopup(context.entry, context.anchor);
+                }, false));
+            }
             TextView changeIconRow = addPopupActionRow(shell, "Change dock icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 PinnedAppItem pinnedApp = pinnedAppAt(targetPinnedIndex);
@@ -5200,6 +5257,280 @@ public final class SuggestionBarView extends GridLayout {
         }
     }
 
+    private void showNotificationPopup(
+        @NonNull LauncherAppEntry entry,
+        @NonNull View anchor
+    ) {
+        List<StatusBarNotification> notifications =
+            LauncherNotificationBadgeStore.getNotificationsForPackage(entry.appRef.packageName);
+        if (notifications.isEmpty()) return;
+        dismissNotificationPopup();
+        dismissAppContextPopup();
+        dismissFolderPopup();
+
+        LinearLayout shell = new LinearLayout(getContext());
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(12), dp(10), dp(12), dp(10));
+
+        TextView header = new TextView(getContext());
+        header.setText(notifications.size() == 1
+            ? entry.label : entry.label + " · " + notifications.size());
+        header.setTextColor(resolveLauncherTextColor());
+        header.setTextSize(13f);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        Drawable icon = iconForDisplay(entry, dp(24));
+        if (icon != null && icon.getConstantState() != null) {
+            icon = icon.getConstantState().newDrawable(getResources()).mutate();
+        }
+        if (icon != null) {
+            icon.setBounds(0, 0, dp(24), dp(24));
+            header.setCompoundDrawablesRelative(icon, null, null, null);
+            header.setCompoundDrawablePadding(dp(9));
+        }
+        shell.addView(header, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        for (int i = 0; i < notifications.size(); i++) {
+            if (i > 0) addNotificationDivider(shell);
+            addNotificationCard(shell, notifications.get(i));
+        }
+
+        int tintBase = inheritedTintColor & 0x00FFFFFF;
+        final PopupWindow[] holder = new PopupWindow[1];
+        notificationPopupWindow = buildPopupWindow(shell, tintBase, false, () -> {
+            if (notificationPopupWindow == holder[0]) {
+                notificationPopupWindow = null;
+                notificationPopupPackage = null;
+                notificationPopupKeys = Collections.emptySet();
+            }
+        });
+        holder[0] = notificationPopupWindow;
+        notificationPopupPackage = entry.appRef.packageName;
+        Set<String> shownKeys = new HashSet<>();
+        for (StatusBarNotification sbn : notifications) {
+            shownKeys.add(sbn.getKey() + "@" + sbn.getPostTime());
+        }
+        notificationPopupKeys = Collections.unmodifiableSet(shownKeys);
+        notificationPopupWindow.setFocusable(true);
+        notificationPopupWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
+        notificationPopupWindow.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                | WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED);
+        showPopupAtAnchor(notificationPopupWindow, anchor);
+    }
+
+    private void addNotificationCard(
+        @NonNull LinearLayout shell,
+        @NonNull StatusBarNotification sbn
+    ) {
+        Notification notification = sbn.getNotification();
+        if (notification == null) return;
+        Bundle extras = notification.extras;
+        CharSequence title = firstNotificationText(extras,
+            Notification.EXTRA_TITLE, Notification.EXTRA_TITLE_BIG);
+        CharSequence text = firstNotificationText(extras,
+            Notification.EXTRA_BIG_TEXT, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT);
+
+        LinearLayout card = new LinearLayout(getContext());
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(2), dp(9), dp(2), dp(4));
+        if (!TextUtils.isEmpty(title)) {
+            TextView titleView = new TextView(getContext());
+            titleView.setText(title);
+            titleView.setTextColor(resolveLauncherTextColor());
+            titleView.setTextSize(14f);
+            titleView.setTypeface(Typeface.DEFAULT_BOLD);
+            titleView.setMaxLines(2);
+            titleView.setEllipsize(TextUtils.TruncateAt.END);
+            card.addView(titleView);
+        }
+        if (!TextUtils.isEmpty(text)) {
+            TextView textView = new TextView(getContext());
+            textView.setText(text);
+            textView.setTextColor(resolveLauncherSubtleTextColor());
+            textView.setTextSize(12.5f);
+            textView.setMaxLines(5);
+            textView.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            textLp.topMargin = dp(3);
+            card.addView(textView, textLp);
+        }
+
+        if (notification.contentIntent != null) {
+            card.setClickable(true);
+            card.setOnClickListener(v -> {
+                sendNotificationIntent(notification.contentIntent, null, null);
+                if ((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0) {
+                    LauncherCtlNotificationListener.dismissNotification(sbn.getKey());
+                }
+                dismissNotificationPopup();
+            });
+        }
+
+        Notification.Action[] actions = notification.actions;
+        if (actions != null) {
+            for (Notification.Action action : actions) {
+                if (action == null || action.actionIntent == null) continue;
+                RemoteInput[] remoteInputs = action.getRemoteInputs();
+                RemoteInput freeform = firstFreeformRemoteInput(remoteInputs);
+                if (freeform != null) {
+                    addInlineReply(card, action, remoteInputs, freeform);
+                } else {
+                    Button actionButton = notificationActionButton(
+                        TextUtils.isEmpty(action.title) ? "Action" : action.title.toString());
+                    actionButton.setOnClickListener(v ->
+                        sendNotificationIntent(action.actionIntent, null, null));
+                    card.addView(actionButton, notificationActionLayoutParams());
+                }
+            }
+        }
+
+        if (sbn.isClearable()) {
+            Button dismiss = notificationActionButton("Dismiss");
+            dismiss.setOnClickListener(v -> {
+                LauncherCtlNotificationListener.dismissNotification(sbn.getKey());
+                card.setVisibility(View.GONE);
+                postDelayed(() -> {
+                    if (LauncherNotificationBadgeStore.getNotificationsForPackage(sbn.getPackageName()).isEmpty()) {
+                        dismissNotificationPopup();
+                    }
+                }, 180L);
+            });
+            card.addView(dismiss, notificationActionLayoutParams());
+        }
+        shell.addView(card, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private void addInlineReply(
+        @NonNull LinearLayout card,
+        @NonNull Notification.Action action,
+        @NonNull RemoteInput[] remoteInputs,
+        @NonNull RemoteInput freeform
+    ) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        EditText reply = new EditText(getContext());
+        reply.setSingleLine(true);
+        reply.setHint(TextUtils.isEmpty(freeform.getLabel()) ? "Reply" : freeform.getLabel());
+        reply.setTextColor(resolveLauncherTextColor());
+        reply.setHintTextColor(resolveLauncherSubtleTextColor());
+        reply.setTextSize(12.5f);
+        reply.setPadding(dp(8), 0, dp(8), 0);
+        GradientDrawable replyBg = new GradientDrawable();
+        replyBg.setCornerRadius(dp(9));
+        replyBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0x72));
+        replyBg.setStroke(Math.max(1, dp(1)), withAlphaComponent(resolveLauncherOutlineColor(), 0x66));
+        reply.setBackground(replyBg);
+        row.addView(reply, new LinearLayout.LayoutParams(0, dp(38), 1f));
+
+        Button send = notificationActionButton(
+            TextUtils.isEmpty(action.title) ? "Send" : action.title.toString());
+        LinearLayout.LayoutParams sendLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
+        sendLp.leftMargin = dp(6);
+        row.addView(send, sendLp);
+        send.setOnClickListener(v -> {
+            CharSequence value = reply.getText();
+            if (TextUtils.isEmpty(value)) return;
+            sendNotificationIntent(action.actionIntent, remoteInputs, value);
+            reply.setText("");
+        });
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.topMargin = dp(8);
+        card.addView(row, rowLp);
+    }
+
+    @Nullable
+    private static CharSequence firstNotificationText(@Nullable Bundle extras, @NonNull String... keys) {
+        if (extras == null) return null;
+        for (String key : keys) {
+            CharSequence value = extras.getCharSequence(key);
+            if (!TextUtils.isEmpty(value)) return value;
+        }
+        return null;
+    }
+
+    @Nullable
+    private static RemoteInput firstFreeformRemoteInput(@Nullable RemoteInput[] inputs) {
+        if (inputs == null) return null;
+        for (RemoteInput input : inputs) {
+            if (input != null && input.getAllowFreeFormInput()) return input;
+        }
+        return null;
+    }
+
+    private void sendNotificationIntent(
+        @NonNull PendingIntent pendingIntent,
+        @Nullable RemoteInput[] remoteInputs,
+        @Nullable CharSequence reply
+    ) {
+        try {
+            Intent fillIn = null;
+            if (remoteInputs != null && reply != null) {
+                fillIn = new Intent();
+                Bundle results = new Bundle();
+                for (RemoteInput input : remoteInputs) {
+                    if (input != null && input.getAllowFreeFormInput()) {
+                        results.putCharSequence(input.getResultKey(), reply);
+                    }
+                }
+                RemoteInput.addResultsToIntent(remoteInputs, fillIn, results);
+            }
+            pendingIntent.send(getContext(), 0, fillIn);
+        } catch (PendingIntent.CanceledException exception) {
+            Log.d(LOG_TAG, "Notification action is no longer available: " + exception.getMessage());
+        }
+    }
+
+    @NonNull
+    private Button notificationActionButton(@NonNull String title) {
+        Button button = new Button(getContext());
+        button.setText(title);
+        button.setTextColor(resolveLauncherTextColor());
+        button.setTextSize(11.5f);
+        button.setAllCaps(false);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(dp(10), 0, dp(10), 0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(9));
+        bg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0x66));
+        bg.setStroke(Math.max(1, dp(1)), withAlphaComponent(resolveLauncherOutlineColor(), 0x55));
+        button.setBackground(bg);
+        return button;
+    }
+
+    @NonNull
+    private LinearLayout.LayoutParams notificationActionLayoutParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+        lp.topMargin = dp(7);
+        return lp;
+    }
+
+    private void addNotificationDivider(@NonNull LinearLayout shell) {
+        View divider = new View(getContext());
+        divider.setBackgroundColor(withAlphaComponent(resolveLauncherOutlineColor(), 0x42));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        lp.setMargins(0, dp(5), 0, 0);
+        shell.addView(divider, lp);
+    }
+
+    private void dismissNotificationPopup() {
+        if (notificationPopupWindow == null) return;
+        PopupWindow popup = notificationPopupWindow;
+        notificationPopupWindow = null;
+        notificationPopupPackage = null;
+        notificationPopupKeys = Collections.emptySet();
+        dismissPopupWindowAnimated(popup, null);
+    }
+
     private void dismissIconPickerPopup() {
         if (iconPickerDialog != null) {
             final Dialog dialog = iconPickerDialog;
@@ -5448,6 +5779,7 @@ public final class SuggestionBarView extends GridLayout {
         boolean definitiveYMovement = false;
         boolean selectionArmed = false;
         boolean leftAnchor = false;
+        boolean notificationSwipeStarted = false;
 
         LongPressPickupState(@NonNull View sourceView, int pinnedIndex, float downRawX, float downRawY) {
             this.sourceView = sourceView;
@@ -5967,7 +6299,7 @@ public final class SuggestionBarView extends GridLayout {
         if (pageSwitchAnimating) return;
         int totalPages = getPinnedPagesCount();
         if (totalPages <= 1) return;
-        int targetPage = clamp(pinnedPageIndex + pageDelta, 0, totalPages - 1);
+        int targetPage = wrapPageIndex(pinnedPageIndex + pageDelta, totalPages);
         if (targetPage == pinnedPageIndex) return;
 
         pageSwitchAnimating = true;
@@ -6081,8 +6413,7 @@ public final class SuggestionBarView extends GridLayout {
         if (!hasPinnedOverflowPages()) {
             return false;
         }
-        int target = pinnedPageIndex + pageDelta;
-        return target >= 0 && target < getPinnedPagesCount();
+        return getPinnedPagesCount() > 1;
     }
 
     private void prepareSwipePagePreview(int pageDelta) {
@@ -6114,8 +6445,7 @@ public final class SuggestionBarView extends GridLayout {
         if (!hasPinnedOverflowPages()) {
             return -1;
         }
-        int target = pinnedPageIndex + pageDelta;
-        return target >= 0 && target < getPinnedPagesCount() ? target : -1;
+        return wrapPageIndex(pinnedPageIndex + pageDelta, getPinnedPagesCount());
     }
 
     @NonNull
@@ -7076,6 +7406,10 @@ public final class SuggestionBarView extends GridLayout {
     }
 
     private int wrapAzPageIndex(int targetPage, int totalPages) {
+        return wrapPageIndex(targetPage, totalPages);
+    }
+
+    static int wrapPageIndex(int targetPage, int totalPages) {
         if (totalPages <= 0) {
             return 0;
         }

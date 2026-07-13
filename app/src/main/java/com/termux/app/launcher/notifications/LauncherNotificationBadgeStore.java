@@ -8,6 +8,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,8 +18,9 @@ import java.util.concurrent.CopyOnWriteArraySet;
 /**
  * Lightweight active-notification index for launcher dots.
  *
- * The notification listener owns updates; the apps bar only observes package-level
- * badge state, so notification contents are never pulled into the UI path.
+ * The notification listener owns updates. Badge observers receive only package names; live
+ * notification objects remain in-memory and are exposed on demand for the dock's swipe-up panel.
+ * Nothing from this UI index is persisted.
  */
 public final class LauncherNotificationBadgeStore {
 
@@ -26,6 +29,7 @@ public final class LauncherNotificationBadgeStore {
     }
 
     private static final ConcurrentHashMap<String, String> ACTIVE_BADGE_KEYS = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, StatusBarNotification> ACTIVE_NOTIFICATIONS = new ConcurrentHashMap<>();
     private static final CopyOnWriteArraySet<Listener> LISTENERS = new CopyOnWriteArraySet<>();
 
     @NonNull private static volatile Set<String> activePackages = Collections.emptySet();
@@ -53,17 +57,31 @@ public final class LauncherNotificationBadgeStore {
         return activePackages;
     }
 
+    @NonNull
+    public static List<StatusBarNotification> getNotificationsForPackage(@Nullable String packageName) {
+        if (packageName == null) return Collections.emptyList();
+        List<StatusBarNotification> result = new ArrayList<>();
+        for (StatusBarNotification notification : ACTIVE_NOTIFICATIONS.values()) {
+            if (notification != null && packageName.equals(notification.getPackageName())) {
+                result.add(notification);
+            }
+        }
+        result.sort((left, right) -> Long.compare(right.getPostTime(), left.getPostTime()));
+        return result;
+    }
+
     public static void syncFromActiveNotifications(
         @Nullable StatusBarNotification[] notifications,
         @Nullable NotificationListenerService.RankingMap rankingMap
     ) {
         ACTIVE_BADGE_KEYS.clear();
+        ACTIVE_NOTIFICATIONS.clear();
         if (notifications != null) {
             for (StatusBarNotification sbn : notifications) {
                 putIfBadgeable(sbn, rankingMap);
             }
         }
-        publishIfChanged();
+        publish(true);
     }
 
     public static void onNotificationPosted(
@@ -74,26 +92,28 @@ public final class LauncherNotificationBadgeStore {
             return;
         }
         String key = sbn.getKey();
-        boolean changed;
         if (isBadgeable(sbn, rankingMap)) {
-            changed = !sbn.getPackageName().equals(ACTIVE_BADGE_KEYS.put(key, sbn.getPackageName()));
+            ACTIVE_BADGE_KEYS.put(key, sbn.getPackageName());
+            ACTIVE_NOTIFICATIONS.put(key, sbn);
         } else {
-            changed = ACTIVE_BADGE_KEYS.remove(key) != null;
+            ACTIVE_BADGE_KEYS.remove(key);
+            ACTIVE_NOTIFICATIONS.remove(key);
         }
-        if (changed) {
-            publishIfChanged();
-        }
+        publish(true);
     }
 
     public static void onNotificationRemoved(@Nullable StatusBarNotification sbn) {
-        if (sbn != null && ACTIVE_BADGE_KEYS.remove(sbn.getKey()) != null) {
-            publishIfChanged();
+        if (sbn != null) {
+            boolean existed = ACTIVE_NOTIFICATIONS.remove(sbn.getKey()) != null;
+            existed |= ACTIVE_BADGE_KEYS.remove(sbn.getKey()) != null;
+            if (existed) publish(true);
         }
     }
 
     public static void clear() {
         ACTIVE_BADGE_KEYS.clear();
-        publishIfChanged();
+        ACTIVE_NOTIFICATIONS.clear();
+        publish(true);
     }
 
     private static void putIfBadgeable(
@@ -102,6 +122,7 @@ public final class LauncherNotificationBadgeStore {
     ) {
         if (isBadgeable(sbn, rankingMap)) {
             ACTIVE_BADGE_KEYS.put(sbn.getKey(), sbn.getPackageName());
+            ACTIVE_NOTIFICATIONS.put(sbn.getKey(), sbn);
         }
     }
 
@@ -128,9 +149,9 @@ public final class LauncherNotificationBadgeStore {
         return true;
     }
 
-    private static void publishIfChanged() {
+    private static void publish(boolean force) {
         Set<String> packages = Collections.unmodifiableSet(new HashSet<>(ACTIVE_BADGE_KEYS.values()));
-        if (packages.equals(activePackages)) {
+        if (!force && packages.equals(activePackages)) {
             return;
         }
         activePackages = packages;

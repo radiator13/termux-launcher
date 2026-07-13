@@ -36,11 +36,13 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
     private static final int MAX_ART_BYTES = 512 * 1024;
 
     private static volatile boolean listenerConnected;
+    private static volatile LauncherCtlNotificationListener activeInstance;
     private static volatile JSONObject nowPlaying;
     private static volatile JSONObject nowPlayingArt;
 
     @Override
     public void onListenerConnected() {
+        activeInstance = this;
         listenerConnected = true;
         Logger.logInfo(LOG_TAG, "Notification listener connected");
         rebuildNotificationsSnapshot();
@@ -49,6 +51,7 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
 
     @Override
     public void onListenerDisconnected() {
+        if (activeInstance == this) activeInstance = null;
         listenerConnected = false;
         LauncherNotificationBadgeStore.clear();
         Logger.logWarn(LOG_TAG, "Notification listener disconnected");
@@ -87,6 +90,18 @@ public class LauncherCtlNotificationListener extends NotificationListenerService
 
     public static boolean isListenerConnected() {
         return listenerConnected;
+    }
+
+    public static boolean dismissNotification(String key) {
+        LauncherCtlNotificationListener listener = activeInstance;
+        if (listener == null || key == null || key.isEmpty()) return false;
+        try {
+            listener.cancelNotification(key);
+            return true;
+        } catch (Throwable throwable) {
+            Logger.logWarn(LOG_TAG, "Failed to dismiss notification: " + throwable.getMessage());
+            return false;
+        }
     }
 
     public static String getListenerSettingsAction() {
