@@ -663,6 +663,19 @@ public final class SuggestionBarView extends GridLayout {
         if (appDataProvider != null) {
             appDataProvider.invalidate();
         }
+        if (iconResolver != null) iconResolver.clearCache();
+        if (iconPackRepository != null) iconPackRepository.clearCache();
+    }
+
+    /** Reconciles persisted choices after an icon pack is removed or replaces its resources. */
+    public void pruneInvalidIconOverrides() {
+        if (configRepository == null) return;
+        boolean changed = configRepository.pruneInvalidIconOverrides(
+            override -> getIconResolver().loadOverride(override) != null);
+        if (changed) {
+            pinnedItems = configRepository.loadPinnedItems();
+            invalidateRenderedIconCaches();
+        }
     }
 
     public void setSuggestionButtons(@Nullable List<? extends SuggestionBarButton> suggestionButtons) {
@@ -2046,12 +2059,13 @@ public final class SuggestionBarView extends GridLayout {
         // rebuild once so their identity marker is consistent across dock, A-Z and swipe previews.
         if (!unifyIcons && !iconShadowEnabled && !cloneBadge) return raw;
         String key = (unifyIcons ? "u" : "") + (iconShadowEnabled ? "s" : "")
-            + (cloneBadge ? "c" : "") + stableEntryKey(entry) + "@" + sizePx;
+            + (cloneBadge ? "c" : "") + (entry.iconPackArtwork ? "p" : "")
+            + stableEntryKey(entry) + "@" + sizePx;
         Drawable cached = normalizedIconCache.get(key);
         if (cached != null) {
             return cached;
         }
-        Drawable built = unifyIcons ? normalizeIcon(raw, sizePx)
+        Drawable built = unifyIcons ? normalizeIcon(raw, sizePx, !entry.iconPackArtwork)
             : (iconShadowEnabled ? shadowedIcon(raw, sizePx) : rasterizedIcon(raw, sizePx));
         if (cloneBadge && built != null) built = addCloneBadge(built, sizePx);
         if (built != null) {
@@ -2060,7 +2074,7 @@ public final class SuggestionBarView extends GridLayout {
         return built != null ? built : raw;
     }
 
-    private Drawable normalizeIcon(@Nullable Drawable src, int sizePx) {
+    private Drawable normalizeIcon(@Nullable Drawable src, int sizePx, boolean tuneSaturation) {
         if (!unifyIcons || src == null || sizePx <= 0) {
             return src;
         }
@@ -2090,9 +2104,11 @@ public final class SuggestionBarView extends GridLayout {
 
         // Saturation nudge toward the glass vibrancy (match, not grey), then draw the icon.
         Paint iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        ColorMatrix saturate = new ColorMatrix();
-        saturate.setSaturation(0.92f);
-        iconPaint.setColorFilter(new ColorMatrixColorFilter(saturate));
+        if (tuneSaturation) {
+            ColorMatrix saturate = new ColorMatrix();
+            saturate.setSaturation(0.92f);
+            iconPaint.setColorFilter(new ColorMatrixColorFilter(saturate));
+        }
         canvas.drawBitmap(iconBmp, null, iconRect, iconPaint);
         iconBmp.recycle();
 
@@ -2381,11 +2397,14 @@ public final class SuggestionBarView extends GridLayout {
         if (entry == null) {
             return entry;
         }
-        Drawable pinnedIcon = getIconResolver().resolvePinned(entry.appRef, item.iconOverride, entry.icon);
-        if (pinnedIcon == null || pinnedIcon == entry.icon) {
+        LauncherIconResolver.ResolvedIcon resolvedIcon = getIconResolver().resolvePinnedDetailed(
+            entry.appRef, item.iconOverride, entry.icon, entry.iconPackArtwork);
+        Drawable pinnedIcon = resolvedIcon.drawable;
+        if ((pinnedIcon == null || pinnedIcon == entry.icon)
+            && resolvedIcon.iconPackArtwork == entry.iconPackArtwork) {
             return entry;
         }
-        return new LauncherAppEntry(entry.appRef, entry.label, pinnedIcon);
+        return new LauncherAppEntry(entry.appRef, entry.label, pinnedIcon, resolvedIcon.iconPackArtwork);
     }
 
     private LauncherAppEntry folderSyntheticEntry(@NonNull PinnedFolderItem folder) {
@@ -2479,12 +2498,15 @@ public final class SuggestionBarView extends GridLayout {
         AppRef resolvedRef = originalRef;
         String label = originalRef.packageName;
         Drawable icon = null;
+        boolean iconPackArtwork = false;
 
         try {
             if (component != null) {
                 resolvedRef = new AppRef(component.getPackageName(), component.getClassName());
                 label = String.valueOf(packageManager.getActivityInfo(component, 0).loadLabel(packageManager));
-                icon = getIconResolver().resolve(resolvedRef);
+                LauncherIconResolver.ResolvedIcon resolvedIcon = getIconResolver().resolveDetailed(resolvedRef, null, null);
+                icon = resolvedIcon.drawable;
+                iconPackArtwork = resolvedIcon.iconPackArtwork;
             }
         } catch (Exception ignored) {
         }
@@ -2494,13 +2516,15 @@ public final class SuggestionBarView extends GridLayout {
                 label = String.valueOf(packageManager.getApplicationLabel(
                     packageManager.getApplicationInfo(originalRef.packageName, 0)
                 ));
-                icon = getIconResolver().resolve(originalRef);
+                LauncherIconResolver.ResolvedIcon resolvedIcon = getIconResolver().resolveDetailed(originalRef, null, null);
+                icon = resolvedIcon.drawable;
+                iconPackArtwork = resolvedIcon.iconPackArtwork;
             } catch (Exception ignored) {
                 return null;
             }
         }
 
-        return new LauncherAppEntry(resolvedRef, label, icon);
+        return new LauncherAppEntry(resolvedRef, label, icon, iconPackArtwork);
     }
 
     @NonNull

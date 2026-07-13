@@ -27,6 +27,10 @@ public final class LauncherConfigRepository {
         String getLegacyDefaultButtons();
     }
 
+    public interface IconOverrideValidator {
+        boolean isAvailable(@NonNull PinnedIconOverride iconOverride);
+    }
+
     private final PreferencesStore preferences;
 
     public LauncherConfigRepository(@NonNull TermuxAppSharedPreferences preferences) {
@@ -221,6 +225,68 @@ public final class LauncherConfigRepository {
             preferences.setPinnedItemsSchemaVersion(SCHEMA_VERSION);
         } catch (JSONException ignored) {
         }
+    }
+
+    /** Removes overrides whose pack or drawable no longer exists, without changing dock order. */
+    public boolean pruneInvalidIconOverrides(@NonNull IconOverrideValidator validator) {
+        JSONObject root = readRoot();
+        boolean changed = false;
+
+        JSONArray appOverrides = root.optJSONArray("appIconOverrides");
+        if (appOverrides != null) {
+            JSONArray valid = new JSONArray();
+            for (int i = 0; i < appOverrides.length(); i++) {
+                JSONObject item = appOverrides.optJSONObject(i);
+                PinnedIconOverride override = item == null ? null
+                    : parseIconOverride(item.optJSONObject("iconOverride"));
+                if (item != null && override != null && validator.isAvailable(override)) {
+                    valid.put(item);
+                } else {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                try {
+                    root.put("appIconOverrides", valid);
+                } catch (JSONException ignored) {
+                }
+            }
+        }
+
+        JSONArray items = root.optJSONArray("items");
+        if (items != null) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null) continue;
+                if (removeInvalidOverride(item, validator)) changed = true;
+                JSONArray folderApps = item.optJSONArray("apps");
+                if (folderApps == null) continue;
+                for (int j = 0; j < folderApps.length(); j++) {
+                    JSONObject folderApp = folderApps.optJSONObject(j);
+                    if (folderApp != null && removeInvalidOverride(folderApp, validator)) changed = true;
+                }
+            }
+        }
+        if (!changed) return false;
+        try {
+            root.put("schemaVersion", SCHEMA_VERSION);
+            preferences.setPinnedItemsV2(root.toString());
+            preferences.setPinnedItemsSchemaVersion(SCHEMA_VERSION);
+        } catch (JSONException ignored) {
+        }
+        return true;
+    }
+
+    private static boolean removeInvalidOverride(
+        @NonNull JSONObject item,
+        @NonNull IconOverrideValidator validator
+    ) {
+        JSONObject raw = item.optJSONObject("iconOverride");
+        if (raw == null) return false;
+        PinnedIconOverride override = parseIconOverride(raw);
+        if (override != null && validator.isAvailable(override)) return false;
+        item.remove("iconOverride");
+        return true;
     }
 
     public List<PinnedItem> migrateFromLegacyIfNeeded() {

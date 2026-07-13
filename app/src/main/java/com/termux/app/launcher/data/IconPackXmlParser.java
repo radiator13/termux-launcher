@@ -8,6 +8,8 @@ import com.termux.app.launcher.model.IconPackInfo;
 import org.xmlpull.v1.XmlPullParser;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -20,9 +22,9 @@ public final class IconPackXmlParser {
         Map<String, String> componentDrawables = new LinkedHashMap<>();
         Map<String, String> calendarPrefixes = new LinkedHashMap<>();
         Map<String, IconPackDrawableItem> drawableItems = new LinkedHashMap<>();
-        String iconBack = null;
-        String iconMask = null;
-        String iconUpon = null;
+        List<String> iconBacks = new ArrayList<>();
+        List<String> iconMasks = new ArrayList<>();
+        List<String> iconUpons = new ArrayList<>();
         float scale = 1f;
 
         if (appfilter != null) {
@@ -47,11 +49,11 @@ public final class IconPackXmlParser {
                             calendarPrefixes.put(component, prefix);
                         }
                     } else if ("iconback".equals(name)) {
-                        iconBack = normalizeDrawableName(firstImageAttribute(appfilter));
+                        addImageAttributes(appfilter, iconBacks);
                     } else if ("iconmask".equals(name)) {
-                        iconMask = normalizeDrawableName(firstImageAttribute(appfilter));
+                        addImageAttributes(appfilter, iconMasks);
                     } else if ("iconupon".equals(name)) {
-                        iconUpon = normalizeDrawableName(firstImageAttribute(appfilter));
+                        addImageAttributes(appfilter, iconUpons);
                     } else if ("scale".equals(name)) {
                         String value = appfilter.getAttributeValue(null, "factor");
                         if (value == null) value = appfilter.getAttributeValue(null, "value");
@@ -90,7 +92,8 @@ public final class IconPackXmlParser {
             }
         }
 
-        return new IconPack(info, componentDrawables, calendarPrefixes, drawableItems, iconBack, iconMask, iconUpon, scale);
+        return new IconPack(info, componentDrawables, calendarPrefixes, drawableItems,
+            iconBacks, iconMasks, iconUpons, scale);
     }
 
     @NonNull
@@ -138,12 +141,14 @@ public final class IconPackXmlParser {
     }
 
     @Nullable
-    private static String firstImageAttribute(@NonNull XmlPullParser parser) {
+    private static void addImageAttributes(@NonNull XmlPullParser parser, @NonNull List<String> out) {
         for (int i = 1; i <= 6; i++) {
-            String value = parser.getAttributeValue(null, "img" + i);
-            if (value != null && !value.trim().isEmpty()) return value;
+            String value = normalizeDrawableName(parser.getAttributeValue(null, "img" + i));
+            if (value != null && !out.contains(value)) out.add(value);
         }
-        return firstNonEmpty(parser.getAttributeValue(null, "drawable"), parser.getAttributeValue(null, "name"));
+        String fallback = normalizeDrawableName(firstNonEmpty(
+            parser.getAttributeValue(null, "drawable"), parser.getAttributeValue(null, "name")));
+        if (fallback != null && !out.contains(fallback)) out.add(fallback);
     }
 
     @Nullable

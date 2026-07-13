@@ -138,6 +138,7 @@ import androidx.core.view.WindowInsetsCompat.Type;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -246,6 +247,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final long LAUNCHER_CATALOG_WARM_DELAY_MS = 450L;
     private boolean mPackageRefreshForceCatalogReload = false;
     private int mLastLauncherCatalogSignature = Integer.MIN_VALUE;
+    private int mLastLauncherIconDayKey = Integer.MIN_VALUE;
     private final Runnable mPackageRefreshRunnable = () -> {
         boolean forceCatalogRefresh = mPackageRefreshForceCatalogReload;
         mPackageRefreshForceCatalogReload = false;
@@ -709,6 +711,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerPackageChangeReceiver();
         registerLauncherAppsCallback();
         registerWallpaperColorsChangedListener();
+        refreshCalendarIconsIfDayChanged();
         refreshSuggestionBarIfLauncherCatalogChanged();
         getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
     }
@@ -5369,6 +5372,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_NOTIFY_APP_CRASH);
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_RELOAD_STYLE);
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS);
+        intentFilter.addAction(Intent.ACTION_DATE_CHANGED);
+        intentFilter.addAction(Intent.ACTION_TIME_CHANGED);
+        intentFilter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
 
         if (Build.VERSION.SDK_INT >= 28 ) {
             registerReceiver(mTermuxActivityBroadcastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
@@ -5472,6 +5478,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (forceCatalogRefresh) {
             LauncherCtlApiServer.getInstance().invalidatePackageCaches();
             mSuggestionBarView.clearAppCache();
+            mSuggestionBarView.pruneInvalidIconOverrides();
             mSuggestionBarView.reloadAllApps();
             mLastLauncherCatalogSignature = computeLauncherCatalogSignature();
             syncAzScrubLettersAndTint();
@@ -5678,6 +5685,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         scheduleSuggestionBarPackageRefresh(false, true);
     }
 
+    private void refreshCalendarIconsIfDayChanged() {
+        Calendar now = Calendar.getInstance();
+        int dayKey = (now.get(Calendar.YEAR) * 400) + now.get(Calendar.DAY_OF_YEAR);
+        if (mLastLauncherIconDayKey == Integer.MIN_VALUE) {
+            mLastLauncherIconDayKey = dayKey;
+            return;
+        }
+        if (mLastLauncherIconDayKey == dayKey) return;
+        mLastLauncherIconDayKey = dayKey;
+        scheduleSuggestionBarPackageRefresh(true, true);
+    }
+
     private int computeLauncherCatalogSignature() {
         PackageManager packageManager = getPackageManager();
         Intent main = new Intent(Intent.ACTION_MAIN, null);
@@ -5774,6 +5793,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     case TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS:
                         Logger.logDebug(LOG_TAG, "Received intent to request storage permissions");
                         requestStoragePermission(false);
+                        return;
+                    case Intent.ACTION_DATE_CHANGED:
+                    case Intent.ACTION_TIME_CHANGED:
+                    case Intent.ACTION_TIMEZONE_CHANGED:
+                        refreshCalendarIconsIfDayChanged();
                         return;
                     default:
                 }

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -241,8 +242,9 @@ public final class LauncherAppDataProvider {
             CharSequence labelSequence = info.loadLabel(packageManager);
             String label = labelSequence != null ? labelSequence.toString() : info.packageName;
             AppRef ref = new AppRef(info.packageName, info.name);
-            Drawable icon = iconResolver.resolve(ref);
-            LauncherAppEntry entry = new LauncherAppEntry(ref, label, icon);
+            LauncherIconResolver.ResolvedIcon resolvedIcon = iconResolver.resolveDetailed(ref, null, null);
+            Drawable icon = resolvedIcon.drawable;
+            LauncherAppEntry entry = new LauncherAppEntry(ref, label, icon, resolvedIcon.iconPackArtwork);
             snapshot.apps.add(entry);
             snapshot.byId.put(ref.stableId(), entry);
             if (!snapshot.firstByPackage.containsKey(ref.packageName)) {
@@ -286,8 +288,15 @@ public final class LauncherAppDataProvider {
             if (launcherApps == null || userManager == null) {
                 return;
             }
-            List<UserHandle> profiles = userManager.getUserProfiles();
-            if (profiles == null || profiles.isEmpty()) {
+            // Some OEM/private-space profiles are launcher-visible before (or without) appearing
+            // in UserManager#getUserProfiles. Use the union so every profile Android exposes to a
+            // launcher gets the same identity treatment.
+            LinkedHashSet<UserHandle> profiles = new LinkedHashSet<>();
+            List<UserHandle> userManagerProfiles = userManager.getUserProfiles();
+            if (userManagerProfiles != null) profiles.addAll(userManagerProfiles);
+            List<UserHandle> launcherProfiles = launcherApps.getProfiles();
+            if (launcherProfiles != null) profiles.addAll(launcherProfiles);
+            if (profiles.isEmpty()) {
                 return;
             }
             UserHandle currentUser = Process.myUserHandle();
@@ -337,9 +346,10 @@ public final class LauncherAppDataProvider {
                 }
                 // Resolve icon-pack and per-app choices for the exact profile, while keeping the
                 // LauncherApps-provided profile icon as the system fallback.
-                icon = iconResolver.resolve(ref, null, icon);
+                LauncherIconResolver.ResolvedIcon resolvedIcon = iconResolver.resolveDetailed(ref, null, icon);
+                icon = resolvedIcon.drawable;
                 addEntry(snapshot, packageManager, defaultComponentsByPackage,
-                    new LauncherAppEntry(ref, label, icon));
+                    new LauncherAppEntry(ref, label, icon, resolvedIcon.iconPackArtwork));
             }
         } catch (SecurityException ignored) {
         } catch (Throwable ignored) {
@@ -429,7 +439,7 @@ public final class LauncherAppDataProvider {
         if (icon == entry.icon) {
             return entry;
         }
-        return new LauncherAppEntry(entry.appRef, entry.label, icon);
+        return new LauncherAppEntry(entry.appRef, entry.label, icon, entry.iconPackArtwork);
     }
 
     private static char normalizeLetter(char c) {

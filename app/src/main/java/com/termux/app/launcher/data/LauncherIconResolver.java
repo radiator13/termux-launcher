@@ -3,8 +3,14 @@ package com.termux.app.launcher.data;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.LayerDrawable;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,6 +22,17 @@ import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import java.util.Calendar;
 
 public final class LauncherIconResolver {
+    private static final int COMPOSE_SIZE_PX = 192;
+
+    public static final class ResolvedIcon {
+        @Nullable public final Drawable drawable;
+        public final boolean iconPackArtwork;
+
+        ResolvedIcon(@Nullable Drawable drawable, boolean iconPackArtwork) {
+            this.drawable = drawable;
+            this.iconPackArtwork = iconPackArtwork;
+        }
+    }
     public interface SystemIconLoader {
         @Nullable Drawable load(@NonNull AppRef ref);
     }
@@ -62,20 +79,29 @@ public final class LauncherIconResolver {
         @Nullable PinnedIconOverride override,
         @Nullable Drawable systemFallback
     ) {
+        return resolveDetailed(ref, override, systemFallback).drawable;
+    }
+
+    @NonNull
+    public ResolvedIcon resolveDetailed(
+        @NonNull AppRef ref,
+        @Nullable PinnedIconOverride override,
+        @Nullable Drawable systemFallback
+    ) {
         Drawable icon = loadOverride(override);
-        if (icon != null) return icon;
+        if (icon != null) return new ResolvedIcon(icon, true);
 
         if (configRepository != null) {
             icon = loadOverride(configRepository.loadAppIconOverride(ref));
-            if (icon != null) return icon;
+            if (icon != null) return new ResolvedIcon(icon, true);
         }
 
         if (preferences != null) {
             icon = loadFromPack(preferences.getAppLauncherIconPackPackage(), ref, systemFallback);
-            if (icon != null) return icon;
+            if (icon != null) return new ResolvedIcon(icon, true);
         }
 
-        return systemFallback != null ? systemFallback : loadSystemIcon(ref);
+        return new ResolvedIcon(systemFallback != null ? systemFallback : loadSystemIcon(ref), false);
     }
 
     @Nullable
@@ -106,6 +132,30 @@ public final class LauncherIconResolver {
         }
 
         return globalIcon != null ? globalIcon : resolve(ref, null);
+    }
+
+    @NonNull
+    public ResolvedIcon resolvePinnedDetailed(
+        @NonNull AppRef ref,
+        @Nullable PinnedIconOverride override,
+        @Nullable Drawable globalIcon,
+        boolean globalIconPackArtwork
+    ) {
+        Drawable icon = loadOverride(override);
+        if (icon != null) return new ResolvedIcon(icon, true);
+        if (preferences != null) {
+            String pinnedPack = preferences.getAppLauncherPinnedIconPackPackage();
+            if (pinnedPack != null && !pinnedPack.trim().isEmpty()) {
+                icon = loadFromPack(pinnedPack, ref, globalIcon);
+                if (icon != null) return new ResolvedIcon(icon, true);
+            }
+        }
+        if (globalIcon != null) return new ResolvedIcon(globalIcon, globalIconPackArtwork);
+        return resolveDetailed(ref, null, null);
+    }
+
+    public void clearCache() {
+        iconPackRepository.clearCache();
     }
 
     @Nullable
@@ -155,19 +205,62 @@ public final class LauncherIconResolver {
         @NonNull AppRef ref,
         @Nullable Drawable systemFallback
     ) {
-        if (pack.iconBack == null && pack.iconUpon == null && pack.iconMask == null) return null;
+        if (pack.iconBacks.isEmpty() && pack.iconUpons.isEmpty() && pack.iconMasks.isEmpty()) return null;
         Drawable systemIcon = systemFallback != null ? systemFallback : loadSystemIcon(ref);
         if (systemIcon == null) return null;
-        Drawable back = loadDrawableFromPack(pack.info.packageName, pack.iconBack);
-        Drawable upon = loadDrawableFromPack(pack.info.packageName, pack.iconUpon);
-        if (back == null && upon == null) return null;
-        if (back != null && upon != null) {
-            return new LayerDrawable(new Drawable[] { back, systemIcon, upon });
-        } else if (back != null) {
-            return new LayerDrawable(new Drawable[] { back, systemIcon });
-        } else {
-            return new LayerDrawable(new Drawable[] { systemIcon, upon });
+        Drawable back = loadSelectedPackLayer(pack.info.packageName, pack.iconBacks, ref, 0x19);
+        Drawable mask = loadSelectedPackLayer(pack.info.packageName, pack.iconMasks, ref, 0x2f);
+        Drawable upon = loadSelectedPackLayer(pack.info.packageName, pack.iconUpons, ref, 0x43);
+        if (back == null && mask == null && upon == null) return null;
+
+        Bitmap result = Bitmap.createBitmap(COMPOSE_SIZE_PX, COMPOSE_SIZE_PX, Bitmap.Config.ARGB_8888);
+        Canvas resultCanvas = new Canvas(result);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        drawLayer(resultCanvas, back, new Rect(0, 0, COMPOSE_SIZE_PX, COMPOSE_SIZE_PX));
+
+        Bitmap foreground = Bitmap.createBitmap(COMPOSE_SIZE_PX, COMPOSE_SIZE_PX, Bitmap.Config.ARGB_8888);
+        Canvas foregroundCanvas = new Canvas(foreground);
+        float safeScale = Math.max(0.1f, Math.min(1.5f, pack.scale));
+        int targetSize = Math.max(1, Math.round(COMPOSE_SIZE_PX * safeScale));
+        int offset = (COMPOSE_SIZE_PX - targetSize) / 2;
+        drawLayer(foregroundCanvas, systemIcon,
+            new Rect(offset, offset, offset + targetSize, offset + targetSize));
+        if (mask != null) {
+            Bitmap maskBitmap = Bitmap.createBitmap(COMPOSE_SIZE_PX, COMPOSE_SIZE_PX, Bitmap.Config.ARGB_8888);
+            drawLayer(new Canvas(maskBitmap), mask, new Rect(0, 0, COMPOSE_SIZE_PX, COMPOSE_SIZE_PX));
+            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
+            foregroundCanvas.drawBitmap(maskBitmap, 0f, 0f, paint);
+            paint.setXfermode(null);
+            maskBitmap.recycle();
         }
+        resultCanvas.drawBitmap(foreground, 0f, 0f, paint);
+        foreground.recycle();
+        drawLayer(resultCanvas, upon, new Rect(0, 0, COMPOSE_SIZE_PX, COMPOSE_SIZE_PX));
+        return new BitmapDrawable(context.getResources(), result);
+    }
+
+    @Nullable
+    private Drawable loadSelectedPackLayer(
+        @NonNull String packageName,
+        @NonNull java.util.List<String> names,
+        @NonNull AppRef ref,
+        int salt
+    ) {
+        if (names.isEmpty()) return null;
+        int index = Math.floorMod(ref.stableId().hashCode() ^ salt, names.size());
+        return loadDrawableFromPack(packageName, names.get(index));
+    }
+
+    private static void drawLayer(
+        @NonNull Canvas canvas,
+        @Nullable Drawable drawable,
+        @NonNull Rect bounds
+    ) {
+        if (drawable == null) return;
+        Rect oldBounds = new Rect(drawable.getBounds());
+        drawable.setBounds(bounds);
+        drawable.draw(canvas);
+        drawable.setBounds(oldBounds);
     }
 
     @Nullable

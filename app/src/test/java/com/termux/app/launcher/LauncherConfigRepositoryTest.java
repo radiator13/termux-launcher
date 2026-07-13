@@ -238,4 +238,30 @@ public class LauncherConfigRepositoryTest {
         assertNull(repository.loadAppIconOverride(primary));
         assertEquals("ic_clone", repository.loadAppIconOverride(clone).drawableName);
     }
+
+    @Test
+    public void pruneInvalidIconOverrides_cleansAppDockAndFolderScopes() {
+        PinnedIconOverride valid = new PinnedIconOverride(
+            PinnedIconOverride.SOURCE_ICON_PACK, "pack.example", "keep", "Keep");
+        PinnedIconOverride missing = new PinnedIconOverride(
+            PinnedIconOverride.SOURCE_ICON_PACK, "pack.example", "missing", "Missing");
+        AppRef appWide = new AppRef("com.example.appwide", "Main");
+        repository.saveAppIconOverride(appWide, missing);
+
+        List<PinnedItem> pins = new ArrayList<>();
+        pins.add(new PinnedAppItem(new AppRef("com.example.valid", "Main"), valid));
+        pins.add(new PinnedAppItem(new AppRef("com.example.invalid", "Main"), missing));
+        PinnedFolderItem folder = new PinnedFolderItem("folder-prune", "Folder");
+        folder.apps.add(new PinnedAppItem(new AppRef("com.example.folder", "Main"), missing));
+        pins.add(folder);
+        repository.savePinnedItems(pins);
+
+        assertTrue(repository.pruneInvalidIconOverrides(override -> "keep".equals(override.drawableName)));
+
+        assertNull(repository.loadAppIconOverride(appWide));
+        List<PinnedItem> loaded = repository.loadPinnedItems();
+        assertEquals("keep", ((PinnedAppItem) loaded.get(0)).iconOverride.drawableName);
+        assertNull(((PinnedAppItem) loaded.get(1)).iconOverride);
+        assertNull(((PinnedFolderItem) loaded.get(2)).apps.get(0).iconOverride);
+    }
 }
