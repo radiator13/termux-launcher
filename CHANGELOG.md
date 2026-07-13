@@ -1,9 +1,13 @@
 # Changelog
 
-## 0.2.26-rc.1
+## 0.2.26
+
+### Added
+- Notification popup for pinned apps: when a pinned app has an unread notification, swipe up from its icon in the pinned-icons row to open a popup and interact with the notification directly.
+- Pinned app icon pages now loop around instead of stopping at the first or last page.
 
 ### Fixed
-- Launcher icon-pack changes now refresh immediately, including pinned-icon pack changes and resetting per-app icon overrides, without requiring `termux-reload-settings`.
+- Custom app icon bug fixes: icon-pack changes now refresh immediately — including pinned-icon pack changes and resetting per-app icon overrides — without requiring `termux-reload-settings`, and rendered icon caches are invalidated after icon source changes.
 
 ## 0.2.25
 
