@@ -61,6 +61,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
@@ -5088,9 +5089,12 @@ public final class SuggestionBarView extends GridLayout {
         int minWidth = popupMinWidth(screenW, tightWrap);
         int maxHeight = popupMaxHeight(screenH);
 
+        // Measure the full vertical content before imposing the popup viewport. Measuring the
+        // content itself with AT_MOST can clamp a LinearLayout before it enters the ScrollView,
+        // leaving trailing action rows laid out beyond its reported bounds and therefore clipped.
         content.measure(
             View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST),
-            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST)
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         );
         int desiredWidth = clamp(content.getMeasuredWidth(), minWidth, maxWidth);
         int desiredHeight = Math.max(dp(36), Math.min(content.getMeasuredHeight(), maxHeight));
@@ -5098,6 +5102,10 @@ public final class SuggestionBarView extends GridLayout {
         ScrollView scrollView = new ScrollView(getContext());
         scrollView.setFillViewport(true);
         scrollView.setOverScrollMode(OVER_SCROLL_NEVER);
+        scrollView.setVerticalScrollBarEnabled(true);
+        scrollView.setScrollbarFadingEnabled(false);
+        scrollView.setFadingEdgeLength(dp(18));
+        scrollView.setVerticalFadingEdgeEnabled(true);
         scrollView.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         FrameLayout popupRoot = new FrameLayout(getContext());
@@ -5135,6 +5143,11 @@ public final class SuggestionBarView extends GridLayout {
     private void showPopupAtAnchor(@NonNull PopupWindow popupWindow, @Nullable View anchor) {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
+        Rect visibleFrame = new Rect(0, 0, screenW, screenH);
+        getWindowVisibleDisplayFrame(visibleFrame);
+        if (visibleFrame.isEmpty()) {
+            visibleFrame.set(0, 0, screenW, screenH);
+        }
         int popupWidth = popupWindow.getWidth();
         int popupHeight = popupWindow.getHeight();
         int gap = dp(4);
@@ -5155,8 +5168,8 @@ public final class SuggestionBarView extends GridLayout {
                 x = anchorCenterX - (popupWidth / 2);
             }
             int y = location[1] - popupHeight - gap;
-            x = clamp(x, 0, Math.max(0, screenW - popupWidth));
-            y = clamp(y, 0, Math.max(0, screenH - popupHeight));
+            x = clamp(x, visibleFrame.left, Math.max(visibleFrame.left, visibleFrame.right - popupWidth));
+            y = clamp(y, visibleFrame.top, Math.max(visibleFrame.top, visibleFrame.bottom - popupHeight));
             popupWindow.showAtLocation(this, Gravity.NO_GRAVITY, x, y);
         } else {
             popupWindow.showAtLocation(this, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 0, getHeight() + gap);
@@ -5310,11 +5323,9 @@ public final class SuggestionBarView extends GridLayout {
             shownKeys.add(sbn.getKey() + "@" + sbn.getPostTime());
         }
         notificationPopupKeys = Collections.unmodifiableSet(shownKeys);
-        notificationPopupWindow.setFocusable(true);
-        notificationPopupWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
-        notificationPopupWindow.setSoftInputMode(
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                | WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED);
+        // Keep this window non-focusable when it first opens. Taking focus here closes an active
+        // terminal IME, moves the dock, and leaves a popup positioned against stale coordinates.
+        // Inline reply promotes the popup to a focusable IME target only when Reply is touched.
         showPopupAtAnchor(notificationPopupWindow, anchor);
     }
 
@@ -5423,6 +5434,12 @@ public final class SuggestionBarView extends GridLayout {
         replyBg.setColor(withAlphaComponent(resolveLauncherPanelColor(), 0x72));
         replyBg.setStroke(Math.max(1, dp(1)), withAlphaComponent(resolveLauncherOutlineColor(), 0x66));
         reply.setBackground(replyBg);
+        reply.setOnTouchListener((view, event) -> {
+            if (event != null && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                enableNotificationReplyInput(reply);
+            }
+            return false;
+        });
         row.addView(reply, new LinearLayout.LayoutParams(0, dp(38), 1f));
 
         Button send = notificationActionButton(
@@ -5441,6 +5458,28 @@ public final class SuggestionBarView extends GridLayout {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rowLp.topMargin = dp(8);
         card.addView(row, rowLp);
+    }
+
+    private void enableNotificationReplyInput(@NonNull EditText reply) {
+        PopupWindow popup = notificationPopupWindow;
+        if (popup == null || !popup.isShowing()) return;
+        if (!popup.isFocusable()) {
+            popup.setFocusable(true);
+            popup.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
+            popup.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                    | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+            popup.update();
+        }
+        reply.post(() -> {
+            if (notificationPopupWindow != popup || !popup.isShowing()) return;
+            reply.requestFocus();
+            InputMethodManager inputMethodManager =
+                (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (inputMethodManager != null) {
+                inputMethodManager.showSoftInput(reply, InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
     }
 
     @Nullable
