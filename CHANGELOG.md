@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.26-rc.1
+
+### Fixed
+- Launcher icon-pack changes now refresh immediately, including pinned-icon pack changes and resetting per-app icon overrides, without requiring `termux-reload-settings`.
+
 ## 0.2.25
 
 ### Added
