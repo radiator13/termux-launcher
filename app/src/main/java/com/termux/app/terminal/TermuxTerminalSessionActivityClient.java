@@ -141,7 +141,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         if (mTerminalScreenUpdatePending)
             return;
         mTerminalScreenUpdatePending = true;
-        mActivity.getTerminalView().post(() -> {
+        mUiHandler.post(() -> {
             mTerminalScreenUpdatePending = false;
             if (!mActivity.isVisible())
                 return;
