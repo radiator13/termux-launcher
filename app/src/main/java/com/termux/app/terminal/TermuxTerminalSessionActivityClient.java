@@ -540,6 +540,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             final Typeface newTypeface = (fontFile.exists() && fontFile.length() > 0) ? Typeface.createFromFile(fontFile) : Typeface.MONOSPACE;
             final Typeface newItalicTypeface = (italicFontFile.exists() && italicFontFile.length() > 0) ? Typeface.createFromFile(italicFontFile) : newTypeface;
             mActivity.getTerminalView().setTypeface(newTypeface, newItalicTypeface);
+            mActivity.requestTerminalFlushDockGeometryUpdate();
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error in checkForFontAndColors()", e);
         }

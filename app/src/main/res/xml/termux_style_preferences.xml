@@ -20,11 +20,11 @@
             app:summary="@string/termux_use_system_wallpaper_summary"
             android:defaultValue="true" />
 
-        <SwitchPreferenceCompat
-            app:key="fullscreen"
-            app:title="@string/termux_fullscreen_title"
-            app:summary="@string/termux_fullscreen_summary"
-            android:defaultValue="false" />
+        <Preference
+            app:key="termux_screen"
+            app:title="@string/termux_screen_preferences_title"
+            app:summary="@string/termux_screen_preferences_summary"
+            app:fragment="com.termux.app.fragments.settings.termux.TermuxScreenPreferencesFragment" />
     </PreferenceCategory>
 
     <PreferenceCategory

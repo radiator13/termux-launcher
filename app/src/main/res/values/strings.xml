@@ -243,6 +243,11 @@
         <string name="termux_style_preferences_title">Appearance</string>
         <string name="termux_style_preferences_summary">Theme, wallpaper, terminal, dock, sessions menu</string>
 
+        <string name="termux_screen_preferences_title">Screen</string>
+        <string name="termux_screen_preferences_summary">Fullscreen and terminal fit</string>
+        <string name="termux_terminal_flush_dock_title">Flush terminal with dock</string>
+        <string name="termux_terminal_flush_dock_summary">Extend the dock glass to absorb space below the last terminal row</string>
+
         <string name="termux_theme_mode_title">Mode</string>
         <string name="termux_theme_mode_system">System</string>
         <string name="termux_theme_mode_light">Light</string>

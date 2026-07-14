@@ -423,6 +423,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private final int[] mTmpViewLocation = new int[2];
     private long mLastAccessoryRenderSyncUptimeMs;
     private long mLastAccessoryGeometryApplyUptimeMs;
+    private int mAppliedTerminalFlushPaddingPx;
+    private boolean mHasMeasuredTerminalFlushPadding;
     private long mDelayRootMarginAdjustmentsUntilUptimeMs;
     private boolean mImeTransitionInProgress;
     private boolean mFadeAccessoryBlurAfterImeRestore;
@@ -4215,7 +4217,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         DockLayoutMetrics dockMetrics = buildDockLayoutMetrics(0);
         applyDockLayoutMetrics(dockMetrics);
-        int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx);
+        int terminalFlushPaddingPx = resolveTerminalFlushDockPaddingPx();
+        mAppliedTerminalFlushPaddingPx = terminalFlushPaddingPx;
+        // Dock rows remain bottom-anchored. Increasing only their parent leaves this addition as
+        // empty space at the glass surface's top edge rather than stretching an icon row.
+        int combinedHeight = dockMetrics.combinedHeight(toolbarHeightPx) + terminalFlushPaddingPx;
         boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
         boolean accessoryMarginChanged = updateAccessoryStackContainerBottomMargin(
             accessoryStackContainer,
@@ -4225,6 +4231,39 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mTerminalView.post(mTerminalView::updateSize);
         }
         scheduleAccessoryRenderSync("setTerminalToolbarHeight");
+    }
+
+    private int resolveTerminalFlushDockPaddingPx() {
+        if (mPreferences == null || !mPreferences.isTerminalFlushDockEnabled()) {
+            mHasMeasuredTerminalFlushPadding = false;
+            return 0;
+        }
+        if (mTerminalView == null || mTerminalView.mRenderer == null || mTerminalView.getHeight() <= 0)
+            return mAppliedTerminalFlushPaddingPx;
+
+        int fontLineSpacingPx = mTerminalView.mRenderer.getFontLineSpacing();
+        if (fontLineSpacingPx <= 0)
+            return mAppliedTerminalFlushPaddingPx;
+        int baseTerminalHeightPx = mTerminalView.getHeight() + mAppliedTerminalFlushPaddingPx;
+        int availableTerminalHeightPx = Math.max(0,
+            baseTerminalHeightPx - mTerminalView.mRenderer.getFontLineSpacingAndAscent());
+        int flushPaddingPx = availableTerminalHeightPx % fontLineSpacingPx;
+        // A one-pixel rounding shift during inset/layout settling must not alternate the parent
+        // height between adjacent values. The unpadded base still makes larger changes converge.
+        if (mHasMeasuredTerminalFlushPadding
+            && Math.abs(flushPaddingPx - mAppliedTerminalFlushPaddingPx) <= 1)
+            return mAppliedTerminalFlushPaddingPx;
+        mHasMeasuredTerminalFlushPadding = true;
+        return flushPaddingPx;
+    }
+
+    public void requestTerminalFlushDockGeometryUpdate() {
+        if (mTerminalView == null)
+            return;
+        mTerminalView.post(() -> {
+            if (!isFinishing() && !isDestroyed())
+                applyAccessoryGeometryIfNeeded(true, "terminal:metrics");
+        });
     }
 
     private boolean updateAccessoryStackContainerHeight(View view, int height) {
@@ -5563,9 +5602,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (width == oldWidth && height == oldHeight) {
                 return;
             }
+            if (v == mTerminalView) {
+                // Never mutate accessory layout params from inside this layout pass.
+                v.post(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                        applyAccessoryGeometryIfNeeded(true, "terminal:layout");
+                });
+                return;
+            }
             scheduleAccessoryRenderSync("accessory:layout");
         };
         int[] watchIds = {
+            R.id.terminal_view,
             R.id.accessory_stack_container,
             R.id.apps_bar_viewpager,
             R.id.apps_bar_indicator_band,
@@ -5585,6 +5633,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         int[] watchIds = {
+            R.id.terminal_view,
             R.id.accessory_stack_container,
             R.id.apps_bar_viewpager,
             R.id.apps_bar_indicator_band,

@@ -249,6 +249,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setTerminalDynamicColorsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "terminal_flush_dock":
+                mPreferences.setTerminalFlushDockEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "app_launcher_bw_icons":
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -308,6 +312,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return true;
             case "terminal_dynamic_colors_enabled":
                 return mPreferences.isTerminalDynamicColorsEnabled();
+            case "terminal_flush_dock":
+                return mPreferences.isTerminalFlushDockEnabled();
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
             case "app_launcher_unify_icons":
