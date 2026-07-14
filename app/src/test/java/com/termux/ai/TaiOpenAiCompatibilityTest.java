@@ -380,6 +380,42 @@ public class TaiOpenAiCompatibilityTest {
         assertFalse(TaiManager.omitAutomaticToolsForCompatibility(reliableNative,
             toolSpec("native-agent", 16384, true, TaiModelSpec.TOOL_MODE_NATIVE)));
         assertTrue(reliableNative.has("tools"));
+
+        LinkedHashSet<String> specialistCapabilities = new LinkedHashSet<>();
+        specialistCapabilities.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);
+        specialistCapabilities.add(TaiModelSpec.CAPABILITY_TOOL_USE);
+        specialistCapabilities.add(TaiModelSpec.CAPABILITY_MOBILE_ACTIONS);
+        TaiModelSpec shortNativeSpecialist = new TaiModelSpec(
+            TaiModelRegistry.MODEL_MOBILE_ACTIONS_270M,
+            "FunctionGemma",
+            "test",
+            "test",
+            "/models/model.litertlm",
+            "test",
+            0L,
+            specialistCapabilities,
+            false,
+            null,
+            TaiModelSpec.BACKEND_LITERT_LM,
+            TaiModelSpec.FORMAT_LITERTLM,
+            null,
+            null,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            null
+        );
+        assertTrue(shortNativeSpecialist.capabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE));
+        assertTrue(shortNativeSpecialist.capabilities.contains(TaiModelSpec.CAPABILITY_MOBILE_ACTIONS));
+        assertEquals(TaiModelSpec.TOOL_MODE_NATIVE, shortNativeSpecialist.toolMode);
+        assertEquals(1024, shortNativeSpecialist.endpointContextWindow);
+
+        JSONObject shortSpecialist = new JSONObject(tools.toString());
+        assertFalse(TaiManager.omitAutomaticToolsForCompatibility(shortSpecialist, shortNativeSpecialist));
+        assertTrue(shortSpecialist.has("tools"));
     }
 
     @Test

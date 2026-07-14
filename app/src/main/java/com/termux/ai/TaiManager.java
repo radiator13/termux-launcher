@@ -1297,8 +1297,11 @@ public final class TaiManager {
      * Agent TUIs attach their complete tool catalogue to even a casual text prompt. For local
      * models that cannot use tools, short-context models where that catalogue cannot fit, and MNN
      * prompt-fallback models that are not reliable under automatic tool choice, degrade only the
-     * automatic request to ordinary text chat. Explicit required/named tool choices still fail
-     * closed through {@link #modelSupportsRequestedTools(JSONObject, TaiModelSpec)}.
+     * automatic request to ordinary text chat. Mobile-actions specialists are exempt from the
+     * short-context degrade because making tool calls is their purpose; stripping tools makes them
+     * useless, so any overflow instead surfaces as a normal context error. Explicit required/named
+     * tool choices still fail closed through
+     * {@link #modelSupportsRequestedTools(JSONObject, TaiModelSpec)}.
      */
     static boolean omitAutomaticToolsForCompatibility(
         @NonNull JSONObject request,
@@ -1310,8 +1313,9 @@ public final class TaiManager {
         boolean automatic = choice == null || JSONObject.NULL.equals(choice) || "auto".equals(String.valueOf(choice));
         if (!automatic) return false;
         boolean reliableAutomaticTools = spec.capabilities.contains(TaiModelSpec.CAPABILITY_TOOL_USE)
-            && spec.endpointContextWindow >= 16_384
-            && !TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK.equals(spec.toolMode);
+            && !TaiModelSpec.TOOL_MODE_PROMPT_FALLBACK.equals(spec.toolMode)
+            && (spec.endpointContextWindow >= 16_384
+                || spec.capabilities.contains(TaiModelSpec.CAPABILITY_MOBILE_ACTIONS));
         if (reliableAutomaticTools) return false;
         request.remove("tools");
         request.put("tool_choice", "none");
