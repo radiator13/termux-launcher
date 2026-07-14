@@ -233,13 +233,6 @@ public class TaiOpenAiCompatibilityTest {
     }
 
     @Test
-    public void liteRtGeneratedTokenCount_usesNativeDeltaAfterFirstStreamingToken() {
-        assertEquals(1, LiteRtTaiRuntime.generatedTokenCount(120, 120));
-        assertEquals(8, LiteRtTaiRuntime.generatedTokenCount(120, 127));
-        assertEquals(1, LiteRtTaiRuntime.generatedTokenCount(120, 119));
-    }
-
-    @Test
     public void liteRtVisionBackend_autoUsesGpuOnlyWhenEligibleAndNotKnownFailed() {
         assertTrue(LiteRtTaiRuntime.useGpuVision(null, true, true, false));
         assertFalse(LiteRtTaiRuntime.useGpuVision(null, false, true, false));

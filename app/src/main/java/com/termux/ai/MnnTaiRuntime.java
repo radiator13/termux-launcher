@@ -1017,10 +1017,6 @@ public final class MnnTaiRuntime implements TaiRuntime {
         else json.put("max_all_tokens", Math.min(json.optInt("max_all_tokens", modelSpec.endpointContextWindow), modelSpec.endpointContextWindow));
         json.remove("max_context_len");
         json.put("prompt_cache", true);
-        File mmapDir = new File(appContext.getCacheDir(), "tai-mnn-mmap/" + cacheKey(modelSpec.id));
-        if (!mmapDir.isDirectory()) mmapDir.mkdirs();
-        json.put("use_mmap", true);
-        json.put("tmp_path", mmapDir.getAbsolutePath());
         if (!json.has("max_new_tokens")) json.put("max_new_tokens", modelSpec.defaultMaxOutputTokens);
         if (!json.has("temperature")) json.put("temperature", 0.8d);
         if (!json.has("top_p")) json.put("top_p", 0.9d);
@@ -1076,7 +1072,12 @@ public final class MnnTaiRuntime implements TaiRuntime {
         JSONObject json = new JSONObject();
         json.put("is_r1", modelSpec.id.toLowerCase(Locale.ROOT).contains("r1")
             || (modelSpec.architecture != null && modelSpec.architecture.toLowerCase(Locale.ROOT).contains("r1")));
-        json.put("mmap_dir", "");
+        // The native shim derives use_mmap from whether mmap_dir is non-empty and overwrites
+        // any use_mmap/tmp_path in the merged config (llm_session.cpp) — so the directory must
+        // be passed here, not in mergedConfigJson.
+        File mmapDir = new File(appContext.getCacheDir(), "tai-mnn-mmap/" + cacheKey(modelSpec.id));
+        if (!mmapDir.isDirectory()) mmapDir.mkdirs();
+        json.put("mmap_dir", mmapDir.getAbsolutePath());
         json.put("keep_history", false);
         json.put("prompt_cache", true);
         return json.toString();

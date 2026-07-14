@@ -486,7 +486,8 @@ public final class TaiManager {
         choice.put("index", 0);
         JSONArray toolCalls = chat.optJSONArray("toolCalls");
         boolean hasToolCalls = toolCalls != null && toolCalls.length() > 0;
-        choice.put("finish_reason", hasToolCalls ? "tool_calls" : "stop");
+        choice.put("finish_reason", chat.optString("finishReason",
+            hasToolCalls ? "tool_calls" : "stop"));
         JSONObject message = new JSONObject();
         message.put("role", "assistant");
         message.put("content", hasToolCalls && chat.optString("response", "").isEmpty()
@@ -530,7 +531,7 @@ public final class TaiManager {
         JSONObject choice = new JSONObject();
         choice.put("text", completion.optString("response", ""));
         choice.put("index", 0);
-        choice.put("finish_reason", "stop");
+        choice.put("finish_reason", completion.optString("finishReason", "stop"));
         choices.put(choice);
         response.put("choices", choices);
         response.put("tai", completion);

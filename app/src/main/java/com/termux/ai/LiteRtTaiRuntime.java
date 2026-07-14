@@ -302,7 +302,11 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
         AtomicBoolean lengthLimited = new AtomicBoolean(false);
         AtomicBoolean callbackFinished = new AtomicBoolean(false);
-        AtomicInteger firstCallbackTokenCount = new AtomicInteger(-1);
+        // Do not call activeConversation.getTokenCount() from inside onMessage: the native
+        // session lock is held by the decode loop during callbacks and the call deadlocks the
+        // whole generation (observed on-device). Each onMessage delivers at least one decoded
+        // token, so the callback count is a safe lower-bound proxy for output tokens.
+        AtomicInteger decodedCallbacks = new AtomicInteger(0);
         int maxOutputTokens = options.maxTokens != null
             ? options.maxTokens
             : loadedProfile.defaultMaxTokens;
@@ -327,22 +331,18 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                             if (callback != null) callback.onToolCalls(messageToolCalls);
                         }
 
-                        try {
-                            int currentTokenCount = activeConversation.getTokenCount();
-                            firstCallbackTokenCount.compareAndSet(-1, currentTokenCount);
-                            int generatedTokens = generatedTokenCount(
-                                firstCallbackTokenCount.get(), currentTokenCount);
-                            if (generatedTokens >= maxOutputTokens
-                                && lengthLimited.compareAndSet(false, true)) {
-                                activeConversation.cancelProcess();
-                            }
-                        } catch (Throwable throwable) {
-                            lengthLimited.set(false);
-                            errorRef.compareAndSet(null, throwable);
-                            if (callbackFinished.compareAndSet(false, true)) {
-                                if (callback != null) callback.onError(throwable);
-                                done.countDown();
-                            }
+                        int generatedTokens = decodedCallbacks.incrementAndGet();
+                        if (generatedTokens >= maxOutputTokens
+                            && lengthLimited.compareAndSet(false, true)) {
+                            // Cancel from the scheduler thread, never from the decode callback,
+                            // so the native session lock is free when cancelProcess() runs.
+                            scheduler.execute(() -> {
+                                try {
+                                    activeConversation.cancelProcess();
+                                } catch (Throwable throwable) {
+                                    errorRef.compareAndSet(null, throwable);
+                                }
+                            });
                         }
                     }
 
@@ -422,14 +422,6 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         }
         data.put("state", getState().toJson());
         return data;
-    }
-
-    static int generatedTokenCount(int firstCallbackTokenCount, int currentTokenCount) {
-        // The first streaming callback follows prefill and contains at least one decoded token.
-        // Native KV-cache growth after that callback gives an exact decode-token delta. A
-        // speculative batch can cross the cap as one indivisible callback, so cancellation occurs
-        // at the first callback boundary at or beyond maxTokens.
-        return Math.max(1, currentTokenCount - firstCallbackTokenCount + 1);
     }
 
     @NonNull
@@ -622,7 +614,10 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
 
     @NonNull
     private Conversation ensureConversationLocked(@NonNull String mode, @NonNull TaiChatRequest request, @NonNull TaiRuntimeOptions options) {
-        String key = mode + "|" + normalized(request.systemPrompt) + "|" + optionsKey(options);
+        // Tools are baked into the Conversation at creation, so they must be part of the reuse
+        // key — otherwise a cached tool-less conversation silently serves tool requests.
+        String key = mode + "|" + normalized(request.systemPrompt) + "|" + optionsKey(options)
+            + "|tools:" + request.toolDefinitions.toString().hashCode();
         if (request.reusableConversation && conversation != null && conversation.isAlive() && key.equals(conversationKey)) {
             return conversation;
         }

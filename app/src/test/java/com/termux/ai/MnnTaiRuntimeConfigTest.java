@@ -61,9 +61,10 @@ public class MnnTaiRuntimeConfigTest {
         assertEquals(0.05d, merged.getDouble("min_p"), 0.0d);
         assertEquals("tokenizer.mtok", merged.getString("tokenizer_file"));
         assertFalse(merged.has("system_prompt"));
-        assertTrue(merged.getBoolean("use_mmap"));
-        assertTrue(merged.getString("tmp_path").startsWith(context.getCacheDir().getAbsolutePath()));
-        assertTrue(new File(merged.getString("tmp_path")).isDirectory());
+        // mmap is wired via extra-config mmap_dir (the native shim overwrites any
+        // use_mmap/tmp_path in the merged config) — see extraConfig test.
+        assertFalse(merged.has("use_mmap"));
+        assertFalse(merged.has("tmp_path"));
     }
 
     @Test
@@ -248,6 +249,8 @@ public class MnnTaiRuntimeConfigTest {
 
         assertFalse(extra.getBoolean("keep_history"));
         assertTrue(extra.getBoolean("prompt_cache"));
+        assertTrue(extra.getString("mmap_dir").startsWith(context.getCacheDir().getAbsolutePath()));
+        assertTrue(new File(extra.getString("mmap_dir")).isDirectory());
     }
 
     @Test
