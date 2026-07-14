@@ -57,8 +57,6 @@ import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.util.DisplayMetrics;
 import android.widget.EditText;
@@ -135,6 +133,7 @@ import androidx.core.view.WindowInsetsAnimationCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsCompat.Type;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 import java.util.ArrayList;
@@ -299,6 +298,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public boolean isToolbarHidden = false;
 
     private int mNavBarHeight;
+    private int mImeLiftPx;
 
     /** Reactive glass-plank physics for the dock (tilt, specular, accent rim glow). */
     @Nullable private DockPlankController mDockPlankController;
@@ -532,7 +532,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
                 if (imeAnimationRunning) {
                     mDelayRootMarginAdjustmentsUntilUptimeMs = SystemClock.uptimeMillis() + 80L;
-                    applySmoothDockImeOffset(0);
+                    applySmoothDockImeOffset(computeDockImeLiftPx(insets));
                 }
                 return insets;
             }
@@ -598,6 +598,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         content.setOnApplyWindowInsetsListener((v, insets) -> {
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
+            mImeLiftPx = computeDockImeLiftPx(insetsCompat);
             applyTerminalOverlayInsets(insetsCompat);
             configureExtraKeysBackground();
             return insetsCompat.toWindowInsets();
@@ -608,13 +609,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (accessoryContainer != null) {
             ViewCompat.setWindowInsetsAnimationCallback(accessoryContainer, mDockImeAnimationCallback);
         }
-        if (mProperties.isUsingFullScreen()) {
-            WindowInsetsController insetsController = getWindow().getInsetsController();
-            if (insetsController != null) {
-                insetsController.hide(WindowInsets.Type.statusBars());
-                insetsController.hide(WindowInsets.Type.navigationBars());
-            }
-        }
+        applyFullscreenMode();
         // Must be done every time activity is created in order to registerForActivityResult,
         // Even if the logic of launching is based on user input.
         registerWallpaperActivityResultLaunchers();
@@ -2653,14 +2648,48 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalSurfaceAppearance();
     }
 
-    private void applySmoothDockImeOffset(int translationYPx) {
+    private void applySmoothDockImeOffset(int imeLiftPx) {
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
         if (accessoryContainer == null) {
             return;
         }
-        float translationY = Math.max(0, translationYPx);
+        float translationY = -Math.max(0, imeLiftPx);
         if (accessoryContainer.getTranslationY() != translationY) {
             accessoryContainer.setTranslationY(translationY);
+        }
+    }
+
+    /**
+     * IME lift for the dock, owned by insets only while system bars are hidden (fullscreen property
+     * or externally forced immersive). With bars visible, {@link TermuxActivityRootView}'s
+     * visible-frame probe already lifts the whole root above the keyboard, so applying an inset
+     * lift too would double it.
+     */
+    private int computeDockImeLiftPx(@NonNull WindowInsetsCompat insets) {
+        if (insets.isVisible(Type.navigationBars())) {
+            return 0;
+        }
+        return Math.max(0,
+            insets.getInsets(Type.ime()).bottom - insets.getInsets(Type.navigationBars()).bottom);
+    }
+
+    /** True while the dock is being lifted above the IME via insets instead of the root-view probe. */
+    public boolean isDockImeLiftActive() {
+        return mImeLiftPx > 0;
+    }
+
+    private void applyFullscreenMode() {
+        if (mProperties == null || getWindow() == null) {
+            return;
+        }
+        WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(
+            getWindow(), getWindow().getDecorView());
+        if (mProperties.isUsingFullScreen()) {
+            insetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            insetsController.hide(Type.systemBars());
+        } else {
+            insetsController.show(Type.systemBars());
         }
     }
 
@@ -2765,7 +2794,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mTermuxService != null) {
             // Do not leave service and session clients with references to activity.
-            mTermuxService.unsetTermuxTerminalSessionClient();
+            mTermuxService.unsetTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
             mTermuxService = null;
         }
         try {
@@ -4225,9 +4254,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The capsule floats, so it keeps its bottom gap even when the keyboard is up — otherwise it
         // sits flush against the keyboard. Non-capsule styles stay flush.
         if (!isValarieDockStyle()) {
-            return 0;
+            return mImeLiftPx;
         }
-        return resolveDockCapsuleBottomGapPx();
+        return mImeLiftPx + resolveDockCapsuleBottomGapPx();
     }
 
     // Kept for test compatibility and to preserve existing RelativeLayout params in-place.
@@ -5244,6 +5273,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            applyFullscreenMode();
+        }
         if (!hasFocus || mIsInvalidState || !mIsVisible) {
             return;
         }
@@ -5842,6 +5874,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             Logger.logDebug(LOG_TAG, "Recreating activity");
             TermuxActivity.this.recreate();
         }
+        applyFullscreenMode();
     }
 
     public static void startTermuxActivity(@NonNull final Context context) {

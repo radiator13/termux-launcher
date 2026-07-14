@@ -225,6 +225,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch(key) {
+            case TermuxPropertyConstants.KEY_USE_FULLSCREEN:
+                writeTermuxPropertyToProperties(TermuxPropertyConstants.KEY_USE_FULLSCREEN, Boolean.toString(value));
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "use_system_wallpaper":
                 TermuxActivity.setWallpaperModeEnabled(mContext, value);
                 break;
@@ -290,6 +294,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (mPreferences == null)
             return defValue;
         switch(key) {
+            case TermuxPropertyConstants.KEY_USE_FULLSCREEN:
+                return Boolean.parseBoolean(loadTermuxProperties().getProperty(
+                    TermuxPropertyConstants.KEY_USE_FULLSCREEN, Boolean.toString(defValue)));
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "extrakeys_blur_enabled":

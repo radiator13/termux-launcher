@@ -19,6 +19,12 @@
             app:title="@string/termux_use_system_wallpaper_title"
             app:summary="@string/termux_use_system_wallpaper_summary"
             android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="fullscreen"
+            app:title="@string/termux_fullscreen_title"
+            app:summary="@string/termux_fullscreen_summary"
+            android:defaultValue="false" />
     </PreferenceCategory>
 
     <PreferenceCategory

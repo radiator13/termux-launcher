@@ -531,6 +531,8 @@
             <string name="termux_background_header">Wallpaper</string>
             <string name="termux_use_system_wallpaper_title">Wallpaper</string>
             <string name="termux_use_system_wallpaper_summary">Use launcher-managed wallpaper</string>
+            <string name="termux_fullscreen_title">Fullscreen</string>
+            <string name="termux_fullscreen_summary">Hide system bars while using the launcher</string>
                 
                 <string name="termux_terminal_background_opacity_title">Opacity</string>
             <!-- Extra Keys Category -->
