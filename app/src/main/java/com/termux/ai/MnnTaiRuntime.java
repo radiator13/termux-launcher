@@ -27,7 +27,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class MnnTaiRuntime implements TaiRuntime {
     private final Context appContext;
@@ -283,10 +286,12 @@ public final class MnnTaiRuntime implements TaiRuntime {
 
         StringBuilder responseBuilder = new StringBuilder();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
+        AtomicBoolean callbackCancelled = new AtomicBoolean(false);
         HashMap<String, Object> metrics = new HashMap<>();
+        List<Pair<String, String>> history = mnnHistory(request);
+        String debugInfo = "";
         boolean wasCancelled;
         try {
-            List<Pair<String, String>> history = mnnHistory(request);
             HashMap<String, Object> nativeResult = activeSession.generateHistory(history, progress -> {
                 if (cancelRequested) return true;
                 if (progress == null) return false;
@@ -294,9 +299,15 @@ public final class MnnTaiRuntime implements TaiRuntime {
                     responseBuilder.append(progress);
                 }
                 if (callback != null) callback.onToken(progress);
+                if (callback != null && callback.shouldCancelGeneration()) {
+                    callbackCancelled.set(true);
+                    cancelRequested = true;
+                    return true;
+                }
                 return false;
             });
             if (nativeResult != null) metrics.putAll(nativeResult);
+            debugInfo = activeSession.debugInfo();
         } catch (Throwable t) {
             errorRef.set(t);
         } finally {
@@ -313,10 +324,15 @@ public final class MnnTaiRuntime implements TaiRuntime {
         }
         if (throwable != null) {
             if (callback != null) callback.onError(throwable);
-            if (wasCancelled) return error(499, "generation_cancelled", "MNN generation was cancelled.");
+            if (wasCancelled || callbackCancelled.get()) {
+                return error(499, "generation_cancelled", "MNN generation was cancelled.");
+            }
             return error(500, "mnn_generation_failed", "MNN generation failed: " + message(throwable));
         }
-        if (wasCancelled) return error(499, "generation_cancelled", "MNN generation was cancelled.");
+        if (wasCancelled && !callbackCancelled.get()) {
+            return error(499, "generation_cancelled", "MNN generation was cancelled.");
+        }
+        response = OpenAiStopSequences.truncate(response, request.stopSequences).text;
         JSONArray toolCalls = parseToolCalls(response, generationId);
         if (toolCalls.length() == 0) appendRequiredFallbackToolCall(request, response, generationId, toolCalls);
         JSONObject toolChoiceError = validateRequiredToolChoice(request.toolChoice, request.toolDefinitions, toolCalls);
@@ -339,12 +355,82 @@ public final class MnnTaiRuntime implements TaiRuntime {
         data.put("mode", mode);
         data.put("response", responseText);
         data.put("toolCalls", toolCalls);
+        data.put("finishReason", "stop");
         data.put("elapsedMs", System.currentTimeMillis() - startedAt);
         data.put("options", options.toJson());
         data.put("effectiveConfig", safeJson(activeSession.dumpConfig()));
         data.put("metrics", metricsJson(metrics));
+        appendUsage(data, metrics, debugInfo, history, response);
+        data.put("stoppedByCallback", callbackCancelled.get());
         data.put("state", getState().toJson());
         return data;
+    }
+
+    private void appendUsage(
+        @NonNull JSONObject data,
+        @NonNull HashMap<String, Object> metrics,
+        @Nullable String debugInfo,
+        @NonNull List<Pair<String, String>> history,
+        @NonNull String response
+    ) throws JSONException {
+        int promptTokens = metricInt(metrics, "prompt_len", "prompt_tokens", "prefill_tokens", "promptLen");
+        int completionTokens = metricInt(metrics, "decode_len", "completion_tokens", "decode_tokens", "decodeLen");
+        if (promptTokens < 0) promptTokens = debugMetricInt(debugInfo, "prompt_len");
+        if (completionTokens < 0) completionTokens = debugMetricInt(debugInfo, "decode_len");
+
+        boolean estimated = false;
+        if (promptTokens < 0) {
+            int promptCharacters = 0;
+            for (Pair<String, String> item : history) {
+                if (item != null && item.second != null) promptCharacters += item.second.length();
+            }
+            promptTokens = approximateTokenCountFromCharacters(promptCharacters);
+            estimated = true;
+        }
+        if (completionTokens < 0 || (completionTokens == 0 && !response.isEmpty())) {
+            completionTokens = approximateTokenCountFromCharacters(response.length());
+            estimated = true;
+        }
+
+        JSONObject usage = new JSONObject();
+        usage.put("prompt_tokens", Math.max(0, promptTokens));
+        usage.put("completion_tokens", Math.max(0, completionTokens));
+        usage.put("total_tokens", Math.max(0, promptTokens) + Math.max(0, completionTokens));
+        data.put("usage", usage);
+        data.put("usageEstimated", estimated);
+        data.put("usageSource", estimated
+            ? "mnn_metrics_or_characters_divided_by_4" : "mnn_native_metrics");
+    }
+
+    private int metricInt(@NonNull HashMap<String, Object> metrics, @NonNull String... keys) {
+        for (String key : keys) {
+            Object value = metrics.get(key);
+            if (value instanceof Number) return Math.max(0, ((Number) value).intValue());
+            if (value != null) {
+                try {
+                    return Math.max(0, Integer.parseInt(String.valueOf(value).trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return -1;
+    }
+
+    private int debugMetricInt(@Nullable String debugInfo, @NonNull String key) {
+        if (debugInfo == null || debugInfo.isEmpty()) return -1;
+        Matcher matcher = Pattern.compile("(?:\\\"?" + Pattern.quote(key)
+            + "\\\"?)\\s*[:=]\\s*(\\d+)").matcher(debugInfo);
+        if (!matcher.find()) return -1;
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
+    private int approximateTokenCountFromCharacters(int characters) {
+        if (characters <= 0) return 0;
+        return Math.max(1, (characters + 3) / 4);
     }
 
     @Nullable

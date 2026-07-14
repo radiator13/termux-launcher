@@ -429,6 +429,126 @@ public class TaiOpenAiCompatibilityTest {
         assertTrue(request.has("tools"));
     }
 
+    @Test
+    public void nonStreamUsage_hasRequiredIntegerShapeAndUsesRuntimeCounts() throws Exception {
+        JSONObject runtime = new JSONObject().put("usage", new JSONObject()
+            .put("prompt_tokens", 12)
+            .put("completion_tokens", 7)
+            .put("total_tokens", 999));
+
+        JSONObject response = new JSONObject().put("usage", TaiManager.openAiUsage(runtime, "ignored", "ignored"));
+        JSONObject usage = response.getJSONObject("usage");
+
+        assertEquals(12, usage.getInt("prompt_tokens"));
+        assertEquals(7, usage.getInt("completion_tokens"));
+        assertEquals(19, usage.getInt("total_tokens"));
+    }
+
+    @Test
+    public void usageFallback_isPresentAndClearlyMarkedAsEstimated() throws Exception {
+        JSONObject runtime = new JSONObject();
+
+        JSONObject usage = TaiManager.openAiUsage(runtime, "12345678", "1234");
+
+        assertEquals(2, usage.getInt("prompt_tokens"));
+        assertEquals(1, usage.getInt("completion_tokens"));
+        assertEquals(3, usage.getInt("total_tokens"));
+        assertTrue(runtime.getBoolean("usageEstimated"));
+        assertEquals("characters_divided_by_4", runtime.getString("usageSource"));
+    }
+
+    @Test
+    public void usageFallback_estimatesOnlyMissingRuntimeCount() throws Exception {
+        JSONObject runtime = new JSONObject().put("usage", new JSONObject()
+            .put("prompt_tokens", 12));
+
+        JSONObject usage = TaiManager.openAiUsage(runtime, "ignored", "1234");
+
+        assertEquals(12, usage.getInt("prompt_tokens"));
+        assertEquals(1, usage.getInt("completion_tokens"));
+        assertTrue(runtime.getBoolean("usageEstimated"));
+    }
+
+    @Test
+    public void includeUsageChunk_hasEmptyChoicesAndIsTerminalMetadataOnly() throws Exception {
+        JSONObject request = new JSONObject().put("stream", true)
+            .put("stream_options", new JSONObject().put("include_usage", true));
+        JSONObject usage = new JSONObject().put("prompt_tokens", 2)
+            .put("completion_tokens", 3).put("total_tokens", 5);
+
+        JSONObject chunk = TaiManager.openAiUsageChunk(
+            "chatcmpl-test", 123L, "local", "chat.completion.chunk", usage);
+
+        assertTrue(TaiManager.includeStreamUsage(request));
+        assertEquals(0, chunk.getJSONArray("choices").length());
+        assertEquals(usage.toString(), chunk.getJSONObject("usage").toString());
+    }
+
+    @Test
+    public void openAiErrorEnvelope_preservesLegacySourceAndAddsNested400Error() throws Exception {
+        JSONObject source = new JSONObject().put("ok", false).put("error", "bad_request")
+            .put("message", "Missing messages").put("_statusCode", 400);
+
+        JSONObject response = TaiManager.openAiError(source);
+
+        assertEquals(400, response.getInt("_statusCode"));
+        assertEquals("bad_request", response.getJSONObject("error").getString("code"));
+        assertEquals("Missing messages", response.getJSONObject("error").getString("message"));
+        assertEquals("bad_request", response.getJSONObject("tai").getString("error"));
+        assertFalse(response.getBoolean("ok"));
+    }
+
+    @Test
+    public void openAiErrorEnvelope_usesNestedRuntimeCode() throws Exception {
+        JSONObject source = new JSONObject().put("ok", false)
+            .put("error", new JSONObject().put("code", "model_load_failed").put("message", "Failed"))
+            .put("message", "Failed").put("_statusCode", 500);
+
+        JSONObject response = TaiManager.openAiError(source);
+
+        assertEquals("model_load_failed", response.getJSONObject("error").getString("code"));
+    }
+
+    @Test
+    public void nonStreamStopSuppressesToolCalls() throws Exception {
+        JSONArray calls = new JSONArray().put(new JSONObject().put("id", "call-1"));
+        JSONObject runtime = new JSONObject().put("response", "answer STOP tool-json")
+            .put("toolCalls", calls).put("finishReason", "tool_calls");
+        JSONObject choice = new JSONObject();
+
+        TaiManager.populateOpenAiChatChoice(choice, runtime, Arrays.asList("STOP"));
+
+        assertEquals("stop", choice.getString("finish_reason"));
+        assertEquals("answer ", choice.getJSONObject("message").getString("content"));
+        assertFalse(choice.getJSONObject("message").has("tool_calls"));
+    }
+
+    @Test
+    public void stopSequences_truncateAtEarliestMatchWithoutIncludingStopText() throws Exception {
+        List<String> stops = OpenAiStopSequences.fromRequest(new JSONObject()
+            .put("stop", new JSONArray().put("END").put("STOP")));
+
+        OpenAiStopSequences.Match match = OpenAiStopSequences.truncate("answer STOP ignored END", stops);
+
+        assertTrue(match.stopped);
+        assertEquals("answer ", match.text);
+    }
+
+    @Test
+    public void stopSequences_detectMatchSplitAcrossStreamingChunks() throws Exception {
+        List<String> stops = OpenAiStopSequences.fromRequest(new JSONObject().put("stop", "<END>"));
+        OpenAiStopSequences.StreamMatcher matcher = new OpenAiStopSequences.StreamMatcher(stops);
+        StringBuilder emitted = new StringBuilder();
+
+        emitted.append(matcher.append("hello <EN"));
+        assertFalse(matcher.isStopped());
+        emitted.append(matcher.append("D>discarded"));
+
+        assertTrue(matcher.isStopped());
+        assertEquals("hello ", emitted.toString());
+        assertEquals("", matcher.finish());
+    }
+
     private static TaiModelSpec toolSpec(String id, int context, boolean tools, String toolMode) {
         LinkedHashSet<String> source = new LinkedHashSet<>();
         source.add(TaiModelSpec.CAPABILITY_TEXT_CHAT);

@@ -5,6 +5,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.ai.edge.litertlm.Backend;
+import com.google.ai.edge.litertlm.BenchmarkInfo;
 import com.google.ai.edge.litertlm.Capabilities;
 import com.google.ai.edge.litertlm.Content;
 import com.google.ai.edge.litertlm.Contents;
@@ -301,7 +302,11 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         JSONArray toolCalls = new JSONArray();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
         AtomicBoolean lengthLimited = new AtomicBoolean(false);
+        AtomicBoolean callbackCancelled = new AtomicBoolean(false);
         AtomicBoolean callbackFinished = new AtomicBoolean(false);
+        AtomicInteger lastPrefillTokens = new AtomicInteger(-1);
+        AtomicInteger lastDecodeTokens = new AtomicInteger(-1);
+        AtomicInteger conversationTokenCount = new AtomicInteger(-1);
         // Do not call activeConversation.getTokenCount() from inside onMessage: the native
         // session lock is held by the decode loop during callbacks and the call deadlocks the
         // whole generation (observed on-device). Each onMessage delivers at least one decoded
@@ -332,8 +337,10 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                         }
 
                         int generatedTokens = decodedCallbacks.incrementAndGet();
-                        if (generatedTokens >= maxOutputTokens
-                            && lengthLimited.compareAndSet(false, true)) {
+                        boolean stopRequested = callback != null && callback.shouldCancelGeneration();
+                        boolean newStopRequest = stopRequested && callbackCancelled.compareAndSet(false, true);
+                        if ((generatedTokens >= maxOutputTokens && lengthLimited.compareAndSet(false, true))
+                            || newStopRequest) {
                             // Cancel from the scheduler thread, never from the decode callback,
                             // so the native session lock is free when cancelProcess() runs.
                             scheduler.execute(() -> {
@@ -360,7 +367,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                     @Override
                     public void onError(@NonNull Throwable throwable) {
                         if (!callbackFinished.compareAndSet(false, true)) return;
-                        if (lengthLimited.get() && isCancellation(throwable)) {
+                        if ((lengthLimited.get() || callbackCancelled.get()) && isCancellation(throwable)) {
                             String fullText;
                             synchronized (responseBuilder) {
                                 fullText = responseBuilder.toString();
@@ -375,6 +382,18 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                     }
                 }, Collections.emptyMap());
             done.await();
+            try {
+                BenchmarkInfo benchmark = activeConversation.getBenchmarkInfo();
+                if (benchmark != null) {
+                    lastPrefillTokens.set(benchmark.getLastPrefillTokenCount());
+                    lastDecodeTokens.set(benchmark.getLastDecodeTokenCount());
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
+                conversationTokenCount.set(activeConversation.getTokenCount());
+            } catch (Throwable ignored) {
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             errorRef.set(e);
@@ -386,7 +405,7 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
                 finishGenerationLocked(errorRef.get());
                 // cancelProcess() leaves the KV cache dirty, so a length-limited conversation
                 // must never be reused even though its partial response is a normal completion.
-                if (lengthLimited.get() || !request.reusableConversation) closeConversationLocked();
+                if (lengthLimited.get() || callbackCancelled.get() || !request.reusableConversation) closeConversationLocked();
             }
         }
 
@@ -412,8 +431,10 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         data.put("mode", mode);
         data.put("response", responseBuilder.toString());
         data.put("toolCalls", toolCalls);
-        data.put("finishReason", lengthLimited.get()
-            ? "length" : (toolCalls.length() > 0 ? "tool_calls" : "stop"));
+        data.put("finishReason", callbackCancelled.get() ? "stop" : (lengthLimited.get()
+            ? "length" : (toolCalls.length() > 0 ? "tool_calls" : "stop")));
+        appendUsage(data, request, responseBuilder.toString(), decodedCallbacks.get(),
+            lastPrefillTokens.get(), lastDecodeTokens.get(), conversationTokenCount.get());
         data.put("elapsedMs", System.currentTimeMillis() - startedAt);
         data.put("options", options.toJson());
         if (loadedProfile != null) {
@@ -422,6 +443,53 @@ public final class LiteRtTaiRuntime implements TaiRuntime {
         }
         data.put("state", getState().toJson());
         return data;
+    }
+
+    private void appendUsage(
+        @NonNull JSONObject data,
+        @NonNull TaiChatRequest request,
+        @NonNull String response,
+        int decodedCallbacks,
+        int lastPrefillTokens,
+        int lastDecodeTokens,
+        int conversationTokenCount
+    ) throws JSONException {
+        int promptTokens = lastPrefillTokens;
+        int completionTokens = lastDecodeTokens;
+
+        boolean estimated = false;
+        if (completionTokens < 0 || (completionTokens == 0 && !response.isEmpty())) {
+            completionTokens = decodedCallbacks > 0
+                ? decodedCallbacks : approximateTokenCountFromCharacters(response);
+            estimated = true;
+        }
+        if (promptTokens <= 0) {
+            if (conversationTokenCount >= completionTokens && conversationTokenCount > 0) {
+                promptTokens = conversationTokenCount - completionTokens;
+            } else {
+                promptTokens = approximatePromptTokens(request);
+                estimated = true;
+            }
+        }
+
+        JSONObject usage = new JSONObject();
+        usage.put("prompt_tokens", Math.max(0, promptTokens));
+        usage.put("completion_tokens", Math.max(0, completionTokens));
+        usage.put("total_tokens", Math.max(0, promptTokens) + Math.max(0, completionTokens));
+        data.put("usage", usage);
+        data.put("usageEstimated", estimated);
+        data.put("usageSource", estimated
+            ? "litert_callback_or_characters_divided_by_4" : "litert_benchmark_info");
+    }
+
+    private int approximatePromptTokens(@NonNull TaiChatRequest request) {
+        String prompt = request.systemPrompt + request.messagesJson + request.initialMessages + request.message;
+        return approximateTokenCountFromCharacters(prompt);
+    }
+
+    private int approximateTokenCountFromCharacters(@Nullable String text) {
+        if (text == null || text.isEmpty()) return 0;
+        return Math.max(1, (text.length() + 3) / 4);
     }
 
     @NonNull
