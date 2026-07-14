@@ -279,7 +279,7 @@ public class TaiOpenAiCompatibilityTest {
     }
 
     @Test
-    public void endpointCapabilities_embeddingOnlyDoesNotBecomeChatAndMnnDoesNotClaimEmbeddings() {
+    public void endpointCapabilities_embeddingOnlyDoesNotBecomeChat() {
         LinkedHashSet<String> declared = new LinkedHashSet<>();
         declared.add(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS);
 
@@ -289,7 +289,7 @@ public class TaiOpenAiCompatibilityTest {
             "qwen3-embedding", TaiModelSpec.BACKEND_MNN_LLM, TaiModelSpec.FORMAT_MNN, declared, "/models/config.json");
 
         assertTrue(liteRt.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
-        assertFalse(mnn.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
+        assertTrue(mnn.contains(TaiModelSpec.CAPABILITY_TEXT_EMBEDDINGS));
         assertFalse(liteRt.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
         assertFalse(mnn.contains(TaiModelSpec.CAPABILITY_TEXT_CHAT));
     }
