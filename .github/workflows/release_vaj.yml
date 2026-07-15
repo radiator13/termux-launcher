@@ -44,6 +44,33 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+          link-to-sdk: false
+
+      - name: Build launcher_perf from source (no prebuilt .so)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          set -euo pipefail
+          chmod +x ./native/launcher-perf/build-android.sh
+          # Prefer cargo-ndk when available for clean android targets
+          cargo install cargo-ndk --locked || true
+          ./native/launcher-perf/build-android.sh
+          test -f app/src/main/jniLibs/arm64-v8a/liblauncher_perf.so
+          # Prove it is a freshly built artifact, not a checked-in binary
+          git check-ignore -q app/src/main/jniLibs/arm64-v8a/liblauncher_perf.so \
+            || echo "note: .so is gitignored via *.so"
+
       - name: Apply VAJ package identity
         run: |
           chmod +x ./.github/scripts/apply_vaj_identity.sh
@@ -131,6 +158,9 @@ jobs:
           export TERMUX_APP_VERSION_NAME="$RELEASE_VERSION_PLAIN"
           export TERMUX_APK_VERSION_TAG="$APK_VERSION_TAG"
           export TERMUX_PACKAGE_VARIANT="$PACKAGE_VARIANT"
+
+          test -f app/src/main/jniLibs/arm64-v8a/liblauncher_perf.so \
+            || exit_on_error "liblauncher_perf.so missing — source build step must run first (no prebuilts)."
 
           ./.github/scripts/gradle_retry.sh ./gradlew --no-daemon ":app:${GRADLE_TASK}" \
             || exit_on_error "Gradle ${GRADLE_TASK} failed for VAJ build."

@@ -2,10 +2,13 @@ Native libraries for arm64-v8a.
 
 ## launcher_perf (Termux Launcher)
 
-- `liblauncher_perf.so` — Rust focus-outline mask engine used by
-  `com.termux.app.nativebridge.LauncherPerfNative` / dock AZ focus rings.
-  Built from `native/launcher-perf` (`cargo build --release --features jni` or
-  `./native/launcher-perf/build-android.sh`). See that crate's README.
+`liblauncher_perf.so` is **not checked in**. Build it from source before packaging:
+
+```bash
+./native/launcher-perf/build-android.sh
+```
+
+CI runs that script before `assemble*`. See `native/launcher-perf/README.md`.
 
 ## MNN
 

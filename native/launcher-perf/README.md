@@ -29,5 +29,11 @@ cargo ndk -t arm64-v8a -o ../../app/src/main/jniLibs build --release --features 
 
 ## Packaging
 
-`build-android.sh` places `liblauncher_perf.so` under `app/src/main/jniLibs/<abi>/`.
-The app module already packages `jniLibs` (see existing MNN `.so` files).
+**No prebuilt `.so` is committed.** Always build from source:
+
+```bash
+./native/launcher-perf/build-android.sh
+```
+
+That writes `app/src/main/jniLibs/<abi>/liblauncher_perf.so` for the local/CI tree only
+(gitignores `*.so`). GitHub Actions installs Rust + NDK and runs the same script before APK assemble.
