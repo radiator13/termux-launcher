@@ -116,7 +116,7 @@ import com.termux.app.launcher.model.PinnedFolderItem;
 import com.termux.app.launcher.model.PinnedItem;
 import com.termux.shared.theme.ThemeUtils;
 import com.termux.view.TerminalView;
-import com.termux.launcherctl.LauncherCtlNotificationListener;
+import com.termux.app.launcher.notifications.LauncherNotificationListener;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -5514,7 +5514,7 @@ public final class SuggestionBarView extends GridLayout {
             message.setOnClickListener(v -> {
                 sendNotificationIntent(notification.contentIntent, null, null);
                 if ((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0) {
-                    LauncherCtlNotificationListener.dismissNotification(sbn.getKey());
+                    LauncherNotificationListener.dismissNotification(sbn.getKey());
                 }
                 dismissNotificationPopup();
             });
@@ -5557,7 +5557,7 @@ public final class SuggestionBarView extends GridLayout {
         if (sbn.isClearable()) {
             Button dismiss = notificationActionButton("Dismiss");
             dismiss.setOnClickListener(v -> {
-                LauncherCtlNotificationListener.dismissNotification(sbn.getKey());
+                LauncherNotificationListener.dismissNotification(sbn.getKey());
                 card.setVisibility(View.GONE);
                 postDelayed(() -> {
                     if (LauncherNotificationBadgeStore.getNotificationsForPackage(sbn.getPackageName()).isEmpty()) {

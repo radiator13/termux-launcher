@@ -10,11 +10,6 @@ import androidx.preference.SeekBarPreference;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.termux.R;
-import com.termux.app.fragments.settings.termux.TaiCatalogControlsPreference;
-import com.termux.app.fragments.settings.termux.TaiCatalogFilterPreference;
-import com.termux.app.fragments.settings.termux.TaiModelPreference;
-import com.termux.app.fragments.settings.termux.TaiOverridesPreference;
-import com.termux.app.fragments.settings.termux.TaiRuntimeActionsPreference;
 
 public final class SettingsLayoutUtils {
 
@@ -64,12 +59,7 @@ public final class SettingsLayoutUtils {
         preference.setIconSpaceReserved(false);
 
         // Preferences that fully own their layout.
-        if (preference instanceof StatusCardPreference
-            || preference instanceof TaiRuntimeActionsPreference
-            || preference instanceof TaiOverridesPreference
-            || preference instanceof TaiCatalogFilterPreference
-            || preference instanceof TaiCatalogControlsPreference
-            || preference instanceof TaiModelPreference) {
+        if (preference instanceof StatusCardPreference) {
             return;
         }
 

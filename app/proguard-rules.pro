@@ -10,3 +10,8 @@
 -dontobfuscate
 #-renamesourcefileattribute SourceFile
 #-keepattributes SourceFile,LineNumberTable
+
+# Jetpack Compose (TermuxActivity shell)
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+-keepclassmembers class androidx.compose.runtime.SnapshotStateKt__SnapshotFlowKt { *; }

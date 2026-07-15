@@ -8,8 +8,6 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 
-import com.termux.launcherctl.LauncherCtlNotificationListener;
-
 public final class LauncherNotificationAccess {
 
     private LauncherNotificationAccess() {
@@ -17,7 +15,7 @@ public final class LauncherNotificationAccess {
 
     @NonNull
     public static ComponentName listenerComponent(@NonNull Context context) {
-        return new ComponentName(context, LauncherCtlNotificationListener.class);
+        return new ComponentName(context, LauncherNotificationListener.class);
     }
 
     public static boolean isEnabled(@NonNull Context context) {

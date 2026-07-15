@@ -98,10 +98,6 @@
         <uses-native-library
             android:name="libcdsprpc.so"
             android:required="false" />
-        <uses-native-library
-            android:name="libedgetpu_litert.so"
-            android:required="false" />
-
         <activity
             android:name=".app.TermuxActivity"
             android:exported="true"
@@ -276,18 +272,7 @@
         </service>
 
         <service
-            android:name=".ai.TaiModelDownloadService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse" />
-
-        <service
-            android:name=".ai.TaiRuntimeService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:process=":tai_runtime" />
-
-        <service
-            android:name=".launcherctl.LauncherCtlNotificationListener"
+            android:name=".app.launcher.notifications.LauncherNotificationListener"
             android:exported="false"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

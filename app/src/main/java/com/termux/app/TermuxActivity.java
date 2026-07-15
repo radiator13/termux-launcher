@@ -88,7 +88,6 @@ import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
 import com.termux.app.launcher.LockAccessibilityService;
-import com.termux.launcherctl.LauncherCtlApiServer;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.ShizukuBackend;
 import com.termux.app.terminal.AccessoryStackLayoutPolicy;
@@ -104,6 +103,7 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.app.activities.SettingsActivity;
+import com.termux.app.compose.TermuxActivityContent;
 import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -575,7 +575,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Apply wallpaper or normal theme based on preference
         setActivityThemeAndWindow();
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_termux);
+        // Compose shell host: inflate the existing View hierarchy, then host it via AndroidView so
+        // findViewById / TerminalView / dock IDs stay identical (Phase 1 Jetpack Compose migration).
+        View activityRoot = getLayoutInflater().inflate(R.layout.activity_termux, null, false);
+        TermuxActivityContent.install(this, activityRoot);
         // Load termux shared preferences
         // This will also fail if TermuxConstants.TERMUX_PACKAGE_NAME does not equal applicationId
         if (mPreferences == null) {
@@ -589,10 +592,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mPreferences.migrateTerminalMarginAdjustmentDefaultIfNeeded();
         mLauncherTransitionController = new LauncherTransitionController(this, mPreferences);
         setMargins();
-        setSuggestionBarView();
+        // Resolve shell views after Compose AndroidView attach (install() calls createComposition).
         mTermuxActivityRootView = findViewById(R.id.activity_termux_root_view);
+        if (mTermuxActivityRootView == null && activityRoot instanceof TermuxActivityRootView) {
+            // Fallback if composition attach is deferred; root of activity_termux is TermuxActivityRootView.
+            mTermuxActivityRootView = (TermuxActivityRootView) activityRoot;
+        }
         mTermuxActivityRootView.setActivity(this);
         mTermuxActivityBottomSpaceView = findViewById(R.id.activity_termux_bottom_space_view);
+        if (mTermuxActivityBottomSpaceView == null) {
+            mTermuxActivityBottomSpaceView = activityRoot.findViewById(R.id.activity_termux_bottom_space_view);
+        }
+        setSuggestionBarView();
         mTermuxActivityRootView.setOnApplyWindowInsetsListener(new TermuxActivityRootView.WindowInsetsListener());
         View content = findViewById(android.R.id.content);
         content.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -713,7 +724,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerWallpaperColorsChangedListener();
         refreshCalendarIconsIfDayChanged();
         refreshSuggestionBarIfLauncherCatalogChanged();
-        getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
     }
 
     @Override
@@ -2854,9 +2864,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void startBootstrapAndSession(@Nullable Intent intent) {
         TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
-            // Bootstrap setup may complete after app startup; re-attempt launcher CLI script install.
-            LauncherCtlApiServer.getInstance().ensureCliScriptsInstalled();
-
             // Activity might have been destroyed.
             if (mTermuxService == null) {
                 mEmptySessionRecoveryInProgress = false;
@@ -5574,7 +5581,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         if (forceCatalogRefresh) {
-            LauncherCtlApiServer.getInstance().invalidatePackageCaches();
             mSuggestionBarView.clearAppCache();
             mSuggestionBarView.pruneInvalidIconOverrides();
             mSuggestionBarView.reloadAllApps();
