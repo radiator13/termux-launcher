@@ -1,0 +1,256 @@
+name: Release VAJ APK
+
+# Builds the VAJ edition (io.vaj.tl, arm64-v8a) and publishes a GitHub Release.
+#
+# Triggers:
+#   - Push of tags matching v*-vaj (example: v0.2.27-vaj)
+#   - Manual workflow_dispatch
+#
+# Optional repo secrets for release signing (same names as existing workflows):
+#   TERMUX_RELEASE_STORE_FILE (base64-encoded .jks/.keystore),
+#   TERMUX_RELEASE_STORE_PASSWORD, TERMUX_RELEASE_KEY_ALIAS, TERMUX_RELEASE_KEY_PASSWORD
+# Without them, a debug-signed APK is released (matches historical VAJ assets).
+
+on:
+  push:
+    tags:
+      - 'v*-vaj'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without leading v (example: 0.2.27-vaj). Empty = versionName from app/build.gradle + -vaj if needed.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark GitHub Release as prerelease'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create release as draft'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-vaj-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-vaj:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PACKAGE_VARIANT: apt-android-7
+      VAJ_PACKAGE_NAME: io.vaj.tl
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Apply VAJ package identity
+        run: |
+          chmod +x ./.github/scripts/apply_vaj_identity.sh
+          ./.github/scripts/apply_vaj_identity.sh
+
+      - name: Resolve version and build VAJ APK
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_PRERELEASE: ${{ github.event.inputs.prerelease }}
+          INPUT_DRAFT: ${{ github.event.inputs.draft }}
+          TERMUX_RELEASE_STORE_FILE: ${{ secrets.TERMUX_RELEASE_STORE_FILE }}
+          TERMUX_RELEASE_STORE_PASSWORD: ${{ secrets.TERMUX_RELEASE_STORE_PASSWORD }}
+          TERMUX_RELEASE_KEY_ALIAS: ${{ secrets.TERMUX_RELEASE_KEY_ALIAS }}
+          TERMUX_RELEASE_KEY_PASSWORD: ${{ secrets.TERMUX_RELEASE_KEY_PASSWORD }}
+          GRADLE_OPTS: >-
+            -Dorg.gradle.internal.http.connectionTimeout=120000
+            -Dorg.gradle.internal.http.socketTimeout=120000
+          GRADLE_MAX_ATTEMPTS: "5"
+          GRADLE_RETRY_SLEEP_SECONDS: "20"
+          GRADLE_REFRESH_FROM_ATTEMPT: "2"
+        run: |
+          set -euo pipefail
+          exit_on_error() { echo "::error::$1"; exit 1; }
+
+          # --- version / tag ---
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            RELEASE_VERSION_NAME="${GITHUB_REF_NAME}"
+          elif [ -n "${INPUT_VERSION:-}" ]; then
+            RELEASE_VERSION_NAME="${INPUT_VERSION#v}"
+            RELEASE_VERSION_NAME="v${RELEASE_VERSION_NAME}"
+          else
+            CURRENT_VERSION_NAME_REGEX='\s+versionName "([^"]+)"$'
+            CURRENT_VERSION_NAME="$(grep -m 1 -E "$CURRENT_VERSION_NAME_REGEX" ./app/build.gradle | sed -r "s/$CURRENT_VERSION_NAME_REGEX/\1/")"
+            if [[ "$CURRENT_VERSION_NAME" == *-vaj ]]; then
+              RELEASE_VERSION_NAME="v${CURRENT_VERSION_NAME}"
+            else
+              RELEASE_VERSION_NAME="v${CURRENT_VERSION_NAME}-vaj"
+            fi
+          fi
+
+          RELEASE_VERSION_PLAIN="${RELEASE_VERSION_NAME#v}"
+          if [[ "$RELEASE_VERSION_PLAIN" != *-vaj ]]; then
+            exit_on_error "VAJ release version must end with '-vaj' (got '${RELEASE_VERSION_PLAIN}')."
+          fi
+          if ! printf '%s' "$RELEASE_VERSION_PLAIN" | grep -qP '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$'; then
+            exit_on_error "Version '${RELEASE_VERSION_PLAIN}' is not valid semver 2.0.0."
+          fi
+
+          # --- signing: release keystore if secrets present, else debug ---
+          HAS_RELEASE_SIGNING=1
+          for env_var in TERMUX_RELEASE_STORE_FILE TERMUX_RELEASE_STORE_PASSWORD TERMUX_RELEASE_KEY_ALIAS TERMUX_RELEASE_KEY_PASSWORD; do
+            if [ -z "${!env_var:-}" ]; then
+              HAS_RELEASE_SIGNING=0
+            fi
+          done
+
+          if [ "$HAS_RELEASE_SIGNING" -eq 1 ]; then
+            BUILD_TYPE="release"
+            GRADLE_TASK="assembleRelease"
+            APK_DIR_PATH="./app/build/outputs/apk/release"
+            export TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS=1
+            SIGNING_LABEL="release"
+            KEYSTORE_PATH="${RUNNER_TEMP}/termux-release.jks"
+            if printf '%s' "$TERMUX_RELEASE_STORE_FILE" | base64 -d >"$KEYSTORE_PATH" 2>/dev/null \
+              && [ -s "$KEYSTORE_PATH" ]; then
+              export TERMUX_RELEASE_STORE_FILE="$KEYSTORE_PATH"
+            else
+              exit_on_error "TERMUX_RELEASE_STORE_FILE must be a base64-encoded keystore."
+            fi
+          else
+            echo "Release signing secrets not set; building debug-signed VAJ APK."
+            BUILD_TYPE="debug"
+            GRADLE_TASK="assembleDebug"
+            APK_DIR_PATH="./app/build/outputs/apk/debug"
+            SIGNING_LABEL="debug"
+          fi
+
+          # Historical VAJ asset style: termux-app_v0.2.26-vaj+debug_arm64-v8a.apk
+          APK_VERSION_TAG="${RELEASE_VERSION_NAME}+${SIGNING_LABEL}"
+          APK_BASENAME_PREFIX="termux-app_${APK_VERSION_TAG}"
+
+          {
+            echo "RELEASE_VERSION_NAME=$RELEASE_VERSION_NAME"
+            echo "RELEASE_VERSION_PLAIN=$RELEASE_VERSION_PLAIN"
+            echo "APK_DIR_PATH=$APK_DIR_PATH"
+            echo "APK_VERSION_TAG=$APK_VERSION_TAG"
+            echo "APK_BASENAME_PREFIX=$APK_BASENAME_PREFIX"
+            echo "BUILD_TYPE=$BUILD_TYPE"
+            echo "INPUT_PRERELEASE=${INPUT_PRERELEASE:-false}"
+            echo "INPUT_DRAFT=${INPUT_DRAFT:-false}"
+          } >>"$GITHUB_ENV"
+
+          echo "Building VAJ APK: package=${VAJ_PACKAGE_NAME} version=${RELEASE_VERSION_PLAIN} tag=${APK_VERSION_TAG}"
+
+          export TERMUX_APP_VERSION_NAME="$RELEASE_VERSION_PLAIN"
+          export TERMUX_APK_VERSION_TAG="$APK_VERSION_TAG"
+          export TERMUX_PACKAGE_VARIANT="$PACKAGE_VARIANT"
+
+          ./.github/scripts/gradle_retry.sh ./gradlew --no-daemon ":app:${GRADLE_TASK}" \
+            || exit_on_error "Gradle ${GRADLE_TASK} failed for VAJ build."
+
+          ARM64_APK="${APK_DIR_PATH}/${APK_BASENAME_PREFIX}_arm64-v8a.apk"
+          if [ ! -f "$ARM64_APK" ]; then
+            UNIVERSAL_APK="${APK_DIR_PATH}/${APK_BASENAME_PREFIX}_universal.apk"
+            if [ -f "$UNIVERSAL_APK" ]; then
+              echo "arm64 split missing; using universal APK"
+              ARM64_APK="$UNIVERSAL_APK"
+            else
+              echo "APK dir listing:"
+              ls -la "$APK_DIR_PATH" || true
+              exit_on_error "Missing arm64-v8a (and universal) APK for ${APK_BASENAME_PREFIX}"
+            fi
+          fi
+
+          SUMS_NAME="${APK_BASENAME_PREFIX}_sha256sums"
+          (
+            cd "$APK_DIR_PATH"
+            sha256sum "$(basename "$ARM64_APK")" >"$SUMS_NAME"
+          )
+
+          {
+            echo "PRIMARY_APK_PATH=$ARM64_APK"
+            echo "PRIMARY_APK_NAME=$(basename "$ARM64_APK")"
+            echo "SUMS_NAME=$SUMS_NAME"
+          } >>"$GITHUB_ENV"
+
+          echo "Built: $ARM64_APK"
+
+      - name: Create or update GitHub Release and upload APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          exit_on_error() { echo "::error::$1"; exit 1; }
+
+          TAG="$RELEASE_VERSION_NAME"
+          TITLE="${TAG} — VAJ edition (${VAJ_PACKAGE_NAME})"
+          BODY="$(cat <<EOF
+          ## Termux Launcher ${TAG} — VAJ edition
+
+          Standalone **arm64-v8a** build installable alongside upstream Termux.
+
+          | | |
+          |---|---|
+          | Package | \`${VAJ_PACKAGE_NAME}\` |
+          | ABI | arm64-v8a |
+          | Build | ${BUILD_TYPE} |
+          | Commit | \`${GITHUB_SHA}\` |
+
+          Install this APK only if you want the VAJ edition next to official Termux.
+          For the Termux edition (\`com.termux\`), use a plain \`vX.Y.Z\` release instead.
+          EOF
+          )"
+
+          EXTRA_ARGS=()
+          if [ "${INPUT_PRERELEASE}" = "true" ] || [[ "$RELEASE_VERSION_PLAIN" == *"-rc"* ]]; then
+            EXTRA_ARGS+=(--prerelease)
+          fi
+          if [ "${INPUT_DRAFT}" = "true" ]; then
+            EXTRA_ARGS+=(--draft)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating assets."
+          else
+            echo "Creating release $TAG at ${GITHUB_SHA}"
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" \
+              --notes "$BODY" \
+              "${EXTRA_ARGS[@]}"
+          fi
+
+          for asset_name in "$PRIMARY_APK_NAME" "$SUMS_NAME"; do
+            if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fxq "$asset_name"; then
+              echo "Replacing existing asset: $asset_name"
+              gh release delete-asset "$TAG" "$asset_name" --yes || true
+            fi
+          done
+
+          gh release upload "$TAG" \
+            "$PRIMARY_APK_PATH" \
+            "${APK_DIR_PATH}/${SUMS_NAME}" \
+            --clobber
+
+          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.APK_BASENAME_PREFIX }}_vaj
+          path: |
+            ${{ env.PRIMARY_APK_PATH }}
+            ${{ env.APK_DIR_PATH }}/${{ env.SUMS_NAME }}
