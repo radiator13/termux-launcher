@@ -45,8 +45,6 @@ public class SettingsActivity extends AppCompatActivity {
 
     public static final String EXTRA_INITIAL_FRAGMENT = "settings_initial_fragment";
     public static final String EXTRA_INITIAL_TITLE_RES = "settings_initial_title_res";
-    public static final String EXTRA_OPEN_TAI_SETTINGS = "open_tai_settings";
-
     public static Intent createFragmentIntent(@NonNull Context context, @NonNull Class<? extends Fragment> fragmentClass, int titleResId) {
         Intent intent = new Intent(context, SettingsActivity.class);
         intent.putExtra(EXTRA_INITIAL_FRAGMENT, fragmentClass.getName());
@@ -67,14 +65,6 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
         applySettingsSystemBars();
         if (savedInstanceState == null) {
-            // QA deep-link entry path:
-            // adb shell am start -n com.termux/.app.activities.SettingsActivity --ez open_tai_settings true
-            Intent intent = getIntent();
-            if (intent.getBooleanExtra(EXTRA_OPEN_TAI_SETTINGS, false)) {
-                intent.putExtra(EXTRA_INITIAL_FRAGMENT,
-                    "com.termux.app.fragments.settings.termux.TaiPreferencesFragment");
-                intent.putExtra(EXTRA_INITIAL_TITLE_RES, R.string.termux_ai_preferences_title);
-            }
             Fragment initialFragment = buildInitialFragment();
             getSupportFragmentManager().beginTransaction().replace(R.id.settings, initialFragment).commit();
         }

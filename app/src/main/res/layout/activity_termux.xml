@@ -207,28 +207,8 @@
                     android:visibility="gone"
                     android:background="?attr/termuxColorSurfacePanelHigh"/>
 
-                <com.termux.app.DockEdgeGlowView
-                    android:id="@+id/accessory_edge_glow_fx"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:visibility="gone" />
+</FrameLayout>
 
-                <View
-                    android:id="@+id/accessory_specular_fx"
-                    android:layout_width="300dp"
-                    android:layout_height="300dp"
-                    android:layout_gravity="center"
-                    android:visibility="gone" />
-            </FrameLayout>
-
-            <com.termux.app.LauncherAzGestureFxView
-                android:id="@+id/apps_bar_az_fx_underlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_alignParentBottom="true"
-                android:clickable="false"
-                android:focusable="false"
-                android:visibility="gone" />
 
             <FrameLayout
                 android:id="@+id/apps_bar_viewpager"
@@ -270,25 +250,8 @@
                 android:layout_marginTop="5dp"
                 android:visibility="gone" />
 
-            <com.termux.app.LauncherAzGestureFxView
-                android:id="@+id/apps_bar_az_fx_overlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_alignParentBottom="true"
-                android:clickable="false"
-                android:focusable="false"
-                android:visibility="gone" />
         </RelativeLayout>
 
-        <com.termux.app.LauncherAzGestureFxView
-            android:id="@+id/apps_bar_az_label_overlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_alignParentTop="true"
-            android:layout_alignParentBottom="true"
-            android:clickable="false"
-            android:focusable="false"
-            android:visibility="gone" />
         </RelativeLayout>
     </FrameLayout>
 

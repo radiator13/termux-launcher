@@ -88,7 +88,6 @@ import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherConfigRepository;
 import com.termux.app.launcher.LauncherLockAccessibilityAccess;
 import com.termux.app.launcher.LockAccessibilityService;
-import com.termux.launcherctl.LauncherCtlApiServer;
 import com.termux.privileged.PrivilegedBackendManager;
 import com.termux.privileged.ShizukuBackend;
 import com.termux.app.terminal.AccessoryStackLayoutPolicy;
@@ -104,6 +103,7 @@ import com.termux.shared.data.DataUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.app.activities.SettingsActivity;
+import com.termux.app.compose.TermuxActivityContent;
 import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -214,9 +214,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     SuggestionBarView mSuggestionBarView;
     private boolean mSuggestionBarExplicitSearchActive;
     AzScrubRowView mAzScrubRowView;
-    LauncherAzGestureFxView mLauncherAzGestureFxUnderlayView;
-    LauncherAzGestureFxView mLauncherAzGestureFxOverlayView;
-    LauncherAzGestureFxView mLauncherAzGestureFxLabelOverlayView;
 
     private LauncherAppDataProvider mLauncherAppDataProvider;
     private LauncherConfigRepository mLauncherConfigRepository;
@@ -300,14 +297,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private int mNavBarHeight;
 
-    /** Reactive glass-plank physics for the dock (tilt, specular, accent rim glow). */
-    @Nullable private DockPlankController mDockPlankController;
-    private boolean mDockPlankTouchInside = false;
-    private float mDockPlankLeft = 0f;
-    private float mDockPlankTop = 0f;
-    private float mDockPlankWidth = 0f;
-    private float mDockPlankHeight = 0f;
-    private final int[] mDockPlankLocation = new int[2];
 
     private float mTerminalToolbarDefaultHeight;
     private final Handler mAzGestureHandler = new Handler(Looper.getMainLooper());
@@ -575,7 +564,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Apply wallpaper or normal theme based on preference
         setActivityThemeAndWindow();
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_termux);
+        // Compose shell host: inflate the existing View hierarchy, then host it via AndroidView so
+        // findViewById / TerminalView / dock IDs stay identical (Phase 1 Jetpack Compose migration).
+        View activityRoot = getLayoutInflater().inflate(R.layout.activity_termux, null, false);
+        TermuxActivityContent.install(this, activityRoot);
         // Load termux shared preferences
         // This will also fail if TermuxConstants.TERMUX_PACKAGE_NAME does not equal applicationId
         if (mPreferences == null) {
@@ -589,10 +581,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mPreferences.migrateTerminalMarginAdjustmentDefaultIfNeeded();
         mLauncherTransitionController = new LauncherTransitionController(this, mPreferences);
         setMargins();
-        setSuggestionBarView();
+        // Resolve shell views after Compose AndroidView attach (install() calls createComposition).
         mTermuxActivityRootView = findViewById(R.id.activity_termux_root_view);
+        if (mTermuxActivityRootView == null && activityRoot instanceof TermuxActivityRootView) {
+            // Fallback if composition attach is deferred; root of activity_termux is TermuxActivityRootView.
+            mTermuxActivityRootView = (TermuxActivityRootView) activityRoot;
+        }
         mTermuxActivityRootView.setActivity(this);
         mTermuxActivityBottomSpaceView = findViewById(R.id.activity_termux_bottom_space_view);
+        if (mTermuxActivityBottomSpaceView == null) {
+            mTermuxActivityBottomSpaceView = activityRoot.findViewById(R.id.activity_termux_bottom_space_view);
+        }
+        setSuggestionBarView();
         mTermuxActivityRootView.setOnApplyWindowInsetsListener(new TermuxActivityRootView.WindowInsetsListener());
         View content = findViewById(android.R.id.content);
         content.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -713,14 +713,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerWallpaperColorsChangedListener();
         refreshCalendarIconsIfDayChanged();
         refreshSuggestionBarIfLauncherCatalogChanged();
-        getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
     }
 
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        feedDockPlank(ev);
-        return super.dispatchTouchEvent(ev);
-    }
 
     /**
      * Observes (never consumes) touches over the dock to drive the reactive glass-plank physics:
@@ -728,53 +722,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * Bounds are captured once on ACTION_DOWN so the per-frame tilt transform can't feed back into
      * the hit-test, and reused for the rest of the gesture.
      */
-    private void feedDockPlank(MotionEvent ev) {
-        DockPlankController controller = mDockPlankController;
-        if (controller == null) {
-            return;
-        }
-        switch (ev.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN: {
-                View plank = findViewById(R.id.accessory_stack_container);
-                mDockPlankTouchInside = false;
-                if (plank == null || plank.getVisibility() != View.VISIBLE
-                    || plank.getWidth() <= 0 || plank.getHeight() <= 0) {
-                    break;
-                }
-                plank.getLocationOnScreen(mDockPlankLocation);
-                mDockPlankLeft = mDockPlankLocation[0];
-                mDockPlankTop = mDockPlankLocation[1];
-                mDockPlankWidth = plank.getWidth();
-                mDockPlankHeight = plank.getHeight();
-                float x = ev.getRawX();
-                float y = ev.getRawY();
-                if (x >= mDockPlankLeft && x <= mDockPlankLeft + mDockPlankWidth
-                    && y >= mDockPlankTop && y <= mDockPlankTop + mDockPlankHeight) {
-                    mDockPlankTouchInside = true;
-                    controller.onPointerDown(
-                        (x - mDockPlankLeft) / mDockPlankWidth,
-                        (y - mDockPlankTop) / mDockPlankHeight);
-                }
-                break;
-            }
-            case MotionEvent.ACTION_MOVE:
-                if (mDockPlankTouchInside && mDockPlankWidth > 0f && mDockPlankHeight > 0f) {
-                    controller.onPointerMove(
-                        (ev.getRawX() - mDockPlankLeft) / mDockPlankWidth,
-                        (ev.getRawY() - mDockPlankTop) / mDockPlankHeight);
-                }
-                break;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                if (mDockPlankTouchInside) {
-                    controller.onPointerUp();
-                    mDockPlankTouchInside = false;
-                }
-                break;
-            default:
-                break;
-        }
-    }
 
     @Override
     public void onResume() {
@@ -1045,7 +992,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Vertical glass light model, held roughly constant so the slab still reads as glass even at
         // low opacity: a thin cool sheen at the top, a faint saturated accent edge tint, a clear
         // see-through middle, then a soft dark "foot" at the bottom that suggests the slab's
-        // thickness. The crisp thin top/bottom edge highlights are drawn by DockEdgeGlowView.
         GradientDrawable lightLayer = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[] {
@@ -1325,75 +1271,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /** Lazily wires the reactive glass-plank controller to the inflated dock views. */
-    private void setupDockPlankFx() {
-        View plank = findViewById(R.id.accessory_stack_container);
-        if (plank == null) {
-            return;
-        }
-        if (mDockPlankController == null) {
-            View specular = findViewById(R.id.accessory_specular_fx);
-            View glow = findViewById(R.id.accessory_edge_glow_fx);
-            mDockPlankController = new DockPlankController(plank, specular, glow);
-        }
-        mDockPlankController.setReducedMotion(isReducedMotionEnabled());
-    }
 
     /** Refreshes the plank FX drawables (accent/shape may change) and enables it for a shown dock. */
-    private void refreshDockPlankFx() {
-        if (mDockPlankController == null) {
-            setupDockPlankFx();
-        }
-        if (mDockPlankController == null) {
-            return;
-        }
-        int accent = resolveDockAccentColor();
-        View specular = findViewById(R.id.accessory_specular_fx);
-        if (specular != null) {
-            specular.setBackground(buildDockSpecularDrawable(accent));
-        }
-        View glow = findViewById(R.id.accessory_edge_glow_fx);
-        if (glow instanceof DockEdgeGlowView) {
-            View surfaceHost = findViewById(R.id.accessory_surface_host);
-            int surfaceHeightPx = surfaceHost != null ? surfaceHost.getHeight() : 0;
-            float radius = isValarieDockStyle() ? resolveDockCapsuleCornerRadiusPx(surfaceHeightPx) : 0f;
-            DockEdgeGlowView glowView = (DockEdgeGlowView) glow;
-            glowView.setAccentColor(accent);
-            glowView.setCornerRadiusPx(radius);
-            // Feather the rim into a soft glow instead of a hard outline (API 31+). The view draws
-            // its rim inset from the edge so this blur stays inside the rounded clip at the corners.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                float blur = getResources().getDisplayMetrics().density * 7f;
-                glow.setRenderEffect(RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP));
-            }
-        }
-        // Capsule keeps the free-floating tilt + dip. The edge-to-edge default dock keeps the
-        // touch-tracked specular/glow only; rotating a full-width slab exposes clipped side gaps.
-        boolean capsuleDock = isValarieDockStyle();
-        boolean fullOpt = isFullOptimizationModeEnabled();
-        mDockPlankController.setMotionEnabled(capsuleDock && !fullOpt);
-        mDockPlankController.setHingeMode(!capsuleDock);
-        mDockPlankController.setReducedMotion(isReducedMotionEnabled());
-        mDockPlankController.setEnabled(!fullOpt);
-    }
 
     /** Soft accent-tinted radial specular that rides the touch point across the glass. */
-    @NonNull
-    private Drawable buildDockSpecularDrawable(int accent) {
-        GradientDrawable specular = new GradientDrawable();
-        specular.setShape(GradientDrawable.RECTANGLE);
-        specular.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        specular.setGradientCenter(0.5f, 0.5f);
-        specular.setGradientRadius(dpToPx(120));
-        // White-leaning, wide and soft so it reads as caught light gliding over glass rather than a
-        // painted accent disc under the finger.
-        specular.setColors(new int[] {
-            withAlphaComponent(Color.WHITE, 70),
-            withAlphaComponent(accent, 22),
-            withAlphaComponent(accent, 0)
-        });
-        specular.setDither(true);
-        return specular;
-    }
 
     private boolean isReducedMotionEnabled() {
         if (isFullOptimizationModeEnabled()) {
@@ -2492,9 +2373,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View extraKeysBackground = findViewById(R.id.extrakeys_background);
         View extraKeysBackgroundBlur = findViewById(R.id.extrakeys_backgroundblur);
         View azRow = findViewById(R.id.apps_bar_az_row);
-        View azFxUnderlay = findViewById(R.id.apps_bar_az_fx_underlay);
-        View azFxOverlay = findViewById(R.id.apps_bar_az_fx_overlay);
-        View azLabelOverlay = findViewById(R.id.apps_bar_az_label_overlay);
         boolean useRenderEffectBlur = shouldUseAccessoryRenderEffectBlur(state);
         boolean useDecorSurface = shouldShowDecorNavBarSurface(state);
         applyAccessoryAmbientVeil(accessoryContainer, state);
@@ -2532,23 +2410,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (azRow != null) {
                 azRow.setVisibility(View.GONE);
             }
-            if (azFxOverlay != null) {
-                azFxOverlay.setVisibility(View.GONE);
-            }
-            if (azFxUnderlay != null) {
-                azFxUnderlay.setVisibility(View.GONE);
-            }
-            if (azLabelOverlay != null) {
-                azLabelOverlay.setVisibility(View.GONE);
-            }
             clearAccessoryRenderEffectBackdrop();
             applyDecorNavBarSurfaceState(state);
             configureAccessoryTopEdgeFx(false, state.barAlpha);
             configureExtraKeysDivider(false);
             resetAzOverflowAffordanceState();
-            if (mDockPlankController != null) {
-                mDockPlankController.setEnabled(false);
-            }
             return;
         }
 
@@ -2574,15 +2440,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (azRow != null) {
             azRow.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
         }
-        if (azFxUnderlay != null) {
-            azFxUnderlay.setVisibility(View.GONE);
-        }
-        if (azFxOverlay != null) {
-            azFxOverlay.setVisibility(View.GONE);
-        }
-        if (azLabelOverlay != null) {
-            azLabelOverlay.setVisibility(View.GONE);
-        }
 
         if (extraKeysBackground != null) {
             extraKeysBackground.setVisibility(useDecorSurface && !isValarieDockStyle() ? View.GONE : View.VISIBLE);
@@ -2590,7 +2447,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // Opacity is baked into the drawable (translucent base) so the glass light model survives.
             extraKeysBackground.setAlpha(1f);
         }
-        refreshDockPlankFx();
 
         if (extraKeysBackgroundBlur != null) {
             extraKeysBackgroundBlur.setVisibility(
@@ -2731,9 +2587,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState)
             return;
         mIsVisible = false;
-        if (mDockPlankController != null) {
-            mDockPlankController.reset();
-        }
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onStop();
         if (mTermuxTerminalViewClient != null)
@@ -2854,9 +2707,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void startBootstrapAndSession(@Nullable Intent intent) {
         TermuxInstaller.setupBootstrapIfNeeded(TermuxActivity.this, () -> {
-            // Bootstrap setup may complete after app startup; re-attempt launcher CLI script install.
-            LauncherCtlApiServer.getInstance().ensureCliScriptsInstalled();
-
             // Activity might have been destroyed.
             if (mTermuxService == null) {
                 mEmptySessionRecoveryInProgress = false;
@@ -2990,22 +2840,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setSuggestionBarView() {
         final FrameLayout appsBarContainer = findViewById(R.id.apps_bar_viewpager);
         mAzScrubRowView = findViewById(R.id.apps_bar_az_row);
-        mLauncherAzGestureFxUnderlayView = findViewById(R.id.apps_bar_az_fx_underlay);
-        mLauncherAzGestureFxOverlayView = findViewById(R.id.apps_bar_az_fx_overlay);
-        mLauncherAzGestureFxLabelOverlayView = findViewById(R.id.apps_bar_az_label_overlay);
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.UNDERLAY);
-            mLauncherAzGestureFxUnderlayView.setFocusedIconRingEnabled(false);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.OVERLAY);
-            mLauncherAzGestureFxOverlayView.setFocusedIconRingEnabled(true);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setRenderLayer(LauncherAzGestureFxView.RenderLayer.OVERLAY);
-            mLauncherAzGestureFxLabelOverlayView.setFocusedIconRingEnabled(false);
-        }
-        setupDockPlankFx();
         if (appsBarContainer == null) {
             return;
         }
@@ -3279,15 +3113,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mAzScrubRowView != null) {
             mAzScrubRowView.setEffectsEnabled(effectsEnabled);
         }
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setEffectsEnabled(effectsEnabled);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setEffectsEnabled(effectsEnabled);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setEffectsEnabled(effectsEnabled);
-        }
     }
 
     private int computeLauncherIconPreferencesSignature() {
@@ -3339,35 +3164,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzScrubRowView.setLockedInlineLetter(null);
         int orbColor = brightMonetShade(base);
         int edgeColor = edgeMonetVariant(base);
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setColors(orbColor, edgeColor);
-            mLauncherAzGestureFxUnderlayView.setDarkThemeActive(isNightThemeActive());
-            mLauncherAzGestureFxUnderlayView.setCapsuleDockStyle(isValarieDockStyle());
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mLauncherAzGestureFxUnderlayView.setElevation(0f);
-                mLauncherAzGestureFxUnderlayView.setTranslationZ(-dpToPx(8));
-            }
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setColors(orbColor, edgeColor);
-            mLauncherAzGestureFxOverlayView.setDarkThemeActive(isNightThemeActive());
-            mLauncherAzGestureFxOverlayView.setCapsuleDockStyle(isValarieDockStyle());
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mLauncherAzGestureFxOverlayView.setElevation(dpToPx(30));
-                mLauncherAzGestureFxOverlayView.setTranslationZ(dpToPx(30));
-            }
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setColors(orbColor, edgeColor);
-            mLauncherAzGestureFxLabelOverlayView.setDarkThemeActive(isNightThemeActive());
-            mLauncherAzGestureFxLabelOverlayView.setFocusedAppPreviewLabelEnabled(
-                mPreferences != null && mPreferences.isAppLauncherDisplayAppNamesEnabled()
-            );
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mLauncherAzGestureFxLabelOverlayView.setElevation(dpToPx(40));
-                mLauncherAzGestureFxLabelOverlayView.setTranslationZ(dpToPx(40));
-            }
-        }
         updateAzOverflowAffordance();
         mAzScrubRowView.setBackgroundColor(Color.TRANSPARENT);
         mAzScrubRowView.bringToFront();
@@ -3513,9 +3309,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (phase == AzScrubRowView.GesturePhase.UP) {
             boolean launched = false;
             if (mAzGestureMode == AzGestureMode.ICON_TRACKING_LOCKED && focusResult != null && focusResult.hasFocusEntry()) {
-                if (mLauncherAzGestureFxLabelOverlayView != null) {
-                    mLauncherAzGestureFxLabelOverlayView.playLaunchBloom(rawX, rawY);
-                }
                 launched = mSuggestionBarView.launchAzFocusedEntry(focusResult);
             }
             resetAzGestureState(!launched, false);
@@ -3596,93 +3389,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!isAzRowEnabled()) {
             return;
         }
-        if (mLauncherAzGestureFxUnderlayView == null && mLauncherAzGestureFxOverlayView == null) {
-            return;
-        }
-        populateRawBounds(mAzScrubRowView, mAzRowRawBounds);
-        populateRawBounds(mSuggestionBarView, mAppsRowRawBounds);
-        populateRawBounds(findViewById(R.id.apps_bar_indicator_band), mIndicatorBandRawBounds);
-        populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
-        applyAzFxRowBounds();
-        LauncherAzGestureFxView.InteractionMode interactionMode =
-            mAzGestureMode == AzGestureMode.ICON_TRACKING_LOCKED
-                ? LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
-                : LauncherAzGestureFxView.InteractionMode.LETTER_TRACK;
+        boolean iconTrackLocked = mAzGestureMode == AzGestureMode.ICON_TRACKING_LOCKED;
         if (mSuggestionBarView != null) {
-            if (interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED) {
+            if (iconTrackLocked) {
                 mSuggestionBarView.updateAzFocusedEntry(focusResult);
             } else {
                 mSuggestionBarView.clearAzFocusedEntry();
             }
         }
-        RectF focusBounds;
-        if (interactionMode == LauncherAzGestureFxView.InteractionMode.LETTER_TRACK && mAzScrubRowView != null) {
-            mAzLetterVisualMetrics.clear();
-            boolean hasMetrics = mAzScrubRowView.getLetterVisualMetricsOnScreen(Character.toUpperCase(activeLetter), mAzLetterVisualMetrics);
-            if (hasMetrics) {
-                mAzFocusLetterRawBounds.set(mAzLetterVisualMetrics.glassBoundsRaw);
-                focusBounds = mAzFocusLetterRawBounds;
-            } else {
-                mAzFocusLetterRawBounds.setEmpty();
-                focusBounds = null;
-            }
-        } else {
-            focusBounds = focusResult == null ? null : focusResult.iconBounds;
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setFocusedIconOutline(
-                focusResult == null ? null : focusResult.iconOutlineMask,
-                focusResult == null ? null : focusResult.iconOutlineBounds
-            );
-        }
-        boolean overflowActive = mSuggestionBarView != null && mSuggestionBarView.hasAzOverflowPages();
-        boolean canLeft = mSuggestionBarView != null && mSuggestionBarView.canAzPageLeft();
-        boolean canRight = mSuggestionBarView != null && mSuggestionBarView.canAzPageRight();
-        float currentPagePosition = mSuggestionBarView != null ? mSuggestionBarView.getAzVisualPagePosition() : 0f;
-        int pageCount = mSuggestionBarView != null ? mSuggestionBarView.getAzVisiblePageCount() : 1;
-        applyAzFxInteractionOverflowState(overflowActive, canLeft, canRight, currentPagePosition, pageCount, overflowActive, true, -1);
-
-        float leftProximity = 0f;
-        float rightProximity = 0f;
-        if (mSuggestionBarView != null && interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED) {
-            int[] loc = new int[2];
-            mSuggestionBarView.getLocationOnScreen(loc);
-            float localX = mAzLastRawX - loc[0];
-            float width = Math.max(1f, mSuggestionBarView.getWidth());
-            float edgeZone = Math.max(28f * getResources().getDisplayMetrics().density, width * 0.12f);
-            if (canLeft && localX <= edgeZone) {
-                leftProximity = Math.max(0f, 1f - (localX / Math.max(1f, edgeZone)));
-            }
-            if (canRight && localX >= width - edgeZone) {
-                rightProximity = Math.max(0f, 1f - ((width - localX) / Math.max(1f, edgeZone)));
-            }
-        }
-        applyAzFxEdgeProximity(leftProximity, rightProximity);
-        applyAzFxDrag(
-            mAzGestureActive,
-            mAzLastRawX,
-            mAzLastRawY,
-            true,
-            mAzLastAnchorRawX,
-            mAzLastAnchorRawY,
-            focusBounds,
-            interactionMode
-        );
-        Drawable focusedIcon = interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
-            && focusResult != null
-            && focusResult.entry != null
-            ? focusResult.entry.icon
-            : null;
-        if (focusedIcon == null && interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
-            && focusResult != null && focusResult.entry != null) {
-            focusedIcon = getPackageManager().getDefaultActivityIcon();
-        }
-        String focusedLabel = interactionMode == LauncherAzGestureFxView.InteractionMode.ICON_TRACK_LOCKED
-            && focusResult != null
-            && focusResult.entry != null
-            ? focusResult.entry.label
-            : null;
-        applyAzFxFocusedAppIcon(focusedIcon, focusedLabel);
     }
 
     private void populateRawBounds(@Nullable View view, @NonNull RectF out) {
@@ -3696,150 +3410,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void updateAzOverflowAffordance() {
+        // Page-indicator chrome lived in LauncherAzGestureFxView; removed with dock FX cut.
         if (!isSuggestionBarEnabled()) {
             resetAzOverflowAffordanceState();
-            return;
-        }
-        if ((mLauncherAzGestureFxUnderlayView == null && mLauncherAzGestureFxOverlayView == null) || mSuggestionBarView == null) {
-            return;
-        }
-        populateRawBounds(mAzScrubRowView, mAzRowRawBounds);
-        populateRawBounds(mSuggestionBarView, mAppsRowRawBounds);
-        populateRawBounds(findViewById(R.id.apps_bar_indicator_band), mIndicatorBandRawBounds);
-        populateRawBounds(findViewById(R.id.terminal_toolbar_view_pager), mExtraKeysRawBounds);
-        applyAzFxRowBounds();
-        boolean azOverflowActive = mSuggestionBarView.hasAzOverflowPages();
-        boolean interactionActive = mSuggestionBarInteractionActive;
-        boolean canLeft = false;
-        boolean canRight = false;
-        float currentPagePosition = 0f;
-        int pageCount = 1;
-        boolean showPageIndicators = false;
-        boolean subtlePageIndicators = false;
-        int dynamicPageIndex = -1;
-        if (azOverflowActive) {
-            canLeft = mSuggestionBarView.canAzPageLeft();
-            canRight = mSuggestionBarView.canAzPageRight();
-            currentPagePosition = mSuggestionBarView.getAzVisualPagePosition();
-            pageCount = mSuggestionBarView.getAzVisiblePageCount();
-            showPageIndicators = true;
-            interactionActive = true;
-            subtlePageIndicators = true;
-        } else if (mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
-            canLeft = mSuggestionBarView.canPinnedPageLeft();
-            canRight = mSuggestionBarView.canPinnedPageRight();
-            currentPagePosition = mSuggestionBarView.getPinnedVisualPagePosition();
-            pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
-            showPageIndicators = true;
-            subtlePageIndicators = true;
-            dynamicPageIndex = mSuggestionBarView.getPinnedDynamicPageIndex();
-        } else if (!mAzGestureActive && !mSuggestionBarInteractionActive && mSuggestionBarView.hasPinnedOverflowPages()) {
-            canLeft = mSuggestionBarView.canPinnedPageLeft();
-            canRight = mSuggestionBarView.canPinnedPageRight();
-            currentPagePosition = mSuggestionBarView.getPinnedVisualPagePosition();
-            pageCount = mSuggestionBarView.getPinnedVisiblePageCount();
-            showPageIndicators = true;
-            interactionActive = true;
-            subtlePageIndicators = true;
-            dynamicPageIndex = mSuggestionBarView.getPinnedDynamicPageIndex();
-        }
-        applyAzFxInteractionOverflowState(
-            interactionActive,
-            canLeft,
-            canRight,
-            currentPagePosition,
-            pageCount,
-            showPageIndicators,
-            subtlePageIndicators,
-            dynamicPageIndex
-        );
-    }
-
-    private void applyAzFxRowBounds() {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setRowBounds(mAzRowRawBounds, mAppsRowRawBounds, mIndicatorBandRawBounds, mExtraKeysRawBounds);
         }
     }
 
-    private void applyAzFxInteractionOverflowState(
-        boolean active,
-        boolean canLeft,
-        boolean canRight,
-        float currentPagePosition,
-        int pageCount,
-        boolean showPageIndicators,
-        boolean subtlePinnedIndicators,
-        int dynamicPageIndex
-    ) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setInteractionOverflowState(
-                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators, dynamicPageIndex
-            );
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setInteractionOverflowState(
-                active, canLeft, canRight, currentPagePosition, pageCount, showPageIndicators, subtlePinnedIndicators, dynamicPageIndex
-            );
-        }
-    }
+
 
     private void resetAzOverflowAffordanceState() {
         mSuggestionBarInteractionActive = false;
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.clearDrag(false);
-            mLauncherAzGestureFxUnderlayView.setVisibility(View.GONE);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.clearDrag(false);
-            mLauncherAzGestureFxOverlayView.setVisibility(View.GONE);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.clearDrag(false);
-            mLauncherAzGestureFxLabelOverlayView.setVisibility(View.GONE);
-        }
     }
 
-    private void applyAzFxEdgeProximity(float leftProximity, float rightProximity) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setEdgeProximity(leftProximity, rightProximity);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setEdgeProximity(leftProximity, rightProximity);
-        }
-    }
 
-    private void applyAzFxDrag(boolean active, float rawX, float rawY, boolean anchorVisible, float anchorRawX, float anchorRawY, @Nullable RectF focusedBoundsRaw, @NonNull LauncherAzGestureFxView.InteractionMode mode) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.updateDrag(active, rawX, rawY, anchorVisible, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.updateDrag(active, rawX, rawY, anchorVisible, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.updateDrag(active, rawX, rawY, false, anchorRawX, anchorRawY, focusedBoundsRaw, mode);
-        }
-    }
 
-    private void applyAzFxFocusedAppIcon(@Nullable Drawable icon, @Nullable String label) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setFocusedAppPreviewIcon(null);
-            mLauncherAzGestureFxUnderlayView.setFocusedAppPreviewLabel(null);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setFocusedAppPreviewIcon(null);
-            mLauncherAzGestureFxOverlayView.setFocusedAppPreviewLabel(null);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.setFocusedAppPreviewLabel(label);
-            mLauncherAzGestureFxLabelOverlayView.setFocusedAppPreviewIcon(icon);
-        }
-    }
 
     private void updateAzEdgePagingLoop(@Nullable SuggestionBarView.AzDragFocusResult focusResult) {
         if (!isAzRowEnabled() || !mAzGestureActive || mAzGestureMode != AzGestureMode.ICON_TRACKING_LOCKED || focusResult == null) {
@@ -3857,7 +3441,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         long now = SystemClock.uptimeMillis();
         if (mAzEdgeRequiresReentry || now < mAzEdgePageCooldownUntilUptimeMs) {
-            applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
             return;
         }
         if (mAzEdgePagingRunnable != null && mAzEdgePagingEdge == focusResult.edge) {
@@ -3884,7 +3467,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
                 long frameNow = SystemClock.uptimeMillis();
                 if (frameNow < mAzEdgePageCooldownUntilUptimeMs || mAzEdgeRequiresReentry) {
-                    applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
                     mAzGestureHandler.postDelayed(this, AZ_EDGE_DWELL_FRAME_MS);
                     return;
                 }
@@ -3897,15 +3479,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 int pageDelta = mAzEdgePagingEdge == SuggestionBarView.AZ_EDGE_LEFT ? -1 : 1;
                 boolean changed = mSuggestionBarView.requestAzPageDelta(pageDelta, 640f);
                 if (changed) {
-                    if (mLauncherAzGestureFxLabelOverlayView != null) {
-                        mLauncherAzGestureFxLabelOverlayView.playFocusedAppPreviewSettle();
-                    }
                     updateAzOverflowAffordance();
                 }
                 mAzEdgePageCooldownUntilUptimeMs = frameNow + AZ_EDGE_PAGE_COOLDOWN_MS;
                 mAzEdgeRequiresReentry = true;
                 mAzEdgePagingRunnable = null;
-                applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
                 mAzGestureHandler.postDelayed(() -> {
                     if (!mAzGestureActive || mSuggestionBarView == null) return;
                     SuggestionBarView.AzDragFocusResult afterSwitch = mSuggestionBarView.resolveAzDragFocus(mAzLastRawX, mAzLastRawY);
@@ -3926,26 +3504,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mAzEdgePagingEdge = SuggestionBarView.AZ_EDGE_NONE;
         mAzEdgeDwellStartUptimeMs = 0L;
         mAzEdgeRequiresReentry = false;
-        applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
     }
 
     private void updateAzEdgeDwellProgress(long now) {
         if (mAzEdgeDwellStartUptimeMs <= 0L) {
-            applyAzFxEdgeDwellProgress(0f, mAzLastRawX, mAzLastRawY);
             return;
         }
         float progress = Math.min(1f, (now - mAzEdgeDwellStartUptimeMs) / (float) AZ_EDGE_PAGE_INITIAL_DELAY_MS);
-        applyAzFxEdgeDwellProgress(progress, mAzLastRawX, mAzLastRawY);
     }
 
-    private void applyAzFxEdgeDwellProgress(float progress, float rawX, float rawY) {
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.setEdgeDwellProgress(0f, rawX, rawY);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.setEdgeDwellProgress(progress, rawX, rawY);
-        }
-    }
 
     private void scheduleAzOverflowRefresh() {
         if (!isSuggestionBarEnabled()) {
@@ -3979,15 +3546,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mSuggestionBarView != null) {
             mSuggestionBarView.clearAzFocusedEntry();
-        }
-        if (mLauncherAzGestureFxUnderlayView != null) {
-            mLauncherAzGestureFxUnderlayView.clearDrag(keepOverflowAffordance);
-        }
-        if (mLauncherAzGestureFxOverlayView != null) {
-            mLauncherAzGestureFxOverlayView.clearDrag(keepOverflowAffordance);
-        }
-        if (mLauncherAzGestureFxLabelOverlayView != null) {
-            mLauncherAzGestureFxLabelOverlayView.clearDrag(false);
         }
         if (clearPreview && mSuggestionBarView != null) {
             mSuggestionBarView.clearAzPreview();
@@ -4329,8 +3887,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         updateViewHorizontalMargins(R.id.terminal_toolbar_view_pager, extraKeysInset);
         updateViewHorizontalMargins(R.id.extrakeys_divider, extraKeysInset);
         updateViewPadding(R.id.apps_bar_viewpager, 0, appsTopPadding, 0, appsBottomPadding);
-        updateViewHorizontalMargins(R.id.apps_bar_az_fx_underlay, surfaceInset);
-        updateViewHorizontalMargins(R.id.apps_bar_az_fx_overlay, surfaceInset);
 
         // Keep the extra-keys ViewPager from leaking its adjacent (text-input) page. In capsule mode
         // the pager is inset from the dock edges, so the off-screen page's edge (the "❮" button)
@@ -5574,7 +5130,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         if (forceCatalogRefresh) {
-            LauncherCtlApiServer.getInstance().invalidatePackageCaches();
             mSuggestionBarView.clearAppCache();
             mSuggestionBarView.pruneInvalidIconOverrides();
             mSuggestionBarView.reloadAllApps();
@@ -5732,8 +5287,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
-        View azFxOverlay = findViewById(R.id.apps_bar_az_fx_overlay);
-        View azFxUnderlay = findViewById(R.id.apps_bar_az_fx_underlay);
         View appsBar = findViewById(R.id.apps_bar_viewpager);
         long now = SystemClock.uptimeMillis();
         long delta = mLastAccessoryRenderSyncUptimeMs == 0L ? 0L : now - mLastAccessoryRenderSyncUptimeMs;
@@ -5744,9 +5297,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 " dt=" + delta +
                 " ime=" + mLastImeVisible +
                 " accessoryVis=" + (accessoryContainer != null ? accessoryContainer.getVisibility() : -1) +
-                " appsBarVis=" + (appsBar != null ? appsBar.getVisibility() : -1) +
-                " fxU=" + (azFxUnderlay != null ? azFxUnderlay.getVisibility() : -1) +
-                " fxO=" + (azFxOverlay != null ? azFxOverlay.getVisibility() : -1)
+                " appsBarVis=" + (appsBar != null ? appsBar.getVisibility() : -1)
         );
     }
 

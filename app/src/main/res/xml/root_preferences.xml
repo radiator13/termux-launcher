@@ -4,13 +4,6 @@
         app:key="root_assistant"
         app:title="@string/settings_root_assistant_header">
 
-        <Preference
-            app:key="termux_ai"
-            app:icon="@drawable/ic_settings_ai"
-            app:title="@string/termux_ai_preferences_title"
-            app:summary="@string/termux_ai_preferences_summary"
-            app:fragment="com.termux.app.fragments.settings.termux.TaiPreferencesFragment"/>
-
         <com.termux.app.fragments.settings.PillPreference
             app:key="shizuku"
             app:icon="@drawable/ic_settings_shield"
