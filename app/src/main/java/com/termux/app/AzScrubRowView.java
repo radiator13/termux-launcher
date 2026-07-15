@@ -93,6 +93,7 @@ public final class AzScrubRowView extends AppCompatTextView {
     private int activeLetterIndex = -1;
     private static final float LETTER_SLOT_HYSTERESIS_RATIO = 0.22f;
     private boolean interactionRenderActive;
+    private boolean effectsEnabled = true;
 
     public AzScrubRowView(Context context) {
         super(context);
@@ -493,7 +494,7 @@ public final class AzScrubRowView extends AppCompatTextView {
 
     private void animateWaveRelease() {
         stopSettleAnimation();
-        if (!isAttachedToWindow()) {
+        if (!effectsEnabled || !isAttachedToWindow()) {
             waveStrength = 0f;
             activeTouchX = -1f;
             stopShimmer();
@@ -527,7 +528,26 @@ public final class AzScrubRowView extends AppCompatTextView {
         settleAnimator.start();
     }
 
+    /**
+     * When false (Full Optimization Mode), skip shimmer/settle ValueAnimators.
+     */
+    public void setEffectsEnabled(boolean enabled) {
+        if (effectsEnabled == enabled) {
+            return;
+        }
+        effectsEnabled = enabled;
+        if (!enabled) {
+            stopShimmer();
+            stopSettleAnimation();
+            waveStrength = 0f;
+            invalidate();
+        }
+    }
+
     private void startShimmer() {
+        if (!effectsEnabled) {
+            return;
+        }
         shimmerActive = true;
         if (shimmerAnimator != null && shimmerAnimator.isRunning()) return;
         if (!isAttachedToWindow()) return;

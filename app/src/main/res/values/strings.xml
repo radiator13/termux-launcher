@@ -242,6 +242,10 @@
         <!-- Termux Style Preferences -->
         <string name="termux_style_preferences_title">Appearance</string>
         <string name="termux_style_preferences_summary">Theme, wallpaper, terminal, dock, sessions menu</string>
+        <string name="termux_performance_header">Performance</string>
+        <string name="termux_full_optimization_mode_title">Full optimization mode</string>
+        <string name="termux_full_optimization_mode_summary">Faster UI and lower battery. Disables blur, glass grain, wallpaper passthrough, and launcher animations. Your previous style is restored when turned off.</string>
+        <string name="termux_full_optimization_mode_locked_summary">Locked while Full optimization mode is on. Turn that off to change this setting.</string>
 
         <string name="termux_theme_mode_title">Mode</string>
         <string name="termux_theme_mode_system">System</string>

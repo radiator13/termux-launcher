@@ -58,6 +58,20 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         SettingsLayoutUtils.applyScreenLayout(this);
         LauncherIconPackPreferenceController.configure(this, context);
         configureDockPreferencePresentation();
+        Preference fullOptPreference = findPreference("full_optimization_mode");
+        if (fullOptPreference != null) {
+            fullOptPreference.setOnPreferenceChangeListener((preference, newValue) -> {
+                // DataStore applies the profile; refresh locked-control state on the next frame.
+                if (getView() != null) {
+                    getView().post(() -> {
+                        updateFullOptimizationDependentPreferences();
+                        updateDockBlurAvailability();
+                    });
+                }
+                return true;
+            });
+        }
+        updateFullOptimizationDependentPreferences();
         updateDockBlurAvailability();
     }
 
@@ -71,28 +85,74 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         if (context != null) {
             LauncherIconPackPreferenceController.configure(this, context);
         }
+        updateFullOptimizationDependentPreferences();
         updateDockBlurAvailability();
+    }
+
+    private void updateFullOptimizationDependentPreferences() {
+        Context context = getContext();
+        if (context == null) return;
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        boolean fullOpt = preferences != null && preferences.isFullOptimizationModeEnabled();
+
+        String[] lockedKeys = new String[] {
+            "use_system_wallpaper",
+            "terminal_background_opacity",
+            "extrakeys_blur_radius",
+            "app_bar_opacity",
+            "dock_glass_grain",
+            "app_launcher_icon_shadow"
+        };
+        for (String key : lockedKeys) {
+            Preference preference = findPreference(key);
+            if (preference == null) continue;
+            preference.setEnabled(!fullOpt);
+            if (fullOpt) {
+                preference.setSummary(R.string.termux_full_optimization_mode_locked_summary);
+            }
+        }
+        if (!fullOpt) {
+            // Restore non-full-opt blur summary via updateDockBlurAvailability.
+            Preference wallpaper = findPreference("use_system_wallpaper");
+            if (wallpaper != null) {
+                wallpaper.setSummary(R.string.termux_use_system_wallpaper_summary);
+            }
+            Preference shadow = findPreference("app_launcher_icon_shadow");
+            if (shadow != null) {
+                shadow.setSummary(R.string.termux_app_launcher_icon_shadow_summary);
+            }
+            Preference grain = findPreference("dock_glass_grain");
+            if (grain != null) {
+                grain.setSummary(R.string.termux_dock_glass_grain_summary);
+            }
+        }
     }
 
     private void updateDockBlurAvailability() {
         Context context = getContext();
         if (context == null) return;
 
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        boolean fullOpt = preferences != null && preferences.isFullOptimizationModeEnabled();
         boolean liveWallpaperActive = isLiveWallpaperActive(context);
         SeekBarPreference dockBlurPreference = findPreference("extrakeys_blur_radius");
 
         if (dockBlurPreference != null) {
-            dockBlurPreference.setEnabled(!liveWallpaperActive);
-            dockBlurPreference.setSummary(
-                liveWallpaperActive
-                    ? R.string.termux_extrakeys_blur_live_wallpaper_active_note
-                    : R.string.termux_extrakeys_blur_live_wallpaper_note
-            );
+            if (fullOpt) {
+                dockBlurPreference.setEnabled(false);
+                dockBlurPreference.setSummary(R.string.termux_full_optimization_mode_locked_summary);
+            } else {
+                dockBlurPreference.setEnabled(!liveWallpaperActive);
+                dockBlurPreference.setSummary(
+                    liveWallpaperActive
+                        ? R.string.termux_extrakeys_blur_live_wallpaper_active_note
+                        : R.string.termux_extrakeys_blur_live_wallpaper_note
+                );
+            }
         }
 
-        if (!liveWallpaperActive) return;
+        if (fullOpt || !liveWallpaperActive) return;
 
-        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
         if (preferences != null && preferences.getExtraKeysBlurRadius() != 0) {
             preferences.setExtraKeysBlurRadius(0);
             TermuxActivity.requestTermuxActivityStylingOnNextResume(context, true);
@@ -225,7 +285,13 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (key == null)
             return;
         switch(key) {
+            case "full_optimization_mode":
+                TermuxActivity.setFullOptimizationModeEnabled(mContext, value);
+                break;
             case "use_system_wallpaper":
+                if (mPreferences.isFullOptimizationModeEnabled() && value) {
+                    return;
+                }
                 TermuxActivity.setWallpaperModeEnabled(mContext, value);
                 break;
             case "extrakeys_blur_enabled":
@@ -254,6 +320,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_launcher_icon_shadow":
+                if (mPreferences.isFullOptimizationModeEnabled()) {
+                    return;
+                }
                 mPreferences.setAppLauncherIconShadowEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
@@ -290,6 +359,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (mPreferences == null)
             return defValue;
         switch(key) {
+            case "full_optimization_mode":
+                return mPreferences.isFullOptimizationModeEnabled();
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "extrakeys_blur_enabled":
@@ -332,6 +403,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             return;
         switch (key) {
             case "terminal_background_opacity":
+                if (mPreferences.isFullOptimizationModeEnabled()) {
+                    return;
+                }
                 mPreferences.setTerminalBackgroundOpacity(value);
                 syncBackgroundOverlayColor(value, null);
                 scheduleTermuxActivityStylingSync(false);
@@ -341,14 +415,23 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 scheduleTermuxActivityStylingSync(false);
                 break;
             case "extrakeys_blur_radius":
+                if (mPreferences.isFullOptimizationModeEnabled()) {
+                    return;
+                }
                 mPreferences.setExtraKeysBlurRadius(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
             case "app_bar_opacity":
+                if (mPreferences.isFullOptimizationModeEnabled()) {
+                    return;
+                }
                 mPreferences.setAppBarOpacity(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
             case "dock_glass_grain":
+                if (mPreferences.isFullOptimizationModeEnabled()) {
+                    return;
+                }
                 mPreferences.setDockGlassGrain(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;

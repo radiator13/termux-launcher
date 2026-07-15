@@ -157,6 +157,7 @@ public final class SuggestionBarView extends GridLayout {
     private boolean bandW = false;
     private boolean unifyIcons = true;
     private boolean iconShadowEnabled = true;
+    private boolean effectsEnabled = true;
     private static final int ICON_SHADOW_COLOR = 0x73000000;
     /** Cache of harmonized icon drawables so resting and swipe-preview icons are identical (no size jump) and we don't rebuild bitmaps per frame. */
     private final LruCache<String, Drawable> normalizedIconCache = new LruCache<>(96);
@@ -490,6 +491,20 @@ public final class SuggestionBarView extends GridLayout {
     public void setBlurConfig(boolean blurEnabled, int blurRadiusDp) {
         this.blurEnabled = blurEnabled;
         this.blurRadiusDp = Math.max(0, blurRadiusDp);
+    }
+
+    /**
+     * When false (Full Optimization Mode), skip expensive focus-outline bitmap work and prefer
+     * cheaper interaction paths.
+     */
+    public void setEffectsEnabled(boolean enabled) {
+        if (this.effectsEnabled == enabled) {
+            return;
+        }
+        this.effectsEnabled = enabled;
+        if (!enabled) {
+            focusOutlineVisualCache.clear();
+        }
     }
 
     public void setNotificationBadgesEnabled(boolean enabled) {
@@ -1073,6 +1088,9 @@ public final class SuggestionBarView extends GridLayout {
 
     @Nullable
     private FocusOutlineVisual resolveFocusOutlineVisual(@NonNull ImageView imageView) {
+        if (!effectsEnabled) {
+            return null;
+        }
         Drawable drawable = imageView.getDrawable();
         int width = imageView.getWidth();
         int height = imageView.getHeight();

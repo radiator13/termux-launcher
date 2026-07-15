@@ -1061,9 +1061,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         // Optional film grain over the frosted glass — reads as real glass texture instead of a flat
         // blur. Amount is user-controlled (Appearance > Glass grain); 0 omits the layer entirely.
-        int grain = mPreferences != null
-            ? mPreferences.getDockGlassGrain()
-            : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN;
+        int grain = 0;
+        if (mPreferences != null && !mPreferences.isFullOptimizationModeEnabled()) {
+            grain = mPreferences.getDockGlassGrain();
+        } else if (mPreferences == null) {
+            grain = TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN;
+        }
         if (grain > 0) {
             return new LayerDrawable(new Drawable[] { baseLayer, lightLayer, buildDockGrainLayer(grain, clamped) });
         }
@@ -1366,10 +1369,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Capsule keeps the free-floating tilt + dip. The edge-to-edge default dock keeps the
         // touch-tracked specular/glow only; rotating a full-width slab exposes clipped side gaps.
         boolean capsuleDock = isValarieDockStyle();
-        mDockPlankController.setMotionEnabled(capsuleDock);
+        boolean fullOpt = isFullOptimizationModeEnabled();
+        mDockPlankController.setMotionEnabled(capsuleDock && !fullOpt);
         mDockPlankController.setHingeMode(!capsuleDock);
         mDockPlankController.setReducedMotion(isReducedMotionEnabled());
-        mDockPlankController.setEnabled(true);
+        mDockPlankController.setEnabled(!fullOpt);
     }
 
     /** Soft accent-tinted radial specular that rides the touch point across the glass. */
@@ -1392,6 +1396,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean isReducedMotionEnabled() {
+        if (isFullOptimizationModeEnabled()) {
+            return true;
+        }
         try {
             float scale = Settings.Global.getFloat(
                 getContentResolver(), Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
@@ -1770,11 +1777,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mPreferences == null) {
             return 0;
         }
+        if (mPreferences.isFullOptimizationModeEnabled()) {
+            return 0;
+        }
         int blurRadiusDp = mPreferences.getExtraKeysBlurRadius();
         if (blurRadiusDp <= 0 || isLiveWallpaperActive()) {
             return 0;
         }
         return blurRadiusDp;
+    }
+
+    private boolean isFullOptimizationModeEnabled() {
+        return mPreferences != null && mPreferences.isFullOptimizationModeEnabled();
     }
 
     private boolean isLiveWallpaperActive() {
@@ -3216,17 +3230,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setTextSize(10f);
         mSuggestionBarView.setBandW(mPreferences.isAppLauncherBwIconsEnabled());
         mSuggestionBarView.setUnifyIcons(mPreferences.isAppLauncherUnifyIconsEnabled());
-        mSuggestionBarView.setIconShadowEnabled(mPreferences.isAppLauncherIconShadowEnabled());
+        boolean fullOpt = mPreferences.isFullOptimizationModeEnabled();
+        mSuggestionBarView.setIconShadowEnabled(!fullOpt && mPreferences.isAppLauncherIconShadowEnabled());
         mSuggestionBarView.setIconScale(resolveDerivedDockIconScale());
         mSuggestionBarView.setDockRowHeightHintPx(resolveDockAppsBarHeightHintPx(buildDockLayoutMetrics(0).appsBarHeightPx));
         mSuggestionBarView.setAppBarOpacity(mPreferences.getAppBarOpacity());
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         mSuggestionBarView.setBlurConfig(blurRadiusDp > 0, blurRadiusDp);
+        mSuggestionBarView.setEffectsEnabled(!fullOpt);
         mSuggestionBarView.setInheritedTintColor(resolveAccessoryGlassBaseColor());
         mSuggestionBarView.setNotificationBadgesEnabled(mPreferences.isAppLauncherNotificationDotsEnabled());
         mSuggestionBarView.setMostUsedPageEnabled(mPreferences.isAppLauncherMostUsedPageEnabled());
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
+        applyLauncherEffectsEnabled(!fullOpt);
         mSuggestionBarView.setAppCatalogChangedListener(this::syncAzScrubLettersAndTint);
         mSuggestionBarView.setOverflowInteractionListener(new SuggestionBarView.OverflowInteractionListener() {
             @Override
@@ -3255,6 +3272,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         mSuggestionBarView.reloadWithInput(input, mTerminalView);
         syncAzScrubLettersAndTint();
+    }
+
+    /** Gates expensive launcher chrome FX (AZ glass, scrub shimmer) when full optimization is on. */
+    private void applyLauncherEffectsEnabled(boolean effectsEnabled) {
+        if (mAzScrubRowView != null) {
+            mAzScrubRowView.setEffectsEnabled(effectsEnabled);
+        }
+        if (mLauncherAzGestureFxUnderlayView != null) {
+            mLauncherAzGestureFxUnderlayView.setEffectsEnabled(effectsEnabled);
+        }
+        if (mLauncherAzGestureFxOverlayView != null) {
+            mLauncherAzGestureFxOverlayView.setEffectsEnabled(effectsEnabled);
+        }
+        if (mLauncherAzGestureFxLabelOverlayView != null) {
+            mLauncherAzGestureFxLabelOverlayView.setEffectsEnabled(effectsEnabled);
+        }
     }
 
     private int computeLauncherIconPreferencesSignature() {
@@ -4772,6 +4805,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (preferences == null) {
             return;
         }
+        if (preferences.isFullOptimizationModeEnabled() && enabled) {
+            // Full optimization owns wallpaper-off; refuse re-enabling until mode is off.
+            return;
+        }
 
         applyWallpaperModePreferences(preferences, enabled);
         requestTermuxActivityStylingOnNextResume(context, true);
@@ -4791,6 +4828,67 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             preferences.setTerminalBackgroundOpacity(100);
             preferences.setAppBarOpacity(100);
             preferences.setExtraKeysBlurRadius(0);
+        }
+    }
+
+    public static void setFullOptimizationModeEnabled(@NonNull Context context, boolean enabled) {
+        TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context, false);
+        if (preferences == null) {
+            return;
+        }
+        if (preferences.isFullOptimizationModeEnabled() == enabled) {
+            return;
+        }
+        applyFullOptimizationModePreferences(preferences, enabled);
+        requestTermuxActivityStylingOnNextResume(context, true);
+    }
+
+    /**
+     * Applies or restores the Full Optimization Mode profile (blur/grain/wallpaper/animations off
+     * when enabled). Safe to call from tests without an activity instance.
+     */
+    static void applyFullOptimizationModePreferences(
+        @NonNull TermuxAppSharedPreferences preferences,
+        boolean enabled
+    ) {
+        if (enabled) {
+            if (!preferences.isFullOptimizationModeEnabled()) {
+                preferences.setFullOptSavedExtraKeysBlurRadius(preferences.getExtraKeysBlurRadius());
+                preferences.setFullOptSavedDockGlassGrain(preferences.getDockGlassGrain());
+                preferences.setFullOptSavedAppBarOpacity(preferences.getAppBarOpacity());
+                preferences.setFullOptSavedTerminalBackgroundOpacity(preferences.getTerminalBackgroundOpacity());
+                preferences.setFullOptSavedUseSystemWallpaper(preferences.isUseSystemWallpaperEnabled());
+                preferences.setFullOptSavedAnimationsEnabled(preferences.isAppLauncherAnimationsEnabled());
+                preferences.setFullOptSavedIconShadow(preferences.isAppLauncherIconShadowEnabled());
+            }
+            preferences.setFullOptimizationModeEnabled(true);
+            // Wallpaper off first so opacity setters do not overwrite wallpaper-mode caches.
+            preferences.setUseSystemWallpaperEnabled(false);
+            preferences.setExtraKeysBlurRadius(0);
+            preferences.setDockGlassGrain(0);
+            preferences.setAppBarOpacity(100);
+            preferences.setTerminalBackgroundOpacity(100);
+            preferences.setAppLauncherAnimationsEnabled(false);
+            preferences.setAppLauncherIconShadowEnabled(false);
+            return;
+        }
+
+        if (!preferences.isFullOptimizationModeEnabled()) {
+            return;
+        }
+        preferences.setFullOptimizationModeEnabled(false);
+        preferences.setExtraKeysBlurRadius(preferences.getFullOptSavedExtraKeysBlurRadius());
+        preferences.setDockGlassGrain(preferences.getFullOptSavedDockGlassGrain());
+        preferences.setAppBarOpacity(preferences.getFullOptSavedAppBarOpacity());
+        preferences.setTerminalBackgroundOpacity(preferences.getFullOptSavedTerminalBackgroundOpacity());
+        preferences.setUseSystemWallpaperEnabled(preferences.getFullOptSavedUseSystemWallpaper());
+        preferences.setAppLauncherAnimationsEnabled(preferences.getFullOptSavedAnimationsEnabled());
+        preferences.setAppLauncherIconShadowEnabled(preferences.getFullOptSavedIconShadow());
+        if (preferences.isUseSystemWallpaperEnabled()) {
+            // Keep wallpaper-mode restore caches aligned with the restored live values.
+            preferences.setWallpaperEnabledTerminalBackgroundOpacity(preferences.getTerminalBackgroundOpacity());
+            preferences.setWallpaperEnabledAppBarOpacity(preferences.getAppBarOpacity());
+            preferences.setWallpaperEnabledExtraKeysBlurRadius(preferences.getExtraKeysBlurRadius());
         }
     }
 

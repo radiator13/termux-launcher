@@ -126,6 +126,7 @@ public final class LauncherAzGestureFxView extends View {
     private boolean darkThemeActive = true;
     private boolean capsuleDockStyle;
     @NonNull private RenderLayer renderLayer = RenderLayer.OVERLAY;
+    private boolean effectsEnabled = true;
 
     @NonNull private InteractionMode interactionMode = InteractionMode.LETTER_TRACK;
     private long lastFocusUpdateUptimeMs = 0L;
@@ -174,6 +175,37 @@ public final class LauncherAzGestureFxView extends View {
         previewLabelPaint.setTextAlign(Paint.Align.LEFT);
         previewLabelPaint.setSubpixelText(true);
         previewLabelPaint.setTextSize(dp(11f));
+    }
+
+    /**
+     * When false (Full Optimization Mode), cancel ValueAnimators and skip glass/preview drawing.
+     */
+    public void setEffectsEnabled(boolean enabled) {
+        if (effectsEnabled == enabled) {
+            return;
+        }
+        effectsEnabled = enabled;
+        if (!enabled) {
+            if (launchBloomAnimator != null) {
+                launchBloomAnimator.cancel();
+                launchBloomAnimator = null;
+            }
+            if (focusedAppPreviewAnimator != null) {
+                focusedAppPreviewAnimator.cancel();
+                focusedAppPreviewAnimator = null;
+            }
+            if (focusedAppPreviewSettleAnimator != null) {
+                focusedAppPreviewSettleAnimator.cancel();
+                focusedAppPreviewSettleAnimator = null;
+            }
+            cancelPageIndicatorAnimations();
+            cancelSubtlePageIndicatorIdleFade();
+            focusedAppPreviewProgress = 0f;
+            launchBloomProgress = 0f;
+            edgeDwellProgress = 0f;
+            setVisibility(GONE);
+        }
+        invalidate();
     }
 
     public void setColors(int glassTintColor, int edgeTintColor) {
@@ -481,6 +513,9 @@ public final class LauncherAzGestureFxView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if (!effectsEnabled) {
+            return;
+        }
         getLocationOnScreen(locationOnScreen);
 
         boolean shouldDrawInteractionOverflow = interactionOverflowActive

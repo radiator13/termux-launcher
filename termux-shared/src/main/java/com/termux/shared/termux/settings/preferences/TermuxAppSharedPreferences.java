@@ -570,6 +570,142 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_USE_SYSTEM_WALLPAPER, value, false);
     }
 
+    public boolean isFullOptimizationModeEnabled() {
+        return SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPTIMIZATION_MODE,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPTIMIZATION_MODE
+        );
+    }
+
+    public void setFullOptimizationModeEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPTIMIZATION_MODE,
+            value,
+            false
+        );
+    }
+
+    public int getFullOptSavedExtraKeysBlurRadius() {
+        return Math.max(0, SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_EXTRAKEYS_BLUR_RADIUS,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_EXTRAKEYS_BLUR_RADIUS
+        ));
+    }
+
+    public void setFullOptSavedExtraKeysBlurRadius(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_EXTRAKEYS_BLUR_RADIUS,
+            Math.max(0, value),
+            false
+        );
+    }
+
+    public int getFullOptSavedDockGlassGrain() {
+        return DataUtils.clamp(SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_DOCK_GLASS_GRAIN,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_DOCK_GLASS_GRAIN
+        ), 0, 100);
+    }
+
+    public void setFullOptSavedDockGlassGrain(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_DOCK_GLASS_GRAIN,
+            DataUtils.clamp(value, 0, 100),
+            false
+        );
+    }
+
+    public int getFullOptSavedAppBarOpacity() {
+        return DataUtils.clamp(SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_APP_BAR_OPACITY,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_APP_BAR_OPACITY
+        ), 0, 100);
+    }
+
+    public void setFullOptSavedAppBarOpacity(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_APP_BAR_OPACITY,
+            DataUtils.clamp(value, 0, 100),
+            false
+        );
+    }
+
+    public int getFullOptSavedTerminalBackgroundOpacity() {
+        return DataUtils.clamp(SharedPreferenceUtils.getInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_TERMINAL_BACKGROUND_OPACITY,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_TERMINAL_BACKGROUND_OPACITY
+        ), 0, 100);
+    }
+
+    public void setFullOptSavedTerminalBackgroundOpacity(int value) {
+        SharedPreferenceUtils.setInt(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_TERMINAL_BACKGROUND_OPACITY,
+            DataUtils.clamp(value, 0, 100),
+            false
+        );
+    }
+
+    public boolean getFullOptSavedUseSystemWallpaper() {
+        return SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_USE_SYSTEM_WALLPAPER,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_USE_SYSTEM_WALLPAPER
+        );
+    }
+
+    public void setFullOptSavedUseSystemWallpaper(boolean value) {
+        SharedPreferenceUtils.setBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_USE_SYSTEM_WALLPAPER,
+            value,
+            false
+        );
+    }
+
+    public boolean getFullOptSavedAnimationsEnabled() {
+        return SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_ANIMATIONS_ENABLED,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_ANIMATIONS_ENABLED
+        );
+    }
+
+    public void setFullOptSavedAnimationsEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_ANIMATIONS_ENABLED,
+            value,
+            false
+        );
+    }
+
+    public boolean getFullOptSavedIconShadow() {
+        return SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_ICON_SHADOW,
+            TERMUX_APP.DEFAULT_VALUE_FULL_OPT_SAVED_ICON_SHADOW
+        );
+    }
+
+    public void setFullOptSavedIconShadow(boolean value) {
+        SharedPreferenceUtils.setBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_FULL_OPT_SAVED_ICON_SHADOW,
+            value,
+            false
+        );
+    }
+
     public int getTerminalBackgroundOpacity() {
         int opacity = SharedPreferenceUtils.getInt(mSharedPreferences, TERMUX_APP.KEY_TERMINAL_BACKGROUND_OPACITY, TERMUX_APP.DEFAULT_VALUE_TERMINAL_BACKGROUND_OPACITY);
         return DataUtils.clamp(opacity, 0, 100);

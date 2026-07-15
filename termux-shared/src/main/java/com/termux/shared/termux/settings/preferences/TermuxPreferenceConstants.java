@@ -482,6 +482,56 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_USE_SYSTEM_WALLPAPER = "use_system_wallpaper";
 
         public static final boolean DEFAULT_VALUE_USE_SYSTEM_WALLPAPER = true;
+
+        /**
+         * Master switch: max performance / lower battery. Disables blur, glass grain, wallpaper
+         * passthrough, launcher animations, and icon shadows. Previous values are restored when off.
+         */
+        public static final String KEY_FULL_OPTIMIZATION_MODE = "full_optimization_mode";
+
+        public static final boolean DEFAULT_VALUE_FULL_OPTIMIZATION_MODE = false;
+
+        public static final String KEY_FULL_OPT_SAVED_EXTRAKEYS_BLUR_RADIUS =
+            "full_opt_saved_extrakeys_blur_radius";
+
+        public static final int DEFAULT_VALUE_FULL_OPT_SAVED_EXTRAKEYS_BLUR_RADIUS =
+            DEFAULT_VALUE_EXTRAKEYS_BLUR_RADIUS;
+
+        public static final String KEY_FULL_OPT_SAVED_DOCK_GLASS_GRAIN =
+            "full_opt_saved_dock_glass_grain";
+
+        public static final int DEFAULT_VALUE_FULL_OPT_SAVED_DOCK_GLASS_GRAIN =
+            DEFAULT_VALUE_DOCK_GLASS_GRAIN;
+
+        public static final String KEY_FULL_OPT_SAVED_APP_BAR_OPACITY =
+            "full_opt_saved_app_bar_opacity";
+
+        public static final int DEFAULT_VALUE_FULL_OPT_SAVED_APP_BAR_OPACITY =
+            DEFAULT_VALUE_APP_BAR_OPACITY;
+
+        public static final String KEY_FULL_OPT_SAVED_TERMINAL_BACKGROUND_OPACITY =
+            "full_opt_saved_terminal_background_opacity";
+
+        public static final int DEFAULT_VALUE_FULL_OPT_SAVED_TERMINAL_BACKGROUND_OPACITY =
+            DEFAULT_VALUE_TERMINAL_BACKGROUND_OPACITY;
+
+        public static final String KEY_FULL_OPT_SAVED_USE_SYSTEM_WALLPAPER =
+            "full_opt_saved_use_system_wallpaper";
+
+        public static final boolean DEFAULT_VALUE_FULL_OPT_SAVED_USE_SYSTEM_WALLPAPER =
+            DEFAULT_VALUE_USE_SYSTEM_WALLPAPER;
+
+        public static final String KEY_FULL_OPT_SAVED_ANIMATIONS_ENABLED =
+            "full_opt_saved_animations_enabled";
+
+        public static final boolean DEFAULT_VALUE_FULL_OPT_SAVED_ANIMATIONS_ENABLED =
+            DEFAULT_APP_LAUNCHER_ANIMATIONS_ENABLED;
+
+        public static final String KEY_FULL_OPT_SAVED_ICON_SHADOW =
+            "full_opt_saved_icon_shadow";
+
+        public static final boolean DEFAULT_VALUE_FULL_OPT_SAVED_ICON_SHADOW =
+            DEFAULT_APP_LAUNCHER_ICON_SHADOW;
     }
 
     /**

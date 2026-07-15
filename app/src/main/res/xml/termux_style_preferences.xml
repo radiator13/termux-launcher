@@ -4,6 +4,17 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        app:key="termux_performance"
+        app:title="@string/termux_performance_header">
+
+        <SwitchPreferenceCompat
+            app:key="full_optimization_mode"
+            app:title="@string/termux_full_optimization_mode_title"
+            app:summary="@string/termux_full_optimization_mode_summary"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         app:key="termux_themes"
         app:title="@string/termux_themes_header">
 
