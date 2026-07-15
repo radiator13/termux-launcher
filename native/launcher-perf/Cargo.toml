@@ -1,0 +1,24 @@
+[package]
+name = "launcher_perf"
+version = "0.1.0"
+edition = "2021"
+description = "Performance-critical pixel/mask helpers for Termux Launcher dock chrome"
+license = "GPL-3.0-only"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "launcher_perf"
+
+[features]
+default = ["jni"]
+jni = ["dep:jni"]
+
+[dependencies]
+jni = { version = "0.21", optional = true, default-features = false }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+panic = "abort"

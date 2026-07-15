@@ -30,8 +30,7 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Point;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
+
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -1116,53 +1115,108 @@ public final class SuggestionBarView extends GridLayout {
         return built;
     }
 
-    /** Builds a crisp external contour from the icon alpha, including irregular icon-pack shapes. */
+    /**
+     * Builds a crisp external contour from the icon alpha, including irregular icon-pack shapes.
+     * <p>
+     * Production path is Rust ({@link com.termux.app.nativebridge.LauncherPerfNative}) via JNI.
+     * A small Java fallback remains only when the native library is not packaged (e.g. unit tests).
+     */
     @NonNull
     static Bitmap buildFocusOutlineMask(@NonNull Bitmap source, int gap, int stroke) {
         int safeGap = Math.max(0, gap);
         int safeStroke = Math.max(1, stroke);
-        int outer = safeGap + safeStroke;
         int width = source.getWidth();
         int height = source.getHeight();
         int[] pixels = new int[width * height];
         source.getPixels(pixels, 0, width, 0, 0, width, height);
-        int maxAlpha = 0;
-        for (int pixel : pixels) maxAlpha = Math.max(maxAlpha, pixel >>> 24);
-        int threshold = Math.max(8, Math.round(maxAlpha * 0.25f));
-        for (int i = 0; i < pixels.length; i++) {
-            pixels[i] = (pixels[i] >>> 24) >= threshold ? 0xFFFFFFFF : 0x00000000;
+
+        Bitmap nativeMask = com.termux.app.nativebridge.LauncherPerfNative.buildFocusOutlineMaskBitmap(
+            pixels, width, height, safeGap, safeStroke
+        );
+        if (nativeMask != null) {
+            return nativeMask;
         }
-        Bitmap binary = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        binary.setPixels(pixels, 0, width, 0, 0, width, height);
-        Bitmap result = Bitmap.createBitmap(width + (outer * 2), height + (outer * 2), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(result);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        drawDilatedMask(canvas, binary, paint, outer, outer);
-        if (safeGap > 0) {
-            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-            drawDilatedMask(canvas, binary, paint, outer, safeGap);
-            paint.setXfermode(null);
-        } else {
-            paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_OUT));
-            canvas.drawBitmap(binary, outer, outer, paint);
-            paint.setXfermode(null);
-        }
-        binary.recycle();
-        return result;
+        return buildFocusOutlineMaskJavaFallback(pixels, width, height, safeGap, safeStroke);
     }
 
-    private static void drawDilatedMask(
-        @NonNull Canvas canvas,
-        @NonNull Bitmap mask,
-        @NonNull Paint paint,
-        int origin,
-        int radius
+    /**
+     * Java fallback mirroring the Rust dilate algorithm (not the old O(r²) multi-drawBitmap path).
+     * Used only when {@code liblauncher_perf} is unavailable.
+     */
+    @NonNull
+    static Bitmap buildFocusOutlineMaskJavaFallback(
+        @NonNull int[] srcPixels,
+        int width,
+        int height,
+        int safeGap,
+        int safeStroke
     ) {
-        int radiusSquared = radius * radius;
-        for (int y = -radius; y <= radius; y++) {
-            for (int x = -radius; x <= radius; x++) {
-                if ((x * x) + (y * y) <= radiusSquared) {
-                    canvas.drawBitmap(mask, origin + x, origin + y, paint);
+        int outer = safeGap + safeStroke;
+        int maxAlpha = 0;
+        for (int pixel : srcPixels) {
+            maxAlpha = Math.max(maxAlpha, pixel >>> 24);
+        }
+        int threshold = Math.max(8, Math.round(maxAlpha * 0.25f));
+        boolean[] binary = new boolean[width * height];
+        for (int i = 0; i < binary.length; i++) {
+            binary[i] = (srcPixels[i] >>> 24) >= threshold;
+        }
+        int outW = width + outer * 2;
+        int outH = height + outer * 2;
+        int[] result = new int[outW * outH];
+        dilateDiskInto(binary, width, height, result, outW, outH, outer, outer, 0xFFFFFFFF);
+        if (safeGap > 0) {
+            dilateDiskInto(binary, width, height, result, outW, outH, outer, safeGap, 0x00000000);
+        } else {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    if (binary[y * width + x]) {
+                        result[(y + outer) * outW + (x + outer)] = 0;
+                    }
+                }
+            }
+        }
+        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        out.setPixels(result, 0, outW, 0, 0, outW, outH);
+        return out;
+    }
+
+    /** Disk dilate into {@code out} (same semantics as Rust {@code dilate_or_into}). */
+    private static void dilateDiskInto(
+        @NonNull boolean[] binary,
+        int srcW,
+        int srcH,
+        @NonNull int[] out,
+        int outW,
+        int outH,
+        int origin,
+        int radius,
+        int paint
+    ) {
+        int r2 = radius * radius;
+        for (int y = 0; y < srcH; y++) {
+            for (int x = 0; x < srcW; x++) {
+                if (!binary[y * srcW + x]) {
+                    continue;
+                }
+                int cx = x + origin;
+                int cy = y + origin;
+                for (int dy = -radius; dy <= radius; dy++) {
+                    int yy = cy + dy;
+                    if (yy < 0 || yy >= outH) {
+                        continue;
+                    }
+                    int dy2 = dy * dy;
+                    for (int dx = -radius; dx <= radius; dx++) {
+                        if (dx * dx + dy2 > r2) {
+                            continue;
+                        }
+                        int xx = cx + dx;
+                        if (xx < 0 || xx >= outW) {
+                            continue;
+                        }
+                        out[yy * outW + xx] = paint;
+                    }
                 }
             }
         }

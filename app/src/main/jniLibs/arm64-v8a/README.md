@@ -1,3 +1,14 @@
+Native libraries for arm64-v8a.
+
+## launcher_perf (Termux Launcher)
+
+- `liblauncher_perf.so` — Rust focus-outline mask engine used by
+  `com.termux.app.nativebridge.LauncherPerfNative` / dock AZ focus rings.
+  Built from `native/launcher-perf` (`cargo build --release --features jni` or
+  `./native/launcher-perf/build-android.sh`). See that crate's README.
+
+## MNN
+
 MNN native runtime libraries for the arm64-v8a MNN backend.
 
 MNN is Copyright 2018 Alibaba Group and licensed under Apache-2.0. These are modified object-code
